@@ -70,36 +70,57 @@ echo "INSTANCE_NAME=$INSTANCE" > "$WRAPPER/Contents/MacOS/config.sh"
 # ---- smart launcher (self-contained) ----------------------------------------
 cat > "$WRAPPER/Contents/MacOS/claude-launcher" <<'LAUNCHER'
 #!/bin/bash
-# NOTE: Claude's helper processes use the SAME Contents/MacOS/Claude binary and
-# also carry --user-data-dir. The ONLY reliable way to find the real (window)
-# process is that helpers always have a --type= flag and the main one does not.
+# Behavior on click:
+#   - Running WITH a window  -> focus it (no duplicate).
+#   - Running but WINDOWLESS -> kill it (-9) and relaunch (Claude keeps its main
+#     process alive after the window closes; a windowless instance can't be
+#     re-shown per-instance, so we relaunch).
+#   - Not running            -> launch fresh.
+#
+# Process-matching notes (verified empirically):
+#   * Helper processes use the SAME Contents/MacOS/Claude binary AND carry
+#     --user-data-dir; only helpers have a --type= flag, the main does not.
+#   * A live window shows up as --type=renderer process(es) for that profile.
+#   * kill -9 on the main cleanly takes its helpers with it; the main ignores SIGTERM.
 source "$(dirname "$0")/config.sh"
 CLAUDE_APP="/Applications/Claude.app"
 INSTANCES_BASE="$HOME/.claude-instances"
 
-find_main_pid() {
+main_pid() {
     if [ "$INSTANCE_NAME" = "default" ]; then
-        ps -axww -o pid,command \
-            | grep -E "[C]laude\.app/Contents/MacOS/Claude( |$)" \
-            | grep -v -- "--type=" \
-            | grep -v -- "--user-data-dir" \
-            | awk '{print $1}' | head -1
+        ps -axww -o pid,command | grep -E "[C]laude\.app/Contents/MacOS/Claude( |$)" \
+            | grep -v -- "--type=" | grep -v -- "--user-data-dir" | awk '{print $1}' | head -1
     else
-        ps -axww -o pid,command \
-            | grep -F -- "--user-data-dir=$INSTANCES_BASE/$INSTANCE_NAME" \
-            | grep -v -- "--type=" \
-            | awk '{print $1}' | head -1
+        ps -axww -o pid,command | grep -F -- "--user-data-dir=$INSTANCES_BASE/$INSTANCE_NAME" \
+            | grep -v -- "--type=" | awk '{print $1}' | head -1
     fi
 }
 
-PID=$(find_main_pid)
-if [ -n "$PID" ]; then
+renderer_count() {
+    if [ "$INSTANCE_NAME" = "default" ]; then
+        ps -axww -o command | grep -- "--type=renderer" | grep -F -- "Claude.app/Contents/MacOS/Claude" \
+            | grep -v -F -- "--user-data-dir=$INSTANCES_BASE/" | grep -c .
+    else
+        ps -axww -o command | grep -- "--type=renderer" | grep -c -F -- "--user-data-dir=$INSTANCES_BASE/$INSTANCE_NAME"
+    fi
+}
+
+launch_fresh() {
+    if [ "$INSTANCE_NAME" = "default" ]; then
+        open -n -a "$CLAUDE_APP"
+    else
+        mkdir -p "$INSTANCES_BASE/$INSTANCE_NAME"
+        open -n -a "$CLAUDE_APP" --args --user-data-dir="$INSTANCES_BASE/$INSTANCE_NAME"
+    fi
+}
+
+PID=$(main_pid)
+RENDERERS=$(renderer_count)
+if [ -n "$PID" ] && [ "${RENDERERS:-0}" -gt 0 ]; then
     osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true" 2>/dev/null
-elif [ "$INSTANCE_NAME" = "default" ]; then
-    open -n -a "$CLAUDE_APP"
 else
-    mkdir -p "$INSTANCES_BASE/$INSTANCE_NAME"
-    open -n -a "$CLAUDE_APP" --args --user-data-dir="$INSTANCES_BASE/$INSTANCE_NAME"
+    [ -n "$PID" ] && { kill -9 "$PID" 2>/dev/null; sleep 1; }
+    launch_fresh
 fi
 LAUNCHER
 chmod +x "$WRAPPER/Contents/MacOS/claude-launcher"

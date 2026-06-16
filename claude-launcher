@@ -1,24 +1,32 @@
 #!/bin/bash
 # Self-contained smart launcher for an isolated Claude Desktop instance.
 # Reads INSTANCE_NAME from the adjacent config.sh.
-#   - If that instance is already running, brings ITS main window to the front
-#     (targeted by PID) instead of spawning a duplicate.
-#   - Otherwise launches it fresh.
 #
-# NOTE: Claude's helper processes use the SAME Contents/MacOS/Claude binary and
-# also carry --user-data-dir. The ONLY reliable way to find the real (window)
-# process is that helpers always have a --type= flag and the main one does not.
+# Behavior on click:
+#   - Instance running WITH a window  -> focus that window (no duplicate).
+#   - Instance running but WINDOWLESS -> kill it (-9) and relaunch. Claude keeps
+#     its main process alive after you close the window, and a windowless
+#     instance cannot be re-shown per-instance (shared bundle id), so we relaunch.
+#   - Instance not running            -> launch fresh.
+#
+# Process-matching notes (verified empirically):
+#   * Claude helper processes use the SAME Contents/MacOS/Claude binary AND carry
+#     --user-data-dir. The only reliable discriminator is that helpers have a
+#     --type= flag and the main process does not.
+#   * A live window appears as one or more --type=renderer processes for that
+#     profile; closing the window drops the renderer count to 0.
+#   * kill -9 on the main process cleanly terminates all of its helpers.
+#   * The main ignores SIGTERM, so cleanup must use -9.
 source "$(dirname "$0")/config.sh"
 
 CLAUDE_APP="/Applications/Claude.app"
 INSTANCES_BASE="$HOME/.claude-instances"
 
-find_main_pid() {
+main_pid() {
     if [ "$INSTANCE_NAME" = "default" ]; then
         ps -axww -o pid,command \
             | grep -E "[C]laude\.app/Contents/MacOS/Claude( |$)" \
-            | grep -v -- "--type=" \
-            | grep -v -- "--user-data-dir" \
+            | grep -v -- "--type=" | grep -v -- "--user-data-dir" \
             | awk '{print $1}' | head -1
     else
         ps -axww -o pid,command \
@@ -28,17 +36,35 @@ find_main_pid() {
     fi
 }
 
-PID=$(find_main_pid)
+renderer_count() {
+    if [ "$INSTANCE_NAME" = "default" ]; then
+        ps -axww -o command | grep -- "--type=renderer" \
+            | grep -F -- "Claude.app/Contents/MacOS/Claude" \
+            | grep -v -F -- "--user-data-dir=$INSTANCES_BASE/" | grep -c .
+    else
+        ps -axww -o command | grep -- "--type=renderer" \
+            | grep -c -F -- "--user-data-dir=$INSTANCES_BASE/$INSTANCE_NAME"
+    fi
+}
 
-if [ -n "$PID" ]; then
-    # Already running: focus this specific instance's window. Do not duplicate.
-    # (First run triggers a one-time macOS Automation permission prompt.)
-    osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true" 2>/dev/null
-else
+launch_fresh() {
     if [ "$INSTANCE_NAME" = "default" ]; then
         open -n -a "$CLAUDE_APP"
     else
         mkdir -p "$INSTANCES_BASE/$INSTANCE_NAME"
         open -n -a "$CLAUDE_APP" --args --user-data-dir="$INSTANCES_BASE/$INSTANCE_NAME"
     fi
+}
+
+PID=$(main_pid)
+RENDERERS=$(renderer_count)
+
+if [ -n "$PID" ] && [ "${RENDERERS:-0}" -gt 0 ]; then
+    # Running with a window: focus it. (First use triggers a one-time macOS
+    # "wants to control System Events" Automation prompt -- click OK.)
+    osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true" 2>/dev/null
+else
+    # Not running, or running but windowless: clear any stale process, then relaunch.
+    [ -n "$PID" ] && { kill -9 "$PID" 2>/dev/null; sleep 1; }
+    launch_fresh
 fi

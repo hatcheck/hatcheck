@@ -33,14 +33,23 @@ already running."* Claude has **no per-profile single-instance lock**, so **ever
 another process** against the same profile dir. That stacks up duplicate windows and risks
 corrupting the shared profile.
 
-The **smart launcher** in this gist fixes it:
+The **smart launcher** in this gist fixes it. On click it inspects *that specific instance*
+(matched by `--user-data-dir`; for the default instance, the main process that has *no*
+`--user-data-dir`) and does one of three things:
 
-- It looks for an already-running process for *that specific instance*
-  (matched by `--user-data-dir` for named instances, or "no `--user-data-dir`" for the default one).
-- **If found** → it focuses *that* process's window by PID via AppleScript/System Events. No duplicate.
-- **If not found** → it launches fresh with `open -n`.
+- **Running with a window** → focuses that process's window by PID via System Events. No duplicate.
+- **Running but windowless** → Claude keeps its main process alive after you close the window, and
+  a windowless instance *cannot* be re-shown per-instance (all instances share one bundle id, so
+  `open -a` / "activate" can't target it). So the launcher `kill -9`s the stale process (which
+  cleanly takes its helpers with it) and relaunches. ⚠️ The main process **ignores `SIGTERM`**, which
+  is why cleanup uses `-9`.
+- **Not running** → launches fresh with `open -n`.
 
-So "always click the launcher you want" reliably **focuses-or-launches** the right instance.
+How "has a window?" is detected: a live window shows up as one or more `--type=renderer` processes
+for that profile; closing the window drops that count to 0.
+
+So "always click the launcher you want" reliably **focuses-or-launches** the right instance, even
+after you've closed its window.
 
 ### What the colors do (and don't do)
 
