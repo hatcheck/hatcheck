@@ -1,0 +1,40 @@
+#!/bin/bash
+# Self-contained smart launcher for an isolated Claude Desktop instance.
+# Embedded into each wrapper at <App>.app/Contents/MacOS/claude-launcher.
+# Reads INSTANCE_NAME from the adjacent config.sh.
+#
+#   - If that instance is already running, brings ITS window to the front
+#     (targeted by PID) instead of spawning a duplicate.
+#   - Otherwise launches it fresh.
+#
+# "default" == Claude's built-in profile (launched with no --user-data-dir).
+# Any other name == an isolated profile under ~/.claude-instances/<name>.
+
+source "$(dirname "$0")/config.sh"
+
+CLAUDE_APP="/Applications/Claude.app"
+INSTANCES_BASE="$HOME/.claude-instances"
+
+if [ "$INSTANCE_NAME" = "default" ]; then
+    # The default/personal instance is the main Claude process WITHOUT --user-data-dir.
+    PID=$(ps -axo pid,command \
+        | grep "[C]laude.app/Contents/MacOS/Claude" \
+        | grep -v -- "--user-data-dir" \
+        | awk '{print $1}' | head -1)
+    LAUNCH=(open -n -a "$CLAUDE_APP")
+else
+    DIR="$INSTANCES_BASE/$INSTANCE_NAME"
+    PID=$(ps -axo pid,command \
+        | grep -F -- "MacOS/Claude --user-data-dir=$DIR" \
+        | awk '{print $1}' | head -1)
+    mkdir -p "$DIR"
+    LAUNCH=(open -n -a "$CLAUDE_APP" --args --user-data-dir="$DIR")
+fi
+
+if [ -n "$PID" ]; then
+    # Already running: focus this specific instance, do not duplicate.
+    # (First run triggers a one-time macOS Automation permission prompt.)
+    osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true" 2>/dev/null
+else
+    "${LAUNCH[@]}"
+fi
