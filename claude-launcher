@@ -4,9 +4,12 @@
 #
 # Behavior on click:
 #   - Instance running WITH a window  -> focus that window (no duplicate).
-#   - Instance running but WINDOWLESS -> kill it (-9) and relaunch. Claude keeps
-#     its main process alive after you close the window, and a windowless
-#     instance cannot be re-shown per-instance (shared bundle id), so we relaunch.
+#   - Instance running but WINDOWLESS -> open a fresh window WITHOUT killing the
+#     existing process. Claude keeps its main process alive after you close the
+#     window, often because it's still doing background work (a chat "thinking");
+#     killing it would lose that work, and a windowless instance can't be
+#     re-shown per-instance (shared bundle id). Leftover windowless processes are
+#     harmless and clear on Quit (Cmd-Q).
 #   - Instance not running            -> launch fresh.
 #
 # Process-matching notes (verified empirically):
@@ -15,8 +18,6 @@
 #     --type= flag and the main process does not.
 #   * A live window appears as one or more --type=renderer processes for that
 #     profile; closing the window drops the renderer count to 0.
-#   * kill -9 on the main process cleanly terminates all of its helpers.
-#   * The main ignores SIGTERM, so cleanup must use -9.
 source "$(dirname "$0")/config.sh"
 
 CLAUDE_APP="/Applications/Claude.app"
