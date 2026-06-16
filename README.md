@@ -11,6 +11,23 @@ This builds on Philipp Stracker's excellent
 1. **Recolored icons** so you can tell the launchers apart at a glance (blue work / red personal / etc.).
 2. A **smart, self-contained launcher** that fixes the "every click opens another window" problem.
 
+> ## ⭐ Recommended: give *every* account its own isolated instance
+>
+> The most reliable setup is to create a **separate, dedicated instance for each account —
+> including your "personal" one — and stop using Claude's built-in default profile for day-to-day
+> use.** Don't try to make one launcher target the shared default profile.
+>
+> Why: Claude has **no per-profile single-instance lock**, so two processes can run on one profile
+> at once — and **only the *first* instance on a profile can use its login database. Every
+> additional instance on that same profile shows up logged out.** If a "personal" launcher points
+> at the default profile (which the stock Claude icon also uses), you end up with duplicate,
+> logged-out windows. Giving each account its own dir guarantees **one profile → one instance →
+> always logged in**, and makes the focus-don't-duplicate logic rock-solid.
+>
+> Already logged into the default profile and don't want to re-auth? See
+> [Migrating an existing login](#migrating-an-existing-login-optional) — you can copy your current
+> profile into the new dedicated dir.
+
 ---
 
 ## How it works
@@ -84,13 +101,12 @@ chmod +x make-claude-instance.sh
 
 - The **first** time a launcher focuses a running window, macOS asks
   *"Claude … wants to control System Events"* → click **OK** (one time per launcher).
-- **Give every instance its own isolated dir** (any name other than `default`). Do **not** point
-  two launchers at the same profile, and avoid mixing a launcher with the stock Claude icon on the
-  same profile: **only the first running instance on a profile can use its login database, so any
-  additional instance on that same profile shows up logged out.** One profile → one instance.
+- **Give every instance its own isolated dir** — use a real name like `personal` / `work`, **not**
+  `default`. One profile → one instance (see the ⭐ callout above for why).
 - The instance name **`default`** is still supported (it uses Claude's built-in profile with no
-  `--user-data-dir`), but it's only safe if that profile is *never* run by more than one launcher
-  at a time. A dedicated dir is the robust choice.
+  `--user-data-dir`) for folks who want one launcher onto the stock profile — but it's only safe if
+  that profile is *never* run by more than one instance at a time (i.e. don't also use the stock
+  Claude icon). A dedicated dir is the robust, recommended choice.
 
 ### Color cheatsheet (hue shift, in 0–255 = 0–360° units)
 
@@ -107,6 +123,33 @@ are available (`pip install Pillow`). Without them you still get a fully working
 stock icon.
 
 ---
+
+## Migrating an existing login (optional)
+
+If you're already signed into Claude's **default** profile and want your new dedicated instance to
+start out logged in (with your settings, MCP servers, and sessions intact), copy the profile across
+**while Claude is fully quit** so the copy is consistent:
+
+```bash
+# 1. Quit Claude completely first (⌘Q every window; make sure nothing is running):
+ps -axo command | grep "[C]laude.app/Contents/MacOS/Claude"   # should print nothing
+
+# 2. Copy the default profile into your new dedicated dir, skipping lock files + caches:
+rsync -a \
+  --exclude 'Singleton*' \
+  --exclude 'Cache' --exclude 'Code Cache' --exclude 'GPUCache' \
+  --exclude 'DawnGraphiteCache' --exclude 'DawnWebGPUCache' --exclude 'ShaderCache' \
+  --exclude 'Crashpad' --exclude 'blob_storage' \
+  "$HOME/Library/Application Support/Claude/"  "$HOME/.claude-instances/personal/"
+```
+
+Your original default profile is left untouched (the stock Claude icon still opens it). The auth
+token lives in the copied profile (and/or the shared macOS Keychain), so the new instance should
+launch already signed in. If it doesn't, just sign in once — it sticks from then on.
+
+> Heads-up on size: the local-agent / Cowork runtime lives in a `vm_bundles/` folder that can be
+> **many GB**. The copy above includes it. To save disk, you can `rm -rf` the `vm_bundles` folder in
+> the new dir afterward — it re-downloads on demand the next time you use that feature.
 
 ## Managing instances
 
