@@ -75,16 +75,22 @@ chmod +x make-claude-instance.sh
 # 2. Create a WORK instance (isolated profile) with a BLUE launcher
 ./make-claude-instance.sh work Work 135
 
-# 3. Create a PERSONAL launcher (uses Claude's built-in/default profile) with a RED-ORANGE icon
-./make-claude-instance.sh default Personal -7
+# 3. Create a PERSONAL instance (its own isolated profile) with a RED-ORANGE icon
+./make-claude-instance.sh personal Personal -7
 
 # 4. Launch from Launchpad / drag to Dock:  "Claude Work"  and  "Claude Personal"
+#    First launch of each is a fresh profile -> sign into the right account once.
 ```
 
 - The **first** time a launcher focuses a running window, macOS asks
   *"Claude … wants to control System Events"* → click **OK** (one time per launcher).
-- Use the instance name **`default`** for the personal/built-in profile (no separate data dir).
-  Any other name creates an isolated profile under `~/.claude-instances/<name>`.
+- **Give every instance its own isolated dir** (any name other than `default`). Do **not** point
+  two launchers at the same profile, and avoid mixing a launcher with the stock Claude icon on the
+  same profile: **only the first running instance on a profile can use its login database, so any
+  additional instance on that same profile shows up logged out.** One profile → one instance.
+- The instance name **`default`** is still supported (it uses Claude's built-in profile with no
+  `--user-data-dir`), but it's only safe if that profile is *never* run by more than one launcher
+  at a time. A dedicated dir is the robust choice.
 
 ### Color cheatsheet (hue shift, in 0–255 = 0–360° units)
 
