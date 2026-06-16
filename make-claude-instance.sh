@@ -70,22 +70,36 @@ echo "INSTANCE_NAME=$INSTANCE" > "$WRAPPER/Contents/MacOS/config.sh"
 # ---- smart launcher (self-contained) ----------------------------------------
 cat > "$WRAPPER/Contents/MacOS/claude-launcher" <<'LAUNCHER'
 #!/bin/bash
+# NOTE: Claude's helper processes use the SAME Contents/MacOS/Claude binary and
+# also carry --user-data-dir. The ONLY reliable way to find the real (window)
+# process is that helpers always have a --type= flag and the main one does not.
 source "$(dirname "$0")/config.sh"
 CLAUDE_APP="/Applications/Claude.app"
 INSTANCES_BASE="$HOME/.claude-instances"
-if [ "$INSTANCE_NAME" = "default" ]; then
-    PID=$(ps -axo pid,command | grep "[C]laude.app/Contents/MacOS/Claude" | grep -v -- "--user-data-dir" | awk '{print $1}' | head -1)
-    LAUNCH=(open -n -a "$CLAUDE_APP")
-else
-    DIR="$INSTANCES_BASE/$INSTANCE_NAME"
-    PID=$(ps -axo pid,command | grep -F -- "MacOS/Claude --user-data-dir=$DIR" | awk '{print $1}' | head -1)
-    mkdir -p "$DIR"
-    LAUNCH=(open -n -a "$CLAUDE_APP" --args --user-data-dir="$DIR")
-fi
+
+find_main_pid() {
+    if [ "$INSTANCE_NAME" = "default" ]; then
+        ps -axww -o pid,command \
+            | grep -E "[C]laude\.app/Contents/MacOS/Claude( |$)" \
+            | grep -v -- "--type=" \
+            | grep -v -- "--user-data-dir" \
+            | awk '{print $1}' | head -1
+    else
+        ps -axww -o pid,command \
+            | grep -F -- "--user-data-dir=$INSTANCES_BASE/$INSTANCE_NAME" \
+            | grep -v -- "--type=" \
+            | awk '{print $1}' | head -1
+    fi
+}
+
+PID=$(find_main_pid)
 if [ -n "$PID" ]; then
     osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true" 2>/dev/null
+elif [ "$INSTANCE_NAME" = "default" ]; then
+    open -n -a "$CLAUDE_APP"
 else
-    "${LAUNCH[@]}"
+    mkdir -p "$INSTANCES_BASE/$INSTANCE_NAME"
+    open -n -a "$CLAUDE_APP" --args --user-data-dir="$INSTANCES_BASE/$INSTANCE_NAME"
 fi
 LAUNCHER
 chmod +x "$WRAPPER/Contents/MacOS/claude-launcher"
