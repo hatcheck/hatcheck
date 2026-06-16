@@ -64,7 +64,10 @@ if [ -n "$PID" ] && [ "${RENDERERS:-0}" -gt 0 ]; then
     # "wants to control System Events" Automation prompt -- click OK.)
     osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true" 2>/dev/null
 else
-    # Not running, or running but windowless: clear any stale process, then relaunch.
-    [ -n "$PID" ] && { kill -9 "$PID" 2>/dev/null; sleep 1; }
+    # Not running, OR running but windowless. We do NOT kill the existing process:
+    # a windowless instance is often windowless precisely because it is doing
+    # background work (e.g. a chat still "thinking"), and killing it would lose
+    # that work. Instead just open a fresh window. Any leftover windowless
+    # process is harmless and goes away when you fully Quit (Cmd-Q) Claude.
     launch_fresh
 fi

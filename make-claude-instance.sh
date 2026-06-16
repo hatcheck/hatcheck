@@ -119,7 +119,9 @@ RENDERERS=$(renderer_count)
 if [ -n "$PID" ] && [ "${RENDERERS:-0}" -gt 0 ]; then
     osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true" 2>/dev/null
 else
-    [ -n "$PID" ] && { kill -9 "$PID" 2>/dev/null; sleep 1; }
+    # Not running, OR running but windowless. Do NOT kill: a windowless instance
+    # is often busy doing background work (e.g. a chat still "thinking"). Just
+    # open a fresh window. Any leftover windowless process clears on Quit (Cmd-Q).
     launch_fresh
 fi
 LAUNCHER

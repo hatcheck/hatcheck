@@ -38,11 +38,12 @@ The **smart launcher** in this gist fixes it. On click it inspects *that specifi
 `--user-data-dir`) and does one of three things:
 
 - **Running with a window** → focuses that process's window by PID via System Events. No duplicate.
-- **Running but windowless** → Claude keeps its main process alive after you close the window, and
-  a windowless instance *cannot* be re-shown per-instance (all instances share one bundle id, so
-  `open -a` / "activate" can't target it). So the launcher `kill -9`s the stale process (which
-  cleanly takes its helpers with it) and relaunches. ⚠️ The main process **ignores `SIGTERM`**, which
-  is why cleanup uses `-9`.
+- **Running but windowless** → opens a fresh window. Claude keeps its main process alive after you
+  close the window, and a windowless instance *cannot* be re-shown per-instance (all instances share
+  one bundle id, so `open -a` / "activate" can't target it). We deliberately **do not kill** the
+  windowless process: it is often windowless precisely because it's still doing background work
+  (e.g. a chat that's "thinking"), and killing it would lose that work. The leftover windowless
+  process is harmless and goes away when you fully **Quit (⌘Q)** Claude.
 - **Not running** → launches fresh with `open -n`.
 
 How "has a window?" is detected: a live window shows up as one or more `--type=renderer` processes
@@ -50,6 +51,9 @@ for that profile; closing the window drops that count to 0.
 
 So "always click the launcher you want" reliably **focuses-or-launches** the right instance, even
 after you've closed its window.
+
+> **Tip:** to keep the focus-don't-relaunch behavior working, **close Claude with ⌘W** (close
+> window, app keeps running) when you want it to stay live, and **⌘Q** when you truly want it gone.
 
 ### What the colors do (and don't do)
 
