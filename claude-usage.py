@@ -2,9 +2,10 @@
 """Show how much of each Claude plan limit is left, for every ~/.claude* profile.
 
 Usage:
-    python3 claude-usage.py [--cached]
+    python3 claude-usage.py [--cached] [--email]
 
   --cached : don't call the API; show the snapshot Claude Code last saved.
+  --email  : show each account's email address (hidden by default).
 
 For each profile this reads the OAuth token Claude Code keeps in the macOS
 Keychain and asks the endpoint /usage uses (api.anthropic.com/api/oauth/usage).
@@ -198,6 +199,8 @@ def main():
         description="Show how much of each Claude plan limit is left, for every ~/.claude* profile.")
     parser.add_argument("--cached", action="store_true",
                         help="don't call the API; show the snapshot Claude Code last saved")
+    parser.add_argument("-e", "--email", action="store_true",
+                        help="show each account's email address (hidden by default)")
     args = parser.parse_args()
 
     color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
@@ -247,8 +250,8 @@ def main():
             source = paint("33", "cached %s ago" % age) + paint("2", " (%s)" % why)
         else:
             source = paint("31", "no data") + paint("2", " (%s)" % why)
-        header = paint("1;36", names) + "  " + paint("2", "%s · %s · " % (
-            entry["email"] or "?", plan_text(entry["oauth"]))) + source
+        details = ([entry["email"] or "?"] if args.email else []) + [plan_text(entry["oauth"])]
+        header = paint("1;36", names) + "  " + paint("2", " · ".join(details) + " · ") + source
         blocks.append((header, usage_rows(usage) if usage else [], extra_usage_text(usage or {}), cached))
 
     width = max([len(row[0]) for _, rows, _, _ in blocks for row in rows] or [0])
