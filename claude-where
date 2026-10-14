@@ -1,0 +1,8 @@
+#!/bin/sh
+# claude-where <session id or prefix>
+# Find a Claude Code session in ~/.claude and every ~/.claude-* profile: prints
+# its transcript, plus its data folder if it has one. The profile in the path
+# says how to resume it (claude, or cl <profile>), and the projects/ folder is
+# the directory it ran in, with every non-alphanumeric character turned into -.
+[ -n "$1" ] || { echo "usage: claude-where <session id or prefix>" >&2; exit 2; }
+find "$HOME/.claude" "$HOME"/.claude-* -maxdepth 3 -path '*/projects/*' -name "$1*" 2>/dev/null

@@ -10,15 +10,15 @@ Usage:
   --all      : also list sessions last used from Claude Desktop's Code tab or the
                SDK (claude -p, apps driving Claude Code). Hidden by default.
   --full     : print CLAUDE_CONFIG_DIR=~/.claude-<name> claude ... instead of the
-               cl shortcut, for shells that don't define it.
+               cl shortcut, for machines without it.
   --cached   : take plan usage from the snapshot Claude Code last saved instead
                of asking the API.
   --no-usage : leave plan usage out.
 
 Output is grouped by folder (A-Z), each headed by the cd command to run first,
 with the newest session first within each folder. Sessions in a
-~/.claude-<name> profile resume with `cl <name> --resume <id>`, using this zsh
-function from ~/.zshrc:
+~/.claude-<name> profile resume with `cl <name> --resume <id>`. cl is in this
+repo (install.sh puts it on your PATH) and works like this shell function:
 
     cl() { CLAUDE_CONFIG_DIR="$HOME/.claude-$1" claude "${@:2}"; }
 
@@ -56,7 +56,7 @@ from datetime import datetime
 HOME = os.path.expanduser("~")
 DEFAULT_PROFILE = os.path.realpath(os.path.join(HOME, ".claude"))
 DEFAULT_HOURS = 24
-SHORTCUT = "cl"  # zsh function in ~/.zshrc: cl <name> ... runs claude with ~/.claude-<name>
+SHORTCUT = "cl"  # cl <name> ... runs claude with ~/.claude-<name> (./cl, or a shell function)
 
 
 def parse_count(text):
