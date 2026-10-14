@@ -23,11 +23,12 @@ function from ~/.zshrc:
     cl() { CLAUDE_CONFIG_DIR="$HOME/.claude-$1" claude "${@:2}"; }
 
 After its age, each session line shows what's left of its profile's plan
-limits: the 5-hour session (5h), the weekly limit (week) and per-model weekly
-limits such as Fable. They come from claude-usage.py, which this script loads, so keep the
-two in one folder. When an account can't be asked live, Claude Code's last
-saved snapshot is used and listed at the bottom with its age; ? marks a limit
-that has reset since that snapshot.
+limits and how long until each one resets (↻): the 5-hour session (5h), the
+weekly limit (week) and per-model weekly limits such as Fable. They come from
+claude-usage.py, which this script loads, so keep the two in one folder. When
+an account can't be asked live, Claude Code's last saved snapshot is used and
+listed at the bottom with its age; ? marks a limit that has reset since that
+snapshot.
 
 A profile is any ~/.claude* directory (plus $CLAUDE_CONFIG_DIR) that holds a
 projects/ folder, so Desktop data dirs like ~/.claude-instances are skipped.
@@ -279,31 +280,35 @@ def load_usage_module():
 
 
 def usage_cells(usage_mod, results, now, paint):
-    """profile -> (text, width): each plan limit's short name and % left, in columns
-    aligned across profiles."""
+    """profile -> (text, width): each plan limit's short name, % left and time until it
+    resets, in columns aligned across profiles."""
     meters = {}
     for profile, (usage, saved_at, _) in results.items():
-        meters[profile] = [] if usage is None else [
-            (usage_mod.row_label(row, short=True),
-             usage_mod.percent_left(row.get("percent"), row.get("resets_at"), saved_at, now),
-             row.get("severity"))
-            for row in usage.get("limits") or []]
-    pct = lambda left: "?" if left is None else "%d%%" % left
-    label_w, pct_w = {}, {}
+        meters[profile] = []
+        for row in (usage or {}).get("limits") or []:
+            left = usage_mod.percent_left(row.get("percent"), row.get("resets_at"), saved_at, now)
+            reset = usage_mod.parse_time(row.get("resets_at"))
+            meters[profile].append((
+                usage_mod.row_label(row, short=True),
+                "?" if left is None else "%d%%" % left,
+                "2" if left is None else usage_mod.SEVERITY_COLOR.get(row.get("severity"), ""),
+                "↻" + usage_mod.duration(reset - now) if left is not None and reset is not None else ""))
+    widths = {}  # meter slot -> widest [label, % left, reset] in it
     for rows in meters.values():
-        for i, (label, left, _) in enumerate(rows):
-            label_w[i] = max(label_w.get(i, 0), len(label))
-            pct_w[i] = max(pct_w.get(i, 0), len(pct(left)))
+        for i, (label, pct, _, reset) in enumerate(rows):
+            w = widths.setdefault(i, [0, 0, 0])
+            w[:] = max(w[0], len(label)), max(w[1], len(pct)), max(w[2], len(reset))
     cells = {}
     for profile, rows in meters.items():
         if not rows:
             cells[profile] = (paint("2", "usage ?"), len("usage ?"))
             continue
-        parts = [paint("2", label.ljust(label_w[i])) + " "
-                 + paint("2" if left is None else usage_mod.SEVERITY_COLOR.get(severity, ""),
-                         pct(left).rjust(pct_w[i]))
-                 for i, (label, left, severity) in enumerate(rows)]
-        width = sum(label_w[i] + 1 + pct_w[i] for i in range(len(rows))) + 2 * (len(rows) - 1)
+        parts, width = [], 2 * (len(rows) - 1)
+        for i, (label, pct, code, reset) in enumerate(rows):
+            label_w, pct_w, reset_w = widths[i]
+            parts.append(paint("2", label.ljust(label_w)) + " " + paint(code, pct.rjust(pct_w))
+                         + (" " + paint("2", reset.ljust(reset_w)) if reset_w else ""))
+            width += label_w + 1 + pct_w + (1 + reset_w if reset_w else 0)
         cells[profile] = ("  ".join(parts), width)
     return cells
 
@@ -419,7 +424,7 @@ def main():
 
     window = ("%g" % args.hours) + "h"
     print(paint("1", "Claude Code CLI sessions active in the last %s or open now" % window)
-          + paint("2", " (by folder, newest first%s)" % ("; % = plan usage left" if cells else "")))
+          + paint("2", " (by folder, newest first%s)" % ("; % = plan usage left, ↻ = resets in" if cells else "")))
     if not shown:
         print("  No sessions in this window. Try a longer one, e.g. %s 72" % os.path.basename(sys.argv[0]))
 
