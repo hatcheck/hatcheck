@@ -19,6 +19,9 @@ for all models, per-model weekly limits such as Fable, and any new meter the
 server adds. Percentages are what's left (100 - used). Quota fields the server
 sends that Claude Code doesn't display are listed under their raw names.
 Profiles signed in to the same account are shown together.
+
+claude-recent-sessions.py loads this file to show the same numbers beside each
+session, so keep the two scripts in the same folder.
 """
 import argparse
 import glob
@@ -146,18 +149,26 @@ def plan_text(oauth):
     return plan
 
 
-def row_label(row):
+def row_label(row, short=False):
     scope = row.get("scope") or {}
     name = ((scope.get("model") or {}).get("display_name")
             or (scope.get("surface") or {}).get("display_name"))
     kind = row.get("kind") or "?"
     if kind == "session":
-        return "session (5h)"
+        return "5h" if short else "session (5h)"
     if kind == "weekly_all":
-        return "week (all models)"
+        return "week" if short else "week (all models)"
     if kind == "weekly_scoped" and name:
-        return "week (%s)" % name
+        return name if short else "week (%s)" % name
     return kind.replace("_", " ") + (" (%s)" % name if name else "")
+
+
+def percent_left(used, resets_at, saved_at, now):
+    """What's left of a meter, or None when it comes from a snapshot saved before the meter reset."""
+    reset = parse_time(resets_at)
+    if saved_at is not None and reset is not None and reset <= now:
+        return None
+    return max(0, min(100, 100 - (used or 0)))
 
 
 def usage_rows(usage):
@@ -194,6 +205,51 @@ def extra_usage_text(usage):
     return text
 
 
+def load_accounts(profiles):
+    """Profiles grouped by the account they're signed in to, since they share its limits."""
+    accounts = {}
+    for profile in profiles:
+        account, cache = read_config(profile)
+        oauth = read_oauth(profile)
+        key = account.get("accountUuid") or profile
+        entry = accounts.setdefault(key, {"profiles": [], "email": account.get("emailAddress"),
+                                          "oauth": None, "cache": None})
+        entry["profiles"].append(profile)
+        if cache and cache.get("accountUuid") not in (None, account.get("accountUuid")):
+            cache = None  # saved while the profile was signed in to another account
+        if oauth and (entry["oauth"] is None or oauth.get("expiresAt", 0) > entry["oauth"].get("expiresAt", 0)):
+            entry["oauth"] = oauth
+        if cache and (entry["cache"] is None or cache.get("fetchedAtMs", 0) > entry["cache"].get("fetchedAtMs", 0)):
+            entry["cache"] = cache
+    return list(accounts.values())
+
+
+def account_usage(entry, cached=False):
+    """(usage, saved_at, why): the live usage body with saved_at None, or else Claude Code's
+    snapshot and when it was saved (both None without one) and why it isn't live."""
+    oauth = entry["oauth"]
+    if cached:
+        why = "--cached"
+    elif not oauth or not oauth.get("accessToken"):
+        why = "not signed in"
+    elif oauth.get("expiresAt", 0) / 1000 < time.time() + 60:
+        why = "token expired; run claude in this profile to renew it"
+    else:
+        usage, why = fetch_usage(oauth["accessToken"])
+        if usage is not None:
+            return usage, None, None
+    if entry["cache"] is None:
+        return None, None, why
+    return entry["cache"].get("utilization") or {}, entry["cache"].get("fetchedAtMs", 0) / 1000, why
+
+
+def load_usage(profiles, cached=False):
+    """[(account entry, (usage, saved_at, why))] for the accounts behind `profiles`, fetched in parallel."""
+    entries = load_accounts(profiles)
+    with ThreadPoolExecutor(max_workers=max(len(entries), 1)) as pool:
+        return list(zip(entries, pool.map(lambda entry: account_usage(entry, cached), entries)))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Show how much of each Claude plan limit is left, for every ~/.claude* profile.")
@@ -208,65 +264,32 @@ def main():
         else (lambda code, s: s)
     now = time.time()
 
-    # One entry per account: profiles signed in to the same account share its limits.
-    accounts = {}
-    for profile in find_profiles():
-        account, cache = read_config(profile)
-        oauth = read_oauth(profile)
-        key = account.get("accountUuid") or profile
-        entry = accounts.setdefault(key, {"profiles": [], "email": account.get("emailAddress"),
-                                          "oauth": None, "cache": None})
-        entry["profiles"].append(profile)
-        if cache and cache.get("accountUuid") not in (None, account.get("accountUuid")):
-            cache = None  # saved while the profile was signed in to another account
-        if oauth and (entry["oauth"] is None or oauth.get("expiresAt", 0) > entry["oauth"].get("expiresAt", 0)):
-            entry["oauth"] = oauth
-        if cache and (entry["cache"] is None or cache.get("fetchedAtMs", 0) > entry["cache"].get("fetchedAtMs", 0)):
-            entry["cache"] = cache
-
-    def live(entry):
-        oauth = entry["oauth"]
-        if args.cached:
-            return None, "--cached"
-        if not oauth or not oauth.get("accessToken"):
-            return None, "not signed in"
-        if oauth.get("expiresAt", 0) / 1000 < now + 60:
-            return None, "token expired; run claude in this profile to renew it"
-        return fetch_usage(oauth["accessToken"])
-
-    entries = list(accounts.values())
-    with ThreadPoolExecutor(max_workers=max(len(entries), 1)) as pool:
-        results = list(pool.map(live, entries))
-
     blocks = []
-    for entry, (usage, why) in zip(entries, results):
+    for entry, (usage, saved_at, why) in load_usage(find_profiles(), args.cached):
         names = ", ".join("~" + p[len(HOME):] for p in entry["profiles"])
-        cached = usage is None and entry["cache"] is not None
-        if usage is not None:
-            source = paint("32", "live")
-        elif cached:
-            usage = entry["cache"].get("utilization") or {}
-            age = duration(now - entry["cache"].get("fetchedAtMs", 0) / 1000)
-            source = paint("33", "cached %s ago" % age) + paint("2", " (%s)" % why)
-        else:
+        if usage is None:
             source = paint("31", "no data") + paint("2", " (%s)" % why)
+        elif saved_at is None:
+            source = paint("32", "live")
+        else:
+            source = paint("33", "cached %s ago" % duration(now - saved_at)) + paint("2", " (%s)" % why)
         details = ([entry["email"] or "?"] if args.email else []) + [plan_text(entry["oauth"])]
         header = paint("1;36", names) + "  " + paint("2", " · ".join(details) + " · ") + source
-        blocks.append((header, usage_rows(usage) if usage else [], extra_usage_text(usage or {}), cached))
+        blocks.append((header, usage_rows(usage) if usage else [], extra_usage_text(usage or {}), saved_at))
 
     width = max([len(row[0]) for _, rows, _, _ in blocks for row in rows] or [0])
     unlabeled = False
     print(paint("1", "Claude plan usage by profile") + paint("2", " (% left)"))
-    for header, rows, extra, cached in blocks:
+    for header, rows, extra, saved_at in blocks:
         print(header)
         for label, used, resets_at, severity, note, labeled in rows:
             t = parse_time(resets_at)
-            if cached and t is not None and t <= now:
+            left = percent_left(used, resets_at, saved_at, now)
+            if left is None:
                 # The snapshot predates this window's reset, so its number is gone.
                 pct, bar, code = "   ?", "·" * 10, "2"
                 when = "reset %s, after this snapshot" % clock(t, now)
             else:
-                left = max(0, min(100, 100 - (used or 0)))
                 filled = int(round(left / 10.0))
                 pct, bar = "%3d%%" % left, "█" * filled + "░" * (10 - filled)
                 code = SEVERITY_COLOR.get(severity, "" if labeled else "2")

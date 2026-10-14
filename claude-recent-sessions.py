@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """List recent Claude Code CLI sessions from every ~/.claude* profile, with the
-command that resumes each one.
+command that resumes each one and how much of its profile's plan is left.
 
 Usage:
-    python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--full]
+    python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--full] [--cached] [--no-usage]
 
-  HOURS  : how far back to look (default 24). Accepts 36, 1.5, 12h or 3d.
-  -n N   : show only the newest N sessions per folder (default: all).
-  --all  : also list sessions last used from Claude Desktop's Code tab or the
-           SDK (claude -p, apps driving Claude Code). Hidden by default.
-  --full : print CLAUDE_CONFIG_DIR=~/.claude-<name> claude ... instead of the
-           cl shortcut, for shells that don't define it.
+  HOURS      : how far back to look (default 24). Accepts 36, 1.5, 12h or 3d.
+  -n N       : show only the newest N sessions per folder (default: all).
+  --all      : also list sessions last used from Claude Desktop's Code tab or the
+               SDK (claude -p, apps driving Claude Code). Hidden by default.
+  --full     : print CLAUDE_CONFIG_DIR=~/.claude-<name> claude ... instead of the
+               cl shortcut, for shells that don't define it.
+  --cached   : take plan usage from the snapshot Claude Code last saved instead
+               of asking the API.
+  --no-usage : leave plan usage out.
 
 Output is grouped by folder (A-Z), each headed by the cd command to run first,
 with the newest session first within each folder. Sessions in a
@@ -18,6 +21,13 @@ with the newest session first within each folder. Sessions in a
 function from ~/.zshrc:
 
     cl() { CLAUDE_CONFIG_DIR="$HOME/.claude-$1" claude "${@:2}"; }
+
+After its age, each session line shows what's left of its profile's plan
+limits: the 5-hour session (5h), the weekly limit (week) and per-model weekly
+limits such as Fable. They come from claude-usage.py, which this script loads, so keep the
+two in one folder. When an account can't be asked live, Claude Code's last
+saved snapshot is used and listed at the bottom with its age; ? marks a limit
+that has reset since that snapshot.
 
 A profile is any ~/.claude* directory (plus $CLAUDE_CONFIG_DIR) that holds a
 projects/ folder, so Desktop data dirs like ~/.claude-instances are skipped.
@@ -28,6 +38,7 @@ marked so you don't resume them twice.
 """
 import argparse
 import glob
+import importlib.util
 import json
 import mmap
 import os
@@ -255,6 +266,48 @@ def resume_command(profile, session_id, full):
     return "CLAUDE_CONFIG_DIR=%s claude --resume %s" % (shell_path(profile), session_id)
 
 
+def load_usage_module():
+    """claude-usage.py from this script's folder, loaded as a module, or None if it's missing."""
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "claude-usage.py")
+    if not os.path.isfile(path):
+        return None
+    sys.dont_write_bytecode = True  # leave no __pycache__ folder beside the scripts
+    spec = importlib.util.spec_from_file_location("claude_usage", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def usage_cells(usage_mod, results, now, paint):
+    """profile -> (text, width): each plan limit's short name and % left, in columns
+    aligned across profiles."""
+    meters = {}
+    for profile, (usage, saved_at, _) in results.items():
+        meters[profile] = [] if usage is None else [
+            (usage_mod.row_label(row, short=True),
+             usage_mod.percent_left(row.get("percent"), row.get("resets_at"), saved_at, now),
+             row.get("severity"))
+            for row in usage.get("limits") or []]
+    pct = lambda left: "?" if left is None else "%d%%" % left
+    label_w, pct_w = {}, {}
+    for rows in meters.values():
+        for i, (label, left, _) in enumerate(rows):
+            label_w[i] = max(label_w.get(i, 0), len(label))
+            pct_w[i] = max(pct_w.get(i, 0), len(pct(left)))
+    cells = {}
+    for profile, rows in meters.items():
+        if not rows:
+            cells[profile] = (paint("2", "usage ?"), len("usage ?"))
+            continue
+        parts = [paint("2", label.ljust(label_w[i])) + " "
+                 + paint("2" if left is None else usage_mod.SEVERITY_COLOR.get(severity, ""),
+                         pct(left).rjust(pct_w[i]))
+                 for i, (label, left, severity) in enumerate(rows)]
+        width = sum(label_w[i] + 1 + pct_w[i] for i in range(len(rows))) + 2 * (len(rows) - 1)
+        cells[profile] = ("  ".join(parts), width)
+    return cells
+
+
 def ago(seconds):
     if seconds < 3600:
         return "%dm" % max(seconds // 60, 0)
@@ -292,10 +345,14 @@ def main():
                         help="also list sessions last used from Claude Desktop or the SDK")
     parser.add_argument("--full", action="store_true",
                         help="print CLAUDE_CONFIG_DIR=... claude instead of the %s shortcut" % SHORTCUT)
+    parser.add_argument("--cached", action="store_true",
+                        help="take plan usage from the snapshot Claude Code last saved instead of the API")
+    parser.add_argument("--no-usage", action="store_true", help="leave plan usage out")
     args = parser.parse_args()
 
     color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
-    paint = (lambda code, s: "\033[%sm%s\033[0m" % (code, s)) if color else (lambda code, s: s)
+    paint = (lambda code, s: "\033[%sm%s\033[0m" % (code, s) if code else s) if color \
+        else (lambda code, s: s)
     width = shutil.get_terminal_size((100, 24)).columns
 
     now = time.time()
@@ -339,22 +396,36 @@ def main():
         per_profile[s["profile"]] += 1
         shown.append(s)
 
-    window = ("%g" % args.hours) + "h"
-    print(paint("1", "Claude Code CLI sessions active in the last %s or open now" % window)
-          + paint("2", " (by folder, newest first)"))
-    if not shown:
-        print("  No sessions in this window. Try a longer one, e.g. %s 72" % os.path.basename(sys.argv[0]))
-
     groups = {}
     for s in shown:
         # Group by the exact path the transcript is filed under, not its realpath: an
         # old session filed under a symlinked path must be resumed from that path.
         groups.setdefault(s["cwd"] or HOME, []).append(s)
+    folders = []
     for folder in sorted(groups, key=str.lower):
-        missing = "" if os.path.isdir(folder) else "  " + paint("31", "(directory missing)")
-        print(paint("1;36", "cd " + shell_path(folder)) + missing)
         sessions = sorted(groups[folder], key=lambda s: s["when"], reverse=True)
         listed = sessions[:args.per_folder]  # all of them when -n isn't given
+        folders.append((folder, listed, len(sessions) - len(listed)))
+
+    # Plan usage for the profiles behind the listed sessions, one request per account.
+    usage_mod = None if args.no_usage else load_usage_module()
+    used_profiles = [p for p in profiles if any(s["profile"] == p for _, listed, _ in folders for s in listed)]
+    results = {}
+    if usage_mod:
+        for entry, result in usage_mod.load_usage(used_profiles, args.cached):
+            results.update(dict.fromkeys(entry["profiles"], result))
+    cells = usage_cells(usage_mod, results, now, paint) if results else {}
+    cells_width = max([w for _, w in cells.values()] or [0])
+
+    window = ("%g" % args.hours) + "h"
+    print(paint("1", "Claude Code CLI sessions active in the last %s or open now" % window)
+          + paint("2", " (by folder, newest first%s)" % ("; % = plan usage left" if cells else "")))
+    if not shown:
+        print("  No sessions in this window. Try a longer one, e.g. %s 72" % os.path.basename(sys.argv[0]))
+
+    for folder, listed, older in folders:
+        missing = "" if os.path.isdir(folder) else "  " + paint("31", "(directory missing)")
+        print(paint("1;36", "cd " + shell_path(folder)) + missing)
         for s in listed:
             # No profile here: the command shows it (plain `claude` means ~/.claude).
             meta = [(s["branch"], "2")] if s["branch"] else []
@@ -366,17 +437,33 @@ def main():
                              + (" (%s)" % entry["status"] if entry.get("status") else ""), "32"))
             if s["continued_in"]:
                 meta.append(("continued in " + s["continued_in"][:8], "2"))
-            room = width - 8 - sum(3 + len(text) for text, _ in meta)
-            print("  %s  %s%s" % (paint("2", ago(now - s["when"]).rjust(4)),
-                                  paint("1", truncate(s["title"], max(room, 20))),
-                                  "".join(paint("2", " · ") + paint(c, text) for text, c in meta)))
+            # The usage cell sits right above the command, which names the profile.
+            cell, cell_width = cells.get(s["profile"], ("", 0))
+            usage_col = cell + " " * (cells_width - cell_width + 2) if cells else ""
+            room = width - 8 - (cells_width + 2 if cells else 0) - sum(3 + len(text) for text, _ in meta)
+            print("  %s  %s%s%s" % (paint("2", ago(now - s["when"]).rjust(4)), usage_col,
+                                    paint("1", truncate(s["title"], max(room, 20))),
+                                    "".join(paint("2", " · ") + paint(c, text) for text, c in meta)))
             print(" " * 8 + resume_command(s["profile"], s["id"], args.full))
-        older = len(sessions) - len(listed)
         if older:
             print("  " + paint("2", ("+%d" % older).rjust(4) + "  older session" + "s" * (older > 1)))
 
     print(paint("2", "Profiles: " + ", ".join(
         "%s (%d)" % (shell_path(p), n) for p, n in per_profile.items())))
+    snapshots, no_data = {}, {}
+    for p in used_profiles:
+        if p in results:
+            usage, saved_at, why = results[p]
+            if usage is None:
+                no_data.setdefault(why, []).append(shell_path(p))
+            elif saved_at is not None:
+                snapshots.setdefault(why, []).append("%s %s ago" % (shell_path(p), ago(now - saved_at)))
+    for why, items in snapshots.items():
+        print(paint("2", "Usage from Claude Code's last snapshot (%s): %s" % (why, ", ".join(items))))
+    for why, items in no_data.items():
+        print(paint("2", "No usage data (%s): %s" % (why, ", ".join(items))))
+    if used_profiles and not args.no_usage and not usage_mod:
+        print(paint("2", "No usage data: claude-usage.py isn't in this script's folder"))
     notes = []
     if hidden:
         notes.append("Hidden: " + ", ".join("%d %s" % (n, k) for k, n in sorted(hidden.items()))
