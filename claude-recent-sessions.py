@@ -22,13 +22,14 @@ function from ~/.zshrc:
 
     cl() { CLAUDE_CONFIG_DIR="$HOME/.claude-$1" claude "${@:2}"; }
 
-After its age, each session line shows what's left of its profile's plan
-limits and how long until each one resets (↻): the 5-hour session (5h), the
-weekly limit (week) and per-model weekly limits such as Fable. They come from
-claude-usage.py, which this script loads, so keep the two in one folder. When
-an account can't be asked live, Claude Code's last saved snapshot is used and
-listed at the bottom with its age; ? marks a limit that has reset since that
-snapshot.
+Each resume command ends with a comment showing what's left of its profile's
+plan limits and how long until each one resets (↻): the 5-hour session (5h),
+the weekly limit (week) and per-model weekly limits such as Fable. The shell
+ignores the comment if you paste the whole line (zsh needs
+setopt interactivecomments). The numbers come from claude-usage.py, which this
+script loads, so keep the two in one folder. When an account can't be asked
+live, Claude Code's last saved snapshot is used and listed at the bottom with
+its age; ? marks a limit that has reset since that snapshot.
 
 A profile is any ~/.claude* directory (plus $CLAUDE_CONFIG_DIR) that holds a
 projects/ folder, so Desktop data dirs like ~/.claude-instances are skipped.
@@ -280,8 +281,8 @@ def load_usage_module():
 
 
 def usage_cells(usage_mod, results, now, paint):
-    """profile -> (text, width): each plan limit's short name, % left and time until it
-    resets, in columns aligned across profiles."""
+    """profile -> text: each plan limit's short name, % left and time until it resets,
+    in columns aligned across profiles."""
     meters = {}
     for profile, (usage, saved_at, _) in results.items():
         meters[profile] = []
@@ -300,16 +301,14 @@ def usage_cells(usage_mod, results, now, paint):
             w[:] = max(w[0], len(label)), max(w[1], len(pct)), max(w[2], len(reset))
     cells = {}
     for profile, rows in meters.items():
-        if not rows:
-            cells[profile] = (paint("2", "usage ?"), len("usage ?"))
-            continue
-        parts, width = [], 2 * (len(rows) - 1)
+        parts = []
         for i, (label, pct, code, reset) in enumerate(rows):
             label_w, pct_w, reset_w = widths[i]
+            if i < len(rows) - 1:
+                reset = reset.ljust(reset_w)  # keeps the next meter in its column
             parts.append(paint("2", label.ljust(label_w)) + " " + paint(code, pct.rjust(pct_w))
-                         + (" " + paint("2", reset.ljust(reset_w)) if reset_w else ""))
-            width += label_w + 1 + pct_w + (1 + reset_w if reset_w else 0)
-        cells[profile] = ("  ".join(parts), width)
+                         + (" " + paint("2", reset) if reset else ""))
+        cells[profile] = "  ".join(parts) if parts else paint("2", "usage ?")
     return cells
 
 
@@ -420,7 +419,9 @@ def main():
         for entry, result in usage_mod.load_usage(used_profiles, args.cached):
             results.update(dict.fromkeys(entry["profiles"], result))
     cells = usage_cells(usage_mod, results, now, paint) if results else {}
-    cells_width = max([w for _, w in cells.values()] or [0])
+    # The usage comments line up after the longest resume command.
+    command_width = max([len(resume_command(s["profile"], s["id"], args.full))
+                         for _, listed, _ in folders for s in listed] or [0])
 
     window = ("%g" % args.hours) + "h"
     print(paint("1", "Claude Code CLI sessions active in the last %s or open now" % window)
@@ -442,14 +443,15 @@ def main():
                              + (" (%s)" % entry["status"] if entry.get("status") else ""), "32"))
             if s["continued_in"]:
                 meta.append(("continued in " + s["continued_in"][:8], "2"))
-            # The usage cell sits right above the command, which names the profile.
-            cell, cell_width = cells.get(s["profile"], ("", 0))
-            usage_col = cell + " " * (cells_width - cell_width + 2) if cells else ""
-            room = width - 8 - (cells_width + 2 if cells else 0) - sum(3 + len(text) for text, _ in meta)
-            print("  %s  %s%s%s" % (paint("2", ago(now - s["when"]).rjust(4)), usage_col,
-                                    paint("1", truncate(s["title"], max(room, 20))),
-                                    "".join(paint("2", " · ") + paint(c, text) for text, c in meta)))
-            print(" " * 8 + resume_command(s["profile"], s["id"], args.full))
+            room = width - 8 - sum(3 + len(text) for text, _ in meta)
+            print("  %s  %s%s" % (paint("2", ago(now - s["when"]).rjust(4)),
+                                  paint("1", truncate(s["title"], max(room, 20))),
+                                  "".join(paint("2", " · ") + paint(c, text) for text, c in meta)))
+            command = resume_command(s["profile"], s["id"], args.full)
+            if cells:
+                # A shell comment, so pasting the whole line still runs just the command.
+                command = command.ljust(command_width) + "  " + paint("2", "#") + " " + cells[s["profile"]]
+            print(" " * 8 + command)
         if older:
             print("  " + paint("2", ("+%d" % older).rjust(4) + "  older session" + "s" * (older > 1)))
 
