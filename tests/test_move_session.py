@@ -78,7 +78,8 @@ class MoveSession(unittest.TestCase):
         self.assertIn(new + ".jsonl — résumé ✓ 中文", json.loads(dst[4])["message"]["content"])
         self.assertIn(os.path.join(self.b, "plans", "happy-test-plan.md"), json.loads(dst[5])["content"])
         with open(os.path.join(new, "subagents", "agent-1.jsonl"), encoding="utf-8") as fh:
-            self.assertIn(os.path.join(new, "tool-results", "out.txt"), fh.read())
+            subagent = json.loads(fh.readline())["message"]["content"]  # JSON: Windows paths are escaped in the raw text
+        self.assertIn(os.path.join(new, "tool-results", "out.txt"), subagent)
         self.assertTrue(os.path.isfile(os.path.join(self.b, "file-history", S1, "abc@v1")))
         self.assertTrue(os.path.isfile(os.path.join(self.b, "plans", "happy-test-plan.md")))
         self.assertAlmostEqual(os.path.getmtime(new + ".jsonl"), os.path.getmtime(self.transcript), places=2)
