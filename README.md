@@ -1,4 +1,4 @@
-# Multiple Claude accounts on macOS — isolated Desktop instances and Claude Code CLI profiles
+# Multiple Claude accounts — isolated Desktop instances and Claude Code CLI profiles
 
 Run **two (or more) fully isolated Claude Desktop instances** side by side on macOS — e.g. one
 signed into your **personal** account and one into your **work** account — each with its own
@@ -15,6 +15,11 @@ It also has **command-line helpers for Claude Code** (the `claude` CLI) for keep
 account there: `cl` runs Claude Code with a profile, `claude-where` finds any session, two scripts
 list recent sessions and plan usage across all profiles, and `claude-move-session` carries a session
 over to another profile. See [Claude Code CLI profiles](#claude-code-cli-profiles).
+
+|                          | macOS | Linux | Windows |
+|--------------------------|:-----:|:-----:|:-------:|
+| Claude Desktop instances |  yes  | no official Desktop app | [planned](#roadmap) |
+| Claude Code CLI tools    |  yes  |  yes  |   yes   |
 
 > ## ⭐ Recommended: give *every* account its own isolated instance
 >
@@ -55,7 +60,7 @@ already running."* Claude has **no per-profile single-instance lock**, so **ever
 another process** against the same profile dir. That stacks up duplicate windows and risks
 corrupting the shared profile.
 
-The **smart launcher** in this gist fixes it. On click it inspects *that specific instance*
+The **smart launcher** in this repo fixes it. On click it inspects *that specific instance*
 (matched by `--user-data-dir`; for the default instance, the main process that has *no*
 `--user-data-dir`) and does one of three things:
 
@@ -91,7 +96,7 @@ account. (Truly distinct *running* Dock icons would require a full standalone co
 ```bash
 # 0. Have Claude Desktop installed at /Applications/Claude.app  (https://claude.ai/download)
 
-# 1. Download the scripts from this gist, then make the helper executable
+# 1. Clone this repo (or download the scripts), then make the helper executable
 chmod +x make-claude-instance.sh
 
 # 2. Create a WORK instance (isolated profile) with a BLUE launcher
@@ -380,28 +385,47 @@ Resume it with:
 | `--no-keep`      | delete the original once the copy is checked, which moves it                 |
 | `--dry-run`      | show what would be copied and deleted, and change nothing                    |
 
-## Files in this gist
+## Files in this repo
 
-Claude Desktop instances:
+Claude Desktop instances (macOS):
 
 - **`make-claude-instance.sh`** — builds the `.app` wrapper (Info.plist, config, smart launcher) and optionally recolors the icon.
 - **`claude-launcher`** — the self-contained smart launcher template (embedded into each wrapper).
 - **`recolor-icon.py`** — hue/saturation recolor of the `.icns` (used by the helper; needs Pillow).
 
-Claude Code CLI profiles:
+Claude Code CLI profiles (macOS, Linux, Windows):
 
-- **`install.sh`** — links the five commands below into `~/.local/bin` (or `--bin DIR`).
-- **`cl`** — runs `claude` with a `~/.claude-<name>` profile.
-- **`claude-where`** — finds a session's files by ID or ID prefix.
+- **`install.sh`** / **`install.ps1`** — put the five commands below on your `PATH` (`~/.local/bin` by default).
+- **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile.
+- **`claude-where`** / **`claude-where.ps1`** — finds a session's files by ID or ID prefix.
 - **`claude-recent-sessions.py`** — recent sessions across profiles, with resume commands and plan usage.
 - **`claude-usage.py`** — plan usage left for every profile.
 - **`claude-move-session.py`** — copies a session to another profile, or moves it with `--no-keep`.
 
 `claude-recent-sessions.py` loads `claude-usage.py`, and `claude-move-session.py` loads both, so keep
-the three together.
+the three together. The `.ps1` files are the Windows versions of the `sh` ones.
+
+- **`tests/`** — tests for the CLI tools against throwaway home folders:
+  `python3 -m unittest discover -s tests`. They never read your real profiles, Keychain or the network.
+  GitHub Actions runs them on macOS, Linux and Windows (`.github/workflows/tests.yml`).
+
+## Roadmap
+
+- **Claude Desktop instances on Windows.** Claude Desktop is an Electron app there too, so a
+  separate `--user-data-dir` per account should work. A Windows version would create a shortcut per
+  instance with its own icon, and a launcher that brings a running instance forward instead of
+  opening a duplicate. It needs testing on a Windows machine first.
+- **Linux.** There's no official Claude Desktop for Linux, so only the CLI tools apply there.
 
 ## Credits
 
-Core `--user-data-dir` isolation technique by
-[Philipp Stracker](https://philippstracker.com/multiple-claude-instances/). Smart focus-or-launch
-behavior and icon recoloring added here.
+- **Claude Desktop instances:** the `make-claude-instance.sh`, `claude-launcher` and
+  `recolor-icon.py` scripts, and the Desktop sections of this README, are by
+  [Aaron Oxborrow](https://github.com/aoxborrow), from his
+  [gist](https://gist.github.com/aoxborrow/5a3a0ac0aa37819cc19439b70a552221) that this repo started
+  as a fork of. They build on the core `--user-data-dir` isolation technique from
+  [Philipp Stracker's gist](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
+  ([write-up](https://philippstracker.com/multiple-claude-instances/)), itself a cleaned-up version
+  of [weidwonder/claude-desktop-multi-instance](https://github.com/weidwonder/claude-desktop-multi-instance).
+- **Claude Code CLI tools:** `cl`, `claude-where`, `claude-recent-sessions`, `claude-usage`,
+  `claude-move-session`, the installers and the tests are by [Yi Wang](https://github.com/yiwang).
