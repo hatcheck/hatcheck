@@ -1,0 +1,12 @@
+# Python bytecode, from running the tests
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+
+# macOS Finder
+.DS_Store
+
+# Claude Code's personal settings for this folder
+.claude/settings.local.json
