@@ -243,28 +243,36 @@ it and what's left of that profile's plan:
 
 ```
 $ claude-recent-sessions
-Claude Code CLI sessions active in the last 24h or open now (by folder, newest first; % = plan usage left, ↻ = resets in)
+Claude Code CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
     4m  Fix flaky login test · main · ● open in pid 48213 (busy)
-        cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10      # 5h 100%         Fable 48% ↻4d6h
+        cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10      # 5h 100% █████         Fable 48% ███▍░░░ ↻████▎░░
     3h  Add rate limiting to the login endpoint · feat/rate-limit
-        claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d       # 5h  62% ↻2h41m  week  91% ↻3d2h
+        claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d       # 5h  62% ███▏░ ↻██▋░░  week  91% ██████▍ ↻███▏░░░
 cd ~/code/blog
    20h  Draft post on Rust lifetimes · main
-        cl personal --resume c47e2b1d-0a9f-4e8d-b7c6-5d4e3f2a1b0c  # 5h    ?         week  97% ↻5d2h
+        cl personal --resume c47e2b1d-0a9f-4e8d-b7c6-5d4e3f2a1b0c  # 5h    ? ·····         week  97% ██████▊ ↻█████▏░
 cd ~/notes
     6h  Plan next sprint · main
-        cl work --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e      # 5h 100%         Fable 48% ↻4d6h
+        cl work --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e      # 5h 100% █████         Fable 48% ███▍░░░ ↻████▎░░
 Profiles: ~/.claude (1), ~/.claude-personal (1), ~/.claude-work (2)
 Usage from Claude Code's last snapshot (token expired; run claude in this profile to renew it): ~/.claude-personal 9h ago
 ```
 
 - Run the folder's `cd` line, then the session's command. Sessions still open in a terminal are
   marked `● open`, so you don't resume one twice.
-- The comment after each command shows what's left of each plan limit and how long until it resets
-  (`↻`): the 5-hour session (`5h`), the weekly limit (`week`) and per-model weekly limits such as
-  `Fable`. `?` means the limit has reset since the saved snapshot it came from. Since it's a shell
-  comment, pasting the whole line runs just the command (zsh needs `setopt interactivecomments`).
+- The comment after each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
+  (`week`) and per-model weekly limits such as `Fable`. Each one has the % left and a bar of it, then
+  `↻` and a bar of the time left until it resets. Bars have a block per hour of the 5-hour window and
+  per day of a weekly one, so `↻████▎░░` is about 4 days to go. Add `--numbers` to see the exact
+  time after each bar: `↻████▎░░ 4d6h`.
+- Time bars are coloured by urgency: blue with most of the window to go, then gold and orange, and
+  red as the reset nears.
+- A plan bar shorter than its time bar means that limit is being used up faster than its window runs
+  out, like `Fable` above: 48% left with more than half the week to go. `?` means the limit has
+  reset since the saved snapshot it came from.
+- Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
+  `setopt interactivecomments`).
 - Usage is fetched live, one request per account. When that fails (expired token, rate limit), Claude
   Code's last saved snapshot is used instead and named at the bottom with its age.
 
@@ -275,24 +283,30 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 | `--all`      | also list sessions last used from Claude Desktop's Code tab or the SDK        |
 | `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`          |
 | `--cached`   | take usage from Claude Code's saved snapshots, without calling the API        |
+| `--numbers`  | also show the time until each limit resets as a number, after its bar         |
 | `--no-usage` | leave plan usage out                                                          |
 
 ### `claude-usage`: plan usage for every profile
 
 ```
 $ claude-usage
-Claude plan usage by profile (% left)
+Claude plan usage by profile (% left, then time left until reset)
 ~/.claude  pro · live
-  session (5h)       62% ██████░░░░ resets 5:01pm (in 2h41m)
-  week (all models)  91% █████████░ resets Sat 4:20pm (in 3d2h)
+  session (5h)       62% ██████▎░░░  █████▍░░░░ resets 5:01pm (in 2h41m)
+  week (all models)  91% █████████▏  ████▍░░░░░ resets Sat 4:20pm (in 3d2h)
 ~/.claude-personal  pro · cached 9h00m ago (token expired; run claude in this profile to renew it)
-  session (5h)         ? ·········· reset 10:20am, after this snapshot
-  week (all models)  97% ██████████ resets Mon 4:20pm (in 5d2h)
+  session (5h)         ? ··········             reset 10:20am, after this snapshot
+  week (all models)  97% █████████▊  ███████▎░░ resets Mon 4:20pm (in 5d2h)
 ~/.claude-work  team max 5x · live
   session (5h)      100% ██████████
-  week (Fable)       48% █████░░░░░ resets Sun 8:20pm (in 4d6h)
+  week (Fable)       48% ████▊░░░░░  ██████▏░░░ resets Sun 8:20pm (in 4d6h)
 ```
 
+- Each limit has two bars: what's left of it, then how much of its window, 5 hours or a week, is
+  left before it resets. In a terminal the second goes from blue with most of the window to go,
+  through gold and orange, to red as the reset nears. When the first bar is shorter than the
+  second, as for `Fable` here, the limit is being used up faster than its window runs out. A limit
+  without a reset time, like an unused 5-hour session, has no time bar.
 - It reads each profile's OAuth token from the Keychain and asks the same endpoint as Claude Code's
   `/usage`. The token is only read, never refreshed: a refresh rotates it and would sign Claude Code
   out of that profile.

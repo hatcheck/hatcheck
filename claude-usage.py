@@ -20,6 +20,12 @@ server adds. Percentages are what's left (100 - used). Quota fields the server
 sends that Claude Code doesn't display are listed under their raw names.
 Profiles signed in to the same account are shown together.
 
+Each row has two bars: what's left of the limit, then how much of its window,
+5 hours or a week, is left before it resets. The second is coloured by urgency,
+from blue with most of the window to go, through gold and orange, to red as the
+reset nears. When the first bar is shorter than the second, the limit is
+being used up faster than its window runs out.
+
 claude-recent-sessions.py loads this file to show the same numbers beside each
 session, so keep the two scripts in the same folder.
 """
@@ -40,6 +46,10 @@ HOME = os.path.expanduser("~")
 DEFAULT_PROFILE = os.path.join(HOME, ".claude")
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 SEVERITY_COLOR = {"normal": "32", "warning": "33", "critical": "31"}
+# Time-until-reset bars, in equal steps from red at the reset, through orange, gold
+# and muted tones, to blue at the start of the window (xterm 256-colour palette).
+# Green is left out so the bars don't look like the green plan bars beside them.
+URGENCY_COLORS = (160, 166, 172, 178, 143, 109, 110, 74, 68, 33, 27)
 
 
 def find_profiles():
@@ -138,6 +148,36 @@ def clock(t, now):
     return datetime.fromtimestamp(t).strftime(fmt).replace("AM", "am").replace("PM", "pm")
 
 
+def bar(fraction, cells=10):
+    """A bar `cells` wide, filled to `fraction` (0 to 1) in eighths of a cell."""
+    fraction = max(0.0, min(1.0, fraction))
+    eighths = int(round(fraction * cells * 8))
+    if 0 < fraction < 1:
+        eighths = min(max(eighths, 1), cells * 8 - 1)  # only exactly 0 or 1 looks empty or full
+    return ("█" * (eighths // 8) + " ▏▎▍▌▋▊▉"[eighths % 8]).rstrip().ljust(cells, "░")
+
+
+def urgency_color(fraction):
+    """Colour for a time-until-reset bar `fraction` full: red as the reset nears,
+    through orange and gold, to blue with most of the window to go."""
+    step = min(int(max(0.0, fraction) * len(URGENCY_COLORS)), len(URGENCY_COLORS) - 1)
+    if "256" in os.environ.get("TERM", "") or os.environ.get("COLORTERM"):
+        return "38;5;%d" % URGENCY_COLORS[step]
+    # A 16-colour terminal: the nearest basic colour.
+    return "31" if step < 2 else "33" if step < 4 else "36" if step < 7 else "34"
+
+
+def window_seconds(name):
+    """How long a meter's window runs, from a limits[] row's group or kind or a quota
+    field's name: 5 hours, a week, or None when it isn't known."""
+    name = name or ""
+    if name in ("session", "five_hour"):
+        return 5 * 3600
+    if name.startswith(("weekly", "seven_day")):
+        return 7 * 86400
+    return None
+
+
 def plan_text(oauth):
     if not oauth:
         return "not signed in"
@@ -172,8 +212,9 @@ def percent_left(used, resets_at, saved_at, now):
 
 
 def usage_rows(usage):
-    """(label, percent used, resets_at, severity, note, labeled) for every meter in a usage body."""
-    rows = [(row_label(r), r.get("percent"), r.get("resets_at"), r.get("severity"), "", True)
+    """(label, percent used, resets_at, window, severity, note, labeled) for every meter in a usage body."""
+    rows = [(row_label(r), r.get("percent"), r.get("resets_at"), window_seconds(r.get("group") or r.get("kind")),
+             r.get("severity"), "", True)
             for r in usage.get("limits") or []]
     seen = {(r.get("percent"), r.get("resets_at")) for r in usage.get("limits") or []}
     # Other quota fields (five_hour, seven_day, codenamed meters); skip ones that
@@ -188,7 +229,8 @@ def usage_rows(usage):
             note.append("$%.2f of $%g used" % (value.get("used_dollars") or 0, value["limit_dollars"]))
         if value.get("locked_reason"):
             note.append("locked: %s" % value["locked_reason"])
-        rows.append((key, value["utilization"], value.get("resets_at"), None, " · ".join(note), False))
+        rows.append((key, value["utilization"], value.get("resets_at"), window_seconds(key), None,
+                     " · ".join(note), False))
     return rows
 
 
@@ -279,25 +321,28 @@ def main():
 
     width = max([len(row[0]) for _, rows, _, _ in blocks for row in rows] or [0])
     unlabeled = False
-    print(paint("1", "Claude plan usage by profile") + paint("2", " (% left)"))
+    print(paint("1", "Claude plan usage by profile") + paint("2", " (% left, then time left until reset)"))
     for header, rows, extra, saved_at in blocks:
         print(header)
-        for label, used, resets_at, severity, note, labeled in rows:
+        for label, used, resets_at, window, severity, note, labeled in rows:
             t = parse_time(resets_at)
             left = percent_left(used, resets_at, saved_at, now)
+            time_bar = " " * 10  # stays blank unless the reset time and the window's length are known
             if left is None:
                 # The snapshot predates this window's reset, so its number is gone.
-                pct, bar, code = "   ?", "·" * 10, "2"
+                pct, plan_bar, code = "   ?", "·" * 10, "2"
                 when = "reset %s, after this snapshot" % clock(t, now)
             else:
-                filled = int(round(left / 10.0))
-                pct, bar = "%3d%%" % left, "█" * filled + "░" * (10 - filled)
+                pct, plan_bar = "%3d%%" % left, bar(left / 100.0)
                 code = SEVERITY_COLOR.get(severity, "" if labeled else "2")
                 when = "resets %s (in %s)" % (clock(t, now), duration(t - now)) if t else ""
+                if t and window:
+                    to_go = (t - now) / window  # fraction of the window left
+                    time_bar = paint(urgency_color(to_go) if labeled else "2", bar(to_go))
             tail = " · ".join(text for text in (when, note) if text)
-            print("  %s %s %s%s" % (paint("" if labeled else "2", label.ljust(width)),
-                                    paint(code, pct), paint(code, bar),
-                                    " " + paint("2", tail) if tail else ""))
+            print(("  %s %s %s  %s %s" % (paint("" if labeled else "2", label.ljust(width)),
+                                          paint(code, pct), paint(code, plan_bar), time_bar,
+                                          paint("2", tail) if tail else "")).rstrip())
             unlabeled |= not labeled
         if extra:
             print("  " + paint("2", extra))

@@ -3,7 +3,8 @@
 command that resumes each one and how much of its profile's plan is left.
 
 Usage:
-    python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--full] [--cached] [--no-usage]
+    python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--full]
+                                      [--cached] [--numbers] [--no-usage]
 
   HOURS      : how far back to look (default 24). Accepts 36, 1.5, 12h or 3d.
   -n N       : show only the newest N sessions per folder (default: all).
@@ -13,6 +14,8 @@ Usage:
                cl shortcut, for machines without it.
   --cached   : take plan usage from the snapshot Claude Code last saved instead
                of asking the API.
+  --numbers  : also show the time until each limit resets as a number, after
+               its bar: ↻██▋░░░░ 2d16h.
   --no-usage : leave plan usage out.
 
 Output is grouped by folder (A-Z), each headed by the cd command to run first,
@@ -23,13 +26,18 @@ repo (install.sh puts it on your PATH) and works like this shell function:
     cl() { CLAUDE_CONFIG_DIR="$HOME/.claude-$1" claude "${@:2}"; }
 
 Each resume command ends with a comment showing what's left of its profile's
-plan limits and how long until each one resets (↻): the 5-hour session (5h),
-the weekly limit (week) and per-model weekly limits such as Fable. The shell
-ignores the comment if you paste the whole line (zsh needs
-setopt interactivecomments). The numbers come from claude-usage.py, which this
-script loads, so keep the two in one folder. When an account can't be asked
-live, Claude Code's last saved snapshot is used and listed at the bottom with
-its age; ? marks a limit that has reset since that snapshot.
+plan limits, as a % and a bar, and after ↻ a bar of the time left until each
+one resets: the 5-hour session (5h), the weekly limit (week) and per-model
+weekly limits such as Fable. Bars have a block per hour of the 5-hour window
+and per day of a weekly one, so ↻██▌░░░░ means about 2½ days to go. Time bars
+are coloured by urgency: blue with most of the window to go, then gold and
+orange, red as the reset nears. A plan bar shorter than its time bar means that
+limit is being used up faster than its window runs out. The shell ignores the
+comment if you paste the whole line (zsh needs setopt interactivecomments).
+The numbers come from claude-usage.py, which this script loads, so keep the two
+in one folder. When an account can't be asked live, Claude Code's last saved
+snapshot is used and listed at the bottom with its age; ? marks a limit that
+has reset since that snapshot.
 
 A profile is any ~/.claude* directory (plus $CLAUDE_CONFIG_DIR) that holds a
 projects/ folder, so Desktop data dirs like ~/.claude-instances are skipped.
@@ -280,35 +288,53 @@ def load_usage_module():
     return module
 
 
-def usage_cells(usage_mod, results, now, paint):
-    """profile -> text: each plan limit's short name, % left and time until it resets,
-    in columns aligned across profiles."""
+def usage_cells(usage_mod, results, now, paint, numbers=False):
+    """profile -> text: each plan limit's short name, % left and a bar of it, then ↻ and
+    a bar of the time left until it resets, coloured by urgency (followed by that time
+    as a number when `numbers` is set), in columns aligned across profiles. Bars have
+    a block per hour of the 5-hour window, or per day of a weekly one."""
     meters = {}
     for profile, (usage, saved_at, _) in results.items():
         meters[profile] = []
         for row in (usage or {}).get("limits") or []:
             left = usage_mod.percent_left(row.get("percent"), row.get("resets_at"), saved_at, now)
             reset = usage_mod.parse_time(row.get("resets_at"))
-            meters[profile].append((
-                usage_mod.row_label(row, short=True),
-                "?" if left is None else "%d%%" % left,
-                "2" if left is None else usage_mod.SEVERITY_COLOR.get(row.get("severity"), ""),
-                "↻" + usage_mod.duration(reset - now) if left is not None and reset is not None else ""))
-    widths = {}  # meter slot -> widest [label, % left, reset] in it
+            window = usage_mod.window_seconds(row.get("group") or row.get("kind"))
+            blocks = (window // 86400 or window // 3600) if window else 5
+            if left is None:  # reset since the snapshot
+                pct, code, plan, until, until_code = "?", "2", "·" * blocks, "", ""
+            else:
+                pct, code = "%d%%" % left, usage_mod.SEVERITY_COLOR.get(row.get("severity"), "")
+                plan, until, until_code = usage_mod.bar(left / 100.0, blocks), "", ""
+                if reset is not None:
+                    # Coloured by urgency; the number shows with --numbers, or when there's
+                    # no window to draw a bar for.
+                    to_go = (reset - now) / window if window else None  # fraction of the window left
+                    time_bar = usage_mod.bar(to_go, blocks) if window else ""
+                    number = usage_mod.duration(reset - now) if numbers or not window else ""
+                    until = "↻" + (time_bar + " " + number).strip()
+                    until_code = usage_mod.urgency_color(to_go) if window else "2"
+            meters[profile].append((usage_mod.row_label(row, short=True), pct, code, plan, until, until_code))
+    widths = {}  # meter slot -> widest [label, % left, plan bar, time bar] in it
     for rows in meters.values():
-        for i, (label, pct, _, reset) in enumerate(rows):
-            w = widths.setdefault(i, [0, 0, 0])
-            w[:] = max(w[0], len(label)), max(w[1], len(pct)), max(w[2], len(reset))
+        for i, (label, pct, _, plan, until, _) in enumerate(rows):
+            w = widths.setdefault(i, [0, 0, 0, 0])
+            w[:] = [max(n, len(text)) for n, text in zip(w, (label, pct, plan, until))]
+
+    def padded(code, text, width, right=False):
+        gap = " " * (width - len(text))
+        text = paint(code, text) if text else ""
+        return gap + text if right else text + gap
+
     cells = {}
     for profile, rows in meters.items():
         parts = []
-        for i, (label, pct, code, reset) in enumerate(rows):
-            label_w, pct_w, reset_w = widths[i]
-            if i < len(rows) - 1:
-                reset = reset.ljust(reset_w)  # keeps the next meter in its column
-            parts.append(paint("2", label.ljust(label_w)) + " " + paint(code, pct.rjust(pct_w))
-                         + (" " + paint("2", reset) if reset else ""))
-        cells[profile] = "  ".join(parts) if parts else paint("2", "usage ?")
+        for i, (label, pct, code, plan, until, until_code) in enumerate(rows):
+            label_w, pct_w, plan_w, until_w = widths[i]
+            # Padded so the next meter lines up; the trailing gap is cut below.
+            parts.append(" ".join((padded("2", label, label_w), padded(code, pct, pct_w, right=True),
+                                   padded(code, plan, plan_w), padded(until_code, until, until_w))))
+        cells[profile] = "  ".join(parts).rstrip() if parts else paint("2", "usage ?")
     return cells
 
 
@@ -351,6 +377,8 @@ def main():
                         help="print CLAUDE_CONFIG_DIR=... claude instead of the %s shortcut" % SHORTCUT)
     parser.add_argument("--cached", action="store_true",
                         help="take plan usage from the snapshot Claude Code last saved instead of the API")
+    parser.add_argument("--numbers", action="store_true",
+                        help="also show the time until each limit resets as a number, after its bar")
     parser.add_argument("--no-usage", action="store_true", help="leave plan usage out")
     args = parser.parse_args()
 
@@ -418,14 +446,15 @@ def main():
     if usage_mod:
         for entry, result in usage_mod.load_usage(used_profiles, args.cached):
             results.update(dict.fromkeys(entry["profiles"], result))
-    cells = usage_cells(usage_mod, results, now, paint) if results else {}
+    cells = usage_cells(usage_mod, results, now, paint, args.numbers) if results else {}
     # The usage comments line up after the longest resume command.
     command_width = max([len(resume_command(s["profile"], s["id"], args.full))
                          for _, listed, _ in folders for s in listed] or [0])
 
     window = ("%g" % args.hours) + "h"
     print(paint("1", "Claude Code CLI sessions active in the last %s or open now" % window)
-          + paint("2", " (by folder, newest first%s)" % ("; % = plan usage left, ↻ = resets in" if cells else "")))
+          + paint("2", " (by folder, newest first%s)" % (
+              "; % = plan left, ↻ = hours/days until reset" if cells else "")))
     if not shown:
         print("  No sessions in this window. Try a longer one, e.g. %s 72" % os.path.basename(sys.argv[0]))
 
