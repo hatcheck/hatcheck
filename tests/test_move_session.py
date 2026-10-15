@@ -2,9 +2,13 @@
 import json
 import os
 import re
+import select
+import subprocess
+import sys
+import time
 import unittest
 
-from helpers import NOW, FakeHome, iso, rec, write
+from helpers import NOW, REPO, WINDOWS, FakeHome, iso, rec, write
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
@@ -90,6 +94,7 @@ class MoveSession(unittest.TestCase):
                      "now point to the copies", "Kept the original", "cd " + self.h.shown(self.cwd),
                      "cl b --resume " + S1):
             self.assertIn(text, out)
+        self.assertNotIn("Resume it now", out)  # not a terminal: no question
         code, out = self.h.run(SCRIPT, S1, "b")
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("(already there)"), 4)
@@ -153,6 +158,78 @@ class MoveSession(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertTrue(os.path.isfile(self.copy_of(self.fresh) + ".jsonl"))
         self.assertIn("cl fresh --resume " + S1, out)
+
+
+class ResumeNow(unittest.TestCase):
+    """The y in "Resume it now in ...? [y/N]": Claude Code in the new profile, from the session's folder."""
+
+    def setUp(self):
+        self.h = FakeHome()
+        self.addCleanup(self.h.cleanup)
+        self.default, self.b = self.h.profile("default", "acct-1"), self.h.profile("b", "acct-2")
+        self.cwd = self.h.folder("code", "api")
+        self.h.session(self.default, self.cwd, S1, "Fix the flaky login test", 180)
+        # A fake claude that prints the profile it got, where it runs and its arguments.
+        self.bin = os.path.join(self.h.root, "fakebin")
+        if WINDOWS:
+            write(os.path.join(self.bin, "claude.cmd"),
+                  "@echo off\r\nif defined CLAUDE_CONFIG_DIR (echo CLAUDE_CONFIG_DIR=%CLAUDE_CONFIG_DIR% cwd=%CD% args=%*)"
+                  " else (echo CLAUDE_CONFIG_DIR=unset cwd=%CD% args=%*)\r\n")
+        else:
+            write(os.path.join(self.bin, "claude"), '#!/bin/sh\necho "CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR-unset} cwd=$(pwd) args=$*"\n')
+            os.chmod(os.path.join(self.bin, "claude"), 0o755)
+        self.env = dict(self.h.env(), PATH=self.bin + os.pathsep + (os.environ["PATH"] if WINDOWS else "/bin"))
+
+    def expect(self, out, config_dir):
+        line = "CLAUDE_CONFIG_DIR=%s cwd=%s args=--resume %s" % (config_dir, self.cwd, S1)
+        self.assertIn(line.lower() if WINDOWS else line, out.lower() if WINDOWS else out)
+
+    def test_runs_claude_in_the_new_profile(self):
+        snippet = ("import sys; sys.path.insert(0, %r); from helpers import load; "
+                   "load('claude-move-session.py').resume_now(*sys.argv[1:])" % os.path.dirname(os.path.abspath(__file__)))
+        for target, config_dir in ((self.b, self.b), (self.default, "unset")):
+            env = dict(self.env, CLAUDE_CONFIG_DIR=os.path.join(self.h.home, ".claude-other"))
+            p = subprocess.run([sys.executable, "-c", snippet, target, S1, self.cwd], env=env, cwd=self.h.root,
+                               capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.expect(p.stdout, config_dir)  # ~/.claude: CLAUDE_CONFIG_DIR unset, as plain claude has it
+
+    @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
+    def test_asks_in_a_terminal(self):
+        import pty
+
+        def run(answer):
+            master, slave = pty.openpty()
+            p = subprocess.Popen([sys.executable, os.path.join(REPO, SCRIPT), S1[:8], "b"], stdin=slave,
+                                 stdout=slave, stderr=slave, env=self.env, cwd=self.h.root)
+            os.close(slave)
+            out, sent, deadline = b"", False, time.time() + 30
+            while time.time() < deadline:
+                ready, _, _ = select.select([master], [], [], 0.2)
+                if ready:
+                    try:
+                        chunk = os.read(master, 4096)
+                    except OSError:  # Linux, once the other end has closed
+                        chunk = b""
+                    if not chunk:
+                        break
+                    out += chunk
+                elif p.poll() is not None:
+                    break
+                if not sent and b"[y/N]" in out:
+                    os.write(master, answer + b"\n")
+                    sent = True
+            p.wait(timeout=10)
+            os.close(master)
+            return p.returncode, out.decode("utf-8", "replace").replace("\r\n", "\n")
+
+        code, out = run(b"")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Resume it now in %s? [y/N]" % self.h.shown(self.b), out)
+        self.assertNotIn("args=", out)  # Enter means no
+        code, out = run(b"y")
+        self.assertEqual(code, 0, out)
+        self.expect(out, self.b)
 
 
 if __name__ == "__main__":

@@ -413,6 +413,7 @@ Kept the original in ~/.claude; --no-keep deletes it once the copy is checked.
 Resume it with:
   cd ~/code/api
   cl work --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+Resume it now in ~/.claude-work? [y/N]
 ```
 
 - It copies the transcript, the folder of subagent transcripts and saved tool output, the `/rewind`
@@ -421,10 +422,12 @@ Resume it with:
   Claude's thinking, whose signatures would stop matching.
 - A session that's open in a terminal is refused: quit it first, so it stops changing.
   `claude-recent-sessions` marks those `● open`.
-- Resume it with the printed command, from the directory it ran in. The conversation comes across
-  whole; the account and its plan limits, settings, permissions, MCP servers, plugins and project
-  memory are the new profile's. If the new account rejects the signatures on earlier thinking,
-  Claude Code drops those thinking blocks and carries on.
+- Resume it with the printed command, from the directory it ran in, or answer `y` when it asks and
+  it starts Claude Code there with the new profile. It only asks in a terminal, so scripts never
+  wait on it. The conversation comes across whole; the account and its plan limits, settings,
+  permissions, MCP servers, plugins and project memory are the new profile's. If the new account
+  rejects the signatures on earlier thinking, Claude Code drops those thinking blocks and carries
+  on.
 - Plan files stay in the old profile even with `--no-keep`, since sessions can share one.
 - If the session's last reply came from Z.ai or Kimi, it also prints the `cl -z` or `cl -k` command
   that carries on there instead of on the new profile's Claude plan.

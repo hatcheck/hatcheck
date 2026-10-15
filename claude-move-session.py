@@ -21,10 +21,12 @@ refused: quit it first, so it stops changing. Plan files stay in the old
 profile even with --no-keep, since sessions can share one.
 
 Resume it with the command printed at the end, from the directory it ran in.
-The conversation comes across whole; the account and its plan limits,
-settings, permissions, MCP servers, plugins and project memory are the new
-profile's. If the new account rejects the signatures on earlier thinking,
-Claude Code drops those thinking blocks and carries on.
+In a terminal it then asks whether to do that now: y starts Claude Code in
+the new profile, from that directory. The conversation comes across whole;
+the account and its plan limits, settings, permissions, MCP servers, plugins
+and project memory are the new profile's. If the new account rejects the
+signatures on earlier thinking, Claude Code drops those thinking blocks and
+carries on.
 
 This script loads claude-recent-sessions.py, which loads claude-usage.py, so
 keep the three in one folder.
@@ -36,6 +38,8 @@ import json
 import os
 import re
 import shutil
+import signal
+import subprocess
 import sys
 
 HOME = os.path.expanduser("~")
@@ -165,6 +169,24 @@ def size_text(n):
     if n < 1024:
         return "%d bytes" % n
     return "%.1f KB" % (n / 1024.0) if n < 1024 ** 2 else "%.1f MB" % (n / 1024.0 ** 2)
+
+
+def resume_now(target, sid, cwd):
+    """Start Claude Code on the session in its new profile, from the folder it ran in."""
+    claude = shutil.which("claude")
+    if not claude:
+        sys.exit("claude isn't on your PATH; once it is, resume it with the command above")
+    env = dict(os.environ)
+    if os.path.realpath(target) == os.path.realpath(os.path.join(HOME, ".claude")):
+        env.pop("CLAUDE_CONFIG_DIR", None)  # ~/.claude is where plain claude looks
+    else:
+        env["CLAUDE_CONFIG_DIR"] = target  # spelled as cl spells it: the login is filed under this string
+    sys.stdout.flush()
+    os.chdir(cwd)
+    if os.name == "nt":  # no exec on Windows: run it and leave Ctrl+C to Claude Code
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        sys.exit(subprocess.call([claude, "--resume", sid], env=env))
+    os.execve(claude, [claude, "--resume", sid], env)
 
 
 def main():
@@ -305,6 +327,17 @@ def main():
     if provider:
         print("Its last reply came from %s; to carry on there rather than on this profile's Claude plan:\n  %s"
               % (info["model"], sessions.resume_command(target, sid, False, provider)))
+
+    # In a terminal, offer to run that now. Never when piped, so scripts don't stop to ask.
+    cwd = info["cwd"] if info else None
+    if not args.dry_run and cwd and os.path.isdir(cwd) and sys.stdin.isatty() and sys.stdout.isatty():
+        try:
+            answer = input("Resume it now in %s? [y/N] " % show(target))
+        except (EOFError, KeyboardInterrupt):
+            print()
+            answer = ""
+        if answer.strip().lower() in ("y", "yes"):
+            resume_now(target, sid, cwd)
 
 
 if __name__ == "__main__":
