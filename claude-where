@@ -5,4 +5,10 @@
 # says how to resume it (claude, or cl <profile>), and the projects/ folder is
 # the directory it ran in, with every non-alphanumeric character turned into -.
 [ -n "$1" ] || { echo "usage: claude-where <session id or prefix>" >&2; exit 2; }
-find "$HOME/.claude" "$HOME"/.claude-* -maxdepth 3 -path '*/projects/*' -name "$1*" 2>/dev/null
+# Exits 1 when nothing matches.
+status=1
+for profile in "$HOME/.claude" "$HOME"/.claude-*; do
+    [ -d "$profile/projects" ] || continue
+    if find "$profile/projects" -mindepth 2 -maxdepth 2 -name "$1*" | grep .; then status=0; fi
+done
+exit $status
