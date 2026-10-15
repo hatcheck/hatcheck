@@ -246,15 +246,15 @@ $ claude-recent-sessions
 Claude Code CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
     4m  Fix flaky login test · main · ● open in pid 48213 (busy)
-        cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10      # 5h 100% █████         Fable 48% ███▍░░░ ↻████▎░░
+        cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10      # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
     3h  Add rate limiting to the login endpoint · feat/rate-limit
-        claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d       # 5h  62% ███▏░ ↻██▋░░  week  91% ██████▍ ↻███▏░░░
+        claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d       # 5h  62% ███▏░ ↻██▋░░ 2h41m  week  91% ██████▍ ↻███▏░░░ 3d2h
 cd ~/code/blog
    20h  Draft post on Rust lifetimes · main
-        cl personal --resume c47e2b1d-0a9f-4e8d-b7c6-5d4e3f2a1b0c  # 5h    ? ·····         week  97% ██████▊ ↻█████▏░
+        cl personal --resume c47e2b1d-0a9f-4e8d-b7c6-5d4e3f2a1b0c  # 5h    ? ·····               week  97% ██████▊ ↻█████▏░ 5d2h
 cd ~/notes
     6h  Plan next sprint · main
-        cl work --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e      # 5h 100% █████         Fable 48% ███▍░░░ ↻████▎░░
+        cl work --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e      # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
     9h  Write release notes · main
         cl work --resume 7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b
 Profiles: ~/.claude (1), ~/.claude-personal (1), ~/.claude-work (3)
@@ -265,9 +265,8 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
   marked `● open`, so you don't resume one twice.
 - The comment after each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
   (`week`) and per-model weekly limits such as `Fable`. Each one has the % left and a bar of it, then
-  `↻` and a bar of the time left until it resets. Bars have a block per hour of the 5-hour window and
-  per day of a weekly one, so `↻████▎░░` is about 4 days to go. Add `--numbers` to see the exact
-  time after each bar: `↻████▎░░ 4d6h`.
+  `↻`, a bar of the time left until it resets and that time. Bars have a block per hour of the
+  5-hour window and per day of a weekly one, as in `↻████▎░░ 4d6h`.
 - Time bars are coloured by urgency: blue with most of the window to go, then gold and orange, and
   red as the reset nears.
 - A plan bar shorter than its time bar means that limit is being used up faster than its window runs
@@ -287,7 +286,6 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 | `--all`      | also list sessions last used from Claude Desktop's Code tab or the SDK        |
 | `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`          |
 | `--cached`   | take usage from Claude Code's saved snapshots, without calling the API        |
-| `--numbers`  | also show the time until each limit resets as a number, after its bar         |
 | `--no-usage` | leave plan usage out                                                          |
 
 ### `claude-usage`: plan usage for every profile

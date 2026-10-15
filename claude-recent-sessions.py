@@ -3,8 +3,7 @@
 command that resumes each one and how much of its profile's plan is left.
 
 Usage:
-    python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--full]
-                                      [--cached] [--numbers] [--no-usage]
+    python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--full] [--cached] [--no-usage]
 
   HOURS      : how far back to look (default 24). Accepts 36, 1.5, 12h or 3d.
   -n N       : show only the newest N sessions per folder (default: all).
@@ -14,8 +13,6 @@ Usage:
                cl shortcut, for machines without it.
   --cached   : take plan usage from the snapshot Claude Code last saved instead
                of asking the API.
-  --numbers  : also show the time until each limit resets as a number, after
-               its bar: ↻██▋░░░░ 2d16h.
   --no-usage : leave plan usage out.
 
 Output is grouped by folder (A-Z), each headed by the cd command to run first,
@@ -27,9 +24,9 @@ repo (install.sh puts it on your PATH) and works like this shell function:
 
 Each resume command ends with a comment showing what's left of its profile's
 plan limits, as a % and a bar, and after ↻ a bar of the time left until each
-one resets: the 5-hour session (5h), the weekly limit (week) and per-model
-weekly limits such as Fable. Bars have a block per hour of the 5-hour window
-and per day of a weekly one, so ↻██▌░░░░ means about 2½ days to go. Time bars
+one resets and that time: the 5-hour session (5h), the weekly limit (week) and
+per-model weekly limits such as Fable. Bars have a block per hour of the 5-hour
+window and per day of a weekly one, as in ↻██▌░░░░ 2d12h. Time bars
 are coloured by urgency: blue with most of the window to go, then gold and
 orange, red as the reset nears. A plan bar shorter than its time bar means that
 limit is being used up faster than its window runs out. A command without the
@@ -290,11 +287,11 @@ def load_usage_module():
     return module
 
 
-def usage_cells(usage_mod, results, now, paint, numbers=False):
-    """profile -> text: each plan limit's short name, % left and a bar of it, then ↻ and
-    a bar of the time left until it resets, coloured by urgency (followed by that time
-    as a number when `numbers` is set), in columns aligned across profiles. Bars have
-    a block per hour of the 5-hour window, or per day of a weekly one."""
+def usage_cells(usage_mod, results, now, paint):
+    """profile -> text: each plan limit's short name, % left and a bar of it, then ↻, a
+    bar of the time left until it resets and that time, coloured by urgency, in columns
+    aligned across profiles. Bars have a block per hour of the 5-hour window, or per
+    day of a weekly one."""
     meters = {}
     for profile, (usage, saved_at, _) in results.items():
         meters[profile] = []
@@ -309,12 +306,10 @@ def usage_cells(usage_mod, results, now, paint, numbers=False):
                 pct, code = "%d%%" % left, usage_mod.SEVERITY_COLOR.get(row.get("severity"), "")
                 plan, until, until_code = usage_mod.bar(left / 100.0, blocks), "", ""
                 if reset is not None:
-                    # Coloured by urgency; the number shows with --numbers, or when there's
-                    # no window to draw a bar for.
+                    # Coloured by urgency; just the time when there's no window to draw a bar for.
                     to_go = (reset - now) / window if window else None  # fraction of the window left
-                    time_bar = usage_mod.bar(to_go, blocks) if window else ""
-                    number = usage_mod.duration(reset - now) if numbers or not window else ""
-                    until = "↻" + (time_bar + " " + number).strip()
+                    time_bar = usage_mod.bar(to_go, blocks) + " " if window else ""
+                    until = "↻" + time_bar + usage_mod.duration(reset - now)
                     until_code = usage_mod.urgency_color(to_go) if window else "2"
             meters[profile].append((usage_mod.row_label(row, short=True), pct, code, plan, until, until_code))
     widths = {}  # meter slot -> widest [label, % left, plan bar, time bar] in it
@@ -379,8 +374,6 @@ def main():
                         help="print CLAUDE_CONFIG_DIR=... claude instead of the %s shortcut" % SHORTCUT)
     parser.add_argument("--cached", action="store_true",
                         help="take plan usage from the snapshot Claude Code last saved instead of the API")
-    parser.add_argument("--numbers", action="store_true",
-                        help="also show the time until each limit resets as a number, after its bar")
     parser.add_argument("--no-usage", action="store_true", help="leave plan usage out")
     args = parser.parse_args()
 
@@ -449,7 +442,7 @@ def main():
         for n, (entry, result) in enumerate(usage_mod.load_usage(used_profiles, args.cached)):
             for profile in entry["profiles"]:
                 results[profile], account[profile] = result, n
-    cells = usage_cells(usage_mod, results, now, paint, args.numbers) if results else {}
+    cells = usage_cells(usage_mod, results, now, paint) if results else {}
     # The usage comments line up after the longest resume command.
     command_width = max([len(resume_command(s["profile"], s["id"], args.full))
                          for _, listed, _ in folders for s in listed] or [0])
