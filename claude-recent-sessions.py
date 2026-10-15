@@ -32,12 +32,14 @@ weekly limits such as Fable. Bars have a block per hour of the 5-hour window
 and per day of a weekly one, so ↻██▌░░░░ means about 2½ days to go. Time bars
 are coloured by urgency: blue with most of the window to go, then gold and
 orange, red as the reset nears. A plan bar shorter than its time bar means that
-limit is being used up faster than its window runs out. The shell ignores the
-comment if you paste the whole line (zsh needs setopt interactivecomments).
-The numbers come from claude-usage.py, which this script loads, so keep the two
-in one folder. When an account can't be asked live, Claude Code's last saved
-snapshot is used and listed at the bottom with its age; ? marks a limit that
-has reset since that snapshot.
+limit is being used up faster than its window runs out. A command without the
+comment uses the same account as the one above it, even through another
+profile, so its usage is the same. The shell ignores the comment if you paste
+the whole line (zsh needs setopt interactivecomments). The numbers come from
+claude-usage.py, which this script loads, so keep the two in one folder. When
+an account can't be asked live, Claude Code's last saved snapshot is used and
+listed at the bottom with its age; ? marks a limit that has reset since that
+snapshot.
 
 A profile is any ~/.claude* directory (plus $CLAUDE_CONFIG_DIR) that holds a
 projects/ folder, so Desktop data dirs like ~/.claude-instances are skipped.
@@ -442,10 +444,11 @@ def main():
     # Plan usage for the profiles behind the listed sessions, one request per account.
     usage_mod = None if args.no_usage else load_usage_module()
     used_profiles = [p for p in profiles if any(s["profile"] == p for _, listed, _ in folders for s in listed)]
-    results = {}
+    results, account = {}, {}  # profile -> its account's usage, and a number for that account
     if usage_mod:
-        for entry, result in usage_mod.load_usage(used_profiles, args.cached):
-            results.update(dict.fromkeys(entry["profiles"], result))
+        for n, (entry, result) in enumerate(usage_mod.load_usage(used_profiles, args.cached)):
+            for profile in entry["profiles"]:
+                results[profile], account[profile] = result, n
     cells = usage_cells(usage_mod, results, now, paint, args.numbers) if results else {}
     # The usage comments line up after the longest resume command.
     command_width = max([len(resume_command(s["profile"], s["id"], args.full))
@@ -458,6 +461,7 @@ def main():
     if not shown:
         print("  No sessions in this window. Try a longer one, e.g. %s 72" % os.path.basename(sys.argv[0]))
 
+    previous = None  # (account, usage text) of the session row above, across folders
     for folder, listed, older in folders:
         missing = "" if os.path.isdir(folder) else "  " + paint("31", "(directory missing)")
         print(paint("1;36", "cd " + shell_path(folder)) + missing)
@@ -477,9 +481,13 @@ def main():
                                   paint("1", truncate(s["title"], max(room, 20))),
                                   "".join(paint("2", " · ") + paint(c, text) for text, c in meta)))
             command = resume_command(s["profile"], s["id"], args.full)
-            if cells:
+            usage = cells.get(s["profile"])
+            # Left out when the session above uses the same account, even through another
+            # profile, so it would only repeat.
+            if usage and (account.get(s["profile"]), usage) != previous:
                 # A shell comment, so pasting the whole line still runs just the command.
-                command = command.ljust(command_width) + "  " + paint("2", "#") + " " + cells[s["profile"]]
+                command = command.ljust(command_width) + "  " + paint("2", "#") + " " + usage
+            previous = (account.get(s["profile"]), usage)
             print(" " * 8 + command)
         if older:
             print("  " + paint("2", ("+%d" % older).rjust(4) + "  older session" + "s" * (older > 1)))

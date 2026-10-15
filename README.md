@@ -255,7 +255,9 @@ cd ~/code/blog
 cd ~/notes
     6h  Plan next sprint · main
         cl work --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e      # 5h 100% █████         Fable 48% ███▍░░░ ↻████▎░░
-Profiles: ~/.claude (1), ~/.claude-personal (1), ~/.claude-work (2)
+    9h  Write release notes · main
+        cl work --resume 7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b
+Profiles: ~/.claude (1), ~/.claude-personal (1), ~/.claude-work (3)
 Usage from Claude Code's last snapshot (token expired; run claude in this profile to renew it): ~/.claude-personal 9h ago
 ```
 
@@ -271,6 +273,8 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 - A plan bar shorter than its time bar means that limit is being used up faster than its window runs
   out, like `Fable` above: 48% left with more than half the week to go. `?` means the limit has
   reset since the saved snapshot it came from.
+- A command without the comment, like the second one in `~/notes`, uses the same account as the
+  command above it, even through another profile, so its usage is the same.
 - Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
   `setopt interactivecomments`).
 - Usage is fetched live, one request per account. When that fails (expired token, rate limit), Claude
