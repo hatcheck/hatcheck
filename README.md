@@ -238,8 +238,9 @@ which is listed too.
 ### `claude-recent-sessions`: what to resume
 
 Lists the Claude Code sessions from every `~/.claude*` profile that were active in the last 24 hours
-or are still open, grouped by folder and newest first. Each one comes with the command that resumes
-it and what's left of that profile's plan:
+or are still open, grouped by folder and newest first. Run from a folder that has sessions, it lists
+just that folder's (`--all-folders` lists them all). Each one comes with the command that resumes it
+and what's left of that profile's plan:
 
 ```
 $ claude-recent-sessions
@@ -284,6 +285,7 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 | `HOURS`      | how far back to look (default 24); takes `36`, `1.5`, `12h` or `3d`           |
 | `-n N`       | show only the newest N sessions per folder and count the rest                 |
 | `--all`      | also list sessions last used from Claude Desktop's Code tab or the SDK        |
+| `--all-folders` | list every folder, even when run from one that has sessions                |
 | `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`          |
 | `--cached`   | take usage from Claude Code's saved snapshots, without calling the API        |
 | `--no-usage` | leave plan usage out                                                          |

@@ -3,20 +3,25 @@
 command that resumes each one and how much of its profile's plan is left.
 
 Usage:
-    python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--full] [--cached] [--no-usage]
+    python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--all-folders]
+                                      [--full] [--cached] [--no-usage]
 
-  HOURS      : how far back to look (default 24). Accepts 36, 1.5, 12h or 3d.
-  -n N       : show only the newest N sessions per folder (default: all).
-  --all      : also list sessions last used from Claude Desktop's Code tab or the
-               SDK (claude -p, apps driving Claude Code). Hidden by default.
-  --full     : print CLAUDE_CONFIG_DIR=~/.claude-<name> claude ... instead of the
-               cl shortcut, for machines without it.
-  --cached   : take plan usage from the snapshot Claude Code last saved instead
-               of asking the API.
-  --no-usage : leave plan usage out.
+  HOURS         : how far back to look (default 24). Accepts 36, 1.5, 12h or 3d.
+  -n N          : show only the newest N sessions per folder (default: all).
+  --all         : also list sessions last used from Claude Desktop's Code tab or
+                  the SDK (claude -p, apps driving Claude Code), hidden by
+                  default.
+  --all-folders : list every folder, even when run from one that has sessions.
+  --full        : print CLAUDE_CONFIG_DIR=~/.claude-<name> claude ... instead of
+                  the cl shortcut, for machines without it.
+  --cached      : take plan usage from the snapshot Claude Code last saved
+                  instead of asking the API.
+  --no-usage    : leave plan usage out.
 
-Output is grouped by folder (A-Z), each headed by the cd command to run first,
-with the newest session first within each folder. Sessions in a
+Run from a folder that has sessions in the time window, it lists just that
+folder's; anywhere else it lists every folder. Output is grouped by folder
+(A-Z), each headed by the cd command to run first, with the newest session
+first within each folder. Sessions in a
 ~/.claude-<name> profile resume with `cl <name> --resume <id>`. cl is in this
 repo (install.sh puts it on your PATH) and works like this shell function:
 
@@ -370,6 +375,8 @@ def main():
                         help="show only the newest N sessions per folder (default: all)")
     parser.add_argument("--all", action="store_true",
                         help="also list sessions last used from Claude Desktop or the SDK")
+    parser.add_argument("--all-folders", action="store_true",
+                        help="list every folder, even when run from a folder that has sessions")
     parser.add_argument("--full", action="store_true",
                         help="print CLAUDE_CONFIG_DIR=... claude instead of the %s shortcut" % SHORTCUT)
     parser.add_argument("--cached", action="store_true",
@@ -414,14 +421,25 @@ def main():
                 found[key] = (rank, session)
 
     shown, hidden = [], {}
-    per_profile = dict.fromkeys(profiles, 0)
     for _, s in found.values():
         if s["entrypoint"] != "cli" and not args.all:
             label = "Desktop" if s["entrypoint"] == "claude-desktop" else s["entrypoint"]
             hidden[label] = hidden.get(label, 0) + 1
             continue
-        per_profile[s["profile"]] += 1
         shown.append(s)
+    # Run from a folder that has sessions, list only that folder's.
+    try:
+        here = os.path.realpath(os.getcwd())
+    except OSError:  # the current directory was deleted
+        here = None
+    mine = [s for s in shown if s["cwd"] and os.path.realpath(s["cwd"]) == here]
+    only_here = bool(mine) and not args.all_folders
+    elsewhere = len(shown) - len(mine) if only_here else 0
+    if only_here:
+        shown = mine
+    per_profile = dict.fromkeys(profiles, 0)
+    for s in shown:
+        per_profile[s["profile"]] += 1
 
     groups = {}
     for s in shown:
@@ -448,9 +466,10 @@ def main():
                          for _, listed, _ in folders for s in listed] or [0])
 
     window = ("%g" % args.hours) + "h"
-    print(paint("1", "Claude Code CLI sessions active in the last %s or open now" % window)
-          + paint("2", " (by folder, newest first%s)" % (
-              "; % = plan left, ↻ = hours/days until reset" if cells else "")))
+    print(paint("1", "Claude Code CLI sessions %sactive in the last %s or open now"
+                % ("in this folder, " if only_here else "", window))
+          + paint("2", " (%snewest first%s)" % ("" if only_here else "by folder, ",
+                                                "; % = plan left, ↻ = hours/days until reset" if cells else "")))
     if not shown:
         print("  No sessions in this window. Try a longer one, e.g. %s 72" % os.path.basename(sys.argv[0]))
 
@@ -502,6 +521,8 @@ def main():
     if used_profiles and not args.no_usage and not usage_mod:
         print(paint("2", "No usage data: claude-usage.py isn't in this script's folder"))
     notes = []
+    if elsewhere:
+        notes.append("%d in other folders (show with --all-folders)" % elsewhere)
     if hidden:
         notes.append("Hidden: " + ", ".join("%d %s" % (n, k) for k, n in sorted(hidden.items()))
                      + " (show with --all)")
