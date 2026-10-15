@@ -1,4 +1,4 @@
-# Multiple Claude Desktop instances on macOS — with color-coded, no-duplicate launchers
+# Multiple Claude accounts on macOS — isolated Desktop instances and Claude Code CLI profiles
 
 Run **two (or more) fully isolated Claude Desktop instances** side by side on macOS — e.g. one
 signed into your **personal** account and one into your **work** account — each with its own
