@@ -12,9 +12,9 @@ This builds on Philipp Stracker's excellent
 2. A **smart, self-contained launcher** that fixes the "every click opens another window" problem.
 
 It also has **command-line helpers for Claude Code** (the `claude` CLI) for keeping one profile per
-account there: `cl` runs Claude Code with a profile, `claude-where` finds any session, and two scripts
-list recent sessions and plan usage across all profiles. See
-[Claude Code CLI profiles](#claude-code-cli-profiles).
+account there: `cl` runs Claude Code with a profile, `claude-where` finds any session, two scripts
+list recent sessions and plan usage across all profiles, and `claude-move-session` carries a session
+over to another profile. See [Claude Code CLI profiles](#claude-code-cli-profiles).
 
 > ## ⭐ Recommended: give *every* account its own isolated instance
 >
@@ -181,15 +181,15 @@ hides those unless you pass `--all`).
 ### Install
 
 ```bash
-./install.sh               # link cl, claude-where, claude-recent-sessions, claude-usage into ~/.local/bin
+./install.sh               # link the five commands below into ~/.local/bin
 ./install.sh --bin ~/bin   # or into another folder on your PATH
 ./install.sh --uninstall   # remove the links again
 ```
 
 The commands are symlinks to this repo, so a `git pull` updates them. The installer doesn't edit
 your shell startup files: if the folder isn't on your `PATH`, it prints the line to add. A file that
-already has one of these names is left alone unless you pass `--force`. `claude-recent-sessions`
-and `claude-usage` need `python3` (`xcode-select --install` provides it).
+already has one of these names is left alone unless you pass `--force`. `claude-recent-sessions`,
+`claude-usage` and `claude-move-session` need `python3` (`xcode-select --install` provides it).
 
 #### Or as shell functions
 
@@ -319,6 +319,45 @@ Claude plan usage by profile (% left, then time left until reset)
 - `--cached` skips the API. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share.
 
+### `claude-move-session`: carry on a session with another profile
+
+When one account runs low, continue a session on another profile. It copies the session by default;
+`--no-keep` deletes the original once the copy is checked, which moves it.
+
+```
+$ claude-move-session 9a8b7c6d work
+Copied session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude to ~/.claude-work:
+  transcript                 53.0 KB
+  subagents and tool output  3 files
+  /rewind file snapshots     4 files
+  plan                       quiet-river-plan.md
+Paths in the conversation to these files now point to the copies.
+Kept the original in ~/.claude; --no-keep deletes it once the copy is checked.
+Resume it with:
+  cd ~/code/api
+  cl work --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+```
+
+- It copies the transcript, the folder of subagent transcripts and saved tool output, the `/rewind`
+  file snapshots and the plan file, keeping their timestamps, and checks every copied file. Paths in
+  the conversation that point at those files are changed to point at the copies, except inside
+  Claude's thinking, whose signatures would stop matching.
+- A session that's open in a terminal is refused: quit it first, so it stops changing.
+  `claude-recent-sessions` marks those `● open`.
+- Resume it with the printed command, from the directory it ran in. The conversation comes across
+  whole; the account and its plan limits, settings, permissions, MCP servers, plugins and project
+  memory are the new profile's. If the new account rejects the signatures on earlier thinking,
+  Claude Code drops those thinking blocks and carries on.
+- Plan files stay in the old profile even with `--no-keep`, since sessions can share one.
+
+| Option           | What it does                                                                 |
+|------------------|------------------------------------------------------------------------------|
+| `SESSION`        | the session ID, or the start of it                                           |
+| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, `default` for `~/.claude`, or a path |
+| `--from PROFILE` | the profile to take it from, when more than one has it                       |
+| `--no-keep`      | delete the original once the copy is checked, which moves it                 |
+| `--dry-run`      | show what would be copied and deleted, and change nothing                    |
+
 ## Files in this gist
 
 Claude Desktop instances:
@@ -329,11 +368,15 @@ Claude Desktop instances:
 
 Claude Code CLI profiles:
 
-- **`install.sh`** — links the four commands below into `~/.local/bin` (or `--bin DIR`).
+- **`install.sh`** — links the five commands below into `~/.local/bin` (or `--bin DIR`).
 - **`cl`** — runs `claude` with a `~/.claude-<name>` profile.
 - **`claude-where`** — finds a session's files by ID or ID prefix.
 - **`claude-recent-sessions.py`** — recent sessions across profiles, with resume commands and plan usage.
-- **`claude-usage.py`** — plan usage left for every profile. `claude-recent-sessions.py` loads it, so keep the two together.
+- **`claude-usage.py`** — plan usage left for every profile.
+- **`claude-move-session.py`** — copies a session to another profile, or moves it with `--no-keep`.
+
+`claude-recent-sessions.py` loads `claude-usage.py`, and `claude-move-session.py` loads both, so keep
+the three together.
 
 ## Credits
 

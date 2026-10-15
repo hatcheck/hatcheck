@@ -13,6 +13,7 @@
 #   claude-where            where a session is stored, by ID or ID prefix
 #   claude-recent-sessions  recent sessions in every profile, with resume commands and plan usage
 #   claude-usage            plan usage left for every profile
+#   claude-move-session     copy a session to another profile (move it with --no-keep)
 #
 #   --force  replace files or links that already exist under those names
 set -e
@@ -33,7 +34,7 @@ while [ $# -gt 0 ]; do
 done
 
 # command:file-in-this-repo
-COMMANDS="cl:cl claude-where:claude-where claude-recent-sessions:claude-recent-sessions.py claude-usage:claude-usage.py"
+COMMANDS="cl:cl claude-where:claude-where claude-recent-sessions:claude-recent-sessions.py claude-usage:claude-usage.py claude-move-session:claude-move-session.py"
 
 if $UNINSTALL; then
     for pair in $COMMANDS; do
