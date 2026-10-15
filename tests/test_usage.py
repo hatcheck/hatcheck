@@ -2,6 +2,7 @@
 import time
 import unittest
 from datetime import datetime
+from unittest import mock
 
 from helpers import NOW, FakeHome, iso, load
 
@@ -72,6 +73,16 @@ class Helpers(unittest.TestCase):
     def test_urgency_colours_have_no_green(self):
         colours = {self.u.URGENCY_COLORS[min(int(f / 20.0 * 11), 10)] for f in range(21)}
         self.assertFalse(colours & {34, 35, 70, 106, 2, 10, 22, 28, 40, 46})
+
+    def test_per_model_limits_are_named_in_violet(self):
+        with mock.patch.dict("os.environ", {"TERM": "xterm-256color"}):
+            self.assertEqual(self.u.label_color("weekly_scoped"), "38;5;134")
+            self.assertEqual(self.u.label_color("weekly_all"), "")
+            self.assertEqual(self.u.label_color("session", "2"), "2")
+        with mock.patch.dict("os.environ", {"TERM": "xterm", "COLORTERM": ""}):
+            self.assertEqual(self.u.label_color("weekly_scoped"), "35")  # magenta in 16 colours
+        # Not a colour the time bars use, so the name doesn't read as one of them.
+        self.assertNotIn(self.u.SCOPED_COLOR, self.u.URGENCY_COLORS)
 
     def test_window_lengths(self):
         self.assertEqual(self.u.window_seconds("session"), 5 * 3600)

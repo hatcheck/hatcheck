@@ -17,8 +17,10 @@ in the profile's .claude.json is shown instead, with its age.
 
 Rows come from the server's limits[] list: the 5-hour session, the weekly limit
 for all models, per-model weekly limits such as Fable, and any new meter the
-server adds. Percentages are what's left (100 - used). Quota fields the server
-sends that Claude Code doesn't display are listed under their raw names.
+server adds. Per-model limits are named in violet, to tell them from the
+weekly limit for all models. Percentages are what's left (100 - used). Quota
+fields the server sends that Claude Code doesn't display are listed under their
+raw names.
 Profiles signed in to the same account are shown together.
 
 Each row has two bars: what's left of the limit, then how much of its window,
@@ -51,6 +53,9 @@ SEVERITY_COLOR = {"normal": "32", "warning": "33", "critical": "31"}
 # and muted tones, to blue at the start of the window (xterm 256-colour palette).
 # Green is left out so the bars don't look like the green plan bars beside them.
 URGENCY_COLORS = (160, 166, 172, 178, 143, 109, 110, 74, 68, 33, 27)
+# Names of per-model weekly limits such as Fable: violet, apart from the reds, golds
+# and blues of the time bars, and readable on dark and light backgrounds.
+SCOPED_COLOR = 134
 
 
 def find_profiles():
@@ -191,14 +196,26 @@ def bar(fraction, cells=10):
     return ("█" * (eighths // 8) + " ▏▎▍▌▋▊▉"[eighths % 8]).rstrip().ljust(cells, "░")
 
 
+def has_256_colors():
+    return "256" in os.environ.get("TERM", "") or bool(os.environ.get("COLORTERM"))
+
+
 def urgency_color(fraction):
     """Colour for a time-until-reset bar `fraction` full: red as the reset nears,
     through orange and gold, to blue with most of the window to go."""
     step = min(int(max(0.0, fraction) * len(URGENCY_COLORS)), len(URGENCY_COLORS) - 1)
-    if "256" in os.environ.get("TERM", "") or os.environ.get("COLORTERM"):
+    if has_256_colors():
         return "38;5;%d" % URGENCY_COLORS[step]
     # A 16-colour terminal: the nearest basic colour.
     return "31" if step < 2 else "33" if step < 4 else "36" if step < 7 else "34"
+
+
+def label_color(kind, default=""):
+    """Colour for a limit's name: violet for a per-model weekly limit such as Fable, so
+    it stands apart from the weekly limit for all models; `default` for the rest."""
+    if kind != "weekly_scoped":
+        return default
+    return "38;5;%d" % SCOPED_COLOR if has_256_colors() else "35"  # else magenta
 
 
 def window_seconds(name):
@@ -246,9 +263,10 @@ def percent_left(used, resets_at, saved_at, now):
 
 
 def usage_rows(usage):
-    """(label, percent used, resets_at, window, severity, note, labeled) for every meter in a usage body."""
+    """(label, percent used, resets_at, window, severity, note, labeled, kind) for every meter
+    in a usage body."""
     rows = [(row_label(r), r.get("percent"), r.get("resets_at"), window_seconds(r.get("group") or r.get("kind")),
-             r.get("severity"), "", True)
+             r.get("severity"), "", True, r.get("kind"))
             for r in usage.get("limits") or []]
     seen = {(r.get("percent"), r.get("resets_at")) for r in usage.get("limits") or []}
     # Other quota fields (five_hour, seven_day, codenamed meters); skip ones that
@@ -264,7 +282,7 @@ def usage_rows(usage):
         if value.get("locked_reason"):
             note.append("locked: %s" % value["locked_reason"])
         rows.append((key, value["utilization"], value.get("resets_at"), window_seconds(key), None,
-                     " · ".join(note), False))
+                     " · ".join(note), False, None))
     return rows
 
 
@@ -359,7 +377,7 @@ def main():
     print(paint("1", "Claude plan usage by profile") + paint("2", " (% left, then time left until reset)"))
     for header, rows, extra, saved_at in blocks:
         print(header)
-        for label, used, resets_at, window, severity, note, labeled in rows:
+        for label, used, resets_at, window, severity, note, labeled, kind in rows:
             t = parse_time(resets_at)
             left = percent_left(used, resets_at, saved_at, now)
             time_bar = " " * 10  # stays blank unless the reset time and the window's length are known
@@ -375,7 +393,7 @@ def main():
                     to_go = (t - now) / window  # fraction of the window left
                     time_bar = paint(urgency_color(to_go) if labeled else "2", bar(to_go))
             tail = " · ".join(text for text in (when, note) if text)
-            print(("  %s %s %s  %s %s" % (paint("" if labeled else "2", label.ljust(width)),
+            print(("  %s %s %s  %s %s" % (paint(label_color(kind, "" if labeled else "2"), label.ljust(width)),
                                           paint(code, pct), paint(code, plan_bar), time_bar,
                                           paint("2", tail) if tail else "")).rstrip())
             unlabeled |= not labeled

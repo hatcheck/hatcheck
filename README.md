@@ -337,9 +337,10 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 - Run the folder's `cd` line, then the session's command. Sessions still open in a terminal are
   marked `● open`, so you don't resume one twice.
 - The comment after each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
-  (`week`) and per-model weekly limits such as `Fable`. Each one has the % left and a bar of it, then
-  `↻`, a bar of the time left until it resets and that time. Bars have a block per hour of the
-  5-hour window and per day of a weekly one, as in `↻████▎░░ 4d6h`.
+  (`week`) and per-model weekly limits such as `Fable`, which are named in violet so they stand
+  apart from `week`. Each one has the % left and a bar of it, then `↻`, a bar of the time left until
+  it resets and that time. Bars have a block per hour of the 5-hour window and per day of a weekly
+  one, as in `↻████▎░░ 4d6h`.
 - Time bars are coloured by urgency: blue with most of the window to go, then gold and orange, and
   red as the reset nears.
 - A plan bar shorter than its time bar means that limit is being used up faster than its window runs
@@ -391,8 +392,9 @@ Claude plan usage by profile (% left, then time left until reset)
   out of that profile.
 - When a token has expired or the endpoint rate-limits the account, Claude Code's last saved snapshot
   is shown with its age. Run `claude` (or `cl <name>`) in that profile to renew the token.
-- Profiles signed in to the same account are shown together. Quota fields the server sends that
-  Claude Code doesn't display are listed dimmed under their raw names.
+- Profiles signed in to the same account are shown together. Per-model limits such as
+  `week (Fable)` are named in violet, to tell them from `week (all models)`. Quota fields the server
+  sends that Claude Code doesn't display are listed dimmed under their raw names.
 - `--cached` skips the API. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share.
 

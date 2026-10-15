@@ -37,10 +37,10 @@ Each resume command ends with a comment showing what's left of its profile's
 plan limits (the Claude plan, also on a session that resumes on Z.ai or
 Kimi), as a % and a bar, and after ↻ a bar of the time left until each one
 resets and that time: the 5-hour session (5h), the weekly limit (week) and
-per-model weekly limits such as Fable. Bars have a block per hour of the 5-hour
-window and per day of a weekly one, as in ↻██▌░░░░ 2d12h. Time bars
-are coloured by urgency: blue with most of the window to go, then gold and
-orange, red as the reset nears. A plan bar shorter than its time bar means that
+per-model weekly limits such as Fable, named in violet to tell them from week.
+Bars have a block per hour of the 5-hour window and per day of a weekly one,
+as in ↻██▌░░░░ 2d12h. Time bars are coloured by urgency: blue with most of the
+window to go, then gold and orange, red as the reset nears. A plan bar shorter than its time bar means that
 limit is being used up faster than its window runs out. A command without the
 comment uses the same account as the one above it, even through another
 profile, so its usage is the same. The shell ignores the comment if you paste
@@ -394,10 +394,10 @@ def load_usage_module():
 
 
 def usage_cells(usage_mod, results, now, paint):
-    """profile -> text: each plan limit's short name, % left and a bar of it, then ↻, a
-    bar of the time left until it resets and that time, coloured by urgency, in columns
-    aligned across profiles. Bars have a block per hour of the 5-hour window, or per
-    day of a weekly one."""
+    """profile -> text: each plan limit's short name (per-model ones in violet), % left
+    and a bar of it, then ↻, a bar of the time left until it resets and that time,
+    coloured by urgency, in columns aligned across profiles. Bars have a block per hour
+    of the 5-hour window, or per day of a weekly one."""
     meters = {}
     for profile, (usage, saved_at, _) in results.items():
         meters[profile] = []
@@ -417,10 +417,11 @@ def usage_cells(usage_mod, results, now, paint):
                     time_bar = usage_mod.bar(to_go, blocks) + " " if window else ""
                     until = "↻" + time_bar + usage_mod.duration(reset - now)
                     until_code = usage_mod.urgency_color(to_go) if window else "2"
-            meters[profile].append((usage_mod.row_label(row, short=True), pct, code, plan, until, until_code))
+            meters[profile].append((usage_mod.row_label(row, short=True), usage_mod.label_color(row.get("kind"), "2"),
+                                    pct, code, plan, until, until_code))
     widths = {}  # meter slot -> widest [label, % left, plan bar, time bar] in it
     for rows in meters.values():
-        for i, (label, pct, _, plan, until, _) in enumerate(rows):
+        for i, (label, _, pct, _, plan, until, _) in enumerate(rows):
             w = widths.setdefault(i, [0, 0, 0, 0])
             w[:] = [max(n, len(text)) for n, text in zip(w, (label, pct, plan, until))]
 
@@ -432,10 +433,10 @@ def usage_cells(usage_mod, results, now, paint):
     cells = {}
     for profile, rows in meters.items():
         parts = []
-        for i, (label, pct, code, plan, until, until_code) in enumerate(rows):
+        for i, (label, label_code, pct, code, plan, until, until_code) in enumerate(rows):
             label_w, pct_w, plan_w, until_w = widths[i]
             # Padded so the next meter lines up; the trailing gap is cut below.
-            parts.append(" ".join((padded("2", label, label_w), padded(code, pct, pct_w, right=True),
+            parts.append(" ".join((padded(label_code, label, label_w), padded(code, pct, pct_w, right=True),
                                    padded(code, plan, plan_w), padded(until_code, until, until_w))))
         cells[profile] = "  ".join(parts).rstrip() if parts else paint("2", "usage ?")
     return cells
