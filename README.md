@@ -172,13 +172,16 @@ rm -rf "$HOME/.claude-instances/work"
 ## Claude Code CLI profiles
 
 Claude Code (the `claude` CLI) keeps its settings, history and session transcripts in `~/.claude`
-(plus `~/.claude.json`) and its login in the macOS Keychain. Point `CLAUDE_CONFIG_DIR` at another
-folder and you get a separate profile with its own login, so you can keep one per account:
+(plus `~/.claude.json`), and its login in the macOS Keychain, or on Linux and Windows in
+`~/.claude/.credentials.json`. Point `CLAUDE_CONFIG_DIR` at another folder and you get a separate
+profile with its own login, so you can keep one per account:
 `~/.claude-work`, `~/.claude-personal`, and so on. These are separate from the Desktop instances
 above, though sessions from Desktop's Code tab can be filed in them too (the session list below
 hides those unless you pass `--all`).
 
 ### Install
+
+On macOS and Linux:
 
 ```bash
 ./install.sh               # link the five commands below into ~/.local/bin
@@ -189,7 +192,24 @@ hides those unless you pass `--all`).
 The commands are symlinks to this repo, so a `git pull` updates them. The installer doesn't edit
 your shell startup files: if the folder isn't on your `PATH`, it prints the line to add. A file that
 already has one of these names is left alone unless you pass `--force`. `claude-recent-sessions`,
-`claude-usage` and `claude-move-session` need `python3` (`xcode-select --install` provides it).
+`claude-usage` and `claude-move-session` need Python 3.9 or later (on macOS,
+`xcode-select --install` provides it).
+
+On Windows, in PowerShell:
+
+```powershell
+.\install.ps1               # add .cmd launchers for the five commands to ~\.local\bin
+.\install.ps1 -Bin D:\bin   # or to another folder on your PATH
+.\install.ps1 -Uninstall    # remove them again
+```
+
+The launchers run the scripts in this repo, so a `git pull` updates them, and they work from
+PowerShell and `cmd` alike, whatever the script execution policy. You need Python 3.9 or later
+(python.org, or `winget install Python.Python.3.13`). If PowerShell won't run `install.ps1`, start
+it with `powershell -ExecutionPolicy Bypass -File install.ps1`. On Windows, `claude-recent-sessions`
+prints `cd` and resume commands for PowerShell. Paste them into PowerShell, not `cmd`, because
+`cmd` doesn't treat the trailing `# usage` as a comment. Inside a Visual Studio developer prompt,
+the MSVC compiler is also called `cl`, and whichever comes first on `PATH` wins.
 
 #### Or as shell functions
 
@@ -311,8 +331,8 @@ Claude plan usage by profile (% left, then time left until reset)
   through gold and orange, to red as the reset nears. When the first bar is shorter than the
   second, as for `Fable` here, the limit is being used up faster than its window runs out. A limit
   without a reset time, like an unused 5-hour session, has no time bar.
-- It reads each profile's OAuth token from the Keychain and asks the same endpoint as Claude Code's
-  `/usage`. The token is only read, never refreshed: a refresh rotates it and would sign Claude Code
+- It reads each profile's OAuth token from the macOS Keychain, or from the profile's
+  `.credentials.json` on Linux and Windows, and asks the same endpoint as Claude Code's `/usage`. The token is only read, never refreshed: a refresh rotates it and would sign Claude Code
   out of that profile.
 - When a token has expired or the endpoint rate-limits the account, Claude Code's last saved snapshot
   is shown with its age. Run `claude` (or `cl <name>`) in that profile to renew the token.

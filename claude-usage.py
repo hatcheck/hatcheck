@@ -8,7 +8,8 @@ Usage:
   --email  : show each account's email address (hidden by default).
 
 For each profile this reads the OAuth token Claude Code keeps in the macOS
-Keychain and asks the endpoint /usage uses (api.anthropic.com/api/oauth/usage).
+Keychain, or in the profile's .credentials.json file on Linux and Windows, and
+asks the endpoint /usage uses (api.anthropic.com/api/oauth/usage).
 The token is used as is and never refreshed: a refresh rotates it and would
 sign out the copy Claude Code holds. When the token has expired or the request
 fails (the endpoint rate-limits busy accounts), the snapshot Claude Code cached
@@ -80,18 +81,27 @@ def keychain_service(profile):
 
 
 def read_oauth(profile):
-    """The claudeAiOauth entry (token, expiry, plan) from the Keychain, or None."""
+    """The claudeAiOauth entry (token, expiry, plan), or None. It's in the macOS Keychain,
+    or where there's no keychain (Linux, Windows) in the profile's .credentials.json."""
+    if sys.platform == "darwin":
+        try:
+            out = subprocess.run(["security", "find-generic-password", "-s", keychain_service(profile), "-w"],
+                                 capture_output=True, text=True, timeout=15).stdout
+            oauth = json.loads(out).get("claudeAiOauth")
+            if oauth:
+                return oauth
+        except (OSError, subprocess.SubprocessError, ValueError, AttributeError):
+            pass
     try:
-        out = subprocess.run(["security", "find-generic-password", "-s", keychain_service(profile), "-w"],
-                             capture_output=True, text=True, timeout=15).stdout
-        return json.loads(out).get("claudeAiOauth")
-    except (OSError, subprocess.SubprocessError, ValueError, AttributeError):
+        with open(os.path.join(profile, ".credentials.json"), encoding="utf-8") as fh:
+            return json.load(fh).get("claudeAiOauth")
+    except (OSError, ValueError, AttributeError):
         return None
 
 
 def read_config(profile):
     try:
-        with open(config_path(profile)) as fh:
+        with open(config_path(profile), encoding="utf-8") as fh:
             config = json.load(fh)
     except (OSError, ValueError):
         return {}, None
@@ -139,13 +149,37 @@ def duration(seconds):
 
 
 def clock(t, now):
+    """9:40pm within a day, Sat 9:40pm within the week, else Nov 5. (Built by hand:
+    strftime's %-I and %-d, which drop the leading zero, don't exist on Windows.)"""
+    d = datetime.fromtimestamp(t)
+    time_of_day = "%d:%02d%s" % (d.hour % 12 or 12, d.minute, "am" if d.hour < 12 else "pm")
     if abs(t - now) < 86400:
-        fmt = "%-I:%M%p"
-    elif abs(t - now) < 6 * 86400:
-        fmt = "%a %-I:%M%p"
-    else:
-        fmt = "%b %-d"
-    return datetime.fromtimestamp(t).strftime(fmt).replace("AM", "am").replace("PM", "pm")
+        return time_of_day
+    if abs(t - now) < 6 * 86400:
+        return d.strftime("%a ") + time_of_day
+    return d.strftime("%b ") + str(d.day)
+
+
+def setup_console():
+    """On Windows, make output UTF-8 (the bars and arrows aren't in the ANSI code page)
+    and turn on the console's ANSI colour handling. Returns whether colours will work."""
+    if os.name != "nt":
+        return True
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)  # standard output
+        mode = ctypes.c_uint32()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return False  # not a console: output is going to a file or pipe
+        return bool(kernel32.SetConsoleMode(handle, mode.value | 0x0004))  # virtual terminal processing
+    except (AttributeError, OSError):
+        return False
 
 
 def bar(fraction, cells=10):
@@ -301,7 +335,8 @@ def main():
                         help="show each account's email address (hidden by default)")
     args = parser.parse_args()
 
-    color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    ansi = setup_console()
+    color = sys.stdout.isatty() and not os.environ.get("NO_COLOR") and ansi
     paint = (lambda code, s: "\033[%sm%s\033[0m" % (code, s) if code else s) if color \
         else (lambda code, s: s)
     now = time.time()

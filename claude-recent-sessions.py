@@ -97,32 +97,68 @@ def find_profiles():
     return sorted(profiles.values(), key=lambda d: (os.path.realpath(d) != DEFAULT_PROFILE, d))
 
 
+def windows_start_time(pid):
+    """When a Windows process started, as the FILETIME number Claude Code records
+    (procStartFt), or None when it isn't running."""
+    import ctypes
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(wintypes.FILETIME),) * 4
+    kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return None
+    try:
+        created, exited, kernel, user = (wintypes.FILETIME() for _ in range(4))
+        code = wintypes.DWORD()
+        if not kernel32.GetProcessTimes(handle, ctypes.byref(created), ctypes.byref(exited),
+                                        ctypes.byref(kernel), ctypes.byref(user)):
+            return None
+        if kernel32.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value != 259:  # STILL_ACTIVE
+            return None
+        return created.dwHighDateTime << 32 | created.dwLowDateTime
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def open_sessions(profiles):
     """(profile, sessionId) -> registry entry for sessions whose claude process is alive.
 
-    Claude Code writes <profile>/sessions/<pid>.json with the process start time
-    (UTC, `ps -o lstart` format); matching it guards against reused PIDs.
+    Claude Code writes <profile>/sessions/<pid>.json with when the process started,
+    which guards against reused PIDs: as `ps -o lstart` prints it in UTC (procStart),
+    or on Windows as a FILETIME number (procStartFt).
     """
-    try:
-        out = subprocess.run(["ps", "-A", "-o", "pid=,lstart="], capture_output=True, text=True,
-                             env=dict(os.environ, TZ="UTC", LC_ALL="C")).stdout
-    except OSError:
-        out = ""
     started = {}
-    for line in out.splitlines():
-        pid, _, lstart = line.strip().partition(" ")
-        started[pid] = " ".join(lstart.split())
+    if os.name != "nt":
+        try:
+            out = subprocess.run(["ps", "-A", "-o", "pid=,lstart="], capture_output=True, text=True,
+                                 env=dict(os.environ, TZ="UTC", LC_ALL="C")).stdout
+        except OSError:
+            out = ""
+        for line in out.splitlines():
+            pid, _, lstart = line.strip().partition(" ")
+            started[pid] = " ".join(lstart.split())
     live = {}
     for profile in profiles:
         for path in glob.glob(os.path.join(profile, "sessions", "*.json")):
             try:
-                with open(path) as fh:
+                with open(path, encoding="utf-8") as fh:
                     entry = json.load(fh)
             except (OSError, ValueError):
                 continue
             pid = str(entry.get("pid"))
-            proc_start = " ".join(str(entry.get("procStart") or "").split())
-            if entry.get("sessionId") and pid in started and (not proc_start or proc_start == started[pid]):
+            if not entry.get("sessionId"):
+                continue
+            if os.name == "nt":
+                ft = windows_start_time(int(pid)) if pid.isdigit() else None
+                alive = ft is not None and str(entry.get("procStartFt") or ft) == str(ft)
+            else:
+                proc_start = " ".join(str(entry.get("procStart") or "").split())
+                alive = pid in started and (not proc_start or proc_start == started[pid])
+            if alive:
                 live[(os.path.realpath(profile), entry["sessionId"])] = entry
     return live
 
@@ -264,19 +300,46 @@ def read_session(path):
     }
 
 
+def powershell():
+    """Whether to print commands for PowerShell: on Windows, unless this runs in a POSIX
+    shell such as Git Bash, which sets SHELL."""
+    return os.name == "nt" and not os.environ.get("SHELL")
+
+
+PS_SAFE = re.compile(r"[A-Za-z0-9._~:\\/-]+")  # needs no quotes in a PowerShell command
+
+
+def ps_quote(text):
+    return text if PS_SAFE.fullmatch(text) and not text.startswith("-") else "'" + text.replace("'", "''") + "'"
+
+
 def shell_path(path):
-    if path == HOME or path.startswith(HOME + "/"):
-        rest = path[len(HOME) + 1:]
-        return "~/" + shlex.quote(rest) if rest else "~"
-    return shlex.quote(path)
+    """path to print in a command, as ~/... when it's in the home folder."""
+    if path == HOME:
+        return "~"
+    rest = path[len(HOME) + 1:] if path.startswith(HOME + os.sep) else None
+    if powershell():
+        # PowerShell only expands a ~ that isn't quoted.
+        return "~\\" + rest if rest is not None and PS_SAFE.fullmatch(rest) else ps_quote(path)
+    if os.sep != "/":  # a POSIX shell on Windows reads forward slashes
+        rest, path = rest and rest.replace(os.sep, "/"), path.replace(os.sep, "/")
+    return "~/" + shlex.quote(rest) if rest is not None else shlex.quote(path)
 
 
 def resume_command(profile, session_id, full):
     if os.path.realpath(profile) == DEFAULT_PROFILE:
         return "claude --resume " + session_id
-    name = os.path.basename(profile.rstrip("/"))
-    if not full and os.path.dirname(profile.rstrip("/")) == HOME and name.startswith(".claude-"):
-        return "%s %s --resume %s" % (SHORTCUT, shlex.quote(name[len(".claude-"):]), session_id)
+    parent, name = os.path.split(profile.rstrip("/" + os.sep))
+    if not full and parent == HOME and name.startswith(".claude-"):
+        short = name[len(".claude-"):]
+        return "%s %s --resume %s" % (SHORTCUT, ps_quote(short) if powershell() else shlex.quote(short), session_id)
+    if powershell():
+        # Set for this one command and cleared after, so plain claude in the same window
+        # goes back to ~\.claude.
+        rest = profile[len(HOME) + 1:] if profile.startswith(HOME + os.sep) else None
+        value = '"$HOME\\%s"' % rest if rest is not None and not re.search(r'["$`]', rest) \
+            else "'" + profile.replace("'", "''") + "'"
+        return "$env:CLAUDE_CONFIG_DIR=%s; claude --resume %s; $env:CLAUDE_CONFIG_DIR=$null" % (value, session_id)
     return "CLAUDE_CONFIG_DIR=%s claude --resume %s" % (shell_path(profile), session_id)
 
 
@@ -384,7 +447,9 @@ def main():
     parser.add_argument("--no-usage", action="store_true", help="leave plan usage out")
     args = parser.parse_args()
 
-    color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    usage_lib = load_usage_module()
+    ansi = usage_lib.setup_console() if usage_lib else True  # UTF-8 and colours on Windows
+    color = sys.stdout.isatty() and not os.environ.get("NO_COLOR") and ansi
     paint = (lambda code, s: "\033[%sm%s\033[0m" % (code, s) if code else s) if color \
         else (lambda code, s: s)
     width = shutil.get_terminal_size((100, 24)).columns
@@ -453,7 +518,7 @@ def main():
         folders.append((folder, listed, len(sessions) - len(listed)))
 
     # Plan usage for the profiles behind the listed sessions, one request per account.
-    usage_mod = None if args.no_usage else load_usage_module()
+    usage_mod = None if args.no_usage else usage_lib
     used_profiles = [p for p in profiles if any(s["profile"] == p for _, listed, _ in folders for s in listed)]
     results, account = {}, {}  # profile -> its account's usage, and a number for that account
     if usage_mod:

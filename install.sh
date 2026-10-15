@@ -1,7 +1,8 @@
 #!/bin/bash
 # install.sh
-# Put this repo's Claude Code CLI helpers on your PATH by symlinking them into a
-# bin folder (default ~/.local/bin, where Claude Code's installer puts `claude`).
+# Put this repo's Claude Code CLI helpers on your PATH (macOS, Linux) by
+# symlinking them into a bin folder (default ~/.local/bin, where Claude Code's
+# installer puts `claude`). On Windows, use install.ps1.
 # The links follow the repo, so a git pull updates them. Shell startup files
 # are not touched.
 #
@@ -75,7 +76,10 @@ case ":$PATH:" in
     *) echo "ℹ️  $BIN_DIR isn't on your PATH. Add this to ~/.zshrc (or ~/.bashrc):"
        echo "     export PATH=\"$BIN_DIR:\$PATH\"" ;;
 esac
-command -v python3 >/dev/null || echo "ℹ️  claude-recent-sessions and claude-usage need python3 (xcode-select --install)"
+if ! command -v python3 >/dev/null; then
+    if [ "$(uname)" = Darwin ]; then hint="xcode-select --install"; else hint="your package manager's python3"; fi
+    echo "ℹ️  claude-recent-sessions, claude-usage and claude-move-session need python3 ($hint)"
+fi
 command -v claude >/dev/null || echo "ℹ️  cl runs claude, which isn't on your PATH: install Claude Code first"
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     if [ -f "$rc" ] && grep -qE '^[[:space:]]*(function[[:space:]]+)?(cl|claude-where)[[:space:]]*\(\)' "$rc"; then

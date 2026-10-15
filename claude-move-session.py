@@ -34,6 +34,7 @@ import glob
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -55,7 +56,7 @@ def profile_path(name):
     """NAME for ~/.claude-NAME, default for ~/.claude, or a path."""
     if name == "default":
         return os.path.join(HOME, ".claude")
-    if "/" in name or name.startswith("~"):
+    if "/" in name or os.sep in name or name.startswith("~") or re.match(r"[A-Za-z]:", name):
         return os.path.abspath(os.path.expanduser(name))
     return os.path.join(HOME, ".claude-" + name)
 
@@ -97,7 +98,8 @@ def copy_bytes(src, pairs):
     Only lines holding an old path are rewritten; Claude Code writes compact JSON, so
     re-serializing one changes nothing but the paths."""
     data = read(src)
-    olds = [old.encode() for old, _ in pairs]
+    # As the paths appear in the JSON text: on Windows with their backslashes doubled.
+    olds = [json.dumps(old, ensure_ascii=False)[1:-1].encode() for old, _ in pairs]
     if not src.endswith(".jsonl") or not any(old in data for old in olds):
         return data
     lines = data.split(b"\n")
@@ -135,6 +137,11 @@ def copy(src, dst, pairs):
     else:
         copy_file(src, tmp)
     os.replace(tmp, dst)
+
+
+def path_pairs(old, new):
+    """(old, new), plus on Windows the same with forward slashes, which tools print too."""
+    return [(old, new)] + ([(old.replace(os.sep, "/"), new.replace(os.sep, "/"))] if os.sep != "/" else [])
 
 
 def plan_slugs(transcripts):
@@ -177,6 +184,9 @@ def main():
         sessions = load_sibling("claude_recent_sessions", "claude-recent-sessions.py")
     except OSError:
         sys.exit("claude-move-session needs claude-recent-sessions.py in its folder")
+    usage = sessions.load_usage_module()  # claude-usage.py: accounts, and UTF-8 output on Windows
+    if usage:
+        usage.setup_console()
     show = sessions.shell_path
     target = profile_path(args.profile)
     if not os.path.isdir(target):
@@ -215,7 +225,7 @@ def main():
     for path in transcripts:
         old = path[:-len(".jsonl")]
         new = os.path.join(target, "projects", os.path.basename(os.path.dirname(path)), sid)
-        pairs.append((old, new))  # covers <id>.jsonl and the <id>/ folder beside it
+        pairs += path_pairs(old, new)  # covers <id>.jsonl and the <id>/ folder beside it
         items.append(("transcript", path, new + ".jsonl", True))
         if os.path.isdir(old):
             items.append(("subagents and tool output", old, new, True))
@@ -223,12 +233,12 @@ def main():
         old, new = os.path.join(source, sub, sid), os.path.join(target, sub, sid)
         if os.path.isdir(old) and files_in(old):
             items.append((what, old, new, True))
-            pairs.append((old, new))
+            pairs += path_pairs(old, new)
     for slug in sorted(plan_slugs(transcripts)):
         old, new = os.path.join(source, "plans", slug + ".md"), os.path.join(target, "plans", slug + ".md")
         if os.path.isfile(old):
             items.append(("plan", old, new, False))  # kept: sessions can share a plan
-            pairs.append((old, new))
+            pairs += path_pairs(old, new)
 
     present, conflicts = set(), []
     for _, src, dst, _ in items:
@@ -278,7 +288,6 @@ def main():
         print("  %-26s %s%s" % (what, details[src], "  (already there)" if dst in present else ""))
     if repointed:
         print("Paths in the conversation to these files %s to the copies." % ("would point" if args.dry_run else "now point"))
-    usage = sessions.load_usage_module()
     accounts = {usage.read_config(p)[0].get("accountUuid") for p in (source, target)} if usage else {None}
     if len(accounts) == 1 and None not in accounts:
         print("Both profiles are signed in to the same account, so its plan limits stay the same.")
