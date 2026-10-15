@@ -301,6 +301,10 @@ def main():
     if info and info["cwd"]:
         print("  cd " + show(info["cwd"]))
     print("  " + sessions.resume_command(target, sid, False))
+    provider = sessions.provider_of(info["model"]) if info else None
+    if provider:
+        print("Its last reply came from %s; to carry on there rather than on this profile's Claude plan:\n  %s"
+              % (info["model"], sessions.resume_command(target, sid, False, provider)))
 
 
 if __name__ == "__main__":

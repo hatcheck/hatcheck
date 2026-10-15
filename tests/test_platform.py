@@ -44,6 +44,20 @@ class PrintedCommands(unittest.TestCase):
         self.assertEqual(s.resume_command("C:\\Users\\me\\.claude-work", ID, True),
                          "CLAUDE_CONFIG_DIR=~/.claude-work claude --resume " + ID)
 
+    def test_providers(self):
+        s = self.windows()
+        self.assertEqual(s.resume_command("C:\\Users\\me\\.claude", ID, False, "z"), "claude-z --resume " + ID)
+        self.assertEqual(s.resume_command("C:\\Users\\me\\.claude-work", ID, False, "k"), "cl -k work --resume " + ID)
+        self.assertEqual(s.resume_command("C:\\Users\\me\\.claude-work", ID, True, "k"),
+                         '$env:CLAUDE_CONFIG_DIR="$HOME\\.claude-work"; claude-k --resume %s; '
+                         '$env:CLAUDE_CONFIG_DIR=$null' % ID)
+        s = self.windows(powershell=False)
+        self.assertEqual(s.resume_command("C:\\Users\\me\\.claude-work", ID, True, "z"),
+                         "CLAUDE_CONFIG_DIR=~/.claude-work claude-z --resume " + ID)
+        for model, provider in (("glm-5.3", "z"), ("GLM-4.7", "z"), ("k3", "k"), ("kimi-for-coding", "k"),
+                                ("claude-opus-5-5", None), ("deepseek-v4", None), (None, None)):
+            self.assertEqual(s.provider_of(model), provider, model)
+
     def test_posix(self):
         s = load("claude-recent-sessions.py")
         s.HOME, s.powershell = "/home/me", lambda: False

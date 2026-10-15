@@ -14,6 +14,8 @@
 #   claude-recent-sessions  recent sessions in every profile, with resume commands and plan usage
 #   claude-usage            plan usage left for every profile
 #   claude-move-session     copy a session to another profile (move it with --no-keep)
+#   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (cl.ps1 --as claude-z)
+#   claude-provider         the key and model for those; claude-z reconfig sets them up
 #
 #   -Force  replace .cmd files that already exist under those names
 param(
@@ -32,6 +34,9 @@ $commands = [ordered]@{
     "claude-recent-sessions" = "$python `"$repo\claude-recent-sessions.py`" %*"
     "claude-usage"           = "$python `"$repo\claude-usage.py`" %*"
     "claude-move-session"    = "$python `"$repo\claude-move-session.py`" %*"
+    "claude-provider"        = "$python `"$repo\claude-provider.py`" %*"
+    "claude-z"               = "$powershell `"$repo\cl.ps1`" --as claude-z %*"
+    "claude-k"               = "$powershell `"$repo\cl.ps1`" --as claude-k %*"
 }
 
 function Test-Ours($path) {
@@ -78,7 +83,7 @@ if (-not $onPath) {
     Write-Output "  [Environment]::SetEnvironmentVariable('Path', `"$Bin;`" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
 }
 if (-not (Get-Command py, python -CommandType Application -ErrorAction SilentlyContinue)) {
-    Write-Output "claude-recent-sessions, claude-usage and claude-move-session need Python 3 (python.org or: winget install Python.Python.3.13)"
+    Write-Output "claude-recent-sessions, claude-usage, claude-move-session and claude-provider need Python 3 (python.org or: winget install Python.Python.3.13)"
 }
 if (-not (Get-Command claude -CommandType Application -ErrorAction SilentlyContinue)) {
     Write-Output "cl runs claude, which isn't on your PATH: install Claude Code first"
@@ -86,5 +91,18 @@ if (-not (Get-Command claude -CommandType Application -ErrorAction SilentlyConti
 $compiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue
 if ($compiler) {
     Write-Output "Note: $($compiler.Source) (the MSVC compiler) is also called cl; whichever comes first on PATH wins."
+}
+# The claude-z repo's installers put their own claude-z.cmd and claude-k.cmd in
+# %LOCALAPPDATA%\claude-z and \claude-k, on PATH; whichever folder comes first wins.
+# Their uninstallers also delete %APPDATA%\claude-z, the config these read, so don't
+# point people at those.
+foreach ($name in "claude-z", "claude-k") {
+    $first = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($first -and -not (Test-Ours $first.Source)) {
+        $folder = Split-Path $first.Source
+        Write-Output "Note: $($first.Source) comes first on PATH, so $name runs that one."
+        Write-Output "  If it's from the claude-z repo, delete $folder and take it off your PATH. Keep"
+        Write-Output "  $(Join-Path $env:APPDATA $name): it holds the key this $name reads."
+    }
 }
 if ($skipped) { exit 1 }

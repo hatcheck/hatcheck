@@ -3,7 +3,7 @@ import os
 import re
 import unittest
 
-from helpers import NOW, WINDOWS, FakeHome, iso
+from helpers import NOW, WINDOWS, FakeHome, iso, rec
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 B = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -95,6 +95,42 @@ class RecentSessions(unittest.TestCase):
             fh.write(re.sub(r'"(procStart|procStartFt)": "[^"]*"', r'"\1": "1"', text))
         code, out = self.h.run(SCRIPT, "--no-usage")
         self.assertNotIn("● open", out)
+
+
+class Providers(unittest.TestCase):
+    """Sessions whose newest reply came from Z.ai or Kimi resume there."""
+
+    def setUp(self):
+        self.h = FakeHome()
+        self.addCleanup(self.h.cleanup)
+        self.default, self.work = self.h.profile("default"), self.h.profile("work")
+        api = self.h.folder("code", "api")
+        self.h.session(self.work, api, A, "On Kimi", 1, model="k3")
+        # Claude Code's own <synthetic> replies don't count.
+        synthetic = rec(type="assistant", timestamp=iso(NOW - 90), cwd=api, sessionId=B, entrypoint="cli",
+                        gitBranch="main", message={"model": "<synthetic>", "role": "assistant",
+                                                   "content": [{"type": "text", "text": "x"}]})
+        self.h.session(self.default, api, B, "On GLM", 2, model="glm-5.3", extra=[synthetic])
+        self.h.session(self.work, api, C, "On Claude", 3, model="claude-opus-5-5")
+
+    def test_commands_and_model(self):
+        code, out = self.h.run(SCRIPT, "--no-usage")
+        self.assertEqual(code, 0, out)
+        self.assertIn("cl -k work --resume " + A, out)
+        self.assertIn("claude-z --resume " + B, out)
+        self.assertIn("cl work --resume " + C, out)
+        self.assertIn("On Kimi · main · on k3", out)
+        self.assertIn("On GLM · main · on glm-5.3", out)
+        self.assertNotIn("on claude", out)
+
+    def test_full_commands(self):
+        code, out = self.h.run(SCRIPT, "--no-usage", "--full")
+        if WINDOWS:
+            expected = '$env:CLAUDE_CONFIG_DIR="$HOME\\.claude-work"; claude-k --resume %s; $env:CLAUDE_CONFIG_DIR=$null' % A
+        else:
+            expected = "CLAUDE_CONFIG_DIR=~/.claude-work claude-k --resume " + A
+        self.assertIn(expected, out)
+        self.assertIn("claude-z --resume " + B, out)
 
 
 class UsageComments(unittest.TestCase):

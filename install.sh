@@ -15,8 +15,12 @@
 #   claude-recent-sessions  recent sessions in every profile, with resume commands and plan usage
 #   claude-usage            plan usage left for every profile
 #   claude-move-session     copy a session to another profile (move it with --no-keep)
+#   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (links to cl)
+#   claude-provider         the key and model for those; claude-z reconfig sets them up
 #
-#   --force  replace files or links that already exist under those names
+#   --force  replace files or links that already exist under those names. Copies of
+#            claude-z and claude-k made by the claude-z repo's installers are replaced
+#            without it: these do the same job and read the same config files.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
@@ -35,7 +39,15 @@ while [ $# -gt 0 ]; do
 done
 
 # command:file-in-this-repo
-COMMANDS="cl:cl claude-where:claude-where claude-recent-sessions:claude-recent-sessions.py claude-usage:claude-usage.py claude-move-session:claude-move-session.py"
+COMMANDS="cl:cl claude-where:claude-where claude-recent-sessions:claude-recent-sessions.py
+claude-usage:claude-usage.py claude-move-session:claude-move-session.py
+claude-provider:claude-provider.py claude-z:cl claude-k:cl"
+
+# A launcher that the claude-z repo's install-z.sh or install-k.sh copied here.
+# shellcheck disable=SC2016  # the pattern matches a literal $HOME
+claude_z_copy() {
+    [ -f "$1" ] && [ ! -L "$1" ] && grep -q '^CONFIG_DIR="\$HOME/\.config/claude-[zk]"' "$1"
+}
 
 if $UNINSTALL; then
     for pair in $COMMANDS; do
@@ -62,6 +74,9 @@ for pair in $COMMANDS; do
     elif [ -d "$link" ] && [ ! -L "$link" ]; then
         echo "⚠️  Skipped $name: $link is a folder"
         skipped=$((skipped + 1))
+    elif claude_z_copy "$link"; then
+        ln -sfn "$src" "$link"
+        echo "✅ $name -> $src (replaced the copy from the claude-z repo; ~/.config/$name/config still applies)"
     elif { [ -e "$link" ] || [ -L "$link" ]; } && ! $FORCE; then
         echo "⚠️  Skipped $name: $link already exists (run again with --force to replace it)"
         skipped=$((skipped + 1))
@@ -78,7 +93,7 @@ case ":$PATH:" in
 esac
 if ! command -v python3 >/dev/null; then
     if [ "$(uname)" = Darwin ]; then hint="xcode-select --install"; else hint="your package manager's python3"; fi
-    echo "ℹ️  claude-recent-sessions, claude-usage and claude-move-session need python3 ($hint)"
+    echo "ℹ️  claude-recent-sessions, claude-usage, claude-move-session and claude-provider need python3 ($hint)"
 fi
 command -v claude >/dev/null || echo "ℹ️  cl runs claude, which isn't on your PATH: install Claude Code first"
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do

@@ -27,9 +27,16 @@ repo (install.sh puts it on your PATH) and works like this shell function:
 
     cl() { CLAUDE_CONFIG_DIR="$HOME/.claude-$1" claude "${@:2}"; }
 
+A session whose newest reply came from Z.ai (a GLM model) or Kimi shows that
+model, as in "on k3", and resumes there: claude-z or claude-k --resume <id> in
+~/.claude, cl -z or cl -k <name> --resume <id> in a profile (all in this repo,
+with claude-provider holding the keys). Use claude or cl <name> instead to take
+it back to Anthropic.
+
 Each resume command ends with a comment showing what's left of its profile's
-plan limits, as a % and a bar, and after ↻ a bar of the time left until each
-one resets and that time: the 5-hour session (5h), the weekly limit (week) and
+plan limits (the Claude plan, also on a session that resumes on Z.ai or
+Kimi), as a % and a bar, and after ↻ a bar of the time left until each one
+resets and that time: the 5-hour session (5h), the weekly limit (week) and
 per-model weekly limits such as Fable. Bars have a block per hour of the 5-hour
 window and per day of a weekly one, as in ↻██▌░░░░ 2d12h. Time bars
 are coloured by urgency: blue with most of the window to go, then gold and
@@ -194,6 +201,32 @@ def last_record(mm, rtype):
         end = start
 
 
+def last_model(mm):
+    """The model behind the newest reply, skipping Claude Code's own <synthetic> ones."""
+    for line in lines_backward(mm):
+        if b'"type":"assistant"' not in line or b'"model":"' not in line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        model = (record.get("message") or {}).get("model")
+        if record.get("type") == "assistant" and model and model != "<synthetic>" \
+                and not record.get("isSidechain"):
+            return model
+    return None
+
+
+def provider_of(model):
+    """z or k when the model is served by Z.ai (GLM) or Kimi, else None."""
+    model = (model or "").lower()
+    if model.startswith("glm"):
+        return "z"
+    if model.startswith(("k2", "k3", "kimi")):
+        return "k"
+    return None
+
+
 def prompt_text(record):
     content = (record.get("message") or {}).get("content")
     if isinstance(content, list):
@@ -280,6 +313,7 @@ def read_session(path):
                   (("custom-title", "customTitle"), ("ai-title", "aiTitle"),
                    ("agent-name", "agentName"), ("last-prompt", "lastPrompt"))]
         start_cwd, first_prompt = first_cwd_and_prompt(mm, want_prompt=not any(titles))
+        model = last_model(mm)
     finally:
         mm.close()
     folder = os.path.basename(os.path.dirname(path))
@@ -297,6 +331,7 @@ def read_session(path):
         "has_messages": has_messages,
         "title": " ".join(next((t for t in titles + [first_prompt] if t), "(untitled)").split()),
         "continued_in": continued.get("continuedInSessionId"),
+        "model": model,
     }
 
 
@@ -326,21 +361,24 @@ def shell_path(path):
     return "~/" + shlex.quote(rest) if rest is not None else shlex.quote(path)
 
 
-def resume_command(profile, session_id, full):
+def resume_command(profile, session_id, full, provider=None):
+    """The command that resumes a session, on Z.ai or Kimi when provider is z or k."""
+    command = "claude-" + provider if provider else "claude"  # claude-z and claude-k: see ./cl
     if os.path.realpath(profile) == DEFAULT_PROFILE:
-        return "claude --resume " + session_id
+        return "%s --resume %s" % (command, session_id)
     parent, name = os.path.split(profile.rstrip("/" + os.sep))
     if not full and parent == HOME and name.startswith(".claude-"):
         short = name[len(".claude-"):]
-        return "%s %s --resume %s" % (SHORTCUT, ps_quote(short) if powershell() else shlex.quote(short), session_id)
+        return "%s %s%s --resume %s" % (SHORTCUT, "-%s " % provider if provider else "",
+                                         ps_quote(short) if powershell() else shlex.quote(short), session_id)
     if powershell():
         # Set for this one command and cleared after, so plain claude in the same window
         # goes back to ~\.claude.
         rest = profile[len(HOME) + 1:] if profile.startswith(HOME + os.sep) else None
         value = '"$HOME\\%s"' % rest if rest is not None and not re.search(r'["$`]', rest) \
             else "'" + profile.replace("'", "''") + "'"
-        return "$env:CLAUDE_CONFIG_DIR=%s; claude --resume %s; $env:CLAUDE_CONFIG_DIR=$null" % (value, session_id)
-    return "CLAUDE_CONFIG_DIR=%s claude --resume %s" % (shell_path(profile), session_id)
+        return "$env:CLAUDE_CONFIG_DIR=%s; %s --resume %s; $env:CLAUDE_CONFIG_DIR=$null" % (value, command, session_id)
+    return "CLAUDE_CONFIG_DIR=%s %s --resume %s" % (shell_path(profile), command, session_id)
 
 
 def load_usage_module():
@@ -527,7 +565,7 @@ def main():
                 results[profile], account[profile] = result, n
     cells = usage_cells(usage_mod, results, now, paint) if results else {}
     # The usage comments line up after the longest resume command.
-    command_width = max([len(resume_command(s["profile"], s["id"], args.full))
+    command_width = max([len(resume_command(s["profile"], s["id"], args.full, provider_of(s["model"])))
                          for _, listed, _ in folders for s in listed] or [0])
 
     window = ("%g" % args.hours) + "h"
@@ -545,6 +583,8 @@ def main():
         for s in listed:
             # No profile here: the command shows it (plain `claude` means ~/.claude).
             meta = [(s["branch"], "2")] if s["branch"] else []
+            if s["model"] and not s["model"].startswith("claude"):
+                meta.append(("on " + s["model"], "35"))  # e.g. GLM or Kimi, through claude-z or claude-k
             if s["entrypoint"] != "cli":
                 meta.append(("via " + s["entrypoint"], "33"))
             if s["open"]:
@@ -557,7 +597,7 @@ def main():
             print("  %s  %s%s" % (paint("2", ago(now - s["when"]).rjust(4)),
                                   paint("1", truncate(s["title"], max(room, 20))),
                                   "".join(paint("2", " · ") + paint(c, text) for text, c in meta)))
-            command = resume_command(s["profile"], s["id"], args.full)
+            command = resume_command(s["profile"], s["id"], args.full, provider_of(s["model"]))
             usage = cells.get(s["profile"])
             # Left out when the session above uses the same account, even through another
             # profile, so it would only repeat.

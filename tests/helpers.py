@@ -82,13 +82,14 @@ class FakeHome:
         os.makedirs(path, exist_ok=True)
         return path
 
-    def session(self, profile, cwd, sid, title, minutes_ago=5, entrypoint="cli", extra=()):
-        """A transcript in profile/projects/<cwd as Claude Code names it>/<sid>.jsonl."""
+    def session(self, profile, cwd, sid, title, minutes_ago=5, entrypoint="cli", extra=(), model=None):
+        """A transcript in profile/projects/<cwd as Claude Code names it>/<sid>.jsonl, its
+        reply from `model` when given."""
         when = NOW - minutes_ago * 60
         base = {"cwd": cwd, "sessionId": sid, "entrypoint": entrypoint, "gitBranch": "main"}
+        reply = dict({"model": model} if model else {}, role="assistant", content=[{"type": "text", "text": "ok"}])
         lines = [rec(type="user", timestamp=iso(when - 30), message={"role": "user", "content": title}, **base),
-                 rec(type="assistant", timestamp=iso(when),
-                     message={"role": "assistant", "content": [{"type": "text", "text": "ok"}]}, **base)]
+                 rec(type="assistant", timestamp=iso(when), message=reply, **base)]
         lines += list(extra) + [rec(type="ai-title", aiTitle=title, sessionId=sid)]
         path = os.path.join(profile, "projects", re.sub(r"[^A-Za-z0-9]", "-", cwd), sid + ".jsonl")
         write(path, "\n".join(lines) + "\n", mtime=when)
@@ -100,10 +101,18 @@ class FakeHome:
         entry = dict({"pid": pid, "sessionId": sid, "status": "idle"}, **start_token(pid))
         write(os.path.join(profile, "sessions", "%d.json" % pid), json.dumps(entry))
 
+    def provider_config(self, provider, text):
+        """claude-provider's config for z or k, where it looks for it on this OS."""
+        path = (os.path.join(self.home, "AppData", "Roaming", "claude-" + provider, "config") if WINDOWS
+                else os.path.join(self.home, ".config", "claude-" + provider, "config"))
+        write(path, text)
+        return path
+
     def env(self):
-        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CONFIG_DIR", "SHELL", "NO_COLOR")}
+        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CONFIG_DIR", "SHELL", "NO_COLOR")
+               and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_"))}
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
-                   PYTHONDONTWRITEBYTECODE="1")
+                   PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"))
         if sys.platform == "darwin":
             env["PATH"] = "/bin"  # has ps, but not the security tool, so the real Keychain stays untouched
         return env

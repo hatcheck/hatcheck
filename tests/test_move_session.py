@@ -138,6 +138,14 @@ class MoveSession(unittest.TestCase):
         code, out = self.h.run(SCRIPT, S1[:8], "nosuch")
         self.assertIn("isn't a profile folder", out)
 
+    def test_session_last_on_a_provider(self):
+        self.h.session(self.b, self.cwd, S2, "On Kimi", model="k3")
+        code, out = self.h.run(SCRIPT, S2[:8], "a2")
+        self.assertEqual(code, 0, out)
+        self.assertIn("cl a2 --resume " + S2, out)
+        self.assertIn("Its last reply came from k3; to carry on there", out)
+        self.assertIn("cl -k a2 --resume " + S2, out)
+
     def test_same_account_and_fresh_target(self):
         code, out = self.h.run(SCRIPT, S1[:8], "a2")
         self.assertIn("same account", out)

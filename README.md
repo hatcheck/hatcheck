@@ -14,7 +14,8 @@ This builds on Philipp Stracker's excellent
 It also has **command-line helpers for Claude Code** (the `claude` CLI) for keeping one profile per
 account there: `cl` runs Claude Code with a profile, `claude-where` finds any session, two scripts
 list recent sessions and plan usage across all profiles, and `claude-move-session` carries a session
-over to another profile. See [Claude Code CLI profiles](#claude-code-cli-profiles).
+over to another profile. `claude-z` and `claude-k` run it on Z.ai's GLM or Kimi's models instead, in
+any profile. See [Claude Code CLI profiles](#claude-code-cli-profiles).
 
 |                          | macOS | Linux | Windows |
 |--------------------------|:-----:|:-----:|:-------:|
@@ -189,21 +190,22 @@ hides those unless you pass `--all`).
 On macOS and Linux:
 
 ```bash
-./install.sh               # link the five commands below into ~/.local/bin
+./install.sh               # link the commands below into ~/.local/bin
 ./install.sh --bin ~/bin   # or into another folder on your PATH
 ./install.sh --uninstall   # remove the links again
 ```
 
 The commands are symlinks to this repo, so a `git pull` updates them. The installer doesn't edit
 your shell startup files: if the folder isn't on your `PATH`, it prints the line to add. A file that
-already has one of these names is left alone unless you pass `--force`. `claude-recent-sessions`,
-`claude-usage` and `claude-move-session` need Python 3.9 or later (on macOS,
-`xcode-select --install` provides it).
+already has one of these names is left alone unless you pass `--force`, except the copies of
+`claude-z` and `claude-k` that the [claude-z](https://github.com/yiwang/claude-z) installers made,
+which these replace. `claude-recent-sessions`, `claude-usage`, `claude-move-session` and
+`claude-provider` need Python 3.9 or later (on macOS, `xcode-select --install` provides it).
 
 On Windows, in PowerShell:
 
 ```powershell
-.\install.ps1               # add .cmd launchers for the five commands to ~\.local\bin
+.\install.ps1               # add .cmd launchers for the commands below to ~\.local\bin
 .\install.ps1 -Bin D:\bin   # or to another folder on your PATH
 .\install.ps1 -Uninstall    # remove them again
 ```
@@ -223,9 +225,12 @@ the MSVC compiler is also called `cl`, and whichever comes first on `PATH` wins.
 
 ```bash
 # cl work --resume <id>  ==  CLAUDE_CONFIG_DIR=~/.claude-work claude --resume <id>
+# cl -k work ... runs the installed claude-k instead (-z: claude-z)
 cl() {
-  [ -n "$1" ] || { echo "usage: cl <profile> [claude args...]  (uses ~/.claude-<profile>)" >&2; return 2; }
-  CLAUDE_CONFIG_DIR="$HOME/.claude-$1" claude "${@:2}"
+  local run=claude
+  case $1 in -z|-k) run=claude$1; shift ;; esac
+  [ -n "$1" ] || { echo "usage: cl [-z|-k] <profile> [claude args...]  (uses ~/.claude-<profile>)" >&2; return 2; }
+  CLAUDE_CONFIG_DIR="$HOME/.claude-$1" "$run" "${@:2}"
 }
 
 # claude-where 3f1c2a9e   ← a session ID, or a prefix of one
@@ -240,13 +245,53 @@ same thing.
 ### `cl`: run Claude Code with a profile
 
 ```bash
-cl work                         # Claude Code with ~/.claude-work (sign in on first run)
-cl work --resume <session-id>   # resume one of that profile's sessions
-cl personal --continue          # any claude option works
+cl work                           # Claude Code with ~/.claude-work (sign in on first run)
+cl work --resume <session-id>     # resume one of that profile's sessions
+cl personal --continue            # any claude option works
+cl -k work --resume <session-id>  # that session on Kimi; -z for Z.ai (see below)
 ```
 
 Plain `claude` keeps using `~/.claude`. Claude Code names each profile's Keychain entry after its
 `CLAUDE_CONFIG_DIR` value, so keep one spelling of each path; `cl` always uses `~/.claude-<name>`.
+
+### `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
+
+`claude-z` and `claude-k` start Claude Code on [Z.ai](https://z.ai)'s GLM models or
+[Kimi](https://www.kimi.com/code)'s, with your plan there, instead of on Anthropic's. `cl -z <name>` and
+`cl -k <name>` do the same in a profile, so a session can switch between Claude and those models and
+stay in its profile:
+
+```bash
+claude-k reconfig                   # once: your Kimi API key and model (claude-z reconfig for Z.ai)
+claude-k                            # Claude Code on Kimi, with ~/.claude
+cl -k work --resume <session-id>    # carry on a work-profile session on Kimi…
+cl work --resume <session-id>       # …and later back on the work account's Claude plan
+```
+
+- Setup asks for the API key (from [z.ai](https://z.ai/manage-apikey/apikey-list) or the
+  [Kimi Code Console](https://www.kimi.com/code)), the model, and an optional cap on output tokens.
+  It saves them in `~/.config/claude-z/config` or `~/.config/claude-k/config` (`%APPDATA%\claude-z\config`
+  on Windows), the files the [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup
+  made with those works as is. `claude-provider` shows what's set up.
+- Models: on Z.ai `glm-5.3[1m]` (the default, with `glm-5.3-flash` for quick tasks), `glm-5.3-flash`
+  or `glm-4.7`; on Kimi `k3[1m]` (the default), `k3`, `kimi-for-coding` or
+  `kimi-for-coding-highspeed`. `[1m]` turns on the 1M-token context window.
+- The key reaches Claude Code as `ANTHROPIC_AUTH_TOKEN`, which it always uses ahead of the profile's
+  claude.ai login and never asks about, and `ANTHROPIC_API_KEY` is cleared. Claude Code asks once per
+  profile whether to use an `ANTHROPIC_API_KEY`, with No preselected, and after a No it sends the
+  profile's claude.ai login token to the provider instead.
+- The model is pinned with `ANTHROPIC_MODEL`, so a `"model"` in the profile's `settings.json`, such
+  as `"fable"`, can't send a Claude model name to Z.ai or Kimi.
+- Resuming a session on another provider sends it the whole conversation so far, so check that's
+  allowed before doing it with a work account's sessions.
+- `claude-usage` and the comments in `claude-recent-sessions` show Claude plans only.
+
+Coming from the claude-z repo: `./install.sh` replaces the copies its installers put in
+`~/.local/bin`, and your config stays. On Windows, delete `%LOCALAPPDATA%\claude-z` (and `\claude-k`)
+and take it off your `PATH` by hand, but keep `%APPDATA%\claude-z`, which holds your key; that repo's
+uninstallers delete both. The permission mode its installers asked for isn't used (the old launchers
+only ever applied `dangerously-skip-permissions`): set `permissions.defaultMode` in the profile's
+`settings.json`, or pass `--permission-mode`. OpenRouter (`claude-o`) isn't included.
 
 ### `claude-where`: find a session
 
@@ -273,6 +318,8 @@ Claude Code CLI sessions active in the last 24h or open now (by folder, newest f
 cd ~/code/api
     4m  Fix flaky login test · main · ● open in pid 48213 (busy)
         cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10      # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
+    1h  Refactor the auth middleware · main · on k3
+        cl -k work --resume 2d4f6a8c-1e3b-4d5f-9a7c-0b2d4e6f8a1c
     3h  Add rate limiting to the login endpoint · feat/rate-limit
         claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d       # 5h  62% ███▏░ ↻██▋░░ 2h41m  week  91% ██████▍ ↻███▏░░░ 3d2h
 cd ~/code/blog
@@ -283,7 +330,7 @@ cd ~/notes
         cl work --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e      # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
     9h  Write release notes · main
         cl work --resume 7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b
-Profiles: ~/.claude (1), ~/.claude-personal (1), ~/.claude-work (3)
+Profiles: ~/.claude (1), ~/.claude-personal (1), ~/.claude-work (4)
 Usage from Claude Code's last snapshot (token expired; run claude in this profile to renew it): ~/.claude-personal 9h ago
 ```
 
@@ -300,6 +347,9 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
   reset since the saved snapshot it came from.
 - A command without the comment, like the second one in `~/notes`, uses the same account as the
   command above it, even through another profile, so its usage is the same.
+- A session whose newest reply came from Z.ai or Kimi shows that model, like `on k3` above, and its
+  command resumes it there (`claude-k` for `~/.claude`). Use `cl work` instead to go back to Claude;
+  its comment is still the profile's Claude plan.
 - Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
   `setopt interactivecomments`).
 - Usage is fetched live, one request per account. When that fails (expired token, rate limit), Claude
@@ -376,6 +426,8 @@ Resume it with:
   memory are the new profile's. If the new account rejects the signatures on earlier thinking,
   Claude Code drops those thinking blocks and carries on.
 - Plan files stay in the old profile even with `--no-keep`, since sessions can share one.
+- If the session's last reply came from Z.ai or Kimi, it also prints the `cl -z` or `cl -k` command
+  that carries on there instead of on the new profile's Claude plan.
 
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
@@ -395,8 +447,11 @@ Claude Desktop instances (macOS):
 
 Claude Code CLI profiles (macOS, Linux, Windows):
 
-- **`install.sh`** / **`install.ps1`** — put the five commands below on your `PATH` (`~/.local/bin` by default).
-- **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile.
+- **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
+- **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile, on Z.ai or Kimi with `-z` or
+  `-k`; installed as `claude-z` and `claude-k` too.
+- **`claude-provider.py`** — the Z.ai and Kimi keys and models behind `claude-z`, `claude-k`, `cl -z` and
+  `cl -k`.
 - **`claude-where`** / **`claude-where.ps1`** — finds a session's files by ID or ID prefix.
 - **`claude-recent-sessions.py`** — recent sessions across profiles, with resume commands and plan usage.
 - **`claude-usage.py`** — plan usage left for every profile.
@@ -428,4 +483,9 @@ the three together. The `.ps1` files are the Windows versions of the `sh` ones.
   ([write-up](https://philippstracker.com/multiple-claude-instances/)), itself a cleaned-up version
   of [weidwonder/claude-desktop-multi-instance](https://github.com/weidwonder/claude-desktop-multi-instance).
 - **Claude Code CLI tools:** `cl`, `claude-where`, `claude-recent-sessions`, `claude-usage`,
-  `claude-move-session`, the installers and the tests are by [Yi Wang](https://github.com/yiwang).
+  `claude-move-session`, `claude-provider`, the installers and the tests are by
+  [Yi Wang](https://github.com/yiwang).
+- **Z.ai and Kimi:** the provider settings in `claude-provider.py` (endpoints, model slots, context
+  windows and the config files) come from [claude-z](https://github.com/sam-fakhreddine/claude-z) by
+  Kerim ([lettt325](https://github.com/lettt325)), MIT-licensed, and Yi Wang's
+  [fork](https://github.com/yiwang/claude-z) of it, which added Kimi.
