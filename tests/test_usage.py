@@ -48,6 +48,33 @@ class CachedUsage(unittest.TestCase):
         self.h.profile("solo")
         code, out = self.h.run(SCRIPT, "--cached")
         self.assertIn("no data (--cached)", out)
+        self.assertNotIn("Sorted by Fable", out)  # no account has a Fable limit
+
+    def test_sorted_by_fable(self):
+        def fable(used, days, weekly_used=None):
+            rows = [{"kind": "weekly_scoped", "group": "weekly", "percent": used, "severity": "normal",
+                     "resets_at": iso(NOW + days * 86400), "scope": {"model": {"display_name": "Fable"}}}]
+            if weekly_used is not None:
+                rows.append({"kind": "weekly_all", "group": "weekly", "percent": weekly_used, "severity": "normal",
+                             "resets_at": iso(NOW + 5 * 86400)})
+            return {"limits": rows}
+        h = self.h
+        names = {}
+        names["pro"] = h.profile("default", "acct-0", usage={"limits": [
+            {"kind": "weekly_all", "group": "weekly", "percent": 10, "resets_at": iso(NOW + 86400)}]})
+        names["later"] = h.profile("later", "acct-1", usage=fable(50, 3))
+        names["soon"] = h.profile("soon", "acct-2", usage=fable(80, 1))
+        names["spent"] = h.profile("spent", "acct-3", usage=fable(100, 0.5))
+        # Fable left, but the weekly limit for all models, which Fable counts against too, is used up.
+        names["blocked"] = h.profile("blocked", "acct-4", usage=fable(10, 0.2, weekly_used=100))
+        # Saved before its Fable limit reset a day ago: full again, until it resets in 6 days.
+        names["stale"] = h.profile("stale", "acct-5", usage=fable(95, -1), saved_at=NOW - 2 * 86400)
+        code, out = h.run(SCRIPT, "--cached")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Sorted by Fable: those with some left first, the soonest reset on top;", out)
+        order = [line.split()[0] for line in out.splitlines() if line.startswith("~")]
+        expected = ["soon", "later", "stale", "spent", "blocked", "pro"]
+        self.assertEqual(order, [h.shown(names[n]) for n in expected])
 
 
 class Helpers(unittest.TestCase):

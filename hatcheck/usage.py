@@ -3,10 +3,11 @@
 (~/.claude*) and every Codex home (~/.codex*).
 
 Usage:
-    hatcheck usage [--cached] [--email]
+    hatcheck usage [--cached] [--email] [--json]
 
   --cached : don't call the APIs; show the snapshots Claude Code and Codex last saved.
   --email  : show each account's email address (hidden by default).
+  --json   : print the accounts and their limits as JSON, in the same order.
 
 For each profile this reads the OAuth token Claude Code keeps in the macOS
 Keychain, or in the profile's .credentials.json file on Linux and Windows, and
@@ -18,11 +19,18 @@ in the profile's .claude.json is shown instead, with its age.
 
 Rows come from the server's limits[] list: the 5-hour session, the weekly limit
 for all models, per-model weekly limits such as Fable, and any new meter the
-server adds. Per-model limits are named in violet, to tell them from the
-weekly limit for all models. Percentages are what's left (100 - used). Quota
+server adds. Per-model limits are named in violet, with their bar drawn in it, to
+tell them from the weekly limit for all models; the % keeps the severity's
+colour. Percentages are what's left (100 - used). Quota
 fields the server sends that Claude Code doesn't display are listed under their
 raw names.
 Profiles signed in to the same account are shown together.
+
+Accounts are sorted by their Fable limit. First come those with some Fable left,
+the soonest Fable reset on top, since what's left of it goes unused once it
+resets. Next come those out of Fable, or out of the weekly limit for all
+models, which Fable counts against too, the soonest back on top. Then come
+accounts without a Fable limit, in their usual order, and Codex homes.
 
 Each row has two bars: what's left of the limit, then how much of its window,
 5 hours or a week, is left before it resets. The second is coloured by urgency,
@@ -455,6 +463,40 @@ def percent_left(used, resets_at, saved_at, now):
     return max(0, min(100, 100 - (used or 0)))
 
 
+def is_fable(row):
+    """Whether a limits[] row is the weekly limit for Fable."""
+    model = ((row.get("scope") or {}).get("model") or {}).get("display_name") or ""
+    return row.get("kind") == "weekly_scoped" and "fable" in model.lower()
+
+
+def meter_state(row, saved_at, now):
+    """(% left, next reset) of a limits[] row. A snapshot's meter that has reset since it
+    was saved counts as full, until the reset after."""
+    reset, window = parse_time(row.get("resets_at")), row_window(row)
+    left = percent_left(row.get("percent"), row.get("resets_at"), saved_at, now)
+    if left is None:
+        left = 100
+        while reset is not None and window and reset <= now:
+            reset += window
+    return left, reset
+
+
+def fable_rank(usage, saved_at, now):
+    """Where an account goes in the list: first those with Fable left, the soonest Fable
+    reset on top, since what's left of it then goes unused; then those out of Fable, or of
+    the weekly limit for all models that it counts against too, the soonest back on top;
+    then accounts without a Fable limit, in their usual order."""
+    limits = [r for r in (usage or {}).get("limits") or [] if isinstance(r, dict)]
+    fable = next((r for r in limits if is_fable(r)), None)
+    if fable is None:
+        return 2, 0
+    never = float("inf")
+    needed = [meter_state(r, saved_at, now) for r in [fable] + [r for r in limits if r.get("kind") == "weekly_all"]]
+    if all(left > 0 for left, _ in needed):
+        return 0, needed[0][1] or never
+    return 1, max(reset or never for left, reset in needed if left <= 0)
+
+
 def usage_rows(usage):
     """(label, percent used, resets_at, window, severity, note, labeled, kind) for every meter
     in a usage body."""
@@ -583,6 +625,52 @@ def codex_plan_text(entry, usage):
     return "ChatGPT " + ((usage or {}).get("plan_type") or login.get("plan") or "?")
 
 
+def iso_utc(t):
+    """A time as ISO 8601 in UTC, for --json, or None."""
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if t is not None else None
+
+
+def limits_json(usage, saved_at, now):
+    """An account's limits for --json: what the text shows, as numbers. left_percent is
+    null for a snapshot's limit that has reset since it was saved."""
+    out = []
+    for r in usage.get("limits") or []:
+        if not isinstance(r, dict):
+            continue
+        out.append({"name": row_label(r), "short": row_label(r, short=True), "kind": r.get("kind"),
+                    "used_percent": r.get("percent"),
+                    "left_percent": percent_left(r.get("percent"), r.get("resets_at"), saved_at, now),
+                    "resets_at": iso_utc(parse_time(r.get("resets_at"))), "window_seconds": row_window(r),
+                    "severity": r.get("severity"), "per_model": str(r.get("kind") or "").endswith("_scoped")})
+    for label, used, resets_at, window, _, note, labeled, _ in usage_rows(usage):
+        if not labeled:  # a quota field Claude Code doesn't display, by its raw name
+            out.append({"name": label, "short": label, "kind": None, "used_percent": used,
+                        "left_percent": percent_left(used, resets_at, saved_at, now),
+                        "resets_at": iso_utc(parse_time(resets_at)), "window_seconds": window, "severity": None,
+                        "per_model": False, "raw": True, "note": note or None})
+    return out
+
+
+def account_json(entry, result, now, email=False):
+    """One account for --json: its profiles or homes, plan, where the numbers come from,
+    its limits, and where it stands on Fable (null without a Fable limit)."""
+    usage, saved_at, why = result
+    codex = bool(entry.get("codex"))
+    out = {"agent": "codex" if codex else "claude",
+           "profiles": [os.path.abspath(p) for p in entry["profiles"]],
+           "plan": codex_plan_text(entry, usage) if codex else plan_text(entry["oauth"]),
+           "source": "none" if usage is None else "live" if saved_at is None else "cached",
+           "saved_at": iso_utc(saved_at), "why": why}
+    if email:
+        out["email"] = entry.get("email")
+    out["limits"] = limits_json(usage, saved_at, now) if usage else []
+    out["extra"] = extra_usage_text(usage or {}) or None
+    group, at = fable_rank(usage, saved_at, now)
+    at = iso_utc(at) if at not in (0, float("inf")) else None
+    out["fable"] = None if group == 2 else {"left": True, "resets_at": at} if group == 0 else {"left": False, "back_at": at}
+    return out
+
+
 def load_usage(profiles, cached=False, codex_homes=()):
     """[(account entry, (usage, saved_at, why))] for the accounts behind `profiles` and
     `codex_homes`, fetched in parallel."""
@@ -603,6 +691,8 @@ def main(argv=None, prog=None):
                         help="don't call the APIs; show the snapshots Claude Code and Codex last saved")
     parser.add_argument("-e", "--email", action="store_true",
                         help="show each account's email address (hidden by default)")
+    parser.add_argument("--json", action="store_true",
+                        help="print the accounts and their limits as JSON, for scripts and status bars")
     args = parser.parse_args(argv)
 
     ansi = setup_console()
@@ -611,8 +701,17 @@ def main(argv=None, prog=None):
         else (lambda code, s: s)
     now = time.time()
 
+    accounts = load_usage(find_profiles(), args.cached, find_codex_homes())
+    ranks = [fable_rank(usage, saved_at, now) for _, (usage, saved_at, _) in accounts]
+    accounts = [account for _, account in sorted(zip(ranks, accounts), key=lambda pair: pair[0])]
+    if args.json:
+        print(json.dumps({"version": 1, "generated_at": iso_utc(now),
+                          "sorted_by": "fable" if any(group < 2 for group, _ in ranks) else None,
+                          "accounts": [account_json(entry, result, now, args.email) for entry, result in accounts]},
+                         ensure_ascii=False, indent=2))
+        return
     blocks = []
-    for entry, (usage, saved_at, why) in load_usage(find_profiles(), args.cached, find_codex_homes()):
+    for entry, (usage, saved_at, why) in accounts:
         names = ", ".join("~" + p[len(HOME):] for p in entry["profiles"])
         if usage is None:
             source = paint("31", "no data") + paint("2", " (%s)" % why)
@@ -628,6 +727,9 @@ def main(argv=None, prog=None):
     width = max([len(row[0]) for _, rows, _, _ in blocks for row in rows] or [0])
     unlabeled = False
     print(paint("1", "Plan usage by profile") + paint("2", " (% left, then time left until reset)"))
+    if any(group < 2 for group, _ in ranks):
+        print(paint("2", "Sorted by Fable: those with some left first, the soonest reset on top; "
+                         "then those out of it, the soonest back on top."))
     for header, rows, extra, saved_at in blocks:
         print(header)
         for label, used, resets_at, window, severity, note, labeled, kind in rows:
@@ -646,8 +748,9 @@ def main(argv=None, prog=None):
                     to_go = (t - now) / window  # fraction of the window left
                     time_bar = paint(urgency_color(to_go) if labeled else "2", bar(to_go))
             tail = " · ".join(text for text in (when, note) if text)
+            # A per-model limit's bar is violet like its name; its % keeps the severity's colour.
             print(("  %s %s %s  %s %s" % (paint(label_color(kind, "" if labeled else "2"), label.ljust(width)),
-                                          paint(code, pct), paint(code, plan_bar), time_bar,
+                                          paint(code, pct), paint(label_color(kind, code), plan_bar), time_bar,
                                           paint("2", tail) if tail else "")).rstrip())
             unlabeled |= not labeled
         if extra:

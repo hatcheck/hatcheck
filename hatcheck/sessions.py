@@ -5,7 +5,7 @@ and how much of its account's plan is left.
 
 Usage:
     hatcheck [sessions] [HOURS] [-n N] [--all] [--all-folders] [--full]
-                        [--cached] [--no-usage]
+                        [--cached] [--no-usage] [--json [--email]]
 
   HOURS         : how far back to look (default 24). Accepts 36, 1.5, 12h or 3d.
   -n N          : show only the newest N sessions per folder (default: all).
@@ -20,6 +20,9 @@ Usage:
   --cached      : take plan usage from the snapshots Claude Code and Codex last
                   saved instead of asking the APIs.
   --no-usage    : leave plan usage out.
+  --json        : print the sessions, and the accounts behind them, as JSON: the
+                  same sessions in the same order, with absolute paths and times
+                  in UTC. --email adds each account's email address.
 
 Run from a folder that has sessions in the time window, it lists just that
 folder's; anywhere else it lists every folder. Output is grouped by folder
@@ -45,7 +48,8 @@ Each resume command ends with a comment showing what's left of its profile's
 plan limits (the Claude plan, also on a session that resumes on Z.ai or
 Kimi), as a % and a bar, and after ↻ a bar of the time left until each one
 resets and that time: the 5-hour session (5h), the weekly limit (week) and
-per-model weekly limits such as Fable, named in violet to tell them from week.
+per-model weekly limits such as Fable, named in violet, with their bar drawn in it,
+to tell them from week.
 Bars have a block per hour of the 5-hour window and per day of a weekly one,
 as in ↻██▌░░░░ 2d12h. Time bars are coloured by urgency: blue with most of the
 window to go, then gold and orange, red as the reset nears. A plan bar shorter than its time bar means that
@@ -66,7 +70,8 @@ aren't listed.
 Each transcript records the entrypoint that wrote it; a session counts as
 Desktop when its most recent activity came from Claude Desktop. Sessions still
 open in a terminal are always listed, even when idle longer than HOURS, and
-marked so you don't resume them twice.
+marked so you don't resume them twice. A session that ran in a folder tied to
+another profile with hatcheck bind is marked "⚠ folder bound to ...".
 """
 import argparse
 import glob
@@ -81,7 +86,7 @@ import subprocess
 import sys
 import time
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 
 HOME = os.path.expanduser("~")
 DEFAULT_PROFILE = os.path.realpath(os.path.join(HOME, ".claude"))
@@ -515,39 +520,215 @@ def shell_path(path):
 
 def resume_command(profile, session_id, full, provider=None):
     """The command that resumes a session, on Z.ai or Kimi when provider is z or k."""
+    return claude_command(profile, "--resume " + session_id, full, provider)
+
+
+def claude_command(profile, tail, full, provider=None):
+    """The command that runs Claude Code with a profile, then tail: claude for ~/.claude,
+    cl <name> for ~/.claude-<name>, claude-z or claude-k on Z.ai or Kimi."""
     command = "claude-" + provider if provider else "claude"  # claude-z and claude-k: see ./cl
+    tail = " " + tail if tail else ""
     if os.path.realpath(profile) == DEFAULT_PROFILE:
-        return "%s --resume %s" % (command, session_id)
+        return command + tail
     parent, name = os.path.split(profile.rstrip("/" + os.sep))
     if not full and parent == HOME and name.startswith(".claude-"):
         short = name[len(".claude-"):]
-        return "%s %s%s --resume %s" % (SHORTCUT, "-%s " % provider if provider else "",
-                                         ps_quote(short) if powershell() else shlex.quote(short), session_id)
+        return "%s %s%s%s" % (SHORTCUT, "-%s " % provider if provider else "",
+                              ps_quote(short) if powershell() else shlex.quote(short), tail)
     if powershell():
         # Set for this one command and cleared after, so plain claude in the same window
         # goes back to ~\.claude.
         rest = profile[len(HOME) + 1:] if profile.startswith(HOME + os.sep) else None
         value = '"$HOME\\%s"' % rest if rest is not None and not re.search(r'["$`]', rest) \
             else "'" + profile.replace("'", "''") + "'"
-        return "$env:CLAUDE_CONFIG_DIR=%s; %s --resume %s; $env:CLAUDE_CONFIG_DIR=$null" % (value, command, session_id)
-    return "CLAUDE_CONFIG_DIR=%s %s --resume %s" % (shell_path(profile), command, session_id)
+        return "$env:CLAUDE_CONFIG_DIR=%s; %s%s; $env:CLAUDE_CONFIG_DIR=$null" % (value, command, tail)
+    return "CLAUDE_CONFIG_DIR=%s %s%s" % (shell_path(profile), command, tail)
 
 
 def codex_resume_command(home, session_id, full):
     """The command that resumes a Codex session: codex resume <id>, with cx <name> for a
     ~/.codex-<name> home."""
+    return codex_command(home, "resume " + session_id, full)
+
+
+def codex_command(home, tail, full):
+    """The command that runs Codex with a home, then tail: codex for ~/.codex, cx <name>
+    for ~/.codex-<name>."""
+    tail = " " + tail if tail else ""
     if os.path.realpath(home) == DEFAULT_CODEX_HOME:
-        return "codex resume " + session_id
+        return "codex" + tail
     parent, name = os.path.split(home.rstrip("/" + os.sep))
     if not full and parent == HOME and name.startswith(".codex-"):
         short = name[len(".codex-"):]
-        return "%s %s resume %s" % (CODEX_SHORTCUT, ps_quote(short) if powershell() else shlex.quote(short), session_id)
+        return "%s %s%s" % (CODEX_SHORTCUT, ps_quote(short) if powershell() else shlex.quote(short), tail)
     if powershell():
         rest = home[len(HOME) + 1:] if home.startswith(HOME + os.sep) else None
         value = '"$HOME\\%s"' % rest if rest is not None and not re.search(r'["$`]', rest) \
             else "'" + home.replace("'", "''") + "'"
-        return "$env:CODEX_HOME=%s; codex resume %s; $env:CODEX_HOME=$null" % (value, session_id)
-    return "CODEX_HOME=%s codex resume %s" % (shell_path(home), session_id)
+        return "$env:CODEX_HOME=%s; codex%s; $env:CODEX_HOME=$null" % (value, tail)
+    return "CODEX_HOME=%s codex%s" % (shell_path(home), tail)
+
+
+def start_command(agent, profile, full=False):
+    """The command that starts Claude Code or Codex with a profile or home."""
+    return codex_command(profile, "", full) if agent == "codex" else claude_command(profile, "", full)
+
+
+def iso_utc(t):
+    """A time as ISO 8601 in UTC, for --json, or None."""
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if t is not None else None
+
+
+# Folder bindings (hatcheck bind): which profile and Codex home a folder's work belongs to.
+
+def bindings_path():
+    """~/.config/hatcheck/bindings.json (%APPDATA%\\hatcheck\\bindings.json on Windows):
+    your own config, not the repos', so profile names don't end up in git."""
+    base = os.environ.get("APPDATA") if os.name == "nt" else None
+    return os.path.join(base or os.path.join(HOME, ".config"), "hatcheck", "bindings.json")
+
+
+def load_bindings():
+    """Bound folder -> {"claude": name, "codex": name}: default for ~/.claude or ~/.codex,
+    a NAME for ~/.claude-NAME or ~/.codex-NAME, or a path."""
+    try:
+        with open(bindings_path(), encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    folders = data.get("folders") if isinstance(data, dict) else None
+    return {folder: b for folder, b in (folders or {}).items() if isinstance(b, dict)} \
+        if isinstance(folders, dict) else {}
+
+
+def profile_folder(agent, name):
+    """The folder a bound name stands for: default for ~/.claude or ~/.codex, NAME for
+    ~/.claude-NAME or ~/.codex-NAME, or a path as it is."""
+    base = ".codex" if agent == "codex" else ".claude"
+    if name == "default":
+        return os.path.join(HOME, base)
+    if "/" in name or os.sep in name:
+        return name
+    return os.path.join(HOME, base + "-" + name)
+
+
+def bound_folder(path, bindings):
+    """The deepest bound folder that holds path, path itself included, or None. Folders
+    are compared once symlinks are resolved."""
+    if not path or not bindings:
+        return None
+    keys = {os.path.normcase(os.path.realpath(folder)): folder for folder in bindings}
+    path = os.path.normcase(os.path.realpath(path))
+    while True:
+        if path in keys:
+            return keys[path]
+        parent = os.path.dirname(path)
+        if parent == path:
+            return None
+        path = parent
+
+
+def bound_profile(path, agent, bindings):
+    """The profile (or Codex home) the folder at path is bound to, or None."""
+    folder = bound_folder(path, bindings)
+    name = bindings[folder].get(agent) if folder else None
+    return profile_folder(agent, name) if isinstance(name, str) and name else None
+
+
+def same_folder(a, b):
+    return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
+# Finding sessions, for hatcheck open and hatcheck best.
+
+def summarize(agent, profile, path):
+    """read_session or read_codex_session of a file, with its agent, profile and file
+    added, or None."""
+    try:
+        s = read_codex_session(path, codex_names(profile)) if agent == "codex" else read_session(path)
+    except (OSError, ValueError):
+        return None
+    if s:
+        s.update(agent=agent, profile=profile, path=path)
+        s.setdefault("open", None)
+    return s
+
+
+def session_copies(prefix):
+    """(agent, session ID) -> [(profile or home, file)] for the sessions whose ID starts
+    with prefix, in every Claude Code profile and Codex home, archived Codex ones too."""
+    found = {}
+    for profile in find_profiles():
+        for path in sorted(glob.glob(os.path.join(profile, "projects", "*", glob.escape(prefix) + "*.jsonl"))):
+            found.setdefault(("claude", os.path.basename(path)[:-len(".jsonl")]), []).append((profile, path))
+    for home in find_codex_homes():
+        paths = codex_session_files(home) + glob.glob(os.path.join(home, "archived_sessions", "rollout-*.jsonl"))
+        for path in sorted(paths):
+            m = CODEX_FILE.search(path)
+            if m and m.group(1).startswith(prefix.lower()):
+                found.setdefault(("codex", m.group(1)), []).append((home, path))
+    return found
+
+
+def codex_cwd(path):
+    """The folder a Codex session started in, from its first record."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            record = json.loads(fh.readline())
+    except (OSError, ValueError):
+        return None
+    payload = record.get("payload") if isinstance(record, dict) else None
+    return payload.get("cwd") if isinstance(payload, dict) else None
+
+
+def newest_here(folder, everything=False):
+    """The newest session started from folder, in any profile or home, or None. Only
+    terminal sessions, as the list shows by default, unless everything."""
+    here, best = os.path.realpath(folder), None
+
+    def better(s):
+        return s and s["has_messages"] and s["cwd"] and same_folder(s["cwd"], here) \
+            and s["entrypoint"] != "subagent" and (everything or s["entrypoint"] == "cli") \
+            and (best is None or s["when"] > best["when"])
+    names = {encode_project(p) for p in (folder, here)}
+    for profile in find_profiles():
+        for name in names:
+            pattern = glob.escape(name[:200]) + "*" if len(name) > 200 else glob.escape(name)
+            for path in glob.glob(os.path.join(profile, "projects", pattern, "*.jsonl")):
+                s = summarize("claude", profile, path)
+                best = s if better(s) else best
+    for home in find_codex_homes():
+        for path in sorted(codex_session_files(home), key=os.path.getmtime, reverse=True):
+            if best and os.path.getmtime(path) < best["when"]:
+                break  # a file's mtime is never older than its last message
+            cwd = codex_cwd(path)
+            if cwd and same_folder(cwd, here):
+                s = summarize("codex", home, path)
+                if better(s):
+                    best = s
+                    break
+    return best
+
+
+def codex_session_open(home, sid):
+    """Whether Codex has a session open: it holds a lock on thread-writer-locks/<id>.lock
+    while it's writing the session. Not checked on Windows."""
+    path = os.path.join(home, "thread-writer-locks", sid + ".lock")
+    if os.name == "nt" or not os.path.isfile(path):
+        return False
+    import fcntl
+    try:
+        fd = os.open(path, os.O_RDWR)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    except OSError:
+        return True
+    finally:
+        os.close(fd)
 
 
 def session_command(s, full):
@@ -593,11 +774,12 @@ def usage_cells(usage_mod, results, now, paint):
                     time_bar = usage_mod.bar(to_go, blocks) + " " if window else ""
                     until = "↻" + time_bar + usage_mod.duration(reset - now)
                     until_code = usage_mod.urgency_color(to_go) if window else "2"
+            # A per-model limit's bar is violet like its name; its % keeps the severity's colour.
             meters[profile].append((usage_mod.row_label(row, short=True), usage_mod.label_color(row.get("kind"), "2"),
-                                    pct, code, plan, until, until_code))
+                                    pct, code, plan, usage_mod.label_color(row.get("kind"), code), until, until_code))
     widths = {}  # meter slot -> widest [label, % left, plan bar, time bar] in it
     for rows in meters.values():
-        for i, (label, _, pct, _, plan, until, _) in enumerate(rows):
+        for i, (label, _, pct, _, plan, _, until, _) in enumerate(rows):
             w = widths.setdefault(i, [0, 0, 0, 0])
             w[:] = [max(n, len(text)) for n, text in zip(w, (label, pct, plan, until))]
 
@@ -609,11 +791,11 @@ def usage_cells(usage_mod, results, now, paint):
     cells = {}
     for profile, rows in meters.items():
         parts = []
-        for i, (label, label_code, pct, code, plan, until, until_code) in enumerate(rows):
+        for i, (label, label_code, pct, code, plan, plan_code, until, until_code) in enumerate(rows):
             label_w, pct_w, plan_w, until_w = widths[i]
             # Padded so the next meter lines up; the trailing gap is cut below.
             parts.append(" ".join((padded(label_code, label, label_w), padded(code, pct, pct_w, right=True),
-                                   padded(code, plan, plan_w), padded(until_code, until, until_w))))
+                                   padded(plan_code, plan, plan_w), padded(until_code, until, until_w))))
         cells[profile] = "  ".join(parts).rstrip() if parts else paint("2", "usage ?")
     return cells
 
@@ -643,6 +825,30 @@ def truncate(text, cols):
     return "".join(out) + "…"
 
 
+def sessions_json(args, now, folders, loaded, account, hidden, elsewhere, only_here, usage_mod):
+    """The list as --json gives it: the same sessions in the same order, with the accounts
+    behind them. Paths are absolute and times are in UTC; version goes up only when a field
+    changes meaning or goes away."""
+    out = {"version": 1, "generated_at": iso_utc(now), "hours": args.hours, "this_folder_only": only_here,
+           "sessions": [], "accounts": [], "hidden": hidden, "other_folders": elsewhere,
+           "older_not_listed": {folder: older for folder, _, older in folders if older}}
+    for _, listed, _ in folders:
+        for s in listed:
+            live = s.get("open")
+            out["sessions"].append({
+                "agent": s.get("agent") or "claude", "id": s["id"], "profile": os.path.abspath(s["profile"]),
+                "account": account.get(s["profile"]), "title": s["title"], "cwd": s["cwd"],
+                "last_active": iso_utc(s["when"]), "entrypoint": s["entrypoint"], "branch": s["branch"],
+                "model": s["model"],
+                "open": {"pid": live.get("pid"), "status": live.get("status")} if live else None,
+                "continued_in": s["continued_in"],
+                "bound_to": os.path.abspath(s["bound_to"]) if s["bound_to"] else None,
+                "resume": session_command(s, args.full)})
+    if loaded:
+        out["accounts"] = [usage_mod.account_json(entry, result, now, args.email) for entry, result in loaded]
+    return out
+
+
 def main(argv=None, prog=None):
     parser = argparse.ArgumentParser(
         prog=prog, description="List recent Claude Code CLI sessions across all ~/.claude* profiles, and Codex CLI "
@@ -663,6 +869,9 @@ def main(argv=None, prog=None):
                         help="take plan usage from the snapshots Claude Code and Codex last saved "
                              "instead of the APIs")
     parser.add_argument("--no-usage", action="store_true", help="leave plan usage out")
+    parser.add_argument("--json", action="store_true",
+                        help="print the sessions, and the accounts behind them, as JSON for scripts and apps")
+    parser.add_argument("-e", "--email", action="store_true", help="with --json, include each account's email address")
     args = parser.parse_args(argv)
 
     usage_lib = load_usage_module()
@@ -761,10 +970,19 @@ def main(argv=None, prog=None):
     used = {s["profile"] for _, listed, _ in folders for s in listed}
     used_profiles, used_homes = [p for p in profiles if p in used], [h for h in codex_homes if h in used]
     results, account = {}, {}  # profile or home -> its account's usage, and a number for that account
-    if usage_mod:
-        for n, (entry, result) in enumerate(usage_mod.load_usage(used_profiles, args.cached, used_homes)):
-            for profile in entry["profiles"]:
-                results[profile], account[profile] = result, n
+    loaded = usage_mod.load_usage(used_profiles, args.cached, used_homes) if usage_mod else []
+    for n, (entry, result) in enumerate(loaded):
+        for profile in entry["profiles"]:
+            results[profile], account[profile] = result, n
+    bindings = load_bindings()
+    for _, listed, _ in folders:
+        for s in listed:
+            want = bound_profile(s["cwd"], s.get("agent") or "claude", bindings)
+            s["bound_to"] = want if want and not same_folder(want, s["profile"]) else None
+    if args.json:
+        print(json.dumps(sessions_json(args, now, folders, loaded, account, hidden, elsewhere, only_here, usage_mod),
+                         ensure_ascii=False, indent=2))
+        return
     cells = usage_cells(usage_mod, results, now, paint) if results else {}
     # The usage comments line up after the longest resume command.
     command_width = max([len(session_command(s, args.full)) for _, listed, _ in folders for s in listed] or [0])
@@ -796,6 +1014,8 @@ def main(argv=None, prog=None):
                              + (" (%s)" % entry["status"] if entry.get("status") else ""), "32"))
             if s["continued_in"]:
                 meta.append(("continued in " + s["continued_in"][:8], "2"))
+            if s["bound_to"]:  # hatcheck bind ties this folder to another profile
+                meta.append(("⚠ folder bound to " + shell_path(s["bound_to"]), "33"))
             room = width - 8 - sum(3 + len(text) for text, _ in meta)
             print("  %s  %s%s" % (paint("2", ago(now - s["when"]).rjust(4)),
                                   paint("1", truncate(s["title"], max(room, 20))),

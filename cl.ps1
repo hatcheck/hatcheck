@@ -18,6 +18,7 @@ function Invoke-Provider {  # hatcheck provider ...
 $rest = @($args)
 $provider = $null
 $profileName = $null
+$boundProfile = $null
 if ($rest.Count -ge 2 -and $rest[0] -eq "--as" -and $rest[1] -cmatch '^claude-([zk])$') {
     $provider = $Matches[1]
     $rest = @($rest | Select-Object -Skip 2)
@@ -31,11 +32,23 @@ if ($rest.Count -ge 2 -and $rest[0] -eq "--as" -and $rest[1] -cmatch '^claude-([
         $rest = @($rest | Select-Object -Skip 1)
     }
     if ($rest.Count -lt 1 -or -not $rest[0] -or "$($rest[0])".StartsWith("-")) {
-        [Console]::Error.WriteLine("usage: cl [-z|-k] <profile> [claude args...]  (uses ~\.claude-<profile>)")
-        exit 2
+        # No profile name: the one this folder is bound to with hatcheck bind, if any.
+        $bound = $null
+        if (Get-Command hatcheck -ErrorAction SilentlyContinue) {
+            $out = @(& hatcheck bind --which claude 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $out.Count -gt 0) { $bound = "$($out[0])".Trim() }
+        }
+        if (-not $bound) {
+            [Console]::Error.WriteLine("usage: cl [-z|-k] <profile> [claude args...]  (uses ~\.claude-<profile>)")
+            [Console]::Error.WriteLine("   or tie this folder to a profile with: hatcheck bind <profile>")
+            exit 2
+        }
+        [Console]::Error.WriteLine("cl: this folder is bound to $bound")
+        $boundProfile = "$bound".Trim()
+    } else {
+        $profileName = $rest[0]
+        $rest = @($rest | Select-Object -Skip 1)
     }
-    $profileName = $rest[0]
-    $rest = @($rest | Select-Object -Skip 1)
 }
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     [Console]::Error.WriteLine("cl: claude isn't on your PATH; install Claude Code first")
@@ -44,9 +57,15 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 
 # What to set, as name -> value ($null to remove), and what was there before.
 $settings = [ordered]@{}
+$home_dir = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }  # what Claude Code calls home
 if ($profileName) {
-    $home_dir = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }  # what Claude Code calls home
     $settings["CLAUDE_CONFIG_DIR"] = Join-Path $home_dir (".claude-" + $profileName)
+} elseif ($boundProfile -ceq "default") {
+    $settings["CLAUDE_CONFIG_DIR"] = $null  # ~\.claude, as plain claude has it
+} elseif ($boundProfile -match '[\\/]') {
+    $settings["CLAUDE_CONFIG_DIR"] = $boundProfile
+} elseif ($boundProfile) {
+    $settings["CLAUDE_CONFIG_DIR"] = Join-Path $home_dir (".claude-" + $boundProfile)
 }
 if ($provider) {
     $json = Invoke-Provider env $provider --json

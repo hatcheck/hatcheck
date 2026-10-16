@@ -50,10 +50,10 @@ class Commands(unittest.TestCase):
         for name in ("claude-z", "claude-k"):  # how install.sh installs them
             os.symlink(os.path.join(REPO, "cl"), os.path.join(folder, name))
 
-    def run_command(self, argv, extra_env=None, stdin="", fakes=True, bindir=None):
+    def run_command(self, argv, extra_env=None, stdin="", fakes=True, bindir=None, cwd=None):
         env = dict(self.h.env(), **(extra_env or {}))
         env["PATH"] = ((bindir or self.bin) + os.pathsep if fakes else "") + (os.environ["PATH"] if WINDOWS else "/bin:/usr/bin")
-        p = subprocess.run(argv, cwd=self.h.root, env=env, input=stdin, capture_output=True, text=True,
+        p = subprocess.run(argv, cwd=cwd or self.h.root, env=env, input=stdin, capture_output=True, text=True,
                            encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
 
@@ -109,6 +109,42 @@ class Commands(unittest.TestCase):
             code, out = self.cx(*args)
             self.assertEqual(code, 2, out)
             self.assertIn("usage: cx <profile> [codex args...]", out)
+        # A Codex command first, with no ~/.codex-resume and no binding here: not a home's name.
+        code, out = self.cx("resume", CODEX_ID)
+        self.assertEqual(code, 2, out)
+        self.assertIn("cx: resume is a Codex command, not a home's name", out)
+        self.assertFalse(os.path.exists(os.path.join(self.h.home, ".codex-resume")))
+
+    def test_cl_and_cx_use_the_folder_binding(self):
+        code_dir = self.h.folder("code")
+        hatcheck = [sys.executable, os.path.join(REPO, "hatcheck.py")]
+        code, out = self.run_command(hatcheck + ["bind", "work"], cwd=code_dir)
+        self.assertEqual(code, 0, out)
+        inside = self.h.folder("code", "src")
+        code, out = self.cl("--resume", ID, cwd=inside)
+        self.assertEqual(code, 0, out)
+        self.assertIn("cl: this folder is bound to work", out)
+        self.assertIn("args=--resume " + ID, out)
+        self.assertIn("CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"), out)
+        code, out = self.cx("resume", CODEX_ID, cwd=inside)  # resume is Codex's, not a profile
+        self.assertEqual(code, 0, out)
+        self.assertIn("args=resume " + CODEX_ID, out)
+        self.assertIn("CODEX_HOME=" + os.path.join(self.h.home, ".codex-work"), out)
+        code, out = self.cl("work", "--resume", ID, cwd=inside)  # a profile name still wins
+        self.assertNotIn("bound to", out)
+        code, out = self.cl("--resume", ID)  # outside the folder, as before
+        self.assertEqual(code, 2, out)
+        self.assertIn("hatcheck bind <profile>", out)
+        # Bound to ~/.claude and ~/.codex: plain claude and codex.
+        self.h.profile("default")
+        self.h.codex_home()
+        code, out = self.run_command(hatcheck + ["bind", "default"], cwd=inside)
+        self.assertEqual(code, 0, out)
+        code, out = self.cl("--resume", ID, cwd=inside)
+        self.assertIn("CLAUDE_CONFIG_DIR=unset", out)
+        code, out = self.cx(cwd=inside)
+        self.assertEqual(code, 0, out)
+        self.assertIn("CODEX_HOME=unset", out)
 
     @unittest.skipIf(WINDOWS, "the runner's PATH could have a codex on it")
     def test_cx_without_codex(self):
@@ -155,7 +191,9 @@ class Commands(unittest.TestCase):
         code, out = self.run_command([sys.executable, os.path.join(REPO, "hatcheck.py"), "--help"])
         self.assertEqual(code, 0, out)
         for line in ("hatcheck [sessions] [HOURS]", "hatcheck usage", "hatcheck where SESSION",
-                     "hatcheck move SESSION PROFILE", "hatcheck provider"):
+                     "hatcheck move SESSION PROFILE", "hatcheck open [SESSION]", "hatcheck best [--for SESSION]",
+                     "hatcheck bind PROFILE", "hatcheck unbind [FOLDER]", "hatcheck provider", "take --json",
+                     "hatcheck show SESSION", "hatcheck desktop"):
             self.assertIn(line, out)
         code, out = self.run_command([sys.executable, os.path.join(REPO, "hatcheck.py"), "3d", "--no-usage"])
         self.assertEqual(code, 0, out)  # HOURS on its own: the session list
@@ -272,6 +310,28 @@ class Commands(unittest.TestCase):
         code, out = self.run_command(force)
         self.assertEqual(code, 0, out)
         self.assertTrue(os.path.lexists(made), out)
+
+
+
+class PythonLaunchers(Commands):
+    """The same, through hatcheck/launch.py: the cl, cx, claude-z and claude-k a package
+    install (uv tool install, pipx) puts on the PATH, on every system."""
+
+    def launch(self, name, args, kw):
+        return self.run_command([sys.executable, os.path.join(REPO, "hatcheck", "launch.py"), name] + list(args), **kw)
+
+    def cl(self, *args, **kw):
+        return self.launch("cl", args, kw)
+
+    def cx(self, *args, **kw):
+        return self.launch("cx", args, kw)
+
+    def claude_on(self, name, *args, **kw):
+        return self.launch(name, args, kw)
+
+    # About the hatcheck command, the installers or the sh and PowerShell launchers only.
+    test_hatcheck = test_hat_is_the_short_name = test_installer = test_installer_leaves_hat_to_another_command = None
+    test_where_finds_a_session_by_prefix = test_where_finds_codex_sessions = test_cl_needs_hatcheck_for_a_provider = None
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ profile, a Codex session to another ~/.codex* home, or either one over to the
 other agent.
 
 Usage:
-    hatcheck move SESSION PROFILE [--from PROFILE] [--no-keep] [--dry-run]
+    hatcheck move SESSION PROFILE [--from PROFILE] [--no-keep] [--fork] [--dry-run] [--json]
 
   SESSION   : the session ID, or the start of it, of a Claude Code or Codex session.
   PROFILE   : where it goes: NAME for ~/.claude-NAME, default for ~/.claude,
@@ -13,7 +13,17 @@ Usage:
   --from    : the profile or home to take it from, when more than one has it.
   --no-keep : delete the original once the copy is checked, which moves it.
               Not when the session is converted, since that leaves things out.
+  --fork    : copy it in as a new session with its own ID, as claude --fork-session
+              and codex fork do, leaving a copy already in PROFILE as it is.
   --dry-run : show what would be copied, converted and deleted, and change nothing.
+  --json    : say so as JSON, for scripts and the desktop app: what was or would be
+              done, item by item, and the command that resumes it. Never asks.
+
+When PROFILE already has a copy of the session, from an earlier move, the two are
+compared. If the session went on from the copy there, that copy is brought up to
+date, so a session can go back and forth between profiles. If it went on there
+instead, that copy already has everything and nothing is copied. If it went on in
+both, nothing is copied: --fork brings this one in as a new session, keeping both.
 
 Between Claude Code profiles, the transcript, the folder of subagent transcripts
 and saved tool output, the /rewind file snapshots and the plan file are copied
@@ -51,11 +61,14 @@ This script loads sessions.py, which loads usage.py, so keep the three in one
 folder.
 """
 import argparse
+import contextlib
 import glob
 import importlib.util
+import io
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -74,6 +87,9 @@ CALL_CLIP, RESULT_CLIP, BUDGET = (30, 3000), (20, 2000), 400000
 CLAUDE_HARNESS = ("<command-name>", "<command-message>", "<command-args>", "<local-command-stdout>",
                   "<local-command-stderr>", "<local-command-caveat>", "<task-notification>", "<system-reminder>")
 AGENT_NAMES = {"claude": "Claude Code", "codex": "Codex"}
+# Fields that hold a session's own ID, changed in a --fork copy: Claude Code's sessionId, and
+# Codex's id and session_id (in session_meta) and thread_id.
+ID_KEYS = ("sessionId", "session_id", "thread_id", "id")
 
 
 def load_sibling(name, file):
@@ -121,55 +137,164 @@ def read(path):
         return fh.read()
 
 
-def repoint(value, pairs):
-    """value with each old path changed to its new one. Thinking blocks are left alone:
-    their signatures cover the text."""
+def repoint(value, pairs, ids=None):
+    """value with each old path changed to its new one, and with ids, (old, new), the
+    session's ID changed where a field holds it. Thinking blocks are left alone: their
+    signatures cover the text."""
     if isinstance(value, str):
         for old, new in pairs:
             value = value.replace(old, new)
         return value
     if isinstance(value, list):
-        return [repoint(v, pairs) for v in value]
+        return [repoint(v, pairs, ids) for v in value]
     if isinstance(value, dict):
         if value.get("type") in ("thinking", "redacted_thinking"):
             return value
-        return {k: repoint(v, pairs) for k, v in value.items()}
+        return {k: ids[1] if ids and k in ID_KEYS and v == ids[0] else repoint(v, pairs, ids)
+                for k, v in value.items()}
     return value
 
 
-def copy_bytes(src, pairs):
-    """What the copy of file src holds: its bytes, with a transcript's paths repointed.
-    Only lines holding an old path are rewritten; Claude Code writes compact JSON, so
-    re-serializing one changes nothing but the paths."""
+def copy_bytes(src, pairs, ids=None):
+    """What the copy of file src holds: its bytes, with a transcript's paths repointed and,
+    for --fork, the session's ID changed. Only lines holding an old path or the ID are
+    rewritten; Claude Code and Codex write compact JSON, so re-serializing one changes
+    nothing else."""
     data = read(src)
     # As the paths appear in the JSON text: on Windows with their backslashes doubled.
-    olds = [json.dumps(old, ensure_ascii=False)[1:-1].encode() for old, _ in pairs]
+    olds = [json.dumps(old, ensure_ascii=False)[1:-1].encode() for old, _ in pairs] + ([ids[0].encode()] if ids else [])
     if not src.endswith(".jsonl") or not any(old in data for old in olds):
         return data
     lines = data.split(b"\n")
     for i, line in enumerate(lines):
         if any(old in line for old in olds):
             try:
-                lines[i] = json.dumps(repoint(json.loads(line), pairs), ensure_ascii=False,
+                lines[i] = json.dumps(repoint(json.loads(line), pairs, ids), ensure_ascii=False,
                                       separators=(",", ":")).encode()
             except (ValueError, UnicodeError):
                 pass  # a line that doesn't round-trip stays as it was
     return b"\n".join(lines)
 
 
-def matches(src, dst, pairs):
+def matches(src, dst, pairs, ids=None):
     """Whether dst holds exactly what copying src gives."""
     if not os.path.exists(dst) or os.path.isdir(src) != os.path.isdir(dst):
         return False
     names = files_in(src)
-    return names == files_in(dst) and all(read(join(dst, n)) == copy_bytes(join(src, n), pairs) for n in names)
+    return names == files_in(dst) and all(read(join(dst, n)) == copy_bytes(join(src, n), pairs, ids) for n in names)
 
 
-def copy(src, dst, pairs):
+def lines_of(data):
+    """A JSONL file's lines, without the empty one after the last newline."""
+    lines = data.split(b"\n")
+    return lines[:-1] if lines[-1] == b"" else lines
+
+
+def same_line(a, b):
+    """Whether two lines hold the same record, even if one was written out differently."""
+    if a == b:
+        return True
+    try:
+        return json.loads(a) == json.loads(b)
+    except (ValueError, UnicodeError):
+        return False
+
+
+def shared_lines(a, b):
+    """How many lines two JSONL files start with in common."""
+    n = 0
+    while n < min(len(a), len(b)) and same_line(a[n], b[n]):
+        n += 1
+    return n
+
+
+def standing(have, want, jsonl, mtimes):
+    """How a file already in the profile (have) stands to what copying would put there
+    (want): same; older, when want starts with all of it, so the session went on from it;
+    newer, when it starts with all of want, so the session went on there; or diverged."""
+    if have == want:
+        return "same"
+    if jsonl:  # Claude Code and Codex only ever add lines to these
+        a, b = lines_of(have), lines_of(want)
+        n = shared_lines(a, b)
+        if n == len(a) == len(b):
+            return "same"
+        return "older" if n == len(a) else "newer" if n == len(b) else "diverged"
+    if want.startswith(have):
+        return "older"
+    if have.startswith(want):
+        return "newer"
+    # Written over rather than added to, such as a plan: the one changed last is newer.
+    return "older" if mtimes[0] < mtimes[1] else "newer" if mtimes[0] > mtimes[1] else "diverged"
+
+
+def overall(states):
+    """What standings add up to: diverged once either side has something the other lacks
+    and the other way round too. new (nothing there yet) counts as older."""
+    found = {"older" if s == "new" else s for s in states} - {"same"}
+    if "diverged" in found or {"older", "newer"} <= found:
+        return "diverged"
+    return "older" if "older" in found else "newer" if "newer" in found else "same"
+
+
+def item_standing(src, dst, pairs):
+    """How what's at dst stands to a copy of the file or folder src: new when there's
+    nothing there, otherwise its files compared as standing() does."""
+    if not os.path.lexists(dst):
+        return "new"
+    if not os.path.exists(src):
+        return "newer"
+    if os.path.isdir(src) != os.path.isdir(dst):
+        return "diverged"
+    ours, theirs = set(files_in(src)), set(files_in(dst))
+    states = ["older"] * len(ours - theirs) + ["newer"] * len(theirs - ours)
+    for name in ours & theirs:
+        a, b = join(src, name), join(dst, name)
+        states.append(standing(read(b), copy_bytes(a, pairs), b.endswith(".jsonl"),
+                               (os.path.getmtime(b), os.path.getmtime(a))))
+    return overall(states)
+
+
+def records_of(lines):
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except (ValueError, UnicodeError):
+            continue
+        if isinstance(record, dict):
+            yield record
+
+
+def since_split(ours, theirs, agent, sessions):
+    """For two copies of a session that each went on: how many lines they share, when they
+    were last the same, and how many prompts each has had since (this one's, the other's)."""
+    a, b = lines_of(ours), lines_of(theirs)
+    n = shared_lines(a, b)
+    when = next((r["timestamp"] for r in reversed(list(records_of(a[:n]))) if r.get("timestamp")), None)
+
+    def prompts(lines):
+        if agent == "codex":  # each prompt is in a user_message event, and again as a response item
+            return sum(1 for r in records_of(lines) if r.get("type") == "event_msg" and sessions.codex_prompt(r))
+        return sum(1 for r in records_of(lines) if r.get("type") == "user" and not r.get("isMeta")
+                   and not r.get("isSidechain") and sessions.prompt_text(r))
+    return n, when, prompts(a[n:]), prompts(b[n:])
+
+
+def last_time(data):
+    """The time of a session file's last record that has one."""
+    return next((r["timestamp"] for r in reversed(list(records_of(lines_of(data)))) if r.get("timestamp")), None)
+
+
+def time_text(stamp, sessions):
+    t = sessions.parse_time(stamp) if isinstance(stamp, str) else None
+    return time.strftime("%b %d %H:%M", time.localtime(t)) if t else "an earlier move"
+
+
+def copy(src, dst, pairs, ids=None):
     """Copy a file or folder with its timestamps, under a temporary name until it's whole."""
     def copy_file(a, b):
         with open(b, "wb") as fh:
-            fh.write(copy_bytes(a, pairs))
+            fh.write(copy_bytes(a, pairs, ids))
         shutil.copystat(a, b)
 
     tmp = dst + TMP
@@ -181,6 +306,15 @@ def copy(src, dst, pairs):
     else:
         copy_file(src, tmp)
     os.replace(tmp, dst)
+
+
+def bring_up_to_date(src, dst, pairs):
+    """Turn an older copy of a file or folder into a copy of src: each file it lacks, or
+    has less of, is written whole, under a temporary name until it's complete."""
+    for name in files_in(src):
+        a, b = join(src, name), join(dst, name)
+        if not os.path.isfile(b) or read(b) != copy_bytes(a, pairs):
+            copy(a, b, pairs)
 
 
 def path_pairs(old, new):
@@ -397,6 +531,9 @@ def read_claude(path, sessions):
     node = next((r for r in reversed(records) if r.get("type") in ("user", "assistant")
                  and not r.get("isSidechain")), None)
     chain, seen = [], set()
+    if node is not None and not node.get("uuid"):  # no links to follow: the messages in file order
+        chain = [r for r in reversed(records) if r.get("type") in ("user", "assistant")]
+        node = None
     while node is not None and id(node) not in seen:
         seen.add(id(node))
         chain.append(node)
@@ -618,27 +755,73 @@ def name_session(home, sid, name):
         fh.write(json.dumps({"id": sid, "thread_name": name, "updated_at": stamp}, ensure_ascii=False) + "\n")
 
 
-def move_claude(args, sessions, usage, sid, source, transcripts, target):
-    """Copy (or with --no-keep, move) a Claude Code session to another profile. Returns
-    the directory to resume it from."""
+def delete_originals(items):
+    """--no-keep: delete what was copied from the old profile, except plan files."""
+    for _, src, _, deleted in items:
+        if deleted and os.path.isdir(src):
+            shutil.rmtree(src)
+        elif deleted and os.path.exists(src):
+            os.remove(src)
+
+
+def read_info(sessions, transcripts):
+    """What the session list knows about a session, from the newest of its transcripts."""
+    summaries = []
+    for path in transcripts:
+        try:
+            summaries.append(sessions.read_session(path))
+        except (OSError, ValueError):
+            pass
+    return max(filter(None, summaries), key=lambda s: (s["when"], s["canonical"], s["size"]), default=None)
+
+
+def went_on_in_both(sessions, agent, sid, source, target, ours, theirs, again, paths):
+    """Stop: the session went on in both places after one was copied from the other.
+    ours and theirs: the two transcripts, when it's they that differ that way."""
+    show = sessions.shell_path
+    shared = since_split(ours, theirs, agent, sessions) if ours is not None and theirs is not None else None
+    if shared and shared[0] == 0:
+        first = "%s has a different session with the ID %s, with nothing in common with this one" % (show(target), sid[:8])
+    elif shared:
+        _, when, mine, other = shared
+        first = "Session %s went on in both %s and %s after %s" % (
+            sid[:8], show(source), show(target), time_text(when, sessions))
+        if mine or other:
+            first += ": %d new prompt%s in %s, %d in %s" % (mine, "s" * (mine != 1), show(source), other, show(target))
+    else:
+        first = "The copies of session %s in %s and %s each have files the other lacks" % (
+            sid[:8], show(source), show(target))
+    sys.exit("%s. Copying this one over would lose what's only in %s, so nothing was copied.\n"
+             "To keep both, bring this one in as a new session with its own ID:\n  %s\n"
+             "Or delete the copy in %s first, to replace it:\n%s"
+             % (first, show(target), again("--fork"), show(target), "\n".join("  " + show(p) for p in paths)))
+
+
+def move_claude(args, sessions, usage, sid, source, transcripts, target, again):
+    """Copy (or with --no-keep, move) a Claude Code session to another profile, or with
+    --fork copy it in as a new session. Returns the session to resume and the directory
+    to resume it from."""
     show = sessions.shell_path
     live = sessions.open_sessions([source]).get((os.path.realpath(source), sid))
     if live:
         sys.exit("Session %s is open in pid %s%s; quit it first, so it stops changing"
                  % (sid[:8], live.get("pid"), " (%s)" % live["status"] if live.get("status") else ""))
+    new_sid = str(uuid.uuid4()) if args.fork else sid
+    ids = (sid, new_sid) if args.fork else None
 
     # What to copy: (what, original, copy, deleted with --no-keep), and the paths to repoint.
+    # Also what only the copy already in the profile has, which makes that copy newer.
     items, pairs = [], []
     for path in transcripts:
         old = path[:-len(".jsonl")]
-        new = os.path.join(target, "projects", os.path.basename(os.path.dirname(path)), sid)
+        new = os.path.join(target, "projects", os.path.basename(os.path.dirname(path)), new_sid)
         pairs += path_pairs(old, new)  # covers <id>.jsonl and the <id>/ folder beside it
         items.append(("transcript", path, new + ".jsonl", True))
-        if os.path.isdir(old):
+        if os.path.isdir(old) or os.path.isdir(new):
             items.append(("subagents and tool output", old, new, True))
     for sub, what in (("file-history", "/rewind file snapshots"), ("session-env", "session environment")):
-        old, new = os.path.join(source, sub, sid), os.path.join(target, sub, sid)
-        if os.path.isdir(old) and files_in(old):
+        old, new = os.path.join(source, sub, sid), os.path.join(target, sub, new_sid)
+        if any(os.path.isdir(d) and files_in(d) for d in (old, new)):
             items.append((what, old, new, True))
             pairs += path_pairs(old, new)
     for slug in sorted(plan_slugs(transcripts)):
@@ -647,54 +830,86 @@ def move_claude(args, sessions, usage, sid, source, transcripts, target):
             items.append(("plan", old, new, False))  # kept: sessions can share a plan
             pairs += path_pairs(old, new)
 
-    present, conflicts = set(), []
-    for _, src, dst, _ in items:
-        if os.path.lexists(dst):
-            if matches(src, dst, pairs):
-                present.add(dst)
-            else:
-                conflicts.append(dst)
-    if conflicts:
-        sys.exit("%s already has a different copy of this session. Delete it there first to replace it:\n%s"
-                 % (show(target), "\n".join("  " + show(c) for c in conflicts)))
-    repointed = any(read(join(src, n)) != copy_bytes(join(src, n), pairs)
+    states = {dst: item_standing(src, dst, pairs) for _, src, dst, _ in items}
+    if args.fork:  # its own new paths; but a plan already there is the copy there's too: left as it is
+        states.update({dst: "kept" for what, _, dst, _ in items if what == "plan" and states[dst] not in ("new", "same")})
+    verdict = overall(s for s in states.values() if s != "kept")
+    transcript = next((src, dst) for what, src, dst, _ in items if what == "transcript")
+    theirs = read(transcript[1]) if os.path.isfile(transcript[1]) else None
+    if verdict == "diverged":
+        split = states[transcript[1]] == "diverged"
+        went_on_in_both(sessions, "claude", sid, source, target, copy_bytes(transcript[0], pairs) if split else None,
+                        theirs, again,
+                        [dst for what, _, dst, _ in items if os.path.lexists(dst) and (what != "plan" or states[dst] == "diverged")])
+
+    args.report.update(agent="claude", session=sid, source=source, target=target, fork=bool(args.fork),
+                       new_session=new_sid if args.fork else None)
+    if verdict == "newer":  # it went on there: nothing here that the copy there lacks
+        info = read_info(sessions, [transcript[1]])
+        args.report.update(action="nothing", reason="the copy there is newer", deleted_original=bool(args.no_keep),
+                           cwd=info["cwd"] if info else None, resume=sessions.resume_command(target, sid, False))
+        print('%s already has session %s "%s", with everything in this copy and more: the session went on '
+              "there. Nothing to copy." % (show(target), sid[:8], sessions.truncate(info["title"], 60) if info else "?"))
+        if args.no_keep and not args.dry_run:
+            delete_originals(items)
+        print("%s the older copy from %s." % ("Would delete" if args.dry_run else "Deleted", show(source)) if args.no_keep
+              else "Kept the older copy in %s; --no-keep deletes it." % show(source))
+        print("Resume it with:")
+        if info and info["cwd"]:
+            print("  cd " + show(info["cwd"]))
+        print("  " + sessions.resume_command(target, sid, False))
+        return sid, info["cwd"] if info else None
+
+    repointed = any(read(join(src, n)) != copy_bytes(join(src, n), pairs, ids)
                     for _, src, _, _ in items for n in files_in(src) if join(src, n).endswith(".jsonl"))
     details = {}  # for the report, worked out before --no-keep deletes the originals
     for what, src, _, _ in items:
         files = len(files_in(src))
         details[src] = (os.path.basename(src) if what == "plan" else size_text(os.path.getsize(src))
                         if os.path.isfile(src) else "%d file%s" % (files, "s" * (files != 1)))
-    summaries = []
-    for path in transcripts:
-        try:
-            summaries.append(sessions.read_session(path))
-        except (OSError, ValueError):
-            pass
-    info = max(filter(None, summaries), key=lambda s: (s["when"], s["canonical"], s["size"]), default=None)
+    info = read_info(sessions, transcripts)
+    older_since = last_time(theirs) if states[transcript[1]] == "older" and theirs is not None else None
+    had_it = args.fork and any(os.path.isfile(os.path.join(target, "projects", os.path.basename(os.path.dirname(t)),
+                                                           sid + ".jsonl")) for t in transcripts)  # left as it is
 
     if not args.dry_run:
         for _, src, dst, _ in items:
-            if dst not in present:
-                copy(src, dst, pairs)
-        wrong = [dst for _, src, dst, _ in items if not matches(src, dst, pairs)]
+            if states[dst] == "new":
+                copy(src, dst, pairs, ids)
+            elif states[dst] == "older":
+                bring_up_to_date(src, dst, pairs)
+        wrong = [dst for _, src, dst, _ in items if states[dst] != "kept" and not matches(src, dst, pairs, ids)]
         if wrong:
             sys.exit("These copies don't match their originals, so nothing was deleted:\n"
                      + "\n".join("  " + show(w) for w in wrong))
         if args.no_keep:
-            for _, src, _, deleted in items:
-                if deleted and os.path.isdir(src):
-                    shutil.rmtree(src)
-                elif deleted:
-                    os.remove(src)
+            delete_originals(items)
 
+    args.report.update(
+        action="fork" if args.fork else "update" if "older" in states.values() else "move" if args.no_keep else "copy",
+        title=info["title"] if info else None, deleted_original=bool(args.no_keep), repointed=repointed,
+        items=[{"what": what, "from": src, "to": dst, "state": states[dst], "detail": details[src]}
+               for what, src, dst, _ in items],
+        cwd=info["cwd"] if info else None, resume=sessions.resume_command(target, new_sid, False))
     heading = ("Would move" if args.dry_run else "Moved") if args.no_keep else (
         "Would copy" if args.dry_run else "Copied")
     title = sessions.truncate(info["title"], 60) if info else "(no conversation)"
-    print('%s session %s "%s" from %s to %s:' % (heading, sid[:8], title, show(source), show(target)))
+    print('%s session %s "%s" from %s to %s%s:' % (heading, sid[:8], title, show(source), show(target),
+                                                   " as a new session" if args.fork else ""))
+    notes = {"same": "  (already there)", "older": "  (%s an older copy)" % ("would update" if args.dry_run else "updated"),
+             "kept": "  (the one there stays: the copy there uses it too)"}
     for what, src, dst, _ in items:
-        print("  %-26s %s%s" % (what, details[src], "  (already there)" if dst in present else ""))
+        print("  %-26s %s%s" % (what, details[src], notes.get(states[dst], "")))
+    if args.fork:
+        print("  %-26s %s" % ("new session", new_sid))
     if repointed:
         print("Paths in the conversation to these files %s to the copies." % ("would point" if args.dry_run else "now point"))
+    if "older" in states.values():
+        print("%s had an older copy of this session%s; it %s up to date." % (
+            show(target), ", as it was on " + time_text(older_since, sessions) if older_since else "",
+            "would be brought" if args.dry_run else "is now"))
+    if had_it:
+        print("The copy of session %s that was already in %s stays as it was." % (sid[:8], show(target)))
     accounts = {usage.read_config(p)[0].get("accountUuid") for p in (source, target)} if usage else {None}
     if len(accounts) == 1 and None not in accounts:
         print("Both profiles are signed in to the same account, so its plan limits stay the same.")
@@ -707,12 +922,12 @@ def move_claude(args, sessions, usage, sid, source, transcripts, target):
     print("Then resume it with:" if args.dry_run else "Resume it with:")
     if info and info["cwd"]:
         print("  cd " + show(info["cwd"]))
-    print("  " + sessions.resume_command(target, sid, False))
+    print("  " + sessions.resume_command(target, new_sid, False))
     provider = sessions.provider_of(info["model"]) if info else None
     if provider:
         print("Its last reply came from %s; to carry on there rather than on this profile's Claude plan:\n  %s"
-              % (info["model"], sessions.resume_command(target, sid, False, provider)))
-    return info["cwd"] if info else None
+              % (info["model"], sessions.resume_command(target, new_sid, False, provider)))
+    return new_sid, info["cwd"] if info else None
 
 
 def codex_files(sessions, home, prefix):
@@ -730,40 +945,80 @@ def codex_account(home, usage):
     return (login["account_id"], login.get("user_id")) if login and login.get("account_id") else None
 
 
-def copy_codex(args, sessions, sid, source, files, target):
-    """Copy (or with --no-keep, move) a Codex session to another home on the same account.
-    Returns the directory to resume it from."""
+def copy_codex(args, sessions, sid, source, files, target, again):
+    """Copy (or with --no-keep, move) a Codex session to another home on the same account,
+    or with --fork copy it in as a new session. Returns the session to resume and the
+    directory to resume it from."""
     show = sessions.shell_path
     src = max(files, key=os.path.getmtime)  # an archived copy and a live one: the newer
-    dst = os.path.join(target, os.path.relpath(src, source))
     name = sessions.codex_names(source).get(sid)
     info = sessions.read_codex_session(src, {sid: name} if name else {}) or {}
+    theirs = sorted((p for s, p in codex_files(sessions, target, sid) if s == sid), key=os.path.getmtime)
+    if args.fork:
+        now = time.time()
+        new_sid, local = uuid7(now), time.localtime(now)
+        dst = os.path.join(target, "sessions", time.strftime("%Y", local), time.strftime("%m", local),
+                           time.strftime("%d", local), "rollout-%s-%s.jsonl" % (time.strftime("%Y-%m-%dT%H-%M-%S", local), new_sid))
+    else:  # the copy already there, wherever it is, archived or not
+        new_sid, dst = sid, theirs[-1] if theirs else os.path.join(target, os.path.relpath(src, source))
+    ids = (sid, new_sid) if args.fork else None
     free, release = lock_codex_session(source, sid)
     if not free:
         sys.exit("Codex session %s is open in codex; quit it first, so it stops changing" % sid[:8])
     try:
-        present = os.path.isfile(dst) and read(dst) == read(src)
-        if os.path.exists(dst) and not present:
-            sys.exit("%s already has a different copy of this session. Delete it there first to replace it:\n  %s"
-                     % (show(target), show(dst)))
+        state = item_standing(src, dst, [])
+        if state == "diverged":
+            went_on_in_both(sessions, "codex", sid, source, target, read(src), read(dst), again, [dst])
+        args.report.update(agent="codex", session=sid, source=source, target=target, fork=bool(args.fork),
+                           new_session=new_sid if args.fork else None, title=info.get("title"), cwd=info.get("cwd"))
+        if state == "newer":  # it went on there
+            args.report.update(action="nothing", reason="the copy there is newer", deleted_original=bool(args.no_keep),
+                               resume=sessions.codex_resume_command(target, sid, False))
+            print('%s already has Codex session %s "%s", with everything in this copy and more: the session went on '
+                  "there. Nothing to copy." % (show(target), sid[:8], sessions.truncate(info.get("title") or "?", 60)))
+            if args.no_keep and not args.dry_run:
+                os.remove(src)
+            print("%s the older copy from %s." % ("Would delete" if args.dry_run else "Deleted", show(source))
+                  if args.no_keep else "Kept the older copy in %s; --no-keep deletes it." % show(source))
+            print("Resume it with:")
+            if info.get("cwd"):
+                print("  cd " + show(info["cwd"]))
+            print("  " + sessions.codex_resume_command(target, sid, False))
+            return sid, info.get("cwd")
+        older_since = last_time(read(dst)) if state == "older" else None
         size = size_text(os.path.getsize(src))
+        args.report.update(
+            action="fork" if args.fork else "update" if state == "older" else "move" if args.no_keep else "copy",
+            deleted_original=bool(args.no_keep), items=[{"what": "session file", "from": src, "to": dst, "state": state,
+                                                         "detail": size}],
+            resume=sessions.codex_resume_command(target, new_sid, False))
         if not args.dry_run:
-            if not present:
-                copy(src, dst, [])
-            if read(dst) != read(src):
+            if state in ("new", "older"):
+                copy(src, dst, [], ids)
+            if read(dst) != copy_bytes(src, [], ids):
                 sys.exit("The copy doesn't match the original, so nothing was deleted:\n  " + show(dst))
-            if name and sessions.codex_names(target).get(sid) != name:
-                name_session(target, sid, name)
+            if name and sessions.codex_names(target).get(new_sid) != name:
+                name_session(target, new_sid, name)
             if args.no_keep:
                 os.remove(src)
     finally:
         release()
     heading = ("Would move" if args.dry_run else "Moved") if args.no_keep else ("Would copy" if args.dry_run else "Copied")
-    print('%s Codex session %s "%s" from %s to %s:' % (heading, sid[:8], sessions.truncate(info.get("title") or "?", 60),
-                                                       show(source), show(target)))
-    print("  %-26s %s%s" % ("session file", size, "  (already there)" if present else ""))
+    print('%s Codex session %s "%s" from %s to %s%s:' % (heading, sid[:8], sessions.truncate(info.get("title") or "?", 60),
+                                                         show(source), show(target), " as a new session" if args.fork else ""))
+    print("  %-26s %s%s" % ("session file", size, {
+        "same": "  (already there)", "older": "  (%s an older copy)" % ("would update" if args.dry_run else "updated")
+    }.get(state, "")))
     if name:
         print("  %-26s %s" % ("name", name))
+    if args.fork:
+        print("  %-26s %s" % ("new session", new_sid))
+    if state == "older":
+        print("%s had an older copy of this session%s; it %s up to date." % (
+            show(target), ", as it was on " + time_text(older_since, sessions) if older_since else "",
+            "would be brought" if args.dry_run else "is now"))
+    if args.fork and theirs:
+        print("The copy of session %s that was already in %s stays as it was." % (sid[:8], show(target)))
     print("Both homes are signed in to the same ChatGPT account, so its plan limits stay the same.")
     if args.no_keep:
         print("%s the original from %s." % ("Would delete" if args.dry_run else "Deleted", show(source)))
@@ -772,8 +1027,8 @@ def copy_codex(args, sessions, sid, source, files, target):
     print("Then resume it with:" if args.dry_run else "Resume it with:")
     if info.get("cwd"):
         print("  cd " + show(info["cwd"]))
-    print("  " + sessions.codex_resume_command(target, sid, False))
-    return info.get("cwd")
+    print("  " + sessions.codex_resume_command(target, new_sid, False))
+    return new_sid, info.get("cwd")
 
 
 def convert(args, sessions, agent, sid, source, files, target_agent, target, why):
@@ -798,6 +1053,13 @@ def convert(args, sessions, agent, sid, source, files, target_agent, target, why
     if not args.dry_run:
         write = write_codex if target_agent == "codex" else write_claude
         new_sid, new_path = write(conv, turns, target, cwd, sessions)
+    args.report.update(
+        action="convert", agent=agent, session=sid, source=source, target=target, target_agent=target_agent,
+        new_session=new_sid, title=conv.get("title"), why=why, cwd=cwd,
+        prompts=sum(1 for role, _, _ in conv["turns"] if role == "user"), tool_calls=conv["calls"],
+        left_out=conv["left_out"], turns_dropped=dropped,
+        resume=(sessions.codex_resume_command if target_agent == "codex" else sessions.resume_command)(
+            target, new_sid or "<new id>", False))
     print('%s %s session %s "%s" from %s into a %s session in %s:' % (
         "Would convert" if args.dry_run else "Converted", AGENT_NAMES[agent], sid[:8],
         sessions.truncate(conv.get("title") or "?", 60), show(source), AGENT_NAMES[target_agent], show(target)))
@@ -833,10 +1095,28 @@ def main(argv=None, prog=None):
                         help="the profile or home to take it from, when more than one has it")
     parser.add_argument("--no-keep", action="store_true",
                         help="delete the original once the copy is checked, which moves it (not when converting)")
+    parser.add_argument("--fork", action="store_true",
+                        help="copy it in as a new session with its own ID, leaving a copy already in PROFILE as it is "
+                             "(a converted session always gets one)")
     parser.add_argument("--dry-run", action="store_true",
                         help="show what would be copied, converted and deleted, and change nothing")
+    parser.add_argument("--json", action="store_true",
+                        help="say what was or would be done as JSON, and never ask to resume it")
     args = parser.parse_args(argv)
+    args.report = {"version": 1, "dry_run": bool(args.dry_run)}
+    if args.json:  # the text goes nowhere; the report is printed at the end
+        usage = load_sibling("hatcheck_sessions", "sessions.py").load_usage_module()
+        if usage:
+            usage.setup_console()  # UTF-8 output on Windows, before stdout is set aside
+        with contextlib.redirect_stdout(io.StringIO()):
+            run(args, parser)
+        print(json.dumps(args.report, ensure_ascii=False, indent=2))
+        return
+    run(args, parser)
 
+
+def run(args, parser):
+    """The move itself, saying what it does as it goes, and filling in args.report."""
     try:
         sessions = load_sibling("hatcheck_sessions", "sessions.py")
     except OSError:
@@ -897,10 +1177,17 @@ def main(argv=None, prog=None):
         sys.exit("--no-keep can't be used here: the session would be converted, which leaves things out, so "
                  "the original is kept. Run it again without --no-keep.")
 
+    def again(*flags):
+        """This command again, with flags added: what to run next."""
+        quote = sessions.ps_quote if sessions.powershell() else shlex.quote
+        words = [args.session, args.profile] + (["--from", args.source] if args.source else []) + \
+            [flag for flag, on in (("--no-keep", args.no_keep), ("--dry-run", args.dry_run)) if on] + list(flags)
+        return " ".join([parser.prog] + [quote(w) for w in words])
+
     if not converting and agent == "claude":
-        resume_sid, cwd = sid, move_claude(args, sessions, usage, sid, source, files, target)
+        resume_sid, cwd = move_claude(args, sessions, usage, sid, source, files, target, again)
     elif not converting:
-        resume_sid, cwd = sid, copy_codex(args, sessions, sid, source, files, target)
+        resume_sid, cwd = copy_codex(args, sessions, sid, source, files, target, again)
     else:
         if agent == "claude":
             live = sessions.open_sessions([source]).get((os.path.realpath(source), sid))

@@ -1,6 +1,23 @@
 # Proposal: the next four CLI features
 
-**Status:** proposals, none of them built yet (October 2026).
+**Status:** built, October 2026. The [README](../../README.md#hatcheck-open-resume-a-session-in-a-new-terminal)
+documents them as they are. Where the build differs from what's proposed below:
+
+- **`--json`** is in `hatcheck`, `hatcheck usage`, `hatcheck where` and `hatcheck move` (with or
+  without `--dry-run`), and in the two subcommands the desktop app added, `hatcheck show` and
+  `hatcheck desktop`. The output has a few more fields than the sample:
+  - each session's `continued_in` and `bound_to`;
+  - each account's `why`, `extra` and `fable`, and each limit's `kind`;
+  - `other_folders` and `older_not_listed` at the top;
+  - `sorted_by` in `hatcheck usage --json`.
+- **`hatcheck open`** also has `--from`, for a session with copies in several profiles, and `--all`.
+  Ghostty is started with `open -na Ghostty.app`, since it can't be started from its command line on
+  macOS.
+- **Folder bindings:** `default` binds `~/.claude` and `~/.codex`. `cx` takes a Codex command such as
+  `resume` as a home's name only when that home exists. `--hook` covers Codex homes too, through
+  their `hooks.json`; Codex runs a new hook only once it's trusted with `/hooks`.
+- **`hatcheck best`** ranks as `hatcheck usage` sorts, Fable first, so there's no `--model`; it has
+  `--cached`.
 
 Four additions to the `hatcheck` command. The first two are what a [desktop app](desktop-app.md) would
 need, and both are useful without one.
@@ -128,7 +145,8 @@ $ hatcheck unbind
 - **A warning when it's ignored:** an opt-in `hatcheck bind --hook` adds a SessionStart hook to each
   profile's `settings.json`. When a session starts in a bound folder under another profile, it shows
   a warning that names the folder's profile and the `cl` command to use. It warns and doesn't block.
-  Whether Codex's `hooks.json` can do the same is still to be checked.
+  Codex's `hooks.json` takes the same hook (checked: Codex 0.163 runs it once you trust it with
+  `/hooks`).
 - **The session list** marks sessions that ran in a bound folder under another profile, so they're
   easy to spot and `hatcheck move` them.
 
@@ -141,18 +159,19 @@ every account's bars and doing the sums.
 
 ```console
 $ hatcheck best
-Most left now (Claude Code):
-  1. work      5h 80% left · week 64% · Fable 52%    → cl work
-  2. personal  5h 31% left · week 90%                → cl personal
-  3. default   week 4% left, resets Fri 8:20am
-Most left now (Codex):
-  1. ~/.codex  month 100% left                       → codex
-$ hatcheck best --model fable    # count the Fable limit too
+Claude Code, best first (sorted by Fable, as hatcheck usage sorts)
+   1. ~/.claude-work      Fable 52% left, resets Sun 8:20pm · 5h 80%   → cl work
+   2. ~/.claude-personal  week 90% · 5h 31%                            → cl personal
+Codex, best first
+   1. ~/.codex  month 100%  → codex
 $ hatcheck best --for 3f1c2a9e   # where to carry this session: prints the hatcheck move command
 ```
 
-- **Ranking:** by the tightest limit that applies, the smallest % left among the 5-hour, weekly and
-  (with `--model`) per-model limits, with the sooner reset first on a tie. The numbers come from
+- **Ranking:** in the order `hatcheck usage` already sorts accounts by. First come those with Fable
+  left, the soonest Fable reset on top, since what's left there goes unused once it resets. Next
+  come those out of Fable, or out of the weekly limit for all models, the soonest back on top.
+  Accounts without a Fable limit are ranked by the tightest limit that applies, the smallest % left
+  among the 5-hour and weekly limits, with the sooner reset first on a tie. The numbers come from
   `hatcheck usage`, live when it can, and a snapshot's age is shown when it isn't live.
 - **Advice only.** It runs when you ask, prints commands, and never starts, moves or switches
   anything by itself. Nothing in Hatcheck rotates accounts in the background.
@@ -163,3 +182,9 @@ $ hatcheck best --for 3f1c2a9e   # where to carry this session: prints the hatch
 ## Not a CLI feature, but next too
 
 Publish the CLI on PyPI (`uv tool install hatcheck`) and Homebrew, so installing doesn't need a clone.
+
+**Built:** `pyproject.toml` makes the package, with `cl`, `cx`, `claude-z` and `claude-k` in Python
+(`hatcheck/launch.py`) so they come with it on every system; `packaging/homebrew/hatcheck.rb` is the
+formula; `.github/workflows/release.yml` publishes to PyPI and makes the GitHub release from a `v*`
+tag. Publishing itself waits for you: PyPI's trusted publisher and the tap repo are set up once,
+then a tag releases. Until then, `uv tool install git+https://github.com/yilab/hatcheck` installs it.

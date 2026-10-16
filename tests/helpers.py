@@ -14,7 +14,8 @@ import time
 from datetime import datetime, timezone
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SUBCOMMANDS = ("sessions", "usage", "where", "move", "provider")  # hatcheck's, in hatcheck/
+SUBCOMMANDS = ("sessions", "usage", "where", "move", "open", "show", "best", "bind", "unbind", "desktop",
+               "provider")  # in hatcheck/
 NOW = time.time()
 WINDOWS = os.name == "nt"
 sys.dont_write_bytecode = True  # leave no __pycache__ beside the scripts
@@ -52,8 +53,10 @@ def command(script):
 
 
 def load(script):
-    """One of the repo's scripts, imported as a module: a hatcheck subcommand by its name."""
-    path = os.path.join(REPO, "hatcheck", script + ".py") if script in SUBCOMMANDS else os.path.join(REPO, script)
+    """One of the repo's scripts, imported as a module: a module of the hatcheck/ folder by its
+    name (usage, cli), or another script by its file name."""
+    package = os.path.join(REPO, "hatcheck", script + ".py")
+    path = package if os.path.isfile(package) else os.path.join(REPO, script)
     spec = importlib.util.spec_from_file_location(re.sub(r"\W", "_", script), path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -185,8 +188,9 @@ class FakeHome:
         return path
 
     def env(self):
-        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "SHELL", "NO_COLOR")
-               and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_"))}
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
+               and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "HATCHECK_"))}
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
                    PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"))
         if sys.platform == "darwin":

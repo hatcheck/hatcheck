@@ -5,12 +5,42 @@
 #   cx work resume <id>  ==  CODEX_HOME=~/.codex-work codex resume <id>
 # Codex won't start with a CODEX_HOME that doesn't exist, so the folder is made
 # on first use; sign in there with: cx work login
+# Without a profile name, in a folder tied to a home with `hatcheck bind`, it uses
+# that one: cx resume <id> there means cx <home> resume <id>. A Codex command such
+# as resume counts as a profile name only when ~/.codex-<it> exists.
+profile=
 case $1 in
-    ""|-*) echo "usage: cx <profile> [codex args...]  (uses ~/.codex-<profile>)" >&2; exit 2 ;;
+    ""|-*) ;;
+    agents|exec|e|review|login|logout|mcp|plugin|app-server|remote-control|app|completion|update|doctor|sandbox|\
+    debug|apply|a|resume|queue|archive|delete|migrate-rollouts|unarchive|fork|cloud|exec-server|features|help)
+        [ -d "$HOME/.codex-$1" ] && profile=$1 ;;
+    *) profile=$1 ;;
 esac
-CODEX_HOME="$HOME/.codex-$1"
-export CODEX_HOME
-shift
+bound=
+[ -n "$profile" ] || bound=$(hatcheck bind --which codex 2>/dev/null) || bound=
+if [ -n "$bound" ]; then
+    case $bound in
+        default) unset CODEX_HOME ;;
+        */*) CODEX_HOME=$bound; export CODEX_HOME ;;
+        *) CODEX_HOME="$HOME/.codex-$bound"; export CODEX_HOME ;;
+    esac
+    echo "cx: this folder is bound to $bound" >&2
+else
+    if [ -z "$profile" ]; then
+        case $1 in
+            ""|-*) ;;
+            *) echo "cx: $1 is a Codex command, not a home's name; run it with a home (cx <profile> $1 ...)" >&2 ;;
+        esac
+        echo "usage: cx <profile> [codex args...]  (uses ~/.codex-<profile>)" >&2
+        echo "   or tie this folder to a home with: hatcheck bind <profile>" >&2
+        exit 2
+    fi
+    CODEX_HOME="$HOME/.codex-$1"
+    export CODEX_HOME
+    shift
+fi
 command -v codex >/dev/null 2>&1 || { echo "cx: codex isn't on your PATH; install Codex first" >&2; exit 1; }
-mkdir -p "$CODEX_HOME" || exit
+if [ -n "${CODEX_HOME-}" ]; then
+    mkdir -p "$CODEX_HOME" || exit
+fi
 exec codex "$@"

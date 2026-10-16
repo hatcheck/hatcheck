@@ -146,6 +146,47 @@ class Moves(unittest.TestCase):
         self.assertIn("codex resume " + X, out)
         self.assertTrue(os.path.isfile(self.rollout))
 
+    def go_on(self, path, text):
+        """The session carries on in the home that has this copy: a prompt, as Codex records one."""
+        with open(path, "a", encoding="utf-8", newline="\n") as fh:
+            fh.write(rec(timestamp=iso(NOW - 60), type="event_msg", payload={"type": "user_message", "message": text}) + "\n")
+            fh.write(rec(timestamp=iso(NOW - 50), type="event_msg", payload={
+                "type": "item_completed", "thread_id": X, "item": {"type": "AgentMessage", "text": "ok"}}) + "\n")
+
+    def test_codex_round_trip_newer_and_fork(self):
+        code, out = self.h.run(MOVE, X[:13], "codex:same")  # copied: both homes have it now
+        self.assertEqual(code, 0, out)
+        copy = os.path.join(self.same, os.path.relpath(self.rollout, self.codex))
+        self.go_on(self.rollout, "more here")
+        code, out = self.h.run(MOVE, X[:13], "codex:same")
+        self.assertEqual(code, 0, out)
+        self.assertIn("session file", out)
+        self.assertIn("(updated an older copy)", out)
+        self.assertEqual(text_of(copy), text_of(self.rollout))
+        self.go_on(copy, "more there")
+        code, out = self.h.run(MOVE, X[:13], "codex:same")  # it went on there: nothing to copy
+        self.assertEqual(code, 0, out)
+        self.assertIn("Nothing to copy.", out)
+        self.go_on(self.rollout, "and more here")
+        theirs = text_of(copy)
+        code, out = self.h.run(MOVE, X[:13], "codex:same")
+        self.assertEqual(code, 1, out)
+        self.assertIn(": 1 new prompt in %s, 1 in %s." % (self.h.shown(self.codex), self.h.shown(self.same)), out)
+        self.assertIn("hatcheck move %s codex:same --fork" % X[:13], out)
+        code, out = self.h.run(MOVE, X[:13], "codex:same", "--fork")
+        self.assertEqual(code, 0, out)
+        new = self.new_id(out)
+        self.assertIn("cx same resume " + new, out)
+        self.assertEqual(text_of(copy), theirs)
+        path, = [p for p in self.h_files(self.same) if new in p]
+        records = jsonl(path)
+        self.assertEqual(records[0]["payload"]["id"], new)
+        self.assertEqual({r["payload"]["thread_id"] for r in records if "thread_id" in r["payload"]}, {new})
+        self.assertIn("and more here", text_of(path))
+        with open(os.path.join(self.same, "session_index.jsonl"), encoding="utf-8") as fh:
+            self.assertIn({"id": new, "thread_name": "Uploader fix"},
+                          [{k: e[k] for k in ("id", "thread_name")} for e in map(json.loads, fh)])
+
     def test_codex_homes_on_other_accounts_convert(self):
         code, out = self.h.run(MOVE, X[:13], "codex:other", "--no-keep")
         self.assertEqual(code, 1, out)

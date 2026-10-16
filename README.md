@@ -21,9 +21,12 @@ This builds on Philipp Stracker's excellent
 It also has **command-line tools for Claude Code and [Codex](https://github.com/openai/codex)**, for
 keeping one profile per account: `cl` and `cx` run Claude Code and Codex with a profile, and
 `hatcheck` lists the recent sessions in all of them, with the command that resumes each one and
-what's left of each plan. `hatcheck usage` shows the plans, `hatcheck where` finds a session, and
+what's left of each plan. `hatcheck usage` shows the plans, `hatcheck best` says which account to use
+now, `hatcheck where` finds a session, `hatcheck open` resumes one in a new terminal, and
 `hatcheck move` carries one over to another profile, or converts it between Claude Code and Codex.
-`claude-z` and `claude-k` run Claude Code on Z.ai's GLM or Kimi's models instead, in any profile. See
+`hatcheck bind` ties a folder to a profile, so `cl` and `cx` pick it there, and `--json` gives the
+sessions and plans to scripts and status bars. `claude-z` and `claude-k` run Claude Code on Z.ai's
+GLM or Kimi's models instead, in any profile. See
 [Claude Code and Codex CLI profiles](#claude-code-and-codex-cli-profiles).
 
 |                                 | macOS | Linux | Windows |
@@ -197,7 +200,25 @@ hides those unless you pass `--all`). Codex works the same way with `CODEX_HOME`
 
 ### Install
 
-On macOS and Linux:
+As a package, on macOS, Linux and Windows, without a clone. It installs `hatcheck`, `hat`, `cl`,
+`cx`, `claude-z` and `claude-k`:
+
+```bash
+uv tool install hatcheck          # or: pipx install hatcheck
+brew install yilab/tap/hatcheck   # Homebrew, on macOS and Linux
+```
+
+Those two wait for the first release, made by `.github/workflows/release.yml` from a tag such as
+`v0.1.0`. Until then, from GitHub:
+
+```bash
+uv tool install git+https://github.com/yilab/hatcheck
+```
+
+The package's `cl`, `cx`, `claude-z` and `claude-k` are Python (`hatcheck/launch.py`), doing what
+the `sh` and PowerShell ones below do, so they work on every system. Python 3.9 or later.
+
+From a clone, on macOS and Linux:
 
 ```bash
 ./install.sh               # link the commands below into ~/.local/bin
@@ -271,6 +292,8 @@ cl -k work --resume <session-id>  # that session on Kimi; -z for Z.ai (see below
 
 Plain `claude` keeps using `~/.claude`. Claude Code names each profile's Keychain entry after its
 `CLAUDE_CONFIG_DIR` value, so keep one spelling of each path; `cl` always uses `~/.claude-<name>`.
+In a folder tied to a profile with [`hatcheck bind`](#hatcheck-bind-tie-a-folder-to-a-profile), the
+name can be left out: `cl --resume <session-id>` there uses that profile.
 
 ### `cx`: run Codex with a home per account
 
@@ -289,6 +312,10 @@ cx personal exec "run the tests"  # any codex command works
 - A new home starts without your `~/.codex/config.toml` (model, trusted folders, MCP servers); copy
   it over if you want the same settings.
 - Plain `codex` keeps using `~/.codex`.
+- In a folder tied to a home with [`hatcheck bind`](#hatcheck-bind-tie-a-folder-to-a-profile), the name
+  can be left out: `cx resume <session-id>` there uses that home. A Codex command such as `resume`
+  counts as a home's name only when `~/.codex-resume` exists; anywhere else, `cx resume …` says it
+  needs a home rather than making `~/.codex-resume`.
 
 ### `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
 
@@ -383,8 +410,8 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 - Run the folder's `cd` line, then the session's command. Sessions still open in a terminal are
   marked `● open`, so you don't resume one twice.
 - The comment after each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
-  (`week`) and per-model weekly limits such as `Fable`, which are named in violet so they stand
-  apart from `week`. Each one has the % left and a bar of it, then `↻`, a bar of the time left until
+  (`week`) and per-model weekly limits such as `Fable`, which are named in violet, with their bar
+  drawn in it, so they stand apart from `week`. Each one has the % left and a bar of it, then `↻`, a bar of the time left until
   it resets and that time. Bars have a block per hour of the 5-hour window and per day of a weekly
   one, as in `↻████▎░░ 4d6h`.
 - Time bars are coloured by urgency: blue with most of the window to go, then gold and orange, and
@@ -405,6 +432,8 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
   `setopt interactivecomments`).
 - Usage is fetched live, one request per account. When that fails (expired token, rate limit), Claude
   Code's last saved snapshot is used instead and named at the bottom with its age.
+- A session that ran in a folder [bound](#hatcheck-bind-tie-a-folder-to-a-profile) to another
+  profile is marked `⚠ folder bound to ~/.claude-work`, so it's easy to spot and `hatcheck move`.
 
 | Option       | What it does                                                                  |
 |--------------|-------------------------------------------------------------------------------|
@@ -415,26 +444,34 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 | `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, and `CODEX_HOME=… codex …` instead of `cx` |
 | `--cached`   | take usage from Claude Code's and Codex's saved snapshots, without calling the APIs |
 | `--no-usage` | leave plan usage out                                                          |
+| `--json`     | print the sessions, and the accounts behind them, as JSON ([below](#--json-for-scripts-status-bars-and-apps)) |
+| `-e`, `--email` | with `--json`, include each account's email address                        |
 
 ### `hatcheck usage`: plan usage for every profile
 
 ```
 $ hatcheck usage
 Plan usage by profile (% left, then time left until reset)
+Sorted by Fable: those with some left first, the soonest reset on top; then those out of it, the soonest back on top.
+~/.claude-work  team max 5x · live
+  session (5h)      100% ██████████
+  week (Fable)       48% ████▊░░░░░  ██████▏░░░ resets Sun 8:20pm (in 4d6h)
 ~/.claude  pro · live
   session (5h)       62% ██████▎░░░  █████▍░░░░ resets 5:01pm (in 2h41m)
   week (all models)  91% █████████▏  ████▍░░░░░ resets Sat 4:20pm (in 3d2h)
 ~/.claude-personal  pro · cached 9h00m ago (token expired; run claude in this profile to renew it)
   session (5h)         ? ··········             reset 10:20am, after this snapshot
   week (all models)  97% █████████▊  ███████▎░░ resets Mon 4:20pm (in 5d2h)
-~/.claude-work  team max 5x · live
-  session (5h)      100% ██████████
-  week (Fable)       48% ████▊░░░░░  ██████▏░░░ resets Sun 8:20pm (in 4d6h)
 ~/.codex-work  ChatGPT plus · live
   session (5h)       80% ████████░░  ██████▍░░░ resets 5:30pm (in 3h10m)
   week (all models)  64% ██████▍░░░  ██▌░░░░░░░ resets Fri 8:20am (in 1d18h)
 ```
 
+- Accounts are sorted by their Fable limit. First come those with some Fable left, the soonest
+  Fable reset on top: what's left there goes unused once it resets, so that's the one to use first.
+  Next come those out of Fable, or out of the weekly limit for all models, which Fable counts against
+  too, the soonest back on top. Then come accounts without a Fable limit, such as Pro plans, and
+  Codex homes. A snapshot saved before its Fable limit reset counts as full until the reset after.
 - Each limit has two bars: what's left of it, then how much of its window, 5 hours or a week, is
   left before it resets. In a terminal the second goes from blue with most of the window to go,
   through gold and orange, to red as the reset nears. When the first bar is shorter than the
@@ -446,7 +483,8 @@ Plan usage by profile (% left, then time left until reset)
 - When a token has expired or the endpoint rate-limits the account, Claude Code's last saved snapshot
   is shown with its age. Run `claude` (or `cl <name>`) in that profile to renew the token.
 - Profiles signed in to the same account are shown together. Per-model limits such as
-  `week (Fable)` are named in violet, to tell them from `week (all models)`. Quota fields the server
+  `week (Fable)` are named in violet, with their bar drawn in it, to tell them from `week (all
+  models)`; the % keeps the severity's colour. Quota fields the server
   sends that Claude Code doesn't display are listed dimmed under their raw names.
 - Codex homes show their ChatGPT plan's Codex limits: the 5-hour and weekly windows (a free plan has
   one 30-day window instead), then limits for single models such as `GPT-5.3-Codex-Spark`, named in
@@ -456,7 +494,8 @@ Plan usage by profile (% left, then time left until reset)
   severity, so a limit turns yellow from 75% used and red from 90%. Homes signed in to the same
   account are shown together.
 - `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
-  default so the output is safe to share.
+  default so the output is safe to share. `--json` prints the accounts as data
+  ([below](#--json-for-scripts-status-bars-and-apps)).
 
 ### `hatcheck move`: carry on a session with another profile
 
@@ -494,6 +533,35 @@ Resume it now in ~/.claude-work? [y/N]
 - If the session's last reply came from Z.ai or Kimi, it also prints the `cl -z` or `cl -k` command
   that carries on there instead of on the new profile's Claude plan.
 
+#### When the profile already has a copy
+
+A session copied to another profile and carried on there can be moved back: the copy it left
+behind is an older version of it. The two copies are compared line by line:
+
+- **The copy there is older**, because the session went on from it: it's brought up to date, and
+  each item shows `(updated an older copy)`. Nothing is lost, since the copy being moved starts with
+  all of it.
+- **The copy there is newer**, because the session went on there: nothing is copied. With
+  `--no-keep`, the older copy here is deleted.
+- **Both went on** after the copy was made: nothing is copied, since that would lose the prompts
+  only the copy there has. It says when they split and how many prompts each has had since.
+  `--fork` brings this one in as a new session with its own ID and keeps both, as Claude Code's
+  `claude --resume <id> --fork-session` and `codex fork` do. Or delete the copy there first.
+
+```
+$ hatcheck move 9a8b7c6d default
+Session 9a8b7c6d went on in both ~/.claude-work and ~/.claude after Oct 15 01:40: 3 new prompts in ~/.claude-work, 1 in ~/.claude. Copying this one over would lose what's only in ~/.claude, so nothing was copied.
+To keep both, bring this one in as a new session with its own ID:
+  hatcheck move 9a8b7c6d default --fork
+Or delete the copy in ~/.claude first, to replace it:
+  ~/.claude/projects/-Users-me-code-api/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d.jsonl
+```
+
+A fork changes the session's ID in its records and gives it its own folders for subagents, saved
+tool output and `/rewind` snapshots. Its message IDs stay the same, as in Claude Code's own fork.
+Resuming a fork, a round trip and a copy that went on in both profiles were tested with the real
+`claude` (2.1.301).
+
 #### With Codex
 
 `codex` is `~/.codex` and `codex:<name>` is `~/.codex-<name>`, as a place to copy to or `--from`:
@@ -513,7 +581,9 @@ Resume it now in ~/.claude-work? [y/N]
 ```
 
 - Between Codex homes signed in to the same ChatGPT account, the session file is copied as it is,
-  with its ID and its name, and `--no-keep` works as for Claude Code.
+  with its ID and its name, and `--no-keep` works as for Claude Code. A copy already there is
+  compared the same way, and `--fork` gives the copy a new ID in its file name, its
+  `session_meta` and its events.
 - Between Claude Code and Codex (`hatcheck move 3f1c2a9e codex:work` goes the other way), and
   between Codex homes on different accounts, the session is converted into a new one with a new ID,
   and the original is always kept. Codex encrypts its reasoning and its summaries of compacted
@@ -538,7 +608,187 @@ Resume it now in ~/.claude-work? [y/N]
 | `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, `default` for `~/.claude`, `codex` for `~/.codex`, `codex:NAME` for `~/.codex-NAME`, or a path |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it               |
 | `--no-keep`      | delete the original once the copy is checked, which moves it (not when converting) |
+| `--fork`         | copy it in as a new session with its own ID, leaving a copy already there as it is (a converted session always gets one) |
 | `--dry-run`      | show what would be copied, converted and deleted, and change nothing         |
+
+### `hatcheck open`: resume a session in a new terminal
+
+```console
+$ hatcheck open 3f1c2a9e          # a new terminal window in ~/code/api, running cl work --resume …
+$ hatcheck open                   # the newest session started from this folder, in any profile or home
+$ hatcheck open 3f1c2a9e --here   # in this terminal instead
+$ hatcheck open 3f1c2a9e --print  # the two commands, for scripts
+cd ~/code/api
+cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+```
+
+- It finds the session by its ID or the start of it, in every Claude Code profile and Codex home.
+  When more than one profile has a copy, it takes the one used last; `--from <profile>` picks one.
+- The command is the one `hatcheck` prints: `cl` or `claude`, `cx` or `codex`, and `cl -z`/`cl -k` for a
+  session whose last reply came from Z.ai or Kimi. Without `cl` or `cx` on the `PATH` it's the full
+  form (`CLAUDE_CONFIG_DIR=… claude …`), as `--full` gives.
+- A session that's open in a terminal is refused, so it isn't resumed twice.
+- The terminal:
+  - **macOS:** Terminal, or the one `hatcheck` runs in when that's iTerm2, Ghostty or WezTerm. Terminal
+    and iTerm2 are driven with AppleScript, which macOS asks you to allow once.
+  - **Windows:** Windows Terminal (`wt`), otherwise a new PowerShell window.
+  - **Linux:** `$TERMINAL`, otherwise `x-terminal-emulator`, GNOME Terminal or Konsole.
+  - `--terminal NAME`, or `HATCHECK_TERMINAL`, picks another: `terminal`, `iterm`, `ghostty`,
+    `wezterm`, `wt`, `powershell`, `gnome-terminal`, `konsole`, `kitty`, or any terminal that takes
+    `-e`. A shell stays open in the folder after the session ends.
+- If the terminal can't be opened, it prints the two commands to run instead.
+
+### `hatcheck best`: which account to use now
+
+```console
+$ hatcheck best
+Claude Code, best first (sorted by Fable, as hatcheck usage sorts)
+   1. ~/.claude-work      Fable 31% left, resets Tue 12:00pm · 5h 80%   → cl work
+   2. ~/.claude-team      Fable 100% left, resets Thu 1:00am · 5h 100%  → cl team
+   3. ~/.claude-personal  Fable 0% left, back Sat 4:59pm · 5h 100%      → cl personal
+   4. ~/.claude           week 64% · 5h 100%                            → claude
+Codex, best first
+   1. ~/.codex  month 100%  → codex
+Advice only: nothing is started, moved or switched. hatcheck best --for <session> says where to carry a session.
+$ hatcheck best --for 9a8b7c6d
+Session 9a8b7c6d "Add rate limiting to the login endpoint" is in ~/.claude-personal: Fable 0% left, back Sat 4:59pm · 5h 100%.
+Carry it to ~/.claude-work: Fable 31% left, resets Tue 12:00pm · 5h 80%.
+  hatcheck move 9a8b7c6d work --from personal
+It prints the command that resumes it there, and offers to run it.
+```
+
+- Claude Code accounts come in the order `hatcheck usage` sorts them: those with Fable left first,
+  the soonest Fable reset on top; then those out of Fable, or out of the weekly limit for all models,
+  the soonest back on top; then accounts without a Fable limit, by the limit with the least left.
+  Codex homes are ranked by the limit with the least left.
+- `--for <session>` picks the best other account of the session's agent that has room now, and
+  prints the [`hatcheck move`](#hatcheck-move-carry-on-a-session-with-another-profile) command. If
+  the session's own account is the best, it says so and prints the resume command.
+- The numbers are the ones `hatcheck usage` shows, live when it can be, with a snapshot's age
+  otherwise; `--cached` skips the APIs.
+- **Advice only.** It runs when you ask, prints commands, and never starts, moves or switches
+  anything. Using several accounts to get around one plan's limits may break Anthropic's or OpenAI's
+  terms; this is for choosing between accounts you may use for the work at hand, such as your own
+  and your company's.
+
+### `hatcheck bind`: tie a folder to a profile
+
+With a work and a personal account, it's easy to start `claude` in a work repo out of habit. The
+session then runs on the personal account and is filed in the personal profile. A binding says
+which profile a folder's work belongs to:
+
+```console
+$ cd ~/code/api
+$ hatcheck bind work                    # this folder and everything under it: ~/.claude-work, ~/.codex-work
+Bound ~/code/api and everything under it: Claude Code ~/.claude-work · Codex ~/.codex-work.
+Here, cl --resume <id> means cl work --resume <id> and cx resume <id> means cx work resume <id>.
+$ hatcheck bind work --codex personal   # a different Codex home
+$ hatcheck bind                         # what this folder is bound to
+$ hatcheck bind --list                  # every bound folder
+$ hatcheck unbind                       # untie it
+$ hatcheck bind --hook                  # warn in Claude Code and Codex (once; hatcheck unbind --hook undoes it)
+```
+
+- Bindings live in your own config, `~/.config/hatcheck/bindings.json`
+  (`%APPDATA%\hatcheck\bindings.json` on Windows), not in the repo, so profile names don't end up in
+  git. The deepest bound folder wins, and folders are compared once symlinks are resolved.
+- `default` binds `~/.claude` and `~/.codex`. The Codex home is the one named like the profile when
+  there is one; `--codex <name>` picks another, and `--codex` alone binds just the Codex home.
+- `cl` and `cx` use the binding when no profile name is given: `cl --resume <id>`, `cl`,
+  `cx resume <id>`. A name given still wins, and outside bound folders nothing changes.
+- `hatcheck` marks sessions that ran in a bound folder under another profile:
+  `⚠ folder bound to ~/.claude-work`.
+- `--hook` adds a `SessionStart` hook, `hatcheck bind --check`, to every profile's `settings.json`
+  and every Codex home's `hooks.json`. When a session starts in a bound folder under another
+  profile, it shows a warning and nothing is blocked:
+  `hatcheck: ~/code/api is bound to ~/.claude-work, but this session runs in ~/.claude-personal. Quit
+  and run cl work here instead.` For a resumed session it gives the `hatcheck move` command instead.
+  - **Claude Code:** tested with the real `claude` (2.1.301). It shows the warning in the interactive
+    UI; `claude -p` doesn't display it.
+  - **Codex:** Codex runs a new hook only once you trust it with `/hooks` in `codex`, once per home.
+    Tested with `codex exec` (0.163): it runs the hook from the home's `hooks.json`, with the folder,
+    the session and `CODEX_HOME`, but `codex exec` doesn't print hook messages. Codex's docs say its
+    interactive UI shows them as a warning; that part wasn't tested here.
+
+### `--json`: for scripts, status bars and apps
+
+`hatcheck --json` and `hatcheck usage --json` print what the text shows, as data:
+
+```console
+$ hatcheck --json
+{
+  "version": 1,
+  "generated_at": "2026-10-15T22:41:07Z",
+  "hours": 24,
+  "this_folder_only": false,
+  "sessions": [
+    {
+      "agent": "claude",
+      "id": "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10",
+      "profile": "/Users/me/.claude-work",
+      "account": 0,
+      "title": "Fix flaky login test",
+      "cwd": "/Users/me/code/api",
+      "last_active": "2026-10-15T22:37:02Z",
+      "entrypoint": "cli",
+      "branch": "main",
+      "model": "claude-fable-5-1",
+      "open": {"pid": 48213, "status": "busy"},
+      "continued_in": null,
+      "bound_to": null,
+      "resume": "cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10"
+    }
+  ],
+  "accounts": [
+    {
+      "agent": "claude",
+      "profiles": ["/Users/me/.claude-work"],
+      "plan": "team max 5x",
+      "source": "live",
+      "saved_at": null,
+      "why": null,
+      "limits": [
+        {"name": "session (5h)", "short": "5h", "kind": "session", "used_percent": 20, "left_percent": 80,
+         "resets_at": "2026-10-16T01:30:00Z", "window_seconds": 18000, "severity": "normal", "per_model": false}
+      ],
+      "extra": null,
+      "fable": {"left": true, "resets_at": "2026-10-20T16:00:00Z"}
+    }
+  ],
+  "hidden": {"Desktop": 3},
+  "other_folders": 0,
+  "older_not_listed": {}
+}
+```
+
+- **The same choices as the text:** the time window, `--all`, `--all-folders` and `-n` pick the same
+  sessions in the same order, and `resume` is the command the text prints. `account` is the
+  session's place in `accounts`, which holds the accounts behind the listed sessions (none with
+  `--no-usage`). `hatcheck usage --json` gives every account, in its Fable order, with `sorted_by`.
+- **Stable:** absolute paths rather than `~`, times in UTC (ISO 8601), no colours. `version` goes up
+  only when a field changes meaning or goes away; new fields can appear at any time.
+- `left_percent` is `null` for a snapshot's limit that has reset since it was saved. `fable` is
+  `{"left": true, "resets_at": …}`, `{"left": false, "back_at": …}`, or `null` without a Fable limit.
+  `source` is `live`, `cached` or `none`, with `why` when it isn't live.
+- Errors go to stderr with a non-zero exit, so stdout is always valid JSON. Email addresses only with
+  `--email`.
+
+## The desktop app
+
+A menu-bar app (system tray on Windows and Linux) built on the CLI. It shows what's left of every
+plan, sorted by Fable, with bars and reset times, and the last day's sessions with **Resume**,
+which opens a terminal in the session's folder, and **Copy**. It also has buttons for the Claude
+Desktop instances and notifies you when a limit runs low or resets.
+
+Its main window browses every session, with search, filters and a read-only preview of the
+conversation. From there you can resume a session, copy its command, or move it to another
+profile after a dry run. The window also lists profiles and homes, signs in to a new one in a
+terminal, and makes Desktop instances.
+
+It ships the CLI inside itself, so it needs no Python. It never handles a login, and live usage is
+off until you turn it on. See [desktop/README.md](desktop/README.md) to build it; releases come
+from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behind it is
+[the proposal](docs/proposals/desktop-app.md).
 
 ## Files in this repo
 
@@ -551,12 +801,21 @@ Claude Desktop instances (macOS):
 Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 
 - **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
-- **`hatcheck.py`** — the `hatcheck` command (`hat` for short), which runs the subcommands in **`hatcheck/`**:
+- **`pyproject.toml`** — the Python package (`uv tool install`, `pipx`); **`packaging/`** — the Homebrew
+  formula and cask, and the winget manifest.
+- **`hatcheck.py`** — the `hatcheck` command (`hat` for short) from a clone; it runs **`hatcheck/cli.py`**,
+  which runs the subcommands in **`hatcheck/`**:
   - **`sessions.py`** — recent sessions across profiles and homes, with resume commands and plan usage.
   - **`usage.py`** — plan usage left for every profile and home.
   - **`where.py`** — finds a Claude Code or Codex session's files by ID or ID prefix.
   - **`move.py`** — copies a session to another profile, moves it with `--no-keep`, or converts it between
     Claude Code and Codex.
+  - **`open.py`** — resumes a session in a new terminal, in its folder.
+  - **`best.py`** — which account to use now, and where to carry a session.
+  - **`bind.py`** and **`unbind.py`** — folder bindings, and the warning hook.
+  - **`show.py`** — a session's conversation, read-only.
+  - **`desktop.py`** — Claude Desktop instances on macOS: list, open, make one.
+  - **`launch.py`** — `cl`, `cx`, `claude-z` and `claude-k` in Python, for package installs.
   - **`provider.py`** — the Z.ai and Kimi keys and models behind `claude-z`, `claude-k`, `cl -z` and `cl -k`.
 - **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile, on Z.ai or Kimi with `-z` or
   `-k`; installed as `claude-z` and `claude-k` too.
@@ -565,8 +824,10 @@ Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 The subcommands load each other, so keep the `hatcheck/` folder whole and beside `hatcheck.py`. The
 `.ps1` files are the Windows versions of the `sh` ones.
 
-- **`docs/proposals/`** — what might come next: [the next CLI features](docs/proposals/cli-features.md)
-  and [a desktop app](docs/proposals/desktop-app.md).
+- **`desktop/`** — the desktop app: Tauri, with the CLI inside it ([its README](desktop/README.md)).
+- **`site/`** — the landing page, one self-contained file; `.github/workflows/pages.yml` publishes it when run by hand.
+- **`docs/proposals/`** — the plans these came from: [the CLI features](docs/proposals/cli-features.md)
+  and [the desktop app](docs/proposals/desktop-app.md).
 - **`tests/`** — tests for the CLI tools against throwaway home folders:
   `python3 -m unittest discover -s tests`. They never read your real profiles, Keychain or the network.
   GitHub Actions runs them on macOS, Linux and Windows (`.github/workflows/tests.yml`).
@@ -578,10 +839,9 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
   instance with its own icon, and a launcher that brings a running instance forward instead of
   opening a duplicate. It needs testing on a Windows machine first.
 - **Linux.** There's no official Claude Desktop for Linux, so only the CLI tools apply there.
-- **Next CLI features:** `--json` output, `hatcheck open`, folder bindings and `hatcheck best`. See
-  [the proposal](docs/proposals/cli-features.md).
-- **A desktop app:** plan usage and recent sessions in the menu bar, built on the CLI. See
-  [the proposal](docs/proposals/desktop-app.md).
+- **First releases:** the CLI on PyPI and in the Homebrew tap, and the app's installers, once
+  the release workflows have their accounts and secrets (the workflows list them).
+- **Signing:** a Developer ID for the macOS app, and a certificate for the Windows one.
 
 ## Credits
 

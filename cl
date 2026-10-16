@@ -7,6 +7,8 @@
 # model `hatcheck provider` keeps (set them up with claude-z reconfig or claude-k reconfig).
 # Linked as claude-z or claude-k, it does that without a profile, so with ~/.claude
 # or whatever CLAUDE_CONFIG_DIR already says: claude-k --resume <id>
+# Without a profile name, in a folder tied to one with `hatcheck bind <profile>`,
+# it uses that one: cl --resume <id> there means cl <profile> --resume <id>.
 # Keep the path spelled exactly like this: Claude Code files each profile's
 # Keychain login under a hash of the CLAUDE_CONFIG_DIR string.
 provider=
@@ -24,11 +26,24 @@ if [ -n "$provider" ]; then
 else
     case $1 in -z|-k) provider=${1#-}; shift ;; esac
     case $1 in
-        ""|-*) echo "usage: cl [-z|-k] <profile> [claude args...]  (uses ~/.claude-<profile>)" >&2; exit 2 ;;
+        ""|-*)  # no profile name: the one this folder is bound to, if any
+            bound=$(hatcheck bind --which claude 2>/dev/null) || bound=
+            if [ -z "$bound" ]; then
+                echo "usage: cl [-z|-k] <profile> [claude args...]  (uses ~/.claude-<profile>)" >&2
+                echo "   or tie this folder to a profile with: hatcheck bind <profile>" >&2
+                exit 2
+            fi
+            case $bound in
+                default) unset CLAUDE_CONFIG_DIR ;;
+                */*) CLAUDE_CONFIG_DIR=$bound; export CLAUDE_CONFIG_DIR ;;
+                *) CLAUDE_CONFIG_DIR="$HOME/.claude-$bound"; export CLAUDE_CONFIG_DIR ;;
+            esac
+            echo "cl: this folder is bound to $bound" >&2 ;;
+        *)
+            CLAUDE_CONFIG_DIR="$HOME/.claude-$1"
+            export CLAUDE_CONFIG_DIR
+            shift ;;
     esac
-    CLAUDE_CONFIG_DIR="$HOME/.claude-$1"
-    export CLAUDE_CONFIG_DIR
-    shift
 fi
 if [ -n "$provider" ]; then
     settings=$(provider_settings env "$provider") || exit

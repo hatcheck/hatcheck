@@ -8,7 +8,7 @@ import sys
 import time
 import unittest
 
-from helpers import NOW, WINDOWS, FakeHome, command, iso, rec, write
+from helpers import NOW, WINDOWS, FakeHome, command, iso, load, rec, write
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
@@ -124,9 +124,96 @@ class MoveSession(unittest.TestCase):
             before = fh.read()
         code, out = self.h.run(SCRIPT, S1[:8], "b")
         self.assertEqual(code, 1)
-        self.assertIn("already has a different copy", out)
+        self.assertIn("%s has a different session with the ID 11111111" % self.h.shown(self.b), out)
+        self.assertIn("nothing was copied", out)
+        self.assertIn("hatcheck move 11111111 b --fork", out)
         with open(other, "rb") as fh:
             self.assertEqual(fh.read(), before)
+
+    def go_on(self, profile, text):
+        """The session carries on in a profile: a prompt and a reply added to its copy there,
+        with a new saved tool output and /rewind snapshot."""
+        data = self.data if profile == self.default else self.copy_of(profile)
+        out_txt = os.path.join(data, "tool-results", text.replace(" ", "-") + ".txt")
+        write(out_txt, text + "\n")
+        write(os.path.join(profile, "file-history", S1, "abc@" + text.replace(" ", "-")), text + "\n")
+        base = {"cwd": self.cwd, "sessionId": S1, "entrypoint": "cli"}
+        with open(data + ".jsonl", "a", encoding="utf-8", newline="\n") as fh:
+            fh.write(rec(type="user", timestamp=iso(NOW - 60), message={"role": "user", "content": text}, **base) + "\n")
+            fh.write(rec(type="assistant", timestamp=iso(NOW - 50), message={"role": "assistant", "content": [
+                {"type": "text", "text": "Saved to " + out_txt}]}, **base) + "\n")
+
+    def test_round_trip_brings_the_older_copy_up_to_date(self):
+        code, out = self.h.run(SCRIPT, S1[:8], "b")  # copied, so ~/.claude keeps the copy it had
+        self.assertEqual(code, 0, out)
+        self.go_on(self.b, "more in b")
+        code, out = self.h.run(SCRIPT, S1[:8], "default")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("(updated an older copy)"), 3)  # transcript, its folder, the snapshots
+        self.assertRegex(out, r"plan +happy-test-plan\.md  \(already there\)")
+        self.assertIn("%s had an older copy of this session, as it was on " % self.h.shown(self.default), out)
+        lines = self.lines(self.transcript)
+        self.assertEqual(lines[:len(self.original.split(b"\n")) - 1], self.original.split(b"\n")[:-1])
+        reply = json.loads(lines[-2])["message"]["content"][0]["text"]
+        self.assertEqual(reply, "Saved to " + os.path.join(self.data, "tool-results", "more-in-b.txt"))
+        self.assertTrue(os.path.isfile(os.path.join(self.data, "tool-results", "more-in-b.txt")))
+        self.assertTrue(os.path.isfile(os.path.join(self.default, "file-history", S1, "abc@more-in-b")))
+        code, out = self.h.run(SCRIPT, S1[:8], "default")
+        self.assertEqual(out.count("(already there)"), 4)
+
+    def test_nothing_to_copy_when_the_copy_there_is_newer(self):
+        self.h.run(SCRIPT, S1[:8], "b")
+        self.go_on(self.b, "more in b")
+        with open(self.copy_of(self.b) + ".jsonl", "rb") as fh:
+            theirs = fh.read()
+        code, out = self.h.run(SCRIPT, S1[:8], "b", "--dry-run", "--no-keep")
+        self.assertEqual(code, 0, out)
+        self.assertIn('%s already has session 11111111 "Fix the flaky login test", with everything in this copy and '
+                      "more" % self.h.shown(self.b), out)
+        self.assertIn("Would delete the older copy from %s." % self.h.shown(self.default), out)
+        self.assertTrue(os.path.isfile(self.transcript))
+        code, out = self.h.run(SCRIPT, S1[:8], "b", "--no-keep")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Nothing to copy.", out)
+        self.assertIn("cl b --resume " + S1, out)
+        self.assertFalse(os.path.exists(self.transcript))
+        self.assertFalse(os.path.exists(os.path.join(self.default, "file-history", S1)))
+        self.assertTrue(os.path.isfile(self.plan))  # plans stay
+        with open(self.copy_of(self.b) + ".jsonl", "rb") as fh:
+            self.assertEqual(fh.read(), theirs)
+
+    def test_went_on_in_both_then_fork(self):
+        self.h.run(SCRIPT, S1[:8], "b")
+        self.go_on(self.b, "more in b")
+        self.go_on(self.default, "more here")
+        with open(self.copy_of(self.b) + ".jsonl", "rb") as fh:
+            theirs = fh.read()
+        code, out = self.h.run(SCRIPT, S1[:8], "b")
+        self.assertEqual(code, 1, out)
+        self.assertIn("Session 11111111 went on in both %s and %s after " % (self.h.shown(self.default), self.h.shown(self.b)),
+                      out)
+        self.assertIn(": 1 new prompt in %s, 1 in %s." % (self.h.shown(self.default), self.h.shown(self.b)), out)
+        self.assertIn("hatcheck move 11111111 b --fork", out)
+        self.assertIn("  " + self.h.shown(self.copy_of(self.b) + ".jsonl"), out)
+        code, out = self.h.run(SCRIPT, S1[:8], "b", "--fork")
+        self.assertEqual(code, 0, out)
+        new = re.search(r"new session +(\S+)", out).group(1)
+        self.assertNotEqual(new, S1)
+        self.assertIn("to %s as a new session:" % self.h.shown(self.b), out)
+        self.assertIn("The copy of session 11111111 that was already in %s stays as it was." % self.h.shown(self.b), out)
+        self.assertIn("cl b --resume " + new, out)
+        with open(self.copy_of(self.b) + ".jsonl", "rb") as fh:
+            self.assertEqual(fh.read(), theirs)
+        fork = os.path.join(self.b, "projects", self.cwd_folder(), new)
+        records = [json.loads(line) for line in self.lines(fork + ".jsonl") if line]
+        self.assertEqual({r.get("sessionId") for r in records}, {new})
+        self.assertEqual(records[-1]["message"]["content"][0]["text"],
+                         "Saved to " + os.path.join(fork, "tool-results", "more-here.txt"))
+        self.assertEqual(records[2]["message"]["content"][0], json.loads(self.thinking)["message"]["content"][0])
+        self.assertTrue(os.path.isfile(os.path.join(fork, "tool-results", "out.txt")))
+        self.assertTrue(os.path.isfile(os.path.join(fork, "subagents", "agent-1.jsonl")))
+        self.assertTrue(os.path.isfile(os.path.join(self.b, "file-history", new, "abc@more-here")))
+        self.assertTrue(os.path.isfile(self.transcript))  # the original stays
 
     def test_which_session_and_where(self):
         self.h.session(self.b, self.cwd, S2, "In b")
@@ -158,6 +245,25 @@ class MoveSession(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertTrue(os.path.isfile(self.copy_of(self.fresh) + ".jsonl"))
         self.assertIn("cl fresh --resume " + S1, out)
+
+
+class Standing(unittest.TestCase):
+    """How a copy already in the profile compares with the one being copied."""
+
+    def test_older_newer_and_diverged(self):
+        m = load(SCRIPT)
+        a = b'{"a":1,"b":"x"}\n{"c":2}\n'
+        self.assertEqual(m.standing(a, a, True, (0, 0)), "same")
+        self.assertEqual(m.standing(a, a + b'{"d":3}\n', True, (0, 0)), "older")
+        self.assertEqual(m.standing(a + b'{"d":3}\n', a, True, (0, 0)), "newer")
+        self.assertEqual(m.standing(a + b'{"d":3}\n', a + b'{"e":4}\n', True, (0, 0)), "diverged")
+        self.assertEqual(m.standing(b'{"a": 1, "b": "x"}\n', a, True, (0, 0)), "older")  # the same record, spaced out
+        self.assertEqual(m.standing(b"output", b"output and more", False, (9, 1)), "older")  # added to
+        self.assertEqual(m.standing(b"# Plan\n", b"# Better plan\n", False, (1, 2)), "older")  # written over: the newer
+        self.assertEqual(m.standing(b"# Better plan\n", b"# Plan\n", False, (2, 1)), "newer")
+        self.assertEqual(m.overall(["same", "new"]), "older")
+        self.assertEqual(m.overall(["older", "same", "newer"]), "diverged")
+        self.assertEqual(m.overall(["same"]), "same")
 
 
 class ResumeNow(unittest.TestCase):
