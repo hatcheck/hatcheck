@@ -210,7 +210,8 @@ your shell startup files: if the folder isn't on your `PATH`, it prints the line
 already has one of these names is left alone unless you pass `--force`, except the copies of
 `claude-z` and `claude-k` that the [claude-z](https://github.com/yiwang/claude-z) installers made,
 which these replace. `hatcheck` needs Python 3.9 or later (on macOS, `xcode-select --install`
-provides it).
+provides it). `hat` is installed as its short name too, unless another command on your `PATH` already
+has that name.
 
 Before the rename to Hatcheck these were separate commands: `claude-recent-sessions` (now
 `hatcheck`), `claude-usage`, `claude-where`, `claude-move-session` and `claude-provider` (now
@@ -346,6 +347,8 @@ which is listed too. Codex files its sessions by the date they started, archived
 `~/.codex-<name>` home.
 
 ### `hatcheck`: what to resume
+
+`hat` is the short name: `hat`, `hat usage`, `hat move …` and so on work the same.
 
 Lists the Claude Code sessions from every `~/.claude*` profile, and the Codex sessions from every
 `~/.codex*` home, that were active in the last 24 hours or are still open, grouped by folder and
@@ -548,7 +551,7 @@ Claude Desktop instances (macOS):
 Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 
 - **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
-- **`hatcheck.py`** — the `hatcheck` command, which runs the subcommands in **`hatcheck/`**:
+- **`hatcheck.py`** — the `hatcheck` command (`hat` for short), which runs the subcommands in **`hatcheck/`**:
   - **`sessions.py`** — recent sessions across profiles and homes, with resume commands and plan usage.
   - **`usage.py`** — plan usage left for every profile and home.
   - **`where.py`** — finds a Claude Code or Codex session's files by ID or ID prefix.

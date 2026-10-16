@@ -11,6 +11,7 @@
 #
 #   hatcheck                recent sessions in every profile and home, with resume commands and
 #                           plan usage; hatcheck usage, where, move and provider do the rest
+#   hat                     the short name for hatcheck, unless another hat is on your PATH
 #   cl                      claude with a ~\.claude-<name> profile: cl work --resume <id>
 #   cx                      codex with a ~\.codex-<name> home: cx work resume <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (cl.ps1 --as claude-z)
@@ -33,6 +34,7 @@ $python = if (Get-Command py -CommandType Application -ErrorAction SilentlyConti
 $powershell = "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File"
 $commands = [ordered]@{
     "hatcheck"               = "$python `"$repo\hatcheck.py`" %*"
+    "hat"                    = "$python `"$repo\hatcheck.py`" --as hat %*"
     "cl"                     = "$powershell `"$repo\cl.ps1`" %*"
     "cx"                     = "$powershell `"$repo\cx.ps1`" %*"
     "claude-z"               = "$powershell `"$repo\cl.ps1`" --as claude-z %*"
@@ -93,6 +95,15 @@ foreach ($name in $commands.Keys) {
     if ((Test-Ours $path) -and ([IO.File]::ReadAllText($path) -eq $text)) {
         Write-Output "$name (already installed)"
         continue
+    }
+    if ($name -eq "hat" -and -not $Force -and -not (Test-Ours $path)) {
+        # Only a short name, so it gives way to another command called hat.
+        $other = Get-Command hat -CommandType Application -ErrorAction SilentlyContinue |
+            Where-Object { -not (Test-Ours $_.Source) } | Select-Object -First 1
+        if ($other) {
+            Write-Output "Didn't add hat: $($other.Source) has that name (-Force adds it anyway); hatcheck does the same"
+            continue
+        }
     }
     [IO.File]::WriteAllText($path, $text, [Text.Encoding]::ASCII)
     Write-Output "$name -> $path"

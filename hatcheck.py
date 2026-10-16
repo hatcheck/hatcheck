@@ -13,8 +13,9 @@ Usage:
     hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
                                        claude-k, cl -z and cl -k
 
-`hatcheck SUBCOMMAND --help` lists a subcommand's options. cl and cx, beside
-this script, run Claude Code and Codex with a profile.
+`hatcheck SUBCOMMAND --help` lists a subcommand's options. hat is the short
+name: hat usage is hatcheck usage, and so on. cl and cx, beside this script,
+run Claude Code and Codex with a profile.
 
 The subcommands are the files in the hatcheck/ folder beside this script.
 """
@@ -38,17 +39,25 @@ def load(name):
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
+    # The name it was run by, for its messages: hat, the short name, or hatcheck. A link
+    # named hat says so in sys.argv[0]; install.ps1's hat.cmd passes --as hat.
+    name = os.path.splitext(os.path.basename(sys.argv[0]))[0]
+    if len(argv) >= 2 and argv[0] == "--as":
+        name, argv = argv[1], argv[2:]
+    me = "hat" if name == "hat" else "hatcheck"
     if argv and argv[0] in SUBCOMMANDS:
         command = argv.pop(0)
-        prog = "hatcheck " + command
+        prog = me + " " + command
     elif argv and argv[0] in ("-h", "--help", "help"):
+        if me == "hat":
+            print("hat is the short name for hatcheck.\n")
         print(__doc__.strip())
         return 0
     elif argv and not argv[0].startswith("-") and not re.fullmatch(r"\d+(\.\d+)?[hd]?", argv[0].lower()):
-        sys.stderr.write("hatcheck: there's no %r subcommand; see hatcheck --help\n" % argv[0])
+        sys.stderr.write("%s: there's no %r subcommand; see %s --help\n" % (me, argv[0], me))
         return 2
     else:  # options or HOURS: the session list
-        command, prog = "sessions", "hatcheck"
+        command, prog = "sessions", me
     return load(command).main(argv, prog)
 
 

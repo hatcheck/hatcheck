@@ -12,6 +12,7 @@
 #
 #   hatcheck                recent sessions in every profile and home, with resume commands and
 #                           plan usage; hatcheck usage, where, move and provider do the rest
+#   hat                     the short name for hatcheck, unless another hat is on your PATH
 #   cl                      claude with a ~/.claude-<name> profile: cl work --resume <id>
 #   cx                      codex with a ~/.codex-<name> home: cx work resume <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (links to cl)
@@ -40,7 +41,7 @@ while [ $# -gt 0 ]; do
 done
 
 # command:file-in-this-repo
-COMMANDS="hatcheck:hatcheck.py cl:cl cx:cx claude-z:cl claude-k:cl"
+COMMANDS="hatcheck:hatcheck.py hat:hatcheck.py cl:cl cx:cx claude-z:cl claude-k:cl"
 # command:file it ran:hatcheck subcommand that replaced it
 REPLACED="claude-recent-sessions:claude-recent-sessions.py: claude-usage:claude-usage.py:usage
 claude-where:claude-where:where claude-move-session:claude-move-session.py:move
@@ -99,6 +100,9 @@ for pair in $COMMANDS; do
     elif { [ -e "$link" ] || [ -L "$link" ]; } && ! $FORCE; then
         echo "⚠️  Skipped $name: $link already exists (run again with --force to replace it)"
         skipped=$((skipped + 1))
+    elif [ "$name" = hat ] && other=$(command -v hat) && ! $FORCE; then
+        # Only a short name, so it gives way to another command called hat.
+        echo "ℹ️  Didn't add hat: $other has that name (--force adds it anyway); hatcheck does the same"
     else
         ln -sfn "$src" "$link"
         echo "✅ $name -> $src"

@@ -162,7 +162,21 @@ class Commands(unittest.TestCase):
         self.assertIn("cl work --resume " + ID, out)
         code, out = self.run_command([sys.executable, os.path.join(REPO, "hatcheck.py"), "nope"])
         self.assertEqual(code, 2, out)
-        self.assertIn("there's no 'nope' subcommand", out)
+        self.assertIn("hatcheck: there's no 'nope' subcommand; see hatcheck --help", out)
+
+    def test_hat_is_the_short_name(self):
+        hatcheck = os.path.join(REPO, "hatcheck.py")
+        code, out = self.run_command([sys.executable, hatcheck, "--as", "hat", "--help"])  # as hat.cmd runs it
+        self.assertEqual(code, 0, out)
+        self.assertIn("hat is the short name for hatcheck.", out)
+        code, out = self.run_command([sys.executable, hatcheck, "--as", "hat", "usage", "--help"])
+        self.assertIn("usage: hat usage", out)
+        code, out = self.run_command([sys.executable, hatcheck, "--as", "hat", "nope"])
+        self.assertIn("hat: there's no 'nope' subcommand; see hat --help", out)
+        if not WINDOWS:  # a link named hat, as install.sh makes
+            os.symlink(hatcheck, os.path.join(self.bin, "hat"))
+            code, out = self.run_command(["hat", "where", "--help"])
+            self.assertIn("usage: hat where", out)
 
     def test_where_finds_a_session_by_prefix(self):
         code, out = self.where(ID[:8])
@@ -184,7 +198,7 @@ class Commands(unittest.TestCase):
 
     def test_installer(self):
         target = os.path.join(self.h.root, "installed")
-        names = ["hatcheck", "cl", "cx", "claude-z", "claude-k"]
+        names = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"]
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         if WINDOWS:
             # Launchers for the commands hatcheck replaced, made before the repo was renamed from
@@ -204,6 +218,8 @@ class Commands(unittest.TestCase):
             self.assertIn(self.transcript, out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "hatcheck.cmd"), "--no-usage"])
             self.assertIn("cl work --resume " + ID, out)
+            code, out = self.run_command(["cmd", "/c", os.path.join(target, "hat.cmd"), "--help"])
+            self.assertIn("hat is the short name for hatcheck.", out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-k.cmd"), "--version"])
             self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
             self.assertIn("args=--version", out)
@@ -230,10 +246,32 @@ class Commands(unittest.TestCase):
             os.remove(os.path.join(target, "claude-where"))
             code, out = self.run_command([os.path.join(target, "hatcheck"), "where", ID[:8]])
             self.assertIn(self.transcript, out)
+            code, out = self.run_command([os.path.join(target, "hat"), "--help"])
+            self.assertIn("hat is the short name for hatcheck.", out)
             code, out = self.run_command([os.path.join(target, "claude-k"), "--version"])
             self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
             code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target, "--uninstall"])
             self.assertEqual(os.listdir(target), [], out)
+
+    def test_installer_leaves_hat_to_another_command(self):
+        target = os.path.join(self.h.root, "installed")
+        if WINDOWS:
+            write(os.path.join(self.bin, "hat.cmd"), "@echo off\r\necho another hat\r\n")  # on the PATH
+            install = POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target]
+            force, made = install + ["-Force"], os.path.join(target, "hat.cmd")
+        else:
+            write(os.path.join(self.bin, "hat"), "#!/bin/sh\necho another hat\n")
+            os.chmod(os.path.join(self.bin, "hat"), 0o755)
+            install = ["bash", os.path.join(REPO, "install.sh"), "--bin", target]
+            force, made = install + ["--force"], os.path.join(target, "hat")
+        code, out = self.run_command(install)
+        self.assertEqual(code, 0, out)  # only a short name: not having it isn't a failure
+        self.assertIn("Didn't add hat: %s has that name" % os.path.join(self.bin, "hat" + (".cmd" if WINDOWS else "")), out)
+        self.assertFalse(os.path.lexists(made), out)
+        self.assertTrue(os.path.lexists(os.path.join(target, "hatcheck" + (".cmd" if WINDOWS else ""))), out)
+        code, out = self.run_command(force)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(os.path.lexists(made), out)
 
 
 if __name__ == "__main__":
