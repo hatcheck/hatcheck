@@ -25,7 +25,9 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $repo = $PSScriptRoot
-$marker = "rem made by claude-multi-account install.ps1"
+$marker = "rem made by hatcheck install.ps1"
+# Launchers made before the repo was renamed from claude-multi-account carry the old marker.
+$markers = @($marker, "rem made by claude-multi-account install.ps1")
 $python = if (Get-Command py -CommandType Application -ErrorAction SilentlyContinue) { "py -3" } else { "python" }
 $powershell = "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File"
 $commands = [ordered]@{
@@ -40,7 +42,7 @@ $commands = [ordered]@{
 }
 
 function Test-Ours($path) {
-    (Test-Path -LiteralPath $path -PathType Leaf) -and (Select-String -LiteralPath $path -SimpleMatch $marker -Quiet)
+    (Test-Path -LiteralPath $path -PathType Leaf) -and (Select-String -LiteralPath $path -SimpleMatch $markers -Quiet)
 }
 
 if ($Uninstall) {

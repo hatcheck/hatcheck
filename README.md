@@ -1,4 +1,11 @@
-# Multiple Claude accounts — isolated Desktop instances and Claude Code CLI profiles
+# Hatcheck
+
+Several Claude accounts on one computer, each kept apart: isolated Claude Desktop instances on
+macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume commands across all
+of them.
+
+*Unofficial: not made by, affiliated with or endorsed by Anthropic. Claude, Claude Code and Claude
+Desktop are trademarks of Anthropic.*
 
 Run **two (or more) fully isolated Claude Desktop instances** side by side on macOS — e.g. one
 signed into your **personal** account and one into your **work** account — each with its own

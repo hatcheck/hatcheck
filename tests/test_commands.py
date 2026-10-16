@@ -122,10 +122,16 @@ class Commands(unittest.TestCase):
                  "claude-provider", "claude-z", "claude-k"]
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         if WINDOWS:
+            # Made before the repo was renamed from claude-multi-account: still its own, so replaced
+            # without -Force.
+            old = "@echo off\r\nrem made by claude-multi-account install.ps1\r\npython old\\claude-usage.py %*\r\n"
+            write(os.path.join(target, "claude-usage.cmd"), old)
             code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target])
             self.assertEqual(code, 0, out)
             for name in names:
                 self.assertTrue(os.path.isfile(os.path.join(target, name + ".cmd")), out)
+            with open(os.path.join(target, "claude-usage.cmd")) as f:
+                self.assertIn("rem made by hatcheck install.ps1", f.read())
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-where.cmd"), ID[:8]])
             self.assertIn(self.transcript, out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-recent-sessions.cmd"), "--no-usage"])
@@ -133,6 +139,7 @@ class Commands(unittest.TestCase):
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-k.cmd"), "--version"])
             self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
             self.assertIn("args=--version", out)
+            write(os.path.join(target, "claude-where.cmd"), old)  # an old one is removed too
             code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target, "-Uninstall"])
             self.assertEqual(os.listdir(target), [], out)
         else:

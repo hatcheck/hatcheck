@@ -27,7 +27,7 @@ else
 fi
 if [ -n "$provider" ]; then
     command -v claude-provider >/dev/null 2>&1 ||
-        { echo "${0##*/}: claude-provider isn't on your PATH; run install.sh from claude-multi-account" >&2; exit 1; }
+        { echo "${0##*/}: claude-provider isn't on your PATH; run hatcheck's install.sh" >&2; exit 1; }
     settings=$(claude-provider env "$provider") || exit
     eval "$settings"
 fi

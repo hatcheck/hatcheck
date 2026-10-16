@@ -43,7 +43,7 @@ if ($profileName) {
 }
 if ($provider) {
     if (-not (Get-Command claude-provider -ErrorAction SilentlyContinue)) {
-        [Console]::Error.WriteLine("cl: claude-provider isn't on your PATH; run install.ps1 from claude-multi-account")
+        [Console]::Error.WriteLine("cl: claude-provider isn't on your PATH; run hatcheck's install.ps1")
         exit 1
     }
     $json = & claude-provider env $provider --json
