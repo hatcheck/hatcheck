@@ -1,0 +1,28 @@
+name: pages
+
+# Puts the landing page, site/, on GitHub Pages. It runs only when started by hand, from the
+# Actions tab, once Pages is turned on for the repo (Settings > Pages > Source: GitHub
+# Actions). For a domain of your own, set it there too and keep it in a site/CNAME file.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
