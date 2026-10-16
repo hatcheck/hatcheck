@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hatcheck"
+version = "0.1.0"  # and in hatcheck/__init__.py; a test checks they match
+description = "Claude Code and Codex accounts on one computer, each kept apart: recent sessions, plan usage, resume commands and moves across all of them."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Yi Wang" }]
+keywords = ["claude", "claude-code", "codex", "cli", "profiles", "sessions"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/yilab/hatcheck"
+Issues = "https://github.com/yilab/hatcheck/issues"
+
+[project.scripts]
+hatcheck = "hatcheck.cli:main"
+hat = "hatcheck.cli:main"
+cl = "hatcheck.launch:cl"
+cx = "hatcheck.launch:cx"
+claude-z = "hatcheck.launch:claude_z"
+claude-k = "hatcheck.launch:claude_k"
+
+[tool.setuptools]
+packages = ["hatcheck"]

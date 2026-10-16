@@ -10,3 +10,8 @@ __pycache__/
 
 # Claude Code's personal settings for this folder
 .claude/settings.local.json
+
+# Python packaging (uv build)
+dist/
+build/
+*.egg-info/

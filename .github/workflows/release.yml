@@ -1,0 +1,67 @@
+name: release
+
+# A tag such as v0.1.0 releases the hatcheck CLI: it builds the Python package, publishes it
+# to PyPI through trusted publishing, and makes a GitHub release with the files attached. It
+# prints the url and sha256 lines for the Homebrew formula (packaging/homebrew/hatcheck.rb).
+# Once, before the first release: at pypi.org, add a trusted publisher for the project
+# hatcheck (this repo, workflow release.yml, environment pypi), and make the pypi environment
+# in this repo's settings. The tag must match the version in pyproject.toml.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: The tag matches the version
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' pyproject.toml)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "The tag is $GITHUB_REF_NAME but the version is $version"; exit 1; }
+      - name: Build
+        run: uv build
+      - name: Try the package
+        run: |
+          uvx --from dist/*.whl hatcheck --version
+          uvx --from dist/*.whl hatcheck --help > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Homebrew formula lines
+        run: |
+          url="https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$GITHUB_REF_NAME.tar.gz"
+          curl -sSL "$url" -o source.tar.gz
+          echo "url \"$url\""
+          echo "sha256 \"$(sha256sum source.tar.gz | cut -d' ' -f1)\""
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

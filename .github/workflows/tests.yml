@@ -25,6 +25,29 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s tests -v
 
+  package:
+    name: package, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build and run the commands it installs
+        shell: bash
+        run: |
+          uv build
+          wheel=$(ls dist/*.whl)
+          uvx --from "$wheel" hatcheck --version
+          uvx --from "$wheel" hat --help > /dev/null
+          uvx --from "$wheel" hatcheck usage --json --cached > /dev/null
+          set +e
+          uvx --from "$wheel" cl > out.txt 2>&1; code=$?
+          set -e
+          test "$code" = 2 && grep -q "usage: cl" out.txt
+
   lint:
     runs-on: ubuntu-latest
     steps:
