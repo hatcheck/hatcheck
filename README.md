@@ -562,6 +562,8 @@ Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 The subcommands load each other, so keep the `hatcheck/` folder whole and beside `hatcheck.py`. The
 `.ps1` files are the Windows versions of the `sh` ones.
 
+- **`docs/proposals/`** — what might come next: [the next CLI features](docs/proposals/cli-features.md)
+  and [a desktop app](docs/proposals/desktop-app.md).
 - **`tests/`** — tests for the CLI tools against throwaway home folders:
   `python3 -m unittest discover -s tests`. They never read your real profiles, Keychain or the network.
   GitHub Actions runs them on macOS, Linux and Windows (`.github/workflows/tests.yml`).
@@ -573,6 +575,10 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
   instance with its own icon, and a launcher that brings a running instance forward instead of
   opening a duplicate. It needs testing on a Windows machine first.
 - **Linux.** There's no official Claude Desktop for Linux, so only the CLI tools apply there.
+- **Next CLI features:** `--json` output, `hatcheck open`, folder bindings and `hatcheck best`. See
+  [the proposal](docs/proposals/cli-features.md).
+- **A desktop app:** plan usage and recent sessions in the menu bar, built on the CLI. See
+  [the proposal](docs/proposals/desktop-app.md).
 
 ## Credits
 
