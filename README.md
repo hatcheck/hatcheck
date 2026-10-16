@@ -2,7 +2,7 @@
 
 Several Claude accounts on one computer, each kept apart: isolated Claude Desktop instances on
 macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume commands across all
-of them. OpenAI's Codex CLI gets the same treatment.
+of them. OpenAI's Codex CLI gets the same treatment, and sessions can be carried between the two.
 
 *Unofficial: not made by, affiliated with or endorsed by Anthropic or OpenAI. Claude, Claude Code and
 Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI.*
@@ -23,7 +23,8 @@ account there: `cl` runs Claude Code with a profile, `claude-where` finds any se
 list recent sessions and plan usage across all profiles, and `claude-move-session` carries a session
 over to another profile. `claude-z` and `claude-k` run it on Z.ai's GLM or Kimi's models instead, in
 any profile. The same tools cover [Codex](https://github.com/openai/codex): `cx` runs it with a home
-per ChatGPT account, and the session list and usage include its sessions and plan limits. See
+per ChatGPT account, the session list and usage include its sessions and plan limits, and
+`claude-move-session` converts sessions between Claude Code and Codex. See
 [Claude Code CLI profiles](#claude-code-cli-profiles).
 
 |                                 | macOS | Linux | Windows |
@@ -455,8 +456,8 @@ Plan usage by profile (% left, then time left until reset)
 
 ### `claude-move-session`: carry on a session with another profile
 
-When one account runs low, continue a session on another profile. It copies the session by default;
-`--no-keep` deletes the original once the copy is checked, which moves it.
+When one account runs low, continue a session on another profile, or in the other agent. It copies
+the session by default; `--no-keep` deletes the original once the copy is checked, which moves it.
 
 ```
 $ claude-move-session 9a8b7c6d work
@@ -489,13 +490,51 @@ Resume it now in ~/.claude-work? [y/N]
 - If the session's last reply came from Z.ai or Kimi, it also prints the `cl -z` or `cl -k` command
   that carries on there instead of on the new profile's Claude plan.
 
+#### With Codex
+
+`codex` is `~/.codex` and `codex:<name>` is `~/.codex-<name>`, as a place to copy to or `--from`:
+
+```
+$ claude-move-session 019a8c1e work
+Converted Codex session 019a8c1e "Add retries to the uploader" from ~/.codex-work into a Claude Code session in ~/.claude-work:
+  conversation               5 of your messages, with the replies
+  tool calls                 191, as text with their output shortened
+  left out                   Codex's reasoning, images, goals and subagent sessions
+  new session                6f6749d7-0f59-4683-997c-a3595421b93f (241.9 KB)
+The original stays in ~/.codex-work.
+Resume it with:
+  cd ~/code/api
+  cl work --resume 6f6749d7-0f59-4683-997c-a3595421b93f
+Resume it now in ~/.claude-work? [y/N]
+```
+
+- Between Codex homes signed in to the same ChatGPT account, the session file is copied as it is,
+  with its ID and its name, and `--no-keep` works as for Claude Code.
+- Between Claude Code and Codex (`claude-move-session 3f1c2a9e codex:work` goes the other way), and
+  between Codex homes on different accounts, the session is converted into a new one with a new ID,
+  and the original is always kept. Codex encrypts its reasoning and its summaries of compacted
+  context for the account that wrote them, so a copy can't take them to another account.
+- Your messages and the replies come across as text, and each tool call as a block with its input
+  and the start of its output, in the format Codex's own `/import` uses for Claude Code sessions
+  (`[external_agent_tool_call: Bash] … [/external_agent_tool_call]`). A note at the start tells the
+  model where the session came from. Claude's thinking and Codex's reasoning are left out, and so are
+  images, plans, goals, `/rewind` snapshots and subagent transcripts.
+- The whole conversation before a compaction is carried over, not its summary. Past about 100,000
+  tokens the oldest turns after the first are left out, so it fits the new agent's context window.
+- Converted sessions were tested by resuming them with the real `claude` (2.1.301) and `codex`
+  (0.155.1), which sent the whole converted history to the model and carried on in the same
+  session. Codex's resume picker lists them by their Claude Code title.
+- Codex can import Claude Code sessions itself (`/import` in Codex), but only from `~/.claude` and
+  the last 30 days. Claude Code's `claude import codex` brings over Codex's instructions, agents and
+  hooks, not sessions.
+
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it                                           |
-| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, `default` for `~/.claude`, or a path |
-| `--from PROFILE` | the profile to take it from, when more than one has it                       |
-| `--no-keep`      | delete the original once the copy is checked, which moves it                 |
-| `--dry-run`      | show what would be copied and deleted, and change nothing                    |
+| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, `default` for `~/.claude`, `codex` for `~/.codex`, `codex:NAME` for `~/.codex-NAME`, or a path |
+| `--from PROFILE` | the profile or home to take it from, when more than one has it               |
+| `--no-keep`      | delete the original once the copy is checked, which moves it (not when converting) |
+| `--dry-run`      | show what would be copied, converted and deleted, and change nothing         |
 
 ## Files in this repo
 
@@ -516,7 +555,8 @@ Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 - **`claude-where`** / **`claude-where.ps1`** — finds a Claude Code or Codex session's files by ID or ID prefix.
 - **`claude-recent-sessions.py`** — recent sessions across profiles and homes, with resume commands and plan usage.
 - **`claude-usage.py`** — plan usage left for every profile and home.
-- **`claude-move-session.py`** — copies a session to another profile, or moves it with `--no-keep`.
+- **`claude-move-session.py`** — copies a session to another profile, moves it with `--no-keep`, or
+  converts it between Claude Code and Codex.
 
 `claude-recent-sessions.py` loads `claude-usage.py`, and `claude-move-session.py` loads both, so keep
 the three together. The `.ps1` files are the Windows versions of the `sh` ones.

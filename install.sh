@@ -15,7 +15,7 @@
 #   claude-where            where a session is stored, by ID or ID prefix
 #   claude-recent-sessions  recent sessions in every profile and home, with resume commands and plan usage
 #   claude-usage            plan usage left for every profile and home
-#   claude-move-session     copy a session to another profile (move it with --no-keep)
+#   claude-move-session     copy a session to another profile, or convert it between Claude Code and Codex
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (links to cl)
 #   claude-provider         the key and model for those; claude-z reconfig sets them up
 #
