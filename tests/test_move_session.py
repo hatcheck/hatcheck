@@ -1,4 +1,4 @@
-"""claude-move-session.py against a throwaway home."""
+"""hatcheck move against a throwaway home."""
 import json
 import os
 import re
@@ -8,11 +8,11 @@ import sys
 import time
 import unittest
 
-from helpers import NOW, REPO, WINDOWS, FakeHome, iso, rec, write
+from helpers import NOW, WINDOWS, FakeHome, command, iso, rec, write
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
-SCRIPT = "claude-move-session.py"
+SCRIPT = "move"
 OLD = NOW - 3 * 3600
 
 
@@ -186,7 +186,7 @@ class ResumeNow(unittest.TestCase):
 
     def test_runs_claude_in_the_new_profile(self):
         snippet = ("import sys; sys.path.insert(0, %r); from helpers import load; "
-                   "load('claude-move-session.py').resume_now(*sys.argv[1:])" % os.path.dirname(os.path.abspath(__file__)))
+                   "load('move').resume_now(*sys.argv[1:])" % os.path.dirname(os.path.abspath(__file__)))
         for target, config_dir in ((self.b, self.b), (self.default, "unset")):
             env = dict(self.env, CLAUDE_CONFIG_DIR=os.path.join(self.h.home, ".claude-other"))
             p = subprocess.run([sys.executable, "-c", snippet, target, S1, self.cwd], env=env, cwd=self.h.root,
@@ -200,7 +200,7 @@ class ResumeNow(unittest.TestCase):
 
         def run(answer):
             master, slave = pty.openpty()
-            p = subprocess.Popen([sys.executable, os.path.join(REPO, SCRIPT), S1[:8], "b"], stdin=slave,
+            p = subprocess.Popen([sys.executable] + command(SCRIPT) + [S1[:8], "b"], stdin=slave,
                                  stdout=slave, stderr=slave, env=self.env, cwd=self.h.root)
             os.close(slave)
             out, sent, deadline = b"", False, time.time() + 30

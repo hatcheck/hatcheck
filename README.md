@@ -18,14 +18,13 @@ This builds on Philipp Stracker's excellent
 1. **Recolored icons** so you can tell the launchers apart at a glance (blue work / red personal / etc.).
 2. A **smart, self-contained launcher** that fixes the "every click opens another window" problem.
 
-It also has **command-line helpers for Claude Code** (the `claude` CLI) for keeping one profile per
-account there: `cl` runs Claude Code with a profile, `claude-where` finds any session, two scripts
-list recent sessions and plan usage across all profiles, and `claude-move-session` carries a session
-over to another profile. `claude-z` and `claude-k` run it on Z.ai's GLM or Kimi's models instead, in
-any profile. The same tools cover [Codex](https://github.com/openai/codex): `cx` runs it with a home
-per ChatGPT account, the session list and usage include its sessions and plan limits, and
-`claude-move-session` converts sessions between Claude Code and Codex. See
-[Claude Code CLI profiles](#claude-code-cli-profiles).
+It also has **command-line tools for Claude Code and [Codex](https://github.com/openai/codex)**, for
+keeping one profile per account: `cl` and `cx` run Claude Code and Codex with a profile, and
+`hatcheck` lists the recent sessions in all of them, with the command that resumes each one and
+what's left of each plan. `hatcheck usage` shows the plans, `hatcheck where` finds a session, and
+`hatcheck move` carries one over to another profile, or converts it between Claude Code and Codex.
+`claude-z` and `claude-k` run Claude Code on Z.ai's GLM or Kimi's models instead, in any profile. See
+[Claude Code and Codex CLI profiles](#claude-code-and-codex-cli-profiles).
 
 |                                 | macOS | Linux | Windows |
 |---------------------------------|:-----:|:-----:|:-------:|
@@ -185,7 +184,7 @@ rm -rf "$HOME/.claude-instances/work"
 
 ---
 
-## Claude Code CLI profiles
+## Claude Code and Codex CLI profiles
 
 Claude Code (the `claude` CLI) keeps its settings, history and session transcripts in `~/.claude`
 (plus `~/.claude.json`), and its login in the macOS Keychain, or on Linux and Windows in
@@ -193,7 +192,8 @@ Claude Code (the `claude` CLI) keeps its settings, history and session transcrip
 profile with its own login, so you can keep one per account:
 `~/.claude-work`, `~/.claude-personal`, and so on. These are separate from the Desktop instances
 above, though sessions from Desktop's Code tab can be filed in them too (the session list below
-hides those unless you pass `--all`).
+hides those unless you pass `--all`). Codex works the same way with `CODEX_HOME`: see
+[`cx`](#cx-run-codex-with-a-home-per-account).
 
 ### Install
 
@@ -209,8 +209,12 @@ The commands are symlinks to this repo, so a `git pull` updates them. The instal
 your shell startup files: if the folder isn't on your `PATH`, it prints the line to add. A file that
 already has one of these names is left alone unless you pass `--force`, except the copies of
 `claude-z` and `claude-k` that the [claude-z](https://github.com/yiwang/claude-z) installers made,
-which these replace. `claude-recent-sessions`, `claude-usage`, `claude-move-session` and
-`claude-provider` need Python 3.9 or later (on macOS, `xcode-select --install` provides it).
+which these replace. `hatcheck` needs Python 3.9 or later (on macOS, `xcode-select --install`
+provides it).
+
+The commands from before the rename to Hatcheck still work for now, and run the matching
+subcommand: `claude-recent-sessions` (now `hatcheck`), `claude-usage`, `claude-where`,
+`claude-move-session` and `claude-provider` (now `hatcheck usage`, `where`, `move` and `provider`).
 
 On Windows, in PowerShell:
 
@@ -223,15 +227,15 @@ On Windows, in PowerShell:
 The launchers run the scripts in this repo, so a `git pull` updates them, and they work from
 PowerShell and `cmd` alike, whatever the script execution policy. You need Python 3.9 or later
 (python.org, or `winget install Python.Python.3.13`). If PowerShell won't run `install.ps1`, start
-it with `powershell -ExecutionPolicy Bypass -File install.ps1`. On Windows, `claude-recent-sessions`
-prints `cd` and resume commands for PowerShell. Paste them into PowerShell, not `cmd`, because
+it with `powershell -ExecutionPolicy Bypass -File install.ps1`. On Windows, `hatcheck` prints `cd`
+and resume commands for PowerShell. Paste them into PowerShell, not `cmd`, because
 `cmd` doesn't treat the trailing `# usage` as a comment. Inside a Visual Studio developer prompt,
 the MSVC compiler is also called `cl`, and whichever comes first on `PATH` wins.
 
 #### Or as shell functions
 
-`cl`, `cx` and `claude-where` are small enough to keep as shell functions instead. Add this to
-`~/.zshrc` (or `~/.bashrc`):
+`cl` and `cx` are small enough to keep as shell functions instead. Add this to `~/.zshrc` (or
+`~/.bashrc`):
 
 ```bash
 # cl work --resume <id>  ==  CLAUDE_CONFIG_DIR=~/.claude-work claude --resume <id>
@@ -249,15 +253,11 @@ cx() {
   mkdir -p "$HOME/.codex-$1" && CODEX_HOME="$HOME/.codex-$1" codex "${@:2}"
 }
 
-# claude-where 3f1c2a9e   ← a Claude Code or Codex session ID, or a prefix of one
-claude-where() {
-  find ~/.claude ~/.claude-* -maxdepth 3 -path '*/projects/*' -name "$1*" 2>/dev/null
-  find ~/.codex ~/.codex-* -path '*sessions/*' -name "rollout-????-??-??T??-??-??-$1*.jsonl" 2>/dev/null
-}
 ```
 
 A shell function takes precedence over an installed command with the same name, and both do the
-same thing.
+same thing. `hatcheck` needs the install; without it, `find ~/.claude* ~/.codex* -name "*3f1c2a9e*"`
+finds a session's files.
 
 ### `cl`: run Claude Code with a profile
 
@@ -307,7 +307,7 @@ cl work --resume <session-id>       # …and later back on the work account's Cl
   [Kimi Code Console](https://www.kimi.com/code)), the model, and an optional cap on output tokens.
   It saves them in `~/.config/claude-z/config` or `~/.config/claude-k/config` (`%APPDATA%\claude-z\config`
   on Windows), the files the [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup
-  made with those works as is. `claude-provider` shows what's set up.
+  made with those works as is. `hatcheck provider` shows what's set up.
 - Models: on Z.ai `glm-5.3[1m]` (the default, with `glm-5.3-flash` for quick tasks), `glm-5.3-flash`
   or `glm-4.7`; on Kimi `k3[1m]` (the default), `k3`, `kimi-for-coding` or
   `kimi-for-coding-highspeed`. `[1m]` turns on the 1M-token context window.
@@ -319,7 +319,8 @@ cl work --resume <session-id>       # …and later back on the work account's Cl
   as `"fable"`, can't send a Claude model name to Z.ai or Kimi.
 - Resuming a session on another provider sends it the whole conversation so far, so check that's
   allowed before doing it with a work account's sessions.
-- `claude-usage` and the comments in `claude-recent-sessions` show Claude plans only.
+- `hatcheck usage` and the comments in `hatcheck` show the Claude and ChatGPT plans, not Z.ai's or
+  Kimi's.
 
 Coming from the claude-z repo: `./install.sh` replaces the copies its installers put in
 `~/.local/bin`, and your config stays. On Windows, delete `%LOCALAPPDATA%\claude-z` (and `\claude-k`)
@@ -328,12 +329,12 @@ uninstallers delete both. The permission mode its installers asked for isn't use
 only ever applied `dangerously-skip-permissions`): set `permissions.defaultMode` in the profile's
 `settings.json`, or pass `--permission-mode`. OpenRouter (`claude-o`) isn't included.
 
-### `claude-where`: find a session
+### `hatcheck where`: find a session
 
 ```console
-$ claude-where 3f1c2a9e
+$ hatcheck where 3f1c2a9e
 /Users/me/.claude-work/projects/-Users-me-code-api/3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10.jsonl
-$ claude-where 019a8c1e
+$ hatcheck where 019a8c1e
 /Users/me/.codex/sessions/2026/10/14/rollout-2026-10-14T09-12-33-019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e.jsonl
 ```
 
@@ -344,7 +345,7 @@ which is listed too. Codex files its sessions by the date they started, archived
 `archived_sessions/`; resume one with `codex resume <id>`, or `cx <name> resume <id>` for a
 `~/.codex-<name>` home.
 
-### `claude-recent-sessions`: what to resume
+### `hatcheck`: what to resume
 
 Lists the Claude Code sessions from every `~/.claude*` profile, and the Codex sessions from every
 `~/.codex*` home, that were active in the last 24 hours or are still open, grouped by folder and
@@ -353,7 +354,7 @@ just that folder's (`--all-folders` lists them all). Each one comes with the com
 and what's left of that profile's plan:
 
 ```
-$ claude-recent-sessions
+$ hatcheck
 Claude Code and Codex CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
     4m  Fix flaky login test · main · ● open in pid 48213 (busy)
@@ -395,7 +396,7 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
   its comment is still the profile's Claude plan.
 - Codex sessions are marked `codex` and resume with `codex resume <id>`, or `cx <name> resume <id>`
   for a `~/.codex-<name>` home. Their comment shows the ChatGPT plan's Codex limits (see
-  `claude-usage` below). Sessions from the Codex app, its IDE extension and `codex exec` are hidden
+  `hatcheck usage` below). Sessions from the Codex app, its IDE extension and `codex exec` are hidden
   like Desktop ones, and Codex's own approval reviews aren't listed.
 - Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
   `setopt interactivecomments`).
@@ -412,10 +413,10 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 | `--cached`   | take usage from Claude Code's and Codex's saved snapshots, without calling the APIs |
 | `--no-usage` | leave plan usage out                                                          |
 
-### `claude-usage`: plan usage for every profile
+### `hatcheck usage`: plan usage for every profile
 
 ```
-$ claude-usage
+$ hatcheck usage
 Plan usage by profile (% left, then time left until reset)
 ~/.claude  pro · live
   session (5h)       62% ██████▎░░░  █████▍░░░░ resets 5:01pm (in 2h41m)
@@ -454,13 +455,13 @@ Plan usage by profile (% left, then time left until reset)
 - `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share.
 
-### `claude-move-session`: carry on a session with another profile
+### `hatcheck move`: carry on a session with another profile
 
 When one account runs low, continue a session on another profile, or in the other agent. It copies
 the session by default; `--no-keep` deletes the original once the copy is checked, which moves it.
 
 ```
-$ claude-move-session 9a8b7c6d work
+$ hatcheck move 9a8b7c6d work
 Copied session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude to ~/.claude-work:
   transcript                 53.0 KB
   subagents and tool output  3 files
@@ -479,7 +480,7 @@ Resume it now in ~/.claude-work? [y/N]
   the conversation that point at those files are changed to point at the copies, except inside
   Claude's thinking, whose signatures would stop matching.
 - A session that's open in a terminal is refused: quit it first, so it stops changing.
-  `claude-recent-sessions` marks those `● open`.
+  `hatcheck` marks those `● open`.
 - Resume it with the printed command, from the directory it ran in, or answer `y` when it asks and
   it starts Claude Code there with the new profile. It only asks in a terminal, so scripts never
   wait on it. The conversation comes across whole; the account and its plan limits, settings,
@@ -495,7 +496,7 @@ Resume it now in ~/.claude-work? [y/N]
 `codex` is `~/.codex` and `codex:<name>` is `~/.codex-<name>`, as a place to copy to or `--from`:
 
 ```
-$ claude-move-session 019a8c1e work
+$ hatcheck move 019a8c1e work
 Converted Codex session 019a8c1e "Add retries to the uploader" from ~/.codex-work into a Claude Code session in ~/.claude-work:
   conversation               5 of your messages, with the replies
   tool calls                 191, as text with their output shortened
@@ -510,7 +511,7 @@ Resume it now in ~/.claude-work? [y/N]
 
 - Between Codex homes signed in to the same ChatGPT account, the session file is copied as it is,
   with its ID and its name, and `--no-keep` works as for Claude Code.
-- Between Claude Code and Codex (`claude-move-session 3f1c2a9e codex:work` goes the other way), and
+- Between Claude Code and Codex (`hatcheck move 3f1c2a9e codex:work` goes the other way), and
   between Codex homes on different accounts, the session is converted into a new one with a new ID,
   and the original is always kept. Codex encrypts its reasoning and its summaries of compacted
   context for the account that wrote them, so a copy can't take them to another account.
@@ -547,19 +548,22 @@ Claude Desktop instances (macOS):
 Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 
 - **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
+- **`hatcheck.py`** — the `hatcheck` command, which runs the subcommands in **`hatcheck/`**:
+  - **`sessions.py`** — recent sessions across profiles and homes, with resume commands and plan usage.
+  - **`usage.py`** — plan usage left for every profile and home.
+  - **`where.py`** — finds a Claude Code or Codex session's files by ID or ID prefix.
+  - **`move.py`** — copies a session to another profile, moves it with `--no-keep`, or converts it between
+    Claude Code and Codex.
+  - **`provider.py`** — the Z.ai and Kimi keys and models behind `claude-z`, `claude-k`, `cl -z` and `cl -k`.
 - **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile, on Z.ai or Kimi with `-z` or
   `-k`; installed as `claude-z` and `claude-k` too.
 - **`cx`** / **`cx.ps1`** — runs `codex` with a `~/.codex-<name>` home.
-- **`claude-provider.py`** — the Z.ai and Kimi keys and models behind `claude-z`, `claude-k`, `cl -z` and
-  `cl -k`.
-- **`claude-where`** / **`claude-where.ps1`** — finds a Claude Code or Codex session's files by ID or ID prefix.
-- **`claude-recent-sessions.py`** — recent sessions across profiles and homes, with resume commands and plan usage.
-- **`claude-usage.py`** — plan usage left for every profile and home.
-- **`claude-move-session.py`** — copies a session to another profile, moves it with `--no-keep`, or
-  converts it between Claude Code and Codex.
+- **`claude-recent-sessions.py`**, **`claude-usage.py`**, **`claude-where`** (and **`claude-where.ps1`**),
+  **`claude-move-session.py`**, **`claude-provider.py`** — the commands from before the rename; each runs
+  its `hatcheck` subcommand, so older installs keep working.
 
-`claude-recent-sessions.py` loads `claude-usage.py`, and `claude-move-session.py` loads both, so keep
-the three together. The `.ps1` files are the Windows versions of the `sh` ones.
+The subcommands load each other, so keep the `hatcheck/` folder whole and beside `hatcheck.py`. The
+`.ps1` files are the Windows versions of the `sh` ones.
 
 - **`tests/`** — tests for the CLI tools against throwaway home folders:
   `python3 -m unittest discover -s tests`. They never read your real profiles, Keychain or the network.
@@ -583,10 +587,9 @@ the three together. The `.ps1` files are the Windows versions of the `sh` ones.
   [Philipp Stracker's gist](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
   ([write-up](https://philippstracker.com/multiple-claude-instances/)), itself a cleaned-up version
   of [weidwonder/claude-desktop-multi-instance](https://github.com/weidwonder/claude-desktop-multi-instance).
-- **Claude Code and Codex CLI tools:** `cl`, `cx`, `claude-where`, `claude-recent-sessions`,
-  `claude-usage`, `claude-move-session`, `claude-provider`, the installers and the tests are by
+- **Claude Code and Codex CLI tools:** `hatcheck`, `cl`, `cx`, the installers and the tests are by
   [Yi Wang](https://github.com/yiwang).
-- **Z.ai and Kimi:** the provider settings in `claude-provider.py` (endpoints, model slots, context
+- **Z.ai and Kimi:** the provider settings in `hatcheck/provider.py` (endpoints, model slots, context
   windows and the config files) come from [claude-z](https://github.com/sam-fakhreddine/claude-z) by
   Kerim ([lettt325](https://github.com/lettt325)), MIT-licensed, and Yi Wang's
   [fork](https://github.com/yiwang/claude-z) of it, which added Kimi.

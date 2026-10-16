@@ -1,4 +1,4 @@
-"""claude-provider.py: the settings behind claude-z, claude-k, cl -z and cl -k."""
+"""hatcheck provider: the settings behind claude-z, claude-k, cl -z and cl -k."""
 import json
 import os
 import stat
@@ -6,9 +6,9 @@ import subprocess
 import sys
 import unittest
 
-from helpers import REPO, WINDOWS, FakeHome
+from helpers import WINDOWS, FakeHome, command
 
-SCRIPT = "claude-provider.py"
+SCRIPT = "provider"
 # A Z.ai config as the claude-z repo's installer writes it, with models edited by hand.
 ZAI = ('CZ_API_KEY="zai-test-key-1234"\nCZ_PERMISSION_MODE="acceptEdits"\nCZ_MODEL_OPUS="glm-5.3[1m]"\n'
        'CZ_MODEL_SONNET="glm-5.3-flash[1m]"\nCZ_MODEL_HAIKU="glm-4.7"\nCZ_MAX_TOKENS=""\n')
@@ -25,7 +25,7 @@ class Provider(unittest.TestCase):
         return json.loads(out)
 
     def setup_with(self, provider, answers):
-        p = subprocess.run([sys.executable, os.path.join(REPO, SCRIPT), "setup", provider], input=answers,
+        p = subprocess.run([sys.executable] + command(SCRIPT) + ["setup", provider], input=answers,
                            cwd=self.h.root, env=self.h.env(), capture_output=True, text=True, encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
 
@@ -82,9 +82,9 @@ class Provider(unittest.TestCase):
     def test_shell_lines_survive_eval(self):
         key = "it's a $key `with` \"quotes\""  # only by editing the file by hand
         self.h.provider_config("k", "CK_API_KEY=%s\n" % key)
-        script = 'eval "$("$0" "$1" env k)" && printf "%s|%s" "$ANTHROPIC_AUTH_TOKEN" "${ANTHROPIC_API_KEY-unset}"'
+        script = 'eval "$("$0" "$1" "$2" env k)" && printf "%s|%s" "$ANTHROPIC_AUTH_TOKEN" "${ANTHROPIC_API_KEY-unset}"'
         env = dict(self.h.env(), ANTHROPIC_API_KEY="sk-ant-from-the-shell")
-        p = subprocess.run(["sh", "-c", script, sys.executable, os.path.join(REPO, SCRIPT)], env=env,
+        p = subprocess.run(["sh", "-c", script, sys.executable] + command(SCRIPT), env=env,
                            capture_output=True, text=True)
         self.assertEqual(p.stdout, key + "|unset", p.stderr)
 

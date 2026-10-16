@@ -10,14 +10,15 @@
 #   ./install.sh [--bin DIR] [--force]    link the commands
 #   ./install.sh [--bin DIR] --uninstall  remove the links this script made
 #
+#   hatcheck                recent sessions in every profile and home, with resume commands and
+#                           plan usage; hatcheck usage, where, move and provider do the rest
 #   cl                      claude with a ~/.claude-<name> profile: cl work --resume <id>
 #   cx                      codex with a ~/.codex-<name> home: cx work resume <id>
-#   claude-where            where a session is stored, by ID or ID prefix
-#   claude-recent-sessions  recent sessions in every profile and home, with resume commands and plan usage
-#   claude-usage            plan usage left for every profile and home
-#   claude-move-session     copy a session to another profile, or convert it between Claude Code and Codex
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (links to cl)
-#   claude-provider         the key and model for those; claude-z reconfig sets them up
+#
+# The commands from before the rename are linked too, for now: claude-recent-sessions,
+# claude-usage, claude-where, claude-move-session and claude-provider run hatcheck,
+# hatcheck usage, where, move and provider.
 #
 #   --force  replace files or links that already exist under those names. Copies of
 #            claude-z and claude-k made by the claude-z repo's installers are replaced
@@ -40,9 +41,9 @@ while [ $# -gt 0 ]; do
 done
 
 # command:file-in-this-repo
-COMMANDS="cl:cl cx:cx claude-where:claude-where claude-recent-sessions:claude-recent-sessions.py
-claude-usage:claude-usage.py claude-move-session:claude-move-session.py
-claude-provider:claude-provider.py claude-z:cl claude-k:cl"
+COMMANDS="hatcheck:hatcheck.py cl:cl cx:cx claude-z:cl claude-k:cl
+claude-recent-sessions:claude-recent-sessions.py claude-usage:claude-usage.py claude-where:claude-where
+claude-move-session:claude-move-session.py claude-provider:claude-provider.py"
 
 # A launcher that the claude-z repo's install-z.sh or install-k.sh copied here.
 # shellcheck disable=SC2016  # the pattern matches a literal $HOME
@@ -94,12 +95,12 @@ case ":$PATH:" in
 esac
 if ! command -v python3 >/dev/null; then
     if [ "$(uname)" = Darwin ]; then hint="xcode-select --install"; else hint="your package manager's python3"; fi
-    echo "ℹ️  claude-recent-sessions, claude-usage, claude-move-session and claude-provider need python3 ($hint)"
+    echo "ℹ️  hatcheck needs python3 ($hint)"
 fi
 command -v claude >/dev/null || echo "ℹ️  cl runs claude, which isn't on your PATH: install Claude Code first"
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-    if [ -f "$rc" ] && grep -qE '^[[:space:]]*(function[[:space:]]+)?(cl|claude-where)[[:space:]]*\(\)' "$rc"; then
-        echo "ℹ️  $rc defines cl() or claude-where() itself. A shell function wins over the"
+    if [ -f "$rc" ] && grep -qE '^[[:space:]]*(function[[:space:]]+)?(cl|cx|claude-where)[[:space:]]*\(\)' "$rc"; then
+        echo "ℹ️  $rc defines cl(), cx() or claude-where() itself. A shell function wins over the"
         echo "   installed command; they do the same thing, so keep it or delete it."
     fi
 done

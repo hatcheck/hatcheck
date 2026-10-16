@@ -1,4 +1,4 @@
-"""claude-recent-sessions.py against a throwaway home."""
+"""hatcheck sessions (plain hatcheck) against a throwaway home."""
 import os
 import re
 import unittest
@@ -11,7 +11,7 @@ B = "bbbbbbbb-0000-4000-8000-000000000002"
 C = "cccccccc-0000-4000-8000-000000000003"
 D = "dddddddd-0000-4000-8000-000000000004"
 E = "eeeeeeee-0000-4000-8000-000000000005"
-SCRIPT = "claude-recent-sessions.py"
+SCRIPT = "sessions"
 
 
 def limits(session_used, weekly_used):
@@ -165,7 +165,7 @@ class UsageComments(unittest.TestCase):
                                 "resets_at": iso(NOW + 4 * 86400), "scope": {"model": {"display_name": "Fable"}}})
         paint = lambda code, text: "<%s>%s" % (code, text) if code else text  # noqa: E731
         with mock.patch.dict("os.environ", {"TERM": "xterm-256color"}):
-            cells = load(SCRIPT).usage_cells(load("claude-usage.py"), {"p": (usage, None, "")}, NOW, paint)
+            cells = load(SCRIPT).usage_cells(load("usage"), {"p": (usage, None, "")}, NOW, paint)
         self.assertIn("<2>5h", cells["p"])
         self.assertIn("<2>week", cells["p"])
         self.assertIn("<38;5;134>Fable", cells["p"])

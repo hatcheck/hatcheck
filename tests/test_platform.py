@@ -1,5 +1,5 @@
 """How commands and paths are printed for each shell, checked on any OS by giving
-claude-recent-sessions a Windows-style os module."""
+hatcheck sessions a Windows-style os module."""
 import ntpath
 import os
 import shutil
@@ -15,7 +15,7 @@ CODEX_ID = "019f0000-aaaa-7000-8000-000000000001"
 
 class PrintedCommands(unittest.TestCase):
     def windows(self, powershell=True):
-        s = load("claude-recent-sessions.py")
+        s = load("sessions")
         fake_os = types.SimpleNamespace(**{k: getattr(os, k) for k in dir(os) if not k.startswith("__")})
         fake_os.name, fake_os.sep, fake_os.path = "nt", "\\", ntpath
         s.os, s.HOME, s.DEFAULT_PROFILE = fake_os, "C:\\Users\\me", "C:\\Users\\me\\.claude"
@@ -74,7 +74,7 @@ class PrintedCommands(unittest.TestCase):
                          "CODEX_HOME=~/.codex-work codex resume " + CODEX_ID)
 
     def test_posix(self):
-        s = load("claude-recent-sessions.py")
+        s = load("sessions")
         s.HOME, s.powershell = "/home/me", lambda: False
         if os.sep == "/":
             self.assertEqual(s.shell_path("/home/me/code/api"), "~/code/api")
@@ -82,7 +82,7 @@ class PrintedCommands(unittest.TestCase):
             self.assertEqual(s.shell_path("/srv/x"), "/srv/x")
 
     def test_windows_paths_in_transcripts_are_repointed(self):
-        m = load("claude-move-session.py")
+        m = load("move")
         old, new = "C:\\Users\\me\\.claude\\projects\\X\\" + ID, "C:\\Users\\me\\.claude-b\\projects\\X\\" + ID
         line = ('{"type":"user","message":{"role":"user","content":"saved to %s\\\\tool-results\\\\a.txt"}}'
                 % old.replace("\\", "\\\\"))

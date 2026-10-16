@@ -3,11 +3,22 @@
 # which has its own login, settings and sessions:
 #   cl work --resume <id>  ==  $env:CLAUDE_CONFIG_DIR="$HOME\.claude-work"; claude --resume <id>
 # -z or -k runs it on Z.ai (GLM) or Kimi instead of Anthropic, with the key and model
-# claude-provider keeps. install.ps1's claude-z.cmd and claude-k.cmd call this with
+# `hatcheck provider` keeps. install.ps1's claude-z.cmd and claude-k.cmd call this with
 # --as claude-z or --as claude-k, which does that without a profile, so with ~\.claude
 # or whatever CLAUDE_CONFIG_DIR already says; `claude-z reconfig` runs the setup.
 # install.ps1 puts a cl.cmd launcher for this on your PATH. Everything set here is put
 # back afterwards, so plain claude in the same window keeps using ~\.claude and Anthropic.
+# `hatcheck provider`, or claude-provider in an install from before the rename.
+function Invoke-Provider {
+    if (Get-Command hatcheck -ErrorAction SilentlyContinue) {
+        & hatcheck provider @args
+    } elseif (Get-Command claude-provider -ErrorAction SilentlyContinue) {
+        & claude-provider @args
+    } else {
+        [Console]::Error.WriteLine("cl: hatcheck isn't on your PATH; run hatcheck's install.ps1")
+        exit 1
+    }
+}
 $rest = @($args)
 $provider = $null
 $profileName = $null
@@ -15,7 +26,7 @@ if ($rest.Count -ge 2 -and $rest[0] -eq "--as" -and $rest[1] -cmatch '^claude-([
     $provider = $Matches[1]
     $rest = @($rest | Select-Object -Skip 2)
     if ($rest.Count -gt 0 -and $rest[0] -ceq "reconfig") {
-        & claude-provider setup $provider
+        Invoke-Provider setup $provider
         exit $LASTEXITCODE
     }
 } else {
@@ -42,11 +53,7 @@ if ($profileName) {
     $settings["CLAUDE_CONFIG_DIR"] = Join-Path $home_dir (".claude-" + $profileName)
 }
 if ($provider) {
-    if (-not (Get-Command claude-provider -ErrorAction SilentlyContinue)) {
-        [Console]::Error.WriteLine("cl: claude-provider isn't on your PATH; run hatcheck's install.ps1")
-        exit 1
-    }
-    $json = & claude-provider env $provider --json
+    $json = Invoke-Provider env $provider --json
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     foreach ($p in (($json -join "`n") | ConvertFrom-Json).PSObject.Properties) {
         $settings[$p.Name] = $p.Value

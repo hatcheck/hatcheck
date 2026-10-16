@@ -1,4 +1,4 @@
-"""claude-usage.py against a throwaway home, plus its platform helpers."""
+"""hatcheck usage against a throwaway home, plus its platform helpers."""
 import time
 import unittest
 from datetime import datetime
@@ -6,7 +6,7 @@ from unittest import mock
 
 from helpers import NOW, FakeHome, iso, load
 
-SCRIPT = "claude-usage.py"
+SCRIPT = "usage"
 FAR = (NOW + 30 * 86400) * 1000  # a token expiry well in the future, in ms
 
 

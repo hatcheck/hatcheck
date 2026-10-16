@@ -1,4 +1,4 @@
-"""Codex in claude-recent-sessions and claude-usage: its sessions with their resume commands,
+"""Codex in hatcheck sessions and hatcheck usage: its sessions with their resume commands,
 and its ChatGPT plan's limits. Against a throwaway home: no real Codex home, no network."""
 import json
 import os
@@ -35,7 +35,7 @@ class CodexSessions(unittest.TestCase):
         h.codex_session(self.codex, self.api, Z, "From the app", 4, source="vscode", originator="Codex Desktop")
 
     def test_listed_with_claude_code_sessions(self):
-        code, out = self.h.run("claude-recent-sessions.py", "--no-usage")
+        code, out = self.h.run("sessions", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Claude Code and Codex CLI sessions", out)
         self.assertIn("codex resume " + X, out)
@@ -50,7 +50,7 @@ class CodexSessions(unittest.TestCase):
         self.assertIn("~/.codex-work (1)".replace("/", os.sep), out)
 
     def test_all_and_full(self):
-        code, out = self.h.run("claude-recent-sessions.py", "--no-usage", "--all", "--full")
+        code, out = self.h.run("sessions", "--no-usage", "--all", "--full")
         self.assertIn(Z, out)
         self.assertIn("via Codex app", out)
         if WINDOWS:
@@ -62,7 +62,7 @@ class CodexSessions(unittest.TestCase):
     def test_sessions_codex_runs_itself_are_not_listed(self):
         self.h.codex_session(self.codex, self.api, "019f0000-dddd-7000-8000-000000000004", "Review this", 1,
                              source={"subagent": {"other": "guardian"}}, originator="codex_cli_rs")
-        code, out = self.h.run("claude-recent-sessions.py", "--no-usage", "--all")
+        code, out = self.h.run("sessions", "--no-usage", "--all")
         self.assertNotIn("019f0000-dddd", out)
         self.assertNotIn("without messages", out)
 
@@ -70,7 +70,7 @@ class CodexSessions(unittest.TestCase):
         h = self.h
         h.codex_session(self.work, h.folder("code", "web"), "019f0000-eeee-7000-8000-000000000005", "Style it", 1,
                         rate_limits=rate_limits(40, 10))
-        code, out = h.run("claude-recent-sessions.py", "--cached", cwd=h.folder("code", "web"))
+        code, out = h.run("sessions", "--cached", cwd=h.folder("code", "web"))
         self.assertEqual(code, 0, out)
         self.assertRegex(out, r"cx work resume 019f0000-eeee-\S+ +# 5h 60% ███░░ ↻██░░░ 1h5\dm  week 90% ██████▎ ↻███░░░░ 2d23h")
         self.assertRegex(out, r"Usage from Codex's session files \(--cached\): ~.\.codex-work \dm ago")
@@ -80,7 +80,7 @@ class CodexUsage(unittest.TestCase):
     def setUp(self):
         self.h = FakeHome()
         self.addCleanup(self.h.cleanup)
-        self.u = load("claude-usage.py")
+        self.u = load("usage")
 
     def test_snapshot_rows_and_shared_accounts(self):
         h = self.h
@@ -91,7 +91,7 @@ class CodexUsage(unittest.TestCase):
         newest = [rec(timestamp=iso(NOW - 60), type="event_msg",
                       payload={"type": "token_count", "info": None, "rate_limits": spark})]
         h.codex_session(two, api, Y, "New", 2, rate_limits=rate_limits(40, 10), extra=newest)
-        code, out = h.run("claude-usage.py", "--cached")
+        code, out = h.run("usage", "--cached")
         self.assertEqual(code, 0, out)
         # From the newest limits Codex recorded, which are the Spark ones, a minute ago.
         self.assertIn("~/.codex, ~/.codex-b  ChatGPT plus · cached 1m ago (--cached)".replace("/", os.sep), out)
@@ -99,7 +99,7 @@ class CodexUsage(unittest.TestCase):
         self.assertRegex(out, r"week \(all models\) +90% ")
         self.assertRegex(out, r"week \(GPT-5\.3-Codex-Spark\) +48% ")
         self.assertNotIn("acct-1@example.com", out)
-        code, out = h.run("claude-usage.py", "--cached", "--email")
+        code, out = h.run("usage", "--cached", "--email")
         self.assertIn("acct-1@example.com · ChatGPT plus", out)
 
     def test_live_answer(self):

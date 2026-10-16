@@ -1,4 +1,4 @@
-"""claude-move-session with Codex: copying Codex sessions between homes on one account, and
+"""hatcheck move with Codex: copying Codex sessions between homes on one account, and
 converting sessions between Claude Code and Codex, or for a home on another account. Against a
 throwaway home: no real Codex home, no network."""
 import json
@@ -13,7 +13,7 @@ from helpers import NOW, WINDOWS, FakeHome, iso, load, rec, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 X = "019f0000-aaaa-7000-8000-000000000001"  # Codex IDs are version 7 UUIDs
-MOVE = "claude-move-session.py"
+MOVE = "move"
 UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 
@@ -27,7 +27,7 @@ def jsonl(path):
 
 
 class Moves(unittest.TestCase):
-    """claude-move-session with Codex: copies between homes on one account, conversions otherwise."""
+    """hatcheck move with Codex: copies between homes on one account, conversions otherwise."""
 
     def setUp(self):
         self.h = h = FakeHome()
@@ -94,7 +94,7 @@ class Moves(unittest.TestCase):
             self.assertEqual(json.loads(fh.read())["thread_name"], "Run the test suite")
         with open(self.transcript, "rb") as fh:
             self.assertEqual(fh.read(), original)
-        code, out = self.h.run("claude-recent-sessions.py", "--no-usage")
+        code, out = self.h.run("sessions", "--no-usage")
         self.assertIn("cx work resume " + new, out)
 
     def h_files(self, home):
@@ -126,7 +126,7 @@ class Moves(unittest.TestCase):
                          ("system", "informational", messages[-1]["uuid"]))
         self.assertEqual(records[-1], {"type": "ai-title", "aiTitle": "Uploader fix", "sessionId": new})
         self.assertTrue(all(m["sessionId"] == new and m["cwd"] == self.cwd for m in messages))
-        code, out = self.h.run("claude-recent-sessions.py", "--no-usage")
+        code, out = self.h.run("sessions", "--no-usage")
         self.assertIn("cl work --resume " + new, out)
         self.assertIn("Uploader fix", out)
 
@@ -192,7 +192,7 @@ class Moves(unittest.TestCase):
 class Converting(unittest.TestCase):
     def setUp(self):
         self.m = load(MOVE)
-        self.s = load("claude-recent-sessions.py")
+        self.s = load("sessions")
 
     def test_follows_the_conversation_past_rewinds_and_compactions(self):
         def msg(uuid, parent, role, text, **extra):

@@ -9,14 +9,15 @@
 #   .\install.ps1 [-Bin DIR] [-Force]    add the commands
 #   .\install.ps1 [-Bin DIR] -Uninstall  remove the launchers this script made
 #
+#   hatcheck                recent sessions in every profile and home, with resume commands and
+#                           plan usage; hatcheck usage, where, move and provider do the rest
 #   cl                      claude with a ~\.claude-<name> profile: cl work --resume <id>
 #   cx                      codex with a ~\.codex-<name> home: cx work resume <id>
-#   claude-where            where a session is stored, by ID or ID prefix
-#   claude-recent-sessions  recent sessions in every profile and home, with resume commands and plan usage
-#   claude-usage            plan usage left for every profile and home
-#   claude-move-session     copy a session to another profile, or convert it between Claude Code and Codex
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (cl.ps1 --as claude-z)
-#   claude-provider         the key and model for those; claude-z reconfig sets them up
+#
+# The commands from before the rename are added too, for now: claude-recent-sessions,
+# claude-usage, claude-where, claude-move-session and claude-provider run hatcheck,
+# hatcheck usage, where, move and provider.
 #
 #   -Force  replace .cmd files that already exist under those names
 param(
@@ -32,15 +33,16 @@ $markers = @($marker, "rem made by claude-multi-account install.ps1")
 $python = if (Get-Command py -CommandType Application -ErrorAction SilentlyContinue) { "py -3" } else { "python" }
 $powershell = "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File"
 $commands = [ordered]@{
+    "hatcheck"               = "$python `"$repo\hatcheck.py`" %*"
     "cl"                     = "$powershell `"$repo\cl.ps1`" %*"
     "cx"                     = "$powershell `"$repo\cx.ps1`" %*"
-    "claude-where"           = "$powershell `"$repo\claude-where.ps1`" %*"
-    "claude-recent-sessions" = "$python `"$repo\claude-recent-sessions.py`" %*"
-    "claude-usage"           = "$python `"$repo\claude-usage.py`" %*"
-    "claude-move-session"    = "$python `"$repo\claude-move-session.py`" %*"
-    "claude-provider"        = "$python `"$repo\claude-provider.py`" %*"
     "claude-z"               = "$powershell `"$repo\cl.ps1`" --as claude-z %*"
     "claude-k"               = "$powershell `"$repo\cl.ps1`" --as claude-k %*"
+    "claude-recent-sessions" = "$python `"$repo\claude-recent-sessions.py`" %*"
+    "claude-usage"           = "$python `"$repo\claude-usage.py`" %*"
+    "claude-where"           = "$python `"$repo\claude-where`" %*"
+    "claude-move-session"    = "$python `"$repo\claude-move-session.py`" %*"
+    "claude-provider"        = "$python `"$repo\claude-provider.py`" %*"
 }
 
 function Test-Ours($path) {
@@ -87,7 +89,7 @@ if (-not $onPath) {
     Write-Output "  [Environment]::SetEnvironmentVariable('Path', `"$Bin;`" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
 }
 if (-not (Get-Command py, python -CommandType Application -ErrorAction SilentlyContinue)) {
-    Write-Output "claude-recent-sessions, claude-usage, claude-move-session and claude-provider need Python 3 (python.org or: winget install Python.Python.3.13)"
+    Write-Output "hatcheck needs Python 3 (python.org or: winget install Python.Python.3.13)"
 }
 if (-not (Get-Command claude -CommandType Application -ErrorAction SilentlyContinue)) {
     Write-Output "cl runs claude, which isn't on your PATH: install Claude Code first"

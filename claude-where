@@ -1,24 +1,9 @@
-#!/bin/sh
-# claude-where <session id or prefix>
-# Find a Claude Code session in ~/.claude and every ~/.claude-* profile, or a
-# Codex session in ~/.codex and every ~/.codex-* home. For Claude Code it prints
-# the transcript, plus its data folder if it has one: the profile in the path
-# says how to resume it (claude, or cl <profile>), and the projects/ folder is
-# the directory it ran in, with every non-alphanumeric character turned into -.
-# For Codex it prints the session file, under sessions/ by the date it started,
-# or under archived_sessions/: the home says how to resume it (codex resume
-# <id>, or cx <home> resume <id>).
-[ -n "$1" ] || { echo "usage: claude-where <session id or prefix>" >&2; exit 2; }
-# Exits 1 when nothing matches.
-status=1
-for profile in "$HOME/.claude" "$HOME"/.claude-*; do
-    [ -d "$profile/projects" ] || continue
-    if find "$profile/projects" -mindepth 2 -maxdepth 2 -name "$1*" | grep .; then status=0; fi
-done
-for home in "$HOME/.codex" "$HOME"/.codex-*; do
-    for dir in "$home/sessions" "$home/archived_sessions"; do
-        [ -d "$dir" ] || continue
-        if find "$dir" -name "rollout-????-??-??T??-??-??-$1*.jsonl" | grep .; then status=0; fi
-    done
-done
-exit $status
+#!/usr/bin/env python3
+"""claude-where is now `hatcheck where`. This runs it, so installs from before
+the rename keep working; it will go away."""
+import os
+import runpy
+import sys
+
+sys.argv.insert(1, "where")
+runpy.run_path(os.path.join(os.path.dirname(os.path.realpath(__file__)), "hatcheck.py"), run_name="__main__")

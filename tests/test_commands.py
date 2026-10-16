@@ -1,6 +1,6 @@
-"""cl, cx, claude-z, claude-k, claude-where and the installers: the sh versions on macOS
-and Linux, the PowerShell ones on Windows. A fake claude stands in for Claude Code, and a
-fake codex for Codex."""
+"""cl, cx, claude-z, claude-k, hatcheck where, the commands from before the rename, and
+the installers: the sh versions on macOS and Linux, the PowerShell ones on Windows. A fake
+claude stands in for Claude Code, and a fake codex for Codex."""
 import os
 import subprocess
 import sys
@@ -23,30 +23,36 @@ class Commands(unittest.TestCase):
         os.makedirs(self.transcript[:-len(".jsonl")])  # its data folder
         self.rollout = self.h.codex_session(self.h.codex_home("work"), self.h.folder("code"), CODEX_ID, "A Codex session")
         # A fake claude that prints the profile and provider it would use, and its arguments;
-        # and claude-provider, which cl asks for a provider's settings.
+        # and hatcheck, which cl asks for a provider's settings.
         self.bin = os.path.join(self.h.root, "fakebin")
-        provider = os.path.join(REPO, "claude-provider.py")
+        self.fake_bin(self.bin, hatcheck=os.path.join(REPO, "hatcheck.py"))
+        self.h.provider_config("z", 'CZ_API_KEY="zai-test-key"\nCZ_MODEL_OPUS="glm-5.3[1m]"\n')
+
+    def fake_bin(self, folder, **commands):
+        """Fake claude and codex in folder, and a command for each of `commands`, name=script,
+        that runs that repo script with Python."""
         if WINDOWS:
             lines = ["@echo off", "echo args=%*"] + [
                 "if defined %s (echo %s=%%%s%%) else (echo %s=unset)" % (v, v, v, v) for v in SHOWN]
-            write(os.path.join(self.bin, "claude.cmd"), "\r\n".join(lines) + "\r\n")
-            write(os.path.join(self.bin, "claude-provider.cmd"), '@"%s" "%s" %%*\r\n' % (sys.executable, provider))
-            write(os.path.join(self.bin, "codex.cmd"), "@echo off\r\necho args=%*\r\nif defined CODEX_HOME "
+            write(os.path.join(folder, "claude.cmd"), "\r\n".join(lines) + "\r\n")
+            write(os.path.join(folder, "codex.cmd"), "@echo off\r\necho args=%*\r\nif defined CODEX_HOME "
                   "(echo CODEX_HOME=%CODEX_HOME%) else (echo CODEX_HOME=unset)\r\n")
-        else:
-            lines = ["#!/bin/sh", 'echo "args=$*"'] + ['echo "%s=${%s-unset}"' % (v, v) for v in SHOWN]
-            write(os.path.join(self.bin, "claude"), "\n".join(lines) + "\n")
-            write(os.path.join(self.bin, "claude-provider"), '#!/bin/sh\nexec "%s" "%s" "$@"\n' % (sys.executable, provider))
-            write(os.path.join(self.bin, "codex"), '#!/bin/sh\necho "args=$*"\necho "CODEX_HOME=${CODEX_HOME-unset}"\n')
-            for name in ("claude", "claude-provider", "codex"):
-                os.chmod(os.path.join(self.bin, name), 0o755)
-            for name in ("claude-z", "claude-k"):  # how install.sh installs them
-                os.symlink(os.path.join(REPO, "cl"), os.path.join(self.bin, name))
-        self.h.provider_config("z", 'CZ_API_KEY="zai-test-key"\nCZ_MODEL_OPUS="glm-5.3[1m]"\n')
+            for name, script in commands.items():
+                write(os.path.join(folder, name.replace("_", "-") + ".cmd"), '@"%s" "%s" %%*\r\n' % (sys.executable, script))
+            return
+        lines = ["#!/bin/sh", 'echo "args=$*"'] + ['echo "%s=${%s-unset}"' % (v, v) for v in SHOWN]
+        write(os.path.join(folder, "claude"), "\n".join(lines) + "\n")
+        write(os.path.join(folder, "codex"), '#!/bin/sh\necho "args=$*"\necho "CODEX_HOME=${CODEX_HOME-unset}"\n')
+        for name, script in commands.items():
+            write(os.path.join(folder, name.replace("_", "-")), '#!/bin/sh\nexec "%s" "%s" "$@"\n' % (sys.executable, script))
+        for name in os.listdir(folder):
+            os.chmod(os.path.join(folder, name), 0o755)
+        for name in ("claude-z", "claude-k"):  # how install.sh installs them
+            os.symlink(os.path.join(REPO, "cl"), os.path.join(folder, name))
 
-    def run_command(self, argv, extra_env=None, stdin="", fakes=True):
+    def run_command(self, argv, extra_env=None, stdin="", fakes=True, bindir=None):
         env = dict(self.h.env(), **(extra_env or {}))
-        env["PATH"] = (self.bin + os.pathsep if fakes else "") + (os.environ["PATH"] if WINDOWS else "/bin:/usr/bin")
+        env["PATH"] = ((bindir or self.bin) + os.pathsep if fakes else "") + (os.environ["PATH"] if WINDOWS else "/bin:/usr/bin")
         p = subprocess.run(argv, cwd=self.h.root, env=env, input=stdin, capture_output=True, text=True,
                            encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
@@ -68,9 +74,7 @@ class Commands(unittest.TestCase):
         return self.run_command([name] + list(args), **kw)
 
     def where(self, *args):
-        if WINDOWS:
-            return self.run_command(POWERSHELL + [os.path.join(REPO, "claude-where.ps1")] + list(args))
-        return self.run_command(["sh", os.path.join(REPO, "claude-where")] + list(args))
+        return self.run_command([sys.executable, os.path.join(REPO, "hatcheck.py"), "where"] + list(args))
 
     def test_cl_runs_claude_with_the_profile(self):
         code, out = self.cl("work", "--resume", ID)
@@ -139,6 +143,51 @@ class Commands(unittest.TestCase):
             code, out = self.claude_on("claude-k")
             self.assertIn("ANTHROPIC_AUTH_TOKEN=kimi-typed-key", out)
 
+    def test_cl_with_an_install_from_before_the_rename(self):
+        # claude-provider, and no hatcheck: cl still finds the provider's settings.
+        old = os.path.join(self.h.root, "oldbin")
+        self.fake_bin(old, claude_provider=os.path.join(REPO, "claude-provider.py"))
+        self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
+        code, out = self.cl("-k", "work", bindir=old)
+        self.assertEqual(code, 0, out)
+        self.assertIn("ANTHROPIC_AUTH_TOKEN=kimi-test-key", out)
+        bare = os.path.join(self.h.root, "barebin")
+        self.fake_bin(bare)
+        code, out = self.cl("-k", "work", bindir=bare)
+        self.assertEqual(code, 1, out)
+        self.assertIn("hatcheck isn't on your PATH", out)
+
+    def test_hatcheck(self):
+        code, out = self.run_command([sys.executable, os.path.join(REPO, "hatcheck.py"), "--help"])
+        self.assertEqual(code, 0, out)
+        for line in ("hatcheck [sessions] [HOURS]", "hatcheck usage", "hatcheck where SESSION",
+                     "hatcheck move SESSION PROFILE", "hatcheck provider"):
+            self.assertIn(line, out)
+        code, out = self.run_command([sys.executable, os.path.join(REPO, "hatcheck.py"), "3d", "--no-usage"])
+        self.assertEqual(code, 0, out)  # HOURS on its own: the session list
+        self.assertIn("cl work --resume " + ID, out)
+        code, out = self.run_command([sys.executable, os.path.join(REPO, "hatcheck.py"), "nope"])
+        self.assertEqual(code, 2, out)
+        self.assertIn("there's no 'nope' subcommand", out)
+
+    def test_commands_from_before_the_rename(self):
+        def old(name, *args):
+            return self.run_command([sys.executable, os.path.join(REPO, name)] + list(args))
+
+        code, out = old("claude-where", ID[:8])
+        self.assertEqual(sorted(out.split()), sorted([self.transcript, self.transcript[:-len(".jsonl")]]))
+        code, out = old("claude-recent-sessions.py", "--no-usage")
+        self.assertIn("cl work --resume " + ID, out)
+        code, out = old("claude-usage.py", "--cached")
+        self.assertIn("Plan usage by profile", out)
+        code, out = old("claude-move-session.py", "--help")
+        self.assertIn("usage: hatcheck move", out)
+        code, out = old("claude-provider.py", "env", "z")
+        self.assertIn("https://api.z.ai/api/anthropic", out)
+        if WINDOWS:  # what launchers made before the rename run for claude-where
+            code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "claude-where.ps1"), ID[:8]])
+            self.assertIn(self.transcript, out)
+
     def test_claude_where_finds_a_session_by_prefix(self):
         code, out = self.where(ID[:8])
         self.assertEqual(code, 0, out)
@@ -159,8 +208,8 @@ class Commands(unittest.TestCase):
 
     def test_installer(self):
         target = os.path.join(self.h.root, "installed")
-        names = ["cl", "cx", "claude-where", "claude-recent-sessions", "claude-usage", "claude-move-session",
-                 "claude-provider", "claude-z", "claude-k"]
+        names = ["hatcheck", "cl", "cx", "claude-z", "claude-k", "claude-recent-sessions", "claude-usage",
+                 "claude-where", "claude-move-session", "claude-provider"]
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         if WINDOWS:
             # Made before the repo was renamed from claude-multi-account: still its own, so replaced
@@ -173,6 +222,8 @@ class Commands(unittest.TestCase):
                 self.assertTrue(os.path.isfile(os.path.join(target, name + ".cmd")), out)
             with open(os.path.join(target, "claude-usage.cmd")) as f:
                 self.assertIn("rem made by hatcheck install.ps1", f.read())
+            code, out = self.run_command(["cmd", "/c", os.path.join(target, "hatcheck.cmd"), "where", ID[:8]])
+            self.assertIn(self.transcript, out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-where.cmd"), ID[:8]])
             self.assertIn(self.transcript, out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-recent-sessions.cmd"), "--no-usage"])
@@ -191,6 +242,8 @@ class Commands(unittest.TestCase):
             for name in names:
                 self.assertTrue(os.path.islink(os.path.join(target, name)), out)
             self.assertIn("claude-z -> %s (replaced the copy from the claude-z repo" % os.path.join(REPO, "cl"), out)
+            code, out = self.run_command([os.path.join(target, "hatcheck"), "where", ID[:8]])
+            self.assertIn(self.transcript, out)
             code, out = self.run_command([os.path.join(target, "claude-where"), ID[:8]])
             self.assertIn(self.transcript, out)
             code, out = self.run_command([os.path.join(target, "claude-k"), "--version"])

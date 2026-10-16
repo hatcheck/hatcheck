@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timezone
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SUBCOMMANDS = ("sessions", "usage", "where", "move", "provider")  # hatcheck's, in hatcheck/
 NOW = time.time()
 WINDOWS = os.name == "nt"
 sys.dont_write_bytecode = True  # leave no __pycache__ beside the scripts
@@ -42,9 +43,18 @@ def write(path, text, mtime=None):
         os.utime(path, (mtime, mtime))
 
 
+def command(script):
+    """How to run a repo script, after the Python interpreter: a hatcheck subcommand by its
+    name (usage) through hatcheck.py, or another script by its file name."""
+    if script in SUBCOMMANDS:
+        return [os.path.join(REPO, "hatcheck.py"), script]
+    return [os.path.join(REPO, script)]
+
+
 def load(script):
-    """One of the repo's scripts, imported as a module."""
-    spec = importlib.util.spec_from_file_location(re.sub(r"\W", "_", script), os.path.join(REPO, script))
+    """One of the repo's scripts, imported as a module: a hatcheck subcommand by its name."""
+    path = os.path.join(REPO, "hatcheck", script + ".py") if script in SUBCOMMANDS else os.path.join(REPO, script)
+    spec = importlib.util.spec_from_file_location(re.sub(r"\W", "_", script), path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -53,7 +63,7 @@ def load(script):
 def start_token(pid):
     """What Claude Code records in sessions/<pid>.json for when a process started."""
     if WINDOWS:
-        return {"procStartFt": str(load("claude-recent-sessions.py").windows_start_time(pid))}
+        return {"procStartFt": str(load("sessions").windows_start_time(pid))}
     out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True,
                          env=dict(os.environ, TZ="UTC", LC_ALL="C")).stdout
     return {"procStart": out.strip()}
@@ -168,7 +178,7 @@ class FakeHome:
         write(os.path.join(profile, "sessions", "%d.json" % pid), json.dumps(entry))
 
     def provider_config(self, provider, text):
-        """claude-provider's config for z or k, where it looks for it on this OS."""
+        """hatcheck provider's config for z or k, where it looks for it on this OS."""
         path = (os.path.join(self.home, "AppData", "Roaming", "claude-" + provider, "config") if WINDOWS
                 else os.path.join(self.home, ".config", "claude-" + provider, "config"))
         write(path, text)
@@ -184,8 +194,9 @@ class FakeHome:
         return env
 
     def run(self, script, *args, cwd=None):
-        """Run a repo script against this home: (exit code, stdout + stderr)."""
-        p = subprocess.run([sys.executable, os.path.join(REPO, script)] + list(args), cwd=cwd or self.root,
+        """Run a hatcheck subcommand (usage) or another repo script against this home:
+        (exit code, stdout + stderr)."""
+        p = subprocess.run([sys.executable] + command(script) + list(args), cwd=cwd or self.root,
                            env=self.env(), capture_output=True, text=True, encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
 
