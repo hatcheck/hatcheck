@@ -1,0 +1,16 @@
+#!/bin/sh
+# cx <profile> [codex args...]
+# Run Codex with the ~/.codex-<profile> home (CODEX_HOME), which has its own
+# login, config and sessions:
+#   cx work resume <id>  ==  CODEX_HOME=~/.codex-work codex resume <id>
+# Codex won't start with a CODEX_HOME that doesn't exist, so the folder is made
+# on first use; sign in there with: cx work login
+case $1 in
+    ""|-*) echo "usage: cx <profile> [codex args...]  (uses ~/.codex-<profile>)" >&2; exit 2 ;;
+esac
+CODEX_HOME="$HOME/.codex-$1"
+export CODEX_HOME
+shift
+command -v codex >/dev/null 2>&1 || { echo "cx: codex isn't on your PATH; install Codex first" >&2; exit 1; }
+mkdir -p "$CODEX_HOME" || exit
+exec codex "$@"

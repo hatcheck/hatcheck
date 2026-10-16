@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""List recent Claude Code CLI sessions from every ~/.claude* profile, with the
-command that resumes each one and how much of its profile's plan is left.
+"""List recent Claude Code CLI sessions from every ~/.claude* profile, and Codex
+CLI sessions from every ~/.codex* home, with the command that resumes each one
+and how much of its account's plan is left.
 
 Usage:
     python3 claude-recent-sessions.py [HOURS] [-n N] [--all] [--all-folders]
@@ -9,13 +10,15 @@ Usage:
   HOURS         : how far back to look (default 24). Accepts 36, 1.5, 12h or 3d.
   -n N          : show only the newest N sessions per folder (default: all).
   --all         : also list sessions last used from Claude Desktop's Code tab or
-                  the SDK (claude -p, apps driving Claude Code), hidden by
-                  default.
+                  the SDK (claude -p, apps driving Claude Code), and Codex
+                  sessions from the Codex app, its IDE extension or codex exec,
+                  hidden by default.
   --all-folders : list every folder, even when run from one that has sessions.
   --full        : print CLAUDE_CONFIG_DIR=~/.claude-<name> claude ... instead of
-                  the cl shortcut, for machines without it.
-  --cached      : take plan usage from the snapshot Claude Code last saved
-                  instead of asking the API.
+                  the cl shortcut (CODEX_HOME=~/.codex-<name> codex ... instead
+                  of cx), for machines without them.
+  --cached      : take plan usage from the snapshots Claude Code and Codex last
+                  saved instead of asking the APIs.
   --no-usage    : leave plan usage out.
 
 Run from a folder that has sessions in the time window, it lists just that
@@ -26,6 +29,11 @@ first within each folder. Sessions in a
 repo (install.sh puts it on your PATH) and works like this shell function:
 
     cl() { CLAUDE_CONFIG_DIR="$HOME/.claude-$1" claude "${@:2}"; }
+
+Codex sessions resume with `codex resume <id>` in ~/.codex, and with
+`cx <name> resume <id>` in a ~/.codex-<name> home; cx is in this repo too and
+works like CODEX_HOME="$HOME/.codex-$1" codex "${@:2}". They're marked codex,
+and their comment shows the ChatGPT plan's Codex limits.
 
 A session whose newest reply came from Z.ai (a GLM model) or Kimi shows that
 model, as in "on k3", and resumes there: claude-z or claude-k --resume <id> in
@@ -51,7 +59,10 @@ listed at the bottom with its age; ? marks a limit that has reset since that
 snapshot.
 
 A profile is any ~/.claude* directory (plus $CLAUDE_CONFIG_DIR) that holds a
-projects/ folder, so Desktop data dirs like ~/.claude-instances are skipped.
+projects/ folder, so Desktop data dirs like ~/.claude-instances are skipped; a
+Codex home is ~/.codex or any ~/.codex-* directory (plus $CODEX_HOME) that holds
+a sessions/ folder. Codex sessions it runs itself, such as approval reviews,
+aren't listed.
 Each transcript records the entrypoint that wrote it; a session counts as
 Desktop when its most recent activity came from Claude Desktop. Sessions still
 open in a terminal are always listed, even when idle longer than HOURS, and
@@ -76,6 +87,16 @@ HOME = os.path.expanduser("~")
 DEFAULT_PROFILE = os.path.realpath(os.path.join(HOME, ".claude"))
 DEFAULT_HOURS = 24
 SHORTCUT = "cl"  # cl <name> ... runs claude with ~/.claude-<name> (./cl, or a shell function)
+DEFAULT_CODEX_HOME = os.path.realpath(os.path.join(HOME, ".codex"))
+CODEX_SHORTCUT = "cx"  # cx <name> ... runs codex with ~/.codex-<name> (./cx)
+# rollout-<local start time>-<session ID>.jsonl, Codex's name for a session file.
+CODEX_FILE = re.compile(r"rollout-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-"
+                        r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$")
+# How messages that Codex adds to a conversation itself start: the environment, AGENTS.md,
+# goals, interruptions, approval reviews.
+CODEX_HARNESS = ("<environment_context>", "# AGENTS.md instructions", "<user_instructions>", "<goal_context>",
+                 "<turn_aborted>", "The following is the Codex agent history", "<permissions instructions>",
+                 "<recommended_plugins>")
 
 
 def parse_count(text):
@@ -102,6 +123,18 @@ def find_profiles():
         if os.path.isdir(os.path.join(d, "projects")):
             profiles.setdefault(os.path.realpath(d), os.path.abspath(d))
     return sorted(profiles.values(), key=lambda d: (os.path.realpath(d) != DEFAULT_PROFILE, d))
+
+
+def find_codex_homes():
+    """Every Codex home: ~/.codex and ~/.codex-* dirs (and $CODEX_HOME) with a sessions/ folder."""
+    candidates = glob.glob(os.path.join(HOME, ".codex")) + glob.glob(os.path.join(HOME, ".codex-*"))
+    if os.environ.get("CODEX_HOME"):
+        candidates.append(os.path.expanduser(os.environ["CODEX_HOME"]))
+    homes = {}
+    for d in candidates:
+        if os.path.isdir(os.path.join(d, "sessions")):
+            homes.setdefault(os.path.realpath(d), os.path.abspath(d))
+    return sorted(homes.values(), key=lambda d: (os.path.realpath(d) != DEFAULT_CODEX_HOME, d))
 
 
 def windows_start_time(pid):
@@ -335,6 +368,125 @@ def read_session(path):
     }
 
 
+def codex_session_files(home):
+    """The session files of a Codex home, archived ones left out."""
+    return [path for path in glob.glob(os.path.join(home, "sessions", "*", "*", "*", "rollout-*.jsonl"))
+            if CODEX_FILE.search(path)]
+
+
+def codex_names(home):
+    """Session ID -> the name it was given with /rename or by Codex, from session_index.jsonl."""
+    names = {}
+    try:
+        with open(os.path.join(home, "session_index.jsonl"), encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(entry, dict) and entry.get("id") and entry.get("thread_name"):
+                    names[entry["id"]] = entry["thread_name"]  # the newest wins
+    except (OSError, UnicodeError):
+        pass
+    return names
+
+
+def codex_text(content):
+    return "".join(c.get("text") or "" for c in content or []
+                   if isinstance(c, dict) and c.get("type") in ("input_text", "output_text", "text"))
+
+
+def codex_prompt(record):
+    """What you typed, from a Codex record holding one of your messages, or None (also for
+    the messages Codex adds itself)."""
+    payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
+    item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
+    kind, text = (record.get("type"), payload.get("type")), None
+    if kind == ("event_msg", "item_completed") and item.get("type") == "UserMessage":
+        text = codex_text(item.get("content"))
+    elif kind == ("event_msg", "user_message"):
+        text = payload.get("message")
+    elif kind == ("response_item", "message") and payload.get("role") == "user":
+        text = codex_text(payload.get("content"))
+    if isinstance(text, str) and text.strip() and not text.lstrip().startswith(CODEX_HARNESS):
+        return text
+    return None
+
+
+def codex_entrypoint(meta):
+    """Where a Codex session was started from: cli for the terminal, as Claude Code's
+    entrypoint says, or the app, IDE extension or codex exec; subagent for one Codex runs."""
+    source = meta.get("source")
+    if isinstance(source, dict) or meta.get("thread_source") == "subagent":
+        return "subagent"
+    if source == "cli":
+        return "cli"
+    if meta.get("originator") == "Codex Desktop":
+        return "Codex app"
+    return {"vscode": "Codex IDE", "exec": "codex exec"}.get(source, str(source or "?"))
+
+
+def read_codex_session(path, names):
+    """Summary of one Codex session file, like read_session's, or None when it holds no
+    conversation."""
+    with open(path, "rb") as fh:
+        size = os.fstat(fh.fileno()).st_size
+        if size == 0:
+            return None
+        mm = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
+    try:
+        try:
+            first = json.loads(mm.readline())
+        except ValueError:
+            return None
+        meta = first.get("payload") if isinstance(first, dict) and first.get("type") == "session_meta" else None
+        if not isinstance(meta, dict):
+            return None
+        last = None  # the newest record: the last activity
+        for line in lines_backward(mm):
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(record, dict) and parse_time(record.get("timestamp")):
+                last = record
+                break
+        context = last_record(mm, "turn_context") or {}
+        prompt = title = None
+        mm.seek(0)
+        for n, line in enumerate(iter(mm.readline, b"")):
+            if title or n > 5000:
+                break
+            if not any(k in line for k in (b'"UserMessage"', b'"user_message"', b'"role":"user"')):
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            text = codex_prompt(record) if isinstance(record, dict) else None
+            prompt = prompt or text
+            title = text if text and not text.lstrip().startswith("<") else None
+    finally:
+        mm.close()
+    match = CODEX_FILE.search(path)
+    sid = meta.get("id") or (match.group(1) if match else os.path.basename(path))
+    cwd = meta.get("cwd")
+    return {
+        "agent": "codex",
+        "id": sid,
+        "when": parse_time((last or first).get("timestamp")) or os.path.getmtime(path),
+        "entrypoint": codex_entrypoint(meta),
+        "branch": (meta.get("git") or {}).get("branch") if isinstance(meta.get("git"), dict) else None,
+        "cwd": cwd,
+        "canonical": True,
+        "size": size,
+        "has_messages": prompt is not None,
+        "title": " ".join((names.get(sid) or title or prompt or "(untitled)").split()),
+        "continued_in": None,
+        "model": ((context.get("payload") or {}) if isinstance(context.get("payload"), dict) else {}).get("model"),
+    }
+
+
 def powershell():
     """Whether to print commands for PowerShell: on Windows, unless this runs in a POSIX
     shell such as Git Bash, which sets SHELL."""
@@ -381,6 +533,30 @@ def resume_command(profile, session_id, full, provider=None):
     return "CLAUDE_CONFIG_DIR=%s %s --resume %s" % (shell_path(profile), command, session_id)
 
 
+def codex_resume_command(home, session_id, full):
+    """The command that resumes a Codex session: codex resume <id>, with cx <name> for a
+    ~/.codex-<name> home."""
+    if os.path.realpath(home) == DEFAULT_CODEX_HOME:
+        return "codex resume " + session_id
+    parent, name = os.path.split(home.rstrip("/" + os.sep))
+    if not full and parent == HOME and name.startswith(".codex-"):
+        short = name[len(".codex-"):]
+        return "%s %s resume %s" % (CODEX_SHORTCUT, ps_quote(short) if powershell() else shlex.quote(short), session_id)
+    if powershell():
+        rest = home[len(HOME) + 1:] if home.startswith(HOME + os.sep) else None
+        value = '"$HOME\\%s"' % rest if rest is not None and not re.search(r'["$`]', rest) \
+            else "'" + home.replace("'", "''") + "'"
+        return "$env:CODEX_HOME=%s; codex resume %s; $env:CODEX_HOME=$null" % (value, session_id)
+    return "CODEX_HOME=%s codex resume %s" % (shell_path(home), session_id)
+
+
+def session_command(s, full):
+    """The command that resumes a listed session, Claude Code's or Codex's."""
+    if s.get("agent") == "codex":
+        return codex_resume_command(s["profile"], s["id"], full)
+    return resume_command(s["profile"], s["id"], full, provider_of(s["model"]))
+
+
 def load_usage_module():
     """claude-usage.py from this script's folder, loaded as a module, or None if it's missing."""
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "claude-usage.py")
@@ -397,15 +573,15 @@ def usage_cells(usage_mod, results, now, paint):
     """profile -> text: each plan limit's short name (per-model ones in violet), % left
     and a bar of it, then ↻, a bar of the time left until it resets and that time,
     coloured by urgency, in columns aligned across profiles. Bars have a block per hour
-    of the 5-hour window, or per day of a weekly one."""
+    of the 5-hour window, per day of a weekly one, and 10 for Codex's 30 days."""
     meters = {}
     for profile, (usage, saved_at, _) in results.items():
         meters[profile] = []
         for row in (usage or {}).get("limits") or []:
             left = usage_mod.percent_left(row.get("percent"), row.get("resets_at"), saved_at, now)
             reset = usage_mod.parse_time(row.get("resets_at"))
-            window = usage_mod.window_seconds(row.get("group") or row.get("kind"))
-            blocks = (window // 86400 or window // 3600) if window else 5
+            window = usage_mod.row_window(row)
+            blocks = usage_mod.bar_cells(window)
             if left is None:  # reset since the snapshot
                 pct, code, plan, until, until_code = "?", "2", "·" * blocks, "", ""
             else:
@@ -469,20 +645,23 @@ def truncate(text, cols):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="List recent Claude Code CLI sessions across all ~/.claude* profiles, "
-                    "with the command that resumes each one.")
+        description="List recent Claude Code CLI sessions across all ~/.claude* profiles, and Codex CLI "
+                    "sessions across all ~/.codex* homes, with the command that resumes each one.")
     parser.add_argument("hours", nargs="?", type=parse_hours, default=DEFAULT_HOURS,
                         help="how far back to look (default %d); accepts 36, 1.5, 12h or 3d" % DEFAULT_HOURS)
     parser.add_argument("-n", "--per-folder", metavar="N", type=parse_count,
                         help="show only the newest N sessions per folder (default: all)")
     parser.add_argument("--all", action="store_true",
-                        help="also list sessions last used from Claude Desktop or the SDK")
+                        help="also list sessions last used from Claude Desktop or the SDK, and Codex "
+                             "sessions from the Codex app, its IDE extension or codex exec")
     parser.add_argument("--all-folders", action="store_true",
                         help="list every folder, even when run from a folder that has sessions")
     parser.add_argument("--full", action="store_true",
-                        help="print CLAUDE_CONFIG_DIR=... claude instead of the %s shortcut" % SHORTCUT)
+                        help="print CLAUDE_CONFIG_DIR=... claude instead of the %s shortcut, and "
+                             "CODEX_HOME=... codex instead of %s" % (SHORTCUT, CODEX_SHORTCUT))
     parser.add_argument("--cached", action="store_true",
-                        help="take plan usage from the snapshot Claude Code last saved instead of the API")
+                        help="take plan usage from the snapshots Claude Code and Codex last saved "
+                             "instead of the APIs")
     parser.add_argument("--no-usage", action="store_true", help="leave plan usage out")
     args = parser.parse_args()
 
@@ -523,6 +702,27 @@ def main():
             rank = (session["when"], session["canonical"], session["size"])
             if key not in found or rank > found[key][0]:
                 found[key] = (rank, session)
+    codex_homes = find_codex_homes()
+    for home in codex_homes:
+        names = None  # read once a session in the window needs them
+        for path in codex_session_files(home):
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    continue
+                names = codex_names(home) if names is None else names
+                session = read_codex_session(path, names)
+            except (OSError, ValueError):
+                unreadable += 1
+                continue
+            if session is not None and session["entrypoint"] == "subagent":
+                continue  # one Codex ran itself, such as an approval review
+            if session is None or not session["has_messages"]:
+                empty += 1
+                continue
+            if session["when"] < cutoff:
+                continue
+            session["profile"], session["open"] = home, None
+            found[("codex", os.path.realpath(home), session["id"])] = ((session["when"], True, session["size"]), session)
 
     shown, hidden = [], {}
     for _, s in found.values():
@@ -541,7 +741,7 @@ def main():
     elsewhere = len(shown) - len(mine) if only_here else 0
     if only_here:
         shown = mine
-    per_profile = dict.fromkeys(profiles, 0)
+    per_profile = dict.fromkeys(profiles + codex_homes, 0)
     for s in shown:
         per_profile[s["profile"]] += 1
 
@@ -558,20 +758,21 @@ def main():
 
     # Plan usage for the profiles behind the listed sessions, one request per account.
     usage_mod = None if args.no_usage else usage_lib
-    used_profiles = [p for p in profiles if any(s["profile"] == p for _, listed, _ in folders for s in listed)]
-    results, account = {}, {}  # profile -> its account's usage, and a number for that account
+    used = {s["profile"] for _, listed, _ in folders for s in listed}
+    used_profiles, used_homes = [p for p in profiles if p in used], [h for h in codex_homes if h in used]
+    results, account = {}, {}  # profile or home -> its account's usage, and a number for that account
     if usage_mod:
-        for n, (entry, result) in enumerate(usage_mod.load_usage(used_profiles, args.cached)):
+        for n, (entry, result) in enumerate(usage_mod.load_usage(used_profiles, args.cached, used_homes)):
             for profile in entry["profiles"]:
                 results[profile], account[profile] = result, n
     cells = usage_cells(usage_mod, results, now, paint) if results else {}
     # The usage comments line up after the longest resume command.
-    command_width = max([len(resume_command(s["profile"], s["id"], args.full, provider_of(s["model"])))
-                         for _, listed, _ in folders for s in listed] or [0])
+    command_width = max([len(session_command(s, args.full)) for _, listed, _ in folders for s in listed] or [0])
 
     window = ("%g" % args.hours) + "h"
-    print(paint("1", "Claude Code CLI sessions %sactive in the last %s or open now"
-                % ("in this folder, " if only_here else "", window))
+    print(paint("1", "%s CLI sessions %sactive in the last %s or open now"
+                % ("Claude Code and Codex" if codex_homes else "Claude Code", "in this folder, " if only_here else "",
+                   window))
           + paint("2", " (%snewest first%s)" % ("" if only_here else "by folder, ",
                                                 "; % = plan left, ↻ = hours/days until reset" if cells else "")))
     if not shown:
@@ -583,8 +784,9 @@ def main():
         print(paint("1;36", "cd " + shell_path(folder)) + missing)
         for s in listed:
             # No profile here: the command shows it (plain `claude` means ~/.claude).
-            meta = [(s["branch"], "2")] if s["branch"] else []
-            if s["model"] and not s["model"].startswith("claude"):
+            meta = [("codex", "36")] if s.get("agent") == "codex" else []
+            meta += [(s["branch"], "2")] if s["branch"] else []
+            if s.get("agent") != "codex" and s["model"] and not s["model"].startswith("claude"):
                 meta.append(("on " + s["model"], "35"))  # e.g. GLM or Kimi, through claude-z or claude-k
             if s["entrypoint"] != "cli":
                 meta.append(("via " + s["entrypoint"], "33"))
@@ -598,7 +800,7 @@ def main():
             print("  %s  %s%s" % (paint("2", ago(now - s["when"]).rjust(4)),
                                   paint("1", truncate(s["title"], max(room, 20))),
                                   "".join(paint("2", " · ") + paint(c, text) for text, c in meta)))
-            command = resume_command(s["profile"], s["id"], args.full, provider_of(s["model"]))
+            command = session_command(s, args.full)
             usage = cells.get(s["profile"])
             # Left out when the session above uses the same account, even through another
             # profile, so it would only repeat.
@@ -613,18 +815,19 @@ def main():
     print(paint("2", "Profiles: " + ", ".join(
         "%s (%d)" % (shell_path(p), n) for p, n in per_profile.items())))
     snapshots, no_data = {}, {}
-    for p in used_profiles:
+    for p in used_profiles + used_homes:
         if p in results:
             usage, saved_at, why = results[p]
             if usage is None:
                 no_data.setdefault(why, []).append(shell_path(p))
             elif saved_at is not None:
-                snapshots.setdefault(why, []).append("%s %s ago" % (shell_path(p), ago(now - saved_at)))
-    for why, items in snapshots.items():
-        print(paint("2", "Usage from Claude Code's last snapshot (%s): %s" % (why, ", ".join(items))))
+                source = "Codex's session files" if p in used_homes else "Claude Code's last snapshot"
+                snapshots.setdefault((source, why), []).append("%s %s ago" % (shell_path(p), ago(now - saved_at)))
+    for (source, why), items in snapshots.items():
+        print(paint("2", "Usage from %s (%s): %s" % (source, why, ", ".join(items))))
     for why, items in no_data.items():
         print(paint("2", "No usage data (%s): %s" % (why, ", ".join(items))))
-    if used_profiles and not args.no_usage and not usage_mod:
+    if used and not args.no_usage and not usage_mod:
         print(paint("2", "No usage data: claude-usage.py isn't in this script's folder"))
     notes = []
     if elsewhere:

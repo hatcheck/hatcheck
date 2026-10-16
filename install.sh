@@ -1,6 +1,6 @@
 #!/bin/bash
 # install.sh
-# Put this repo's Claude Code CLI helpers on your PATH (macOS, Linux) by
+# Put this repo's Claude Code and Codex CLI helpers on your PATH (macOS, Linux) by
 # symlinking them into a bin folder (default ~/.local/bin, where Claude Code's
 # installer puts `claude`). On Windows, use install.ps1.
 # The links follow the repo, so a git pull updates them. Shell startup files
@@ -11,9 +11,10 @@
 #   ./install.sh [--bin DIR] --uninstall  remove the links this script made
 #
 #   cl                      claude with a ~/.claude-<name> profile: cl work --resume <id>
+#   cx                      codex with a ~/.codex-<name> home: cx work resume <id>
 #   claude-where            where a session is stored, by ID or ID prefix
-#   claude-recent-sessions  recent sessions in every profile, with resume commands and plan usage
-#   claude-usage            plan usage left for every profile
+#   claude-recent-sessions  recent sessions in every profile and home, with resume commands and plan usage
+#   claude-usage            plan usage left for every profile and home
 #   claude-move-session     copy a session to another profile (move it with --no-keep)
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (links to cl)
 #   claude-provider         the key and model for those; claude-z reconfig sets them up
@@ -39,7 +40,7 @@ while [ $# -gt 0 ]; do
 done
 
 # command:file-in-this-repo
-COMMANDS="cl:cl claude-where:claude-where claude-recent-sessions:claude-recent-sessions.py
+COMMANDS="cl:cl cx:cx claude-where:claude-where claude-recent-sessions:claude-recent-sessions.py
 claude-usage:claude-usage.py claude-move-session:claude-move-session.py
 claude-provider:claude-provider.py claude-z:cl claude-k:cl"
 

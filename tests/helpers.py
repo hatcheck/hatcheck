@@ -1,6 +1,7 @@
-"""Shared test helpers: a throwaway home folder with Claude Code profiles and sessions,
-and a way to run the scripts against it. Nothing here reads your real profiles, the
-macOS Keychain or the network."""
+"""Shared test helpers: a throwaway home folder with Claude Code profiles, Codex homes and
+their sessions, and a way to run the scripts against it. Nothing here reads your real
+profiles, the macOS Keychain or the network."""
+import base64
 import importlib.util
 import json
 import os
@@ -25,6 +26,12 @@ def iso(t):
 def rec(**fields):
     """A transcript line written the way Claude Code writes them: compact JSON, raw UTF-8."""
     return json.dumps(fields, ensure_ascii=False, separators=(",", ":"))
+
+
+def fake_jwt(claims):
+    """A token shaped like the JWTs in Codex's auth.json, unsigned."""
+    part = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).decode().rstrip("=")  # noqa: E731
+    return "%s.%s.x" % (part({"alg": "none"}), part(claims))
 
 
 def write(path, text, mtime=None):
@@ -95,6 +102,65 @@ class FakeHome:
         write(path, "\n".join(lines) + "\n", mtime=when)
         return path
 
+    def codex_home(self, name="default", account=None, plan="plus", expires=None):
+        """A Codex home (~/.codex or ~/.codex-NAME), signed in with ChatGPT to `account` when
+        given. Its token has expired unless `expires` says otherwise, so nothing asks the API."""
+        path = os.path.join(self.home, ".codex" if name == "default" else ".codex-" + name)
+        os.makedirs(os.path.join(path, "sessions"), exist_ok=True)
+        if account:
+            auth = {"chatgpt_account_id": account, "chatgpt_user_id": "user-" + account, "chatgpt_plan_type": plan}
+            claims = {"https://api.openai.com/auth": auth, "exp": int(expires or NOW - 3600)}
+            write(os.path.join(path, "auth.json"), json.dumps({"OPENAI_API_KEY": None, "last_refresh": iso(NOW), "tokens": {
+                "access_token": fake_jwt(claims), "account_id": account, "refresh_token": "x",
+                "id_token": fake_jwt(dict(claims, email=account + "@example.com"))}}))
+        return path
+
+    def codex_session(self, home, cwd, sid, prompt, minutes_ago=5, source="cli", originator="codex_cli_rs",
+                      rate_limits=None, name=None, extra=()):
+        """A Codex session file, the way Codex writes one: the instructions it adds itself, your
+        prompt, a command it ran and its answer, and the rate limits it was told about."""
+        when = NOW - minutes_ago * 60
+        start = when - 60
+
+        def line(t, kind, payload):
+            return rec(timestamp=iso(t), type=kind, payload=payload)
+
+        lines = [
+            line(start, "session_meta", {"id": sid, "timestamp": iso(start), "cwd": cwd, "originator": originator,
+                                         "cli_version": "0.155.1", "source": source, "model_provider": "openai",
+                                         "git": {"branch": "main"}}),
+            line(start, "response_item", {"type": "message", "role": "developer", "content": [
+                {"type": "input_text", "text": "<permissions instructions>sandboxed</permissions instructions>"}]}),
+            line(start, "response_item", {"type": "message", "role": "user", "content": [
+                {"type": "input_text", "text": "<environment_context><cwd>%s</cwd></environment_context>" % cwd}]}),
+            line(start, "turn_context", {"cwd": cwd, "model": "gpt-5.5"}),
+            line(start + 1, "response_item", {"type": "message", "role": "user", "content": [
+                {"type": "input_text", "text": prompt}]}),
+            line(start + 2, "response_item", {"type": "reasoning", "summary": [], "content": None,
+                                              "encrypted_content": "gAAAA-SECRET-REASONING"}),
+            line(start + 3, "response_item", {"type": "function_call", "name": "exec_command", "call_id": "c1",
+                                              "arguments": json.dumps({"cmd": "ls src", "yield_time_ms": 1000})}),
+            line(start + 4, "response_item", {"type": "function_call_output", "call_id": "c1", "output":
+                                              "Chunk ID: 1\nProcess exited with code 0\nOutput:\nmain.py\nutil.py\n"}),
+            line(start + 5, "response_item", {"type": "custom_tool_call", "name": "apply_patch", "call_id": "c2",
+                                              "input": "*** Begin Patch\n*** Update File: src/main.py\n+print(1)\n*** End Patch"}),
+            line(start + 6, "response_item", {"type": "custom_tool_call_output", "call_id": "c2",
+                                              "output": json.dumps({"output": "Success. Updated src/main.py"})}),
+        ] + list(extra) + [
+            line(when, "response_item", {"type": "message", "role": "assistant", "content": [
+                {"type": "output_text", "text": "Done: " + prompt}], "phase": "final_answer"}),
+        ]
+        if rate_limits is not None:
+            lines.append(line(when, "event_msg", {"type": "token_count", "info": None, "rate_limits": rate_limits}))
+        local = time.localtime(start)
+        path = os.path.join(home, "sessions", *time.strftime("%Y %m %d", local).split(),
+                            "rollout-%s-%s.jsonl" % (time.strftime("%Y-%m-%dT%H-%M-%S", local), sid))
+        write(path, "\n".join(lines) + "\n", mtime=when)
+        if name:
+            with open(os.path.join(home, "session_index.jsonl"), "a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"id": sid, "thread_name": name, "updated_at": iso(when)}) + "\n")
+        return path
+
     def register_open(self, profile, sid, pid=None):
         """Mark a session as open in a running process (this one by default)."""
         pid = pid or os.getpid()
@@ -109,7 +175,7 @@ class FakeHome:
         return path
 
     def env(self):
-        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CONFIG_DIR", "SHELL", "NO_COLOR")
+        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "SHELL", "NO_COLOR")
                and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_"))}
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
                    PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"))

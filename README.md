@@ -2,10 +2,10 @@
 
 Several Claude accounts on one computer, each kept apart: isolated Claude Desktop instances on
 macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume commands across all
-of them.
+of them. OpenAI's Codex CLI gets the same treatment.
 
-*Unofficial: not made by, affiliated with or endorsed by Anthropic. Claude, Claude Code and Claude
-Desktop are trademarks of Anthropic.*
+*Unofficial: not made by, affiliated with or endorsed by Anthropic or OpenAI. Claude, Claude Code and
+Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI.*
 
 Run **two (or more) fully isolated Claude Desktop instances** side by side on macOS — e.g. one
 signed into your **personal** account and one into your **work** account — each with its own
@@ -22,12 +22,14 @@ It also has **command-line helpers for Claude Code** (the `claude` CLI) for keep
 account there: `cl` runs Claude Code with a profile, `claude-where` finds any session, two scripts
 list recent sessions and plan usage across all profiles, and `claude-move-session` carries a session
 over to another profile. `claude-z` and `claude-k` run it on Z.ai's GLM or Kimi's models instead, in
-any profile. See [Claude Code CLI profiles](#claude-code-cli-profiles).
+any profile. The same tools cover [Codex](https://github.com/openai/codex): `cx` runs it with a home
+per ChatGPT account, and the session list and usage include its sessions and plan limits. See
+[Claude Code CLI profiles](#claude-code-cli-profiles).
 
-|                          | macOS | Linux | Windows |
-|--------------------------|:-----:|:-----:|:-------:|
-| Claude Desktop instances |  yes  | no official Desktop app | [planned](#roadmap) |
-| Claude Code CLI tools    |  yes  |  yes  |   yes   |
+|                                 | macOS | Linux | Windows |
+|---------------------------------|:-----:|:-----:|:-------:|
+| Claude Desktop instances        |  yes  | no official Desktop app | [planned](#roadmap) |
+| Claude Code and Codex CLI tools |  yes  |  yes  |   yes   |
 
 > ## ⭐ Recommended: give *every* account its own isolated instance
 >
@@ -227,7 +229,7 @@ the MSVC compiler is also called `cl`, and whichever comes first on `PATH` wins.
 
 #### Or as shell functions
 
-`cl` and `claude-where` are small enough to keep as shell functions instead. Add this to
+`cl`, `cx` and `claude-where` are small enough to keep as shell functions instead. Add this to
 `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
@@ -240,9 +242,16 @@ cl() {
   CLAUDE_CONFIG_DIR="$HOME/.claude-$1" "$run" "${@:2}"
 }
 
-# claude-where 3f1c2a9e   ← a session ID, or a prefix of one
+# cx work resume <id>  ==  CODEX_HOME=~/.codex-work codex resume <id>
+cx() {
+  [ -n "$1" ] || { echo "usage: cx <profile> [codex args...]  (uses ~/.codex-<profile>)" >&2; return 2; }
+  mkdir -p "$HOME/.codex-$1" && CODEX_HOME="$HOME/.codex-$1" codex "${@:2}"
+}
+
+# claude-where 3f1c2a9e   ← a Claude Code or Codex session ID, or a prefix of one
 claude-where() {
   find ~/.claude ~/.claude-* -maxdepth 3 -path '*/projects/*' -name "$1*" 2>/dev/null
+  find ~/.codex ~/.codex-* -path '*sessions/*' -name "rollout-????-??-??T??-??-??-$1*.jsonl" 2>/dev/null
 }
 ```
 
@@ -260,6 +269,24 @@ cl -k work --resume <session-id>  # that session on Kimi; -z for Z.ai (see below
 
 Plain `claude` keeps using `~/.claude`. Claude Code names each profile's Keychain entry after its
 `CLAUDE_CONFIG_DIR` value, so keep one spelling of each path; `cl` always uses `~/.claude-<name>`.
+
+### `cx`: run Codex with a home per account
+
+[Codex](https://github.com/openai/codex) keeps its login, config and sessions in `~/.codex`, and
+`CODEX_HOME` points it at another folder, so you can keep one home per ChatGPT account the same way:
+`~/.codex-work`, `~/.codex-personal`, and so on.
+
+```bash
+cx work login                     # sign in once, with the work account
+cx work                           # Codex with ~/.codex-work
+cx work resume <session-id>       # resume one of that home's sessions
+cx personal exec "run the tests"  # any codex command works
+```
+
+- `cx` makes the folder on first use, since Codex won't start with a `CODEX_HOME` that doesn't exist.
+- A new home starts without your `~/.codex/config.toml` (model, trusted folders, MCP servers); copy
+  it over if you want the same settings.
+- Plain `codex` keeps using `~/.codex`.
 
 ### `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
 
@@ -305,26 +332,33 @@ only ever applied `dangerously-skip-permissions`): set `permissions.defaultMode`
 ```console
 $ claude-where 3f1c2a9e
 /Users/me/.claude-work/projects/-Users-me-code-api/3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10.jsonl
+$ claude-where 019a8c1e
+/Users/me/.codex/sessions/2026/10/14/rollout-2026-10-14T09-12-33-019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e.jsonl
 ```
 
 The profile in the path tells you how to resume it (`claude`, or `cl work` here), and the folder
 under `projects/` is the directory the session ran in, with every non-alphanumeric character turned
 into `-`. A session with subagents or large tool results also has a data folder of the same name,
-which is listed too.
+which is listed too. Codex files its sessions by the date they started, archived ones under
+`archived_sessions/`; resume one with `codex resume <id>`, or `cx <name> resume <id>` for a
+`~/.codex-<name>` home.
 
 ### `claude-recent-sessions`: what to resume
 
-Lists the Claude Code sessions from every `~/.claude*` profile that were active in the last 24 hours
-or are still open, grouped by folder and newest first. Run from a folder that has sessions, it lists
+Lists the Claude Code sessions from every `~/.claude*` profile, and the Codex sessions from every
+`~/.codex*` home, that were active in the last 24 hours or are still open, grouped by folder and
+newest first. Run from a folder that has sessions, it lists
 just that folder's (`--all-folders` lists them all). Each one comes with the command that resumes it
 and what's left of that profile's plan:
 
 ```
 $ claude-recent-sessions
-Claude Code CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
+Claude Code and Codex CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
     4m  Fix flaky login test · main · ● open in pid 48213 (busy)
         cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10      # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
+   40m  Add retries to the uploader · codex · main
+        cx work resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e        # 5h  80% ████░ ↻███▏░ 3h10m  week  64% ████▌░░ ↻█▊░░░░░ 1d18h
     1h  Refactor the auth middleware · main · on k3
         cl -k work --resume 2d4f6a8c-1e3b-4d5f-9a7c-0b2d4e6f8a1c
     3h  Add rate limiting to the login endpoint · feat/rate-limit
@@ -358,6 +392,10 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 - A session whose newest reply came from Z.ai or Kimi shows that model, like `on k3` above, and its
   command resumes it there (`claude-k` for `~/.claude`). Use `cl work` instead to go back to Claude;
   its comment is still the profile's Claude plan.
+- Codex sessions are marked `codex` and resume with `codex resume <id>`, or `cx <name> resume <id>`
+  for a `~/.codex-<name>` home. Their comment shows the ChatGPT plan's Codex limits (see
+  `claude-usage` below). Sessions from the Codex app, its IDE extension and `codex exec` are hidden
+  like Desktop ones, and Codex's own approval reviews aren't listed.
 - Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
   `setopt interactivecomments`).
 - Usage is fetched live, one request per account. When that fails (expired token, rate limit), Claude
@@ -367,17 +405,17 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
 |--------------|-------------------------------------------------------------------------------|
 | `HOURS`      | how far back to look (default 24); takes `36`, `1.5`, `12h` or `3d`           |
 | `-n N`       | show only the newest N sessions per folder and count the rest                 |
-| `--all`      | also list sessions last used from Claude Desktop's Code tab or the SDK        |
+| `--all`      | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension and `codex exec` |
 | `--all-folders` | list every folder, even when run from one that has sessions                |
-| `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`          |
-| `--cached`   | take usage from Claude Code's saved snapshots, without calling the API        |
+| `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, and `CODEX_HOME=… codex …` instead of `cx` |
+| `--cached`   | take usage from Claude Code's and Codex's saved snapshots, without calling the APIs |
 | `--no-usage` | leave plan usage out                                                          |
 
 ### `claude-usage`: plan usage for every profile
 
 ```
 $ claude-usage
-Claude plan usage by profile (% left, then time left until reset)
+Plan usage by profile (% left, then time left until reset)
 ~/.claude  pro · live
   session (5h)       62% ██████▎░░░  █████▍░░░░ resets 5:01pm (in 2h41m)
   week (all models)  91% █████████▏  ████▍░░░░░ resets Sat 4:20pm (in 3d2h)
@@ -387,6 +425,9 @@ Claude plan usage by profile (% left, then time left until reset)
 ~/.claude-work  team max 5x · live
   session (5h)      100% ██████████
   week (Fable)       48% ████▊░░░░░  ██████▏░░░ resets Sun 8:20pm (in 4d6h)
+~/.codex-work  ChatGPT plus · live
+  session (5h)       80% ████████░░  ██████▍░░░ resets 5:30pm (in 3h10m)
+  week (all models)  64% ██████▍░░░  ██▌░░░░░░░ resets Fri 8:20am (in 1d18h)
 ```
 
 - Each limit has two bars: what's left of it, then how much of its window, 5 hours or a week, is
@@ -402,7 +443,14 @@ Claude plan usage by profile (% left, then time left until reset)
 - Profiles signed in to the same account are shown together. Per-model limits such as
   `week (Fable)` are named in violet, to tell them from `week (all models)`. Quota fields the server
   sends that Claude Code doesn't display are listed dimmed under their raw names.
-- `--cached` skips the API. `-e` / `--email` adds each account's email address, which is hidden by
+- Codex homes show their ChatGPT plan's Codex limits: the 5-hour and weekly windows (a free plan has
+  one 30-day window instead), then limits for single models such as `GPT-5.3-Codex-Spark`, named in
+  violet like `Fable`. The access token in the home's `auth.json` is sent as it is to the endpoint
+  Codex's `/status` uses, and never refreshed. When it has expired, or the request fails, the newest
+  limits Codex recorded in that home's session files are shown, with their age. Codex doesn't send a
+  severity, so a limit turns yellow from 75% used and red from 90%. Homes signed in to the same
+  account are shown together.
+- `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share.
 
 ### `claude-move-session`: carry on a session with another profile
@@ -457,16 +505,17 @@ Claude Desktop instances (macOS):
 - **`claude-launcher`** — the self-contained smart launcher template (embedded into each wrapper).
 - **`recolor-icon.py`** — hue/saturation recolor of the `.icns` (used by the helper; needs Pillow).
 
-Claude Code CLI profiles (macOS, Linux, Windows):
+Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 
 - **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
 - **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile, on Z.ai or Kimi with `-z` or
   `-k`; installed as `claude-z` and `claude-k` too.
+- **`cx`** / **`cx.ps1`** — runs `codex` with a `~/.codex-<name>` home.
 - **`claude-provider.py`** — the Z.ai and Kimi keys and models behind `claude-z`, `claude-k`, `cl -z` and
   `cl -k`.
-- **`claude-where`** / **`claude-where.ps1`** — finds a session's files by ID or ID prefix.
-- **`claude-recent-sessions.py`** — recent sessions across profiles, with resume commands and plan usage.
-- **`claude-usage.py`** — plan usage left for every profile.
+- **`claude-where`** / **`claude-where.ps1`** — finds a Claude Code or Codex session's files by ID or ID prefix.
+- **`claude-recent-sessions.py`** — recent sessions across profiles and homes, with resume commands and plan usage.
+- **`claude-usage.py`** — plan usage left for every profile and home.
 - **`claude-move-session.py`** — copies a session to another profile, or moves it with `--no-keep`.
 
 `claude-recent-sessions.py` loads `claude-usage.py`, and `claude-move-session.py` loads both, so keep
@@ -494,8 +543,8 @@ the three together. The `.ps1` files are the Windows versions of the `sh` ones.
   [Philipp Stracker's gist](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
   ([write-up](https://philippstracker.com/multiple-claude-instances/)), itself a cleaned-up version
   of [weidwonder/claude-desktop-multi-instance](https://github.com/weidwonder/claude-desktop-multi-instance).
-- **Claude Code CLI tools:** `cl`, `claude-where`, `claude-recent-sessions`, `claude-usage`,
-  `claude-move-session`, `claude-provider`, the installers and the tests are by
+- **Claude Code and Codex CLI tools:** `cl`, `cx`, `claude-where`, `claude-recent-sessions`,
+  `claude-usage`, `claude-move-session`, `claude-provider`, the installers and the tests are by
   [Yi Wang](https://github.com/yiwang).
 - **Z.ai and Kimi:** the provider settings in `claude-provider.py` (endpoints, model slots, context
   windows and the config files) come from [claude-z](https://github.com/sam-fakhreddine/claude-z) by

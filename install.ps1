@@ -1,5 +1,5 @@
 # install.ps1
-# Windows version of install.sh: put this repo's Claude Code CLI helpers on your
+# Windows version of install.sh: put this repo's Claude Code and Codex CLI helpers on your
 # PATH as small .cmd launchers in a bin folder (default ~\.local\bin, where Claude
 # Code's installer puts claude.exe). The launchers run the scripts in this repo, so
 # a git pull updates them, and they work from PowerShell and cmd alike. Your PATH
@@ -10,9 +10,10 @@
 #   .\install.ps1 [-Bin DIR] -Uninstall  remove the launchers this script made
 #
 #   cl                      claude with a ~\.claude-<name> profile: cl work --resume <id>
+#   cx                      codex with a ~\.codex-<name> home: cx work resume <id>
 #   claude-where            where a session is stored, by ID or ID prefix
-#   claude-recent-sessions  recent sessions in every profile, with resume commands and plan usage
-#   claude-usage            plan usage left for every profile
+#   claude-recent-sessions  recent sessions in every profile and home, with resume commands and plan usage
+#   claude-usage            plan usage left for every profile and home
 #   claude-move-session     copy a session to another profile (move it with --no-keep)
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (cl.ps1 --as claude-z)
 #   claude-provider         the key and model for those; claude-z reconfig sets them up
@@ -32,6 +33,7 @@ $python = if (Get-Command py -CommandType Application -ErrorAction SilentlyConti
 $powershell = "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File"
 $commands = [ordered]@{
     "cl"                     = "$powershell `"$repo\cl.ps1`" %*"
+    "cx"                     = "$powershell `"$repo\cx.ps1`" %*"
     "claude-where"           = "$powershell `"$repo\claude-where.ps1`" %*"
     "claude-recent-sessions" = "$python `"$repo\claude-recent-sessions.py`" %*"
     "claude-usage"           = "$python `"$repo\claude-usage.py`" %*"

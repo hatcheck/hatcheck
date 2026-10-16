@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
-        run: shellcheck cl claude-where install.sh
+        run: shellcheck cl cx claude-where install.sh
       - name: PowerShell syntax
         shell: pwsh
         run: |

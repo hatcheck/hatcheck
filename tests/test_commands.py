@@ -1,5 +1,6 @@
-"""cl, claude-z, claude-k, claude-where and the installers: the sh versions on macOS and
-Linux, the PowerShell ones on Windows. A fake claude stands in for Claude Code."""
+"""cl, cx, claude-z, claude-k, claude-where and the installers: the sh versions on macOS
+and Linux, the PowerShell ones on Windows. A fake claude stands in for Claude Code, and a
+fake codex for Codex."""
 import os
 import subprocess
 import sys
@@ -8,6 +9,7 @@ import unittest
 from helpers import REPO, WINDOWS, FakeHome, write
 
 ID = "abcdef12-0000-4000-8000-000000000001"
+CODEX_ID = "019f0000-aaaa-7000-8000-000000000001"
 POWERSHELL = ["powershell", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
 SHOWN = ("CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL")
 
@@ -19,6 +21,7 @@ class Commands(unittest.TestCase):
         work = self.h.profile("work")
         self.transcript = self.h.session(work, self.h.folder("code"), ID, "A session")
         os.makedirs(self.transcript[:-len(".jsonl")])  # its data folder
+        self.rollout = self.h.codex_session(self.h.codex_home("work"), self.h.folder("code"), CODEX_ID, "A Codex session")
         # A fake claude that prints the profile and provider it would use, and its arguments;
         # and claude-provider, which cl asks for a provider's settings.
         self.bin = os.path.join(self.h.root, "fakebin")
@@ -28,19 +31,22 @@ class Commands(unittest.TestCase):
                 "if defined %s (echo %s=%%%s%%) else (echo %s=unset)" % (v, v, v, v) for v in SHOWN]
             write(os.path.join(self.bin, "claude.cmd"), "\r\n".join(lines) + "\r\n")
             write(os.path.join(self.bin, "claude-provider.cmd"), '@"%s" "%s" %%*\r\n' % (sys.executable, provider))
+            write(os.path.join(self.bin, "codex.cmd"), "@echo off\r\necho args=%*\r\nif defined CODEX_HOME "
+                  "(echo CODEX_HOME=%CODEX_HOME%) else (echo CODEX_HOME=unset)\r\n")
         else:
             lines = ["#!/bin/sh", 'echo "args=$*"'] + ['echo "%s=${%s-unset}"' % (v, v) for v in SHOWN]
             write(os.path.join(self.bin, "claude"), "\n".join(lines) + "\n")
             write(os.path.join(self.bin, "claude-provider"), '#!/bin/sh\nexec "%s" "%s" "$@"\n' % (sys.executable, provider))
-            for name in ("claude", "claude-provider"):
+            write(os.path.join(self.bin, "codex"), '#!/bin/sh\necho "args=$*"\necho "CODEX_HOME=${CODEX_HOME-unset}"\n')
+            for name in ("claude", "claude-provider", "codex"):
                 os.chmod(os.path.join(self.bin, name), 0o755)
             for name in ("claude-z", "claude-k"):  # how install.sh installs them
                 os.symlink(os.path.join(REPO, "cl"), os.path.join(self.bin, name))
         self.h.provider_config("z", 'CZ_API_KEY="zai-test-key"\nCZ_MODEL_OPUS="glm-5.3[1m]"\n')
 
-    def run_command(self, argv, extra_env=None, stdin=""):
+    def run_command(self, argv, extra_env=None, stdin="", fakes=True):
         env = dict(self.h.env(), **(extra_env or {}))
-        env["PATH"] = self.bin + os.pathsep + (os.environ["PATH"] if WINDOWS else "/bin:/usr/bin")
+        env["PATH"] = (self.bin + os.pathsep if fakes else "") + (os.environ["PATH"] if WINDOWS else "/bin:/usr/bin")
         p = subprocess.run(argv, cwd=self.h.root, env=env, input=stdin, capture_output=True, text=True,
                            encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
@@ -49,6 +55,11 @@ class Commands(unittest.TestCase):
         if WINDOWS:
             return self.run_command(POWERSHELL + [os.path.join(REPO, "cl.ps1")] + list(args), **kw)
         return self.run_command(["sh", os.path.join(REPO, "cl")] + list(args), **kw)
+
+    def cx(self, *args, **kw):
+        if WINDOWS:
+            return self.run_command(POWERSHELL + [os.path.join(REPO, "cx.ps1")] + list(args), **kw)
+        return self.run_command(["sh", os.path.join(REPO, "cx")] + list(args), **kw)
 
     def claude_on(self, name, *args, **kw):
         """claude-z or claude-k, run the way their installed launchers run them."""
@@ -83,6 +94,24 @@ class Commands(unittest.TestCase):
                      "ANTHROPIC_API_KEY=unset", "ANTHROPIC_MODEL=k3[1m]"):
             self.assertIn(line, out)
 
+    def test_cx_runs_codex_with_the_home(self):
+        home = os.path.join(self.h.home, ".codex-fresh")
+        code, out = self.cx("fresh", "resume", CODEX_ID)
+        self.assertEqual(code, 0, out)
+        self.assertIn("args=resume " + CODEX_ID, out)
+        self.assertIn("CODEX_HOME=" + home, out)
+        self.assertTrue(os.path.isdir(home))  # made: Codex won't start without it
+        for args in ((), ("--help",)):
+            code, out = self.cx(*args)
+            self.assertEqual(code, 2, out)
+            self.assertIn("usage: cx <profile> [codex args...]", out)
+
+    @unittest.skipIf(WINDOWS, "the runner's PATH could have a codex on it")
+    def test_cx_without_codex(self):
+        code, out = self.cx("work", fakes=False)
+        self.assertEqual(code, 1, out)
+        self.assertIn("codex isn't on your PATH", out)
+
     def test_claude_z_and_k_keep_the_config_dir(self):
         code, out = self.claude_on("claude-z", "--resume", ID)
         self.assertEqual(code, 0, out)
@@ -116,9 +145,21 @@ class Commands(unittest.TestCase):
         found = sorted(out.split())
         self.assertEqual(found, sorted([self.transcript, self.transcript[:-len(".jsonl")]]))
 
+    def test_claude_where_finds_codex_sessions(self):
+        code, out = self.where(CODEX_ID[:13])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.split(), [self.rollout])
+        archived = os.path.join(self.h.home, ".codex", "archived_sessions",
+                                "rollout-2026-01-02T03-04-05-019f0000-bbbb-7000-8000-000000000002.jsonl")
+        write(archived, "{}\n")
+        code, out = self.where("019f0000-bbbb")
+        self.assertEqual(out.split(), [archived])
+        code, out = self.where("2026")  # the start time in a file name isn't the ID
+        self.assertEqual(code, 1, out)
+
     def test_installer(self):
         target = os.path.join(self.h.root, "installed")
-        names = ["cl", "claude-where", "claude-recent-sessions", "claude-usage", "claude-move-session",
+        names = ["cl", "cx", "claude-where", "claude-recent-sessions", "claude-usage", "claude-move-session",
                  "claude-provider", "claude-z", "claude-k"]
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         if WINDOWS:
