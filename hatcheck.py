@@ -16,10 +16,7 @@ Usage:
 `hatcheck SUBCOMMAND --help` lists a subcommand's options. cl and cx, beside
 this script, run Claude Code and Codex with a profile.
 
-The subcommands are the files in the hatcheck/ folder beside this script. The
-commands from before the rename (claude-recent-sessions, claude-usage,
-claude-where, claude-move-session and claude-provider) are small scripts beside
-it that run the matching subcommand, so older installs keep working.
+The subcommands are the files in the hatcheck/ folder beside this script.
 """
 import importlib.util
 import os

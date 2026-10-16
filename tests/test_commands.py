@@ -1,6 +1,6 @@
-"""cl, cx, claude-z, claude-k, hatcheck where, the commands from before the rename, and
-the installers: the sh versions on macOS and Linux, the PowerShell ones on Windows. A fake
-claude stands in for Claude Code, and a fake codex for Codex."""
+"""cl, cx, claude-z, claude-k, the hatcheck command and the installers: the sh versions on
+macOS and Linux, the PowerShell ones on Windows. A fake claude stands in for Claude Code, and
+a fake codex for Codex."""
 import os
 import subprocess
 import sys
@@ -143,19 +143,13 @@ class Commands(unittest.TestCase):
             code, out = self.claude_on("claude-k")
             self.assertIn("ANTHROPIC_AUTH_TOKEN=kimi-typed-key", out)
 
-    def test_cl_with_an_install_from_before_the_rename(self):
-        # claude-provider, and no hatcheck: cl still finds the provider's settings.
-        old = os.path.join(self.h.root, "oldbin")
-        self.fake_bin(old, claude_provider=os.path.join(REPO, "claude-provider.py"))
-        self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
-        code, out = self.cl("-k", "work", bindir=old)
-        self.assertEqual(code, 0, out)
-        self.assertIn("ANTHROPIC_AUTH_TOKEN=kimi-test-key", out)
-        bare = os.path.join(self.h.root, "barebin")
+    def test_cl_needs_hatcheck_for_a_provider(self):
+        bare = os.path.join(self.h.root, "barebin")  # claude, but no hatcheck
         self.fake_bin(bare)
         code, out = self.cl("-k", "work", bindir=bare)
         self.assertEqual(code, 1, out)
         self.assertIn("hatcheck isn't on your PATH", out)
+        self.assertNotIn("args=", out)  # claude didn't run
 
     def test_hatcheck(self):
         code, out = self.run_command([sys.executable, os.path.join(REPO, "hatcheck.py"), "--help"])
@@ -170,31 +164,13 @@ class Commands(unittest.TestCase):
         self.assertEqual(code, 2, out)
         self.assertIn("there's no 'nope' subcommand", out)
 
-    def test_commands_from_before_the_rename(self):
-        def old(name, *args):
-            return self.run_command([sys.executable, os.path.join(REPO, name)] + list(args))
-
-        code, out = old("claude-where", ID[:8])
-        self.assertEqual(sorted(out.split()), sorted([self.transcript, self.transcript[:-len(".jsonl")]]))
-        code, out = old("claude-recent-sessions.py", "--no-usage")
-        self.assertIn("cl work --resume " + ID, out)
-        code, out = old("claude-usage.py", "--cached")
-        self.assertIn("Plan usage by profile", out)
-        code, out = old("claude-move-session.py", "--help")
-        self.assertIn("usage: hatcheck move", out)
-        code, out = old("claude-provider.py", "env", "z")
-        self.assertIn("https://api.z.ai/api/anthropic", out)
-        if WINDOWS:  # what launchers made before the rename run for claude-where
-            code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "claude-where.ps1"), ID[:8]])
-            self.assertIn(self.transcript, out)
-
-    def test_claude_where_finds_a_session_by_prefix(self):
+    def test_where_finds_a_session_by_prefix(self):
         code, out = self.where(ID[:8])
         self.assertEqual(code, 0, out)
         found = sorted(out.split())
         self.assertEqual(found, sorted([self.transcript, self.transcript[:-len(".jsonl")]]))
 
-    def test_claude_where_finds_codex_sessions(self):
+    def test_where_finds_codex_sessions(self):
         code, out = self.where(CODEX_ID[:13])
         self.assertEqual(code, 0, out)
         self.assertEqual(out.split(), [self.rollout])
@@ -208,43 +184,51 @@ class Commands(unittest.TestCase):
 
     def test_installer(self):
         target = os.path.join(self.h.root, "installed")
-        names = ["hatcheck", "cl", "cx", "claude-z", "claude-k", "claude-recent-sessions", "claude-usage",
-                 "claude-where", "claude-move-session", "claude-provider"]
+        names = ["hatcheck", "cl", "cx", "claude-z", "claude-k"]
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         if WINDOWS:
-            # Made before the repo was renamed from claude-multi-account: still its own, so replaced
-            # without -Force.
+            # Launchers for the commands hatcheck replaced, made before the repo was renamed from
+            # claude-multi-account: removed. One this script didn't make is left alone.
             old = "@echo off\r\nrem made by claude-multi-account install.ps1\r\npython old\\claude-usage.py %*\r\n"
             write(os.path.join(target, "claude-usage.cmd"), old)
+            write(os.path.join(target, "claude-where.cmd"), "@echo off\r\necho mine\r\n")
             code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target])
             self.assertEqual(code, 0, out)
             for name in names:
                 self.assertTrue(os.path.isfile(os.path.join(target, name + ".cmd")), out)
-            with open(os.path.join(target, "claude-usage.cmd")) as f:
-                self.assertIn("rem made by hatcheck install.ps1", f.read())
+            self.assertFalse(os.path.exists(os.path.join(target, "claude-usage.cmd")), out)
+            self.assertIn("it's hatcheck usage now", out)
+            self.assertTrue(os.path.isfile(os.path.join(target, "claude-where.cmd")), out)
+            os.remove(os.path.join(target, "claude-where.cmd"))
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "hatcheck.cmd"), "where", ID[:8]])
             self.assertIn(self.transcript, out)
-            code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-where.cmd"), ID[:8]])
-            self.assertIn(self.transcript, out)
-            code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-recent-sessions.cmd"), "--no-usage"])
+            code, out = self.run_command(["cmd", "/c", os.path.join(target, "hatcheck.cmd"), "--no-usage"])
             self.assertIn("cl work --resume " + ID, out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-k.cmd"), "--version"])
             self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
             self.assertIn("args=--version", out)
-            write(os.path.join(target, "claude-where.cmd"), old)  # an old one is removed too
+            write(os.path.join(target, "claude-where.cmd"), old)  # removed on uninstall too
             code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target, "-Uninstall"])
             self.assertEqual(os.listdir(target), [], out)
         else:
             # A copy that the claude-z repo's install-z.sh left: replaced without --force.
             write(os.path.join(target, "claude-z"), '#!/usr/bin/env bash\nCONFIG_DIR="$HOME/.config/claude-z"\n')
+            # Links to the commands hatcheck replaced: removed. A file this script didn't make stays.
+            repo = os.path.realpath(REPO)  # as install.sh spells it
+            os.symlink(os.path.join(repo, "claude-recent-sessions.py"), os.path.join(target, "claude-recent-sessions"))
+            os.symlink(os.path.join(repo, "claude-usage.py"), os.path.join(target, "claude-usage"))
+            write(os.path.join(target, "claude-where"), "#!/bin/sh\necho mine\n")
             code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target])
             self.assertEqual(code, 0, out)
             for name in names:
                 self.assertTrue(os.path.islink(os.path.join(target, name)), out)
             self.assertIn("claude-z -> %s (replaced the copy from the claude-z repo" % os.path.join(REPO, "cl"), out)
+            self.assertIn("claude-recent-sessions: it's hatcheck now", out)
+            self.assertIn("claude-usage: it's hatcheck usage now", out)
+            self.assertFalse(os.path.lexists(os.path.join(target, "claude-usage")), out)
+            self.assertTrue(os.path.isfile(os.path.join(target, "claude-where")), out)
+            os.remove(os.path.join(target, "claude-where"))
             code, out = self.run_command([os.path.join(target, "hatcheck"), "where", ID[:8]])
-            self.assertIn(self.transcript, out)
-            code, out = self.run_command([os.path.join(target, "claude-where"), ID[:8]])
             self.assertIn(self.transcript, out)
             code, out = self.run_command([os.path.join(target, "claude-k"), "--version"])
             self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)

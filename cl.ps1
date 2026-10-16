@@ -8,16 +8,12 @@
 # or whatever CLAUDE_CONFIG_DIR already says; `claude-z reconfig` runs the setup.
 # install.ps1 puts a cl.cmd launcher for this on your PATH. Everything set here is put
 # back afterwards, so plain claude in the same window keeps using ~\.claude and Anthropic.
-# `hatcheck provider`, or claude-provider in an install from before the rename.
-function Invoke-Provider {
-    if (Get-Command hatcheck -ErrorAction SilentlyContinue) {
-        & hatcheck provider @args
-    } elseif (Get-Command claude-provider -ErrorAction SilentlyContinue) {
-        & claude-provider @args
-    } else {
+function Invoke-Provider {  # hatcheck provider ...
+    if (-not (Get-Command hatcheck -ErrorAction SilentlyContinue)) {
         [Console]::Error.WriteLine("cl: hatcheck isn't on your PATH; run hatcheck's install.ps1")
         exit 1
     }
+    & hatcheck provider @args
 }
 $rest = @($args)
 $provider = $null

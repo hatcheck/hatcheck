@@ -16,9 +16,8 @@
 #   cx                      codex with a ~/.codex-<name> home: cx work resume <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (links to cl)
 #
-# The commands from before the rename are linked too, for now: claude-recent-sessions,
-# claude-usage, claude-where, claude-move-session and claude-provider run hatcheck,
-# hatcheck usage, where, move and provider.
+# Links to the commands hatcheck replaced (claude-recent-sessions, claude-usage,
+# claude-where, claude-move-session, claude-provider) are removed.
 #
 #   --force  replace files or links that already exist under those names. Copies of
 #            claude-z and claude-k made by the claude-z repo's installers are replaced
@@ -41,9 +40,25 @@ while [ $# -gt 0 ]; do
 done
 
 # command:file-in-this-repo
-COMMANDS="hatcheck:hatcheck.py cl:cl cx:cx claude-z:cl claude-k:cl
-claude-recent-sessions:claude-recent-sessions.py claude-usage:claude-usage.py claude-where:claude-where
-claude-move-session:claude-move-session.py claude-provider:claude-provider.py"
+COMMANDS="hatcheck:hatcheck.py cl:cl cx:cx claude-z:cl claude-k:cl"
+# command:file it ran:hatcheck subcommand that replaced it
+REPLACED="claude-recent-sessions:claude-recent-sessions.py: claude-usage:claude-usage.py:usage
+claude-where:claude-where:where claude-move-session:claude-move-session.py:move
+claude-provider:claude-provider.py:provider"
+
+# Links to the commands hatcheck replaced, whose scripts are gone from this repo.
+remove_replaced() {
+    for triple in $REPLACED; do
+        name="${triple%%:*}"
+        rest="${triple#*:}"
+        link="$BIN_DIR/$name"
+        if [ -L "$link" ] && [ "$(readlink "$link")" = "$SCRIPT_DIR/${rest%%:*}" ]; then
+            rm "$link"
+            sub="${rest#*:}"
+            echo "🗑  Removed $link: it's hatcheck${sub:+ $sub} now"
+        fi
+    done
+}
 
 # A launcher that the claude-z repo's install-z.sh or install-k.sh copied here.
 # shellcheck disable=SC2016  # the pattern matches a literal $HOME
@@ -52,6 +67,7 @@ claude_z_copy() {
 }
 
 if $UNINSTALL; then
+    remove_replaced
     for pair in $COMMANDS; do
         link="$BIN_DIR/${pair%%:*}"
         if [ -L "$link" ] && [ "$(readlink "$link")" = "$SCRIPT_DIR/${pair#*:}" ]; then
@@ -65,6 +81,7 @@ if $UNINSTALL; then
 fi
 
 mkdir -p "$BIN_DIR"
+remove_replaced
 skipped=0
 for pair in $COMMANDS; do
     name="${pair%%:*}"
@@ -99,8 +116,8 @@ if ! command -v python3 >/dev/null; then
 fi
 command -v claude >/dev/null || echo "ℹ️  cl runs claude, which isn't on your PATH: install Claude Code first"
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-    if [ -f "$rc" ] && grep -qE '^[[:space:]]*(function[[:space:]]+)?(cl|cx|claude-where)[[:space:]]*\(\)' "$rc"; then
-        echo "ℹ️  $rc defines cl(), cx() or claude-where() itself. A shell function wins over the"
+    if [ -f "$rc" ] && grep -qE '^[[:space:]]*(function[[:space:]]+)?(cl|cx)[[:space:]]*\(\)' "$rc"; then
+        echo "ℹ️  $rc defines cl() or cx() itself. A shell function wins over the"
         echo "   installed command; they do the same thing, so keep it or delete it."
     fi
 done

@@ -10,16 +10,10 @@
 # Keep the path spelled exactly like this: Claude Code files each profile's
 # Keychain login under a hash of the CLAUDE_CONFIG_DIR string.
 provider=
-# `hatcheck provider`, or claude-provider in an install from before the rename.
-provider_settings() {
-    if command -v hatcheck >/dev/null 2>&1; then
-        hatcheck provider "$@"
-    elif command -v claude-provider >/dev/null 2>&1; then
-        claude-provider "$@"
-    else
-        echo "${0##*/}: hatcheck isn't on your PATH; run hatcheck's install.sh" >&2
-        return 1
-    fi
+provider_settings() {  # hatcheck provider ...
+    command -v hatcheck >/dev/null 2>&1 ||
+        { echo "${0##*/}: hatcheck isn't on your PATH; run hatcheck's install.sh" >&2; return 1; }
+    hatcheck provider "$@"
 }
 case ${0##*/} in
     claude-z) provider=z ;;

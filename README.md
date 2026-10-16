@@ -212,9 +212,9 @@ already has one of these names is left alone unless you pass `--force`, except t
 which these replace. `hatcheck` needs Python 3.9 or later (on macOS, `xcode-select --install`
 provides it).
 
-The commands from before the rename to Hatcheck still work for now, and run the matching
-subcommand: `claude-recent-sessions` (now `hatcheck`), `claude-usage`, `claude-where`,
-`claude-move-session` and `claude-provider` (now `hatcheck usage`, `where`, `move` and `provider`).
+Before the rename to Hatcheck these were separate commands: `claude-recent-sessions` (now
+`hatcheck`), `claude-usage`, `claude-where`, `claude-move-session` and `claude-provider` (now
+`hatcheck usage`, `where`, `move` and `provider`). The installers remove the links to them.
 
 On Windows, in PowerShell:
 
@@ -558,9 +558,6 @@ Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 - **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile, on Z.ai or Kimi with `-z` or
   `-k`; installed as `claude-z` and `claude-k` too.
 - **`cx`** / **`cx.ps1`** — runs `codex` with a `~/.codex-<name>` home.
-- **`claude-recent-sessions.py`**, **`claude-usage.py`**, **`claude-where`** (and **`claude-where.ps1`**),
-  **`claude-move-session.py`**, **`claude-provider.py`** — the commands from before the rename; each runs
-  its `hatcheck` subcommand, so older installs keep working.
 
 The subcommands load each other, so keep the `hatcheck/` folder whole and beside `hatcheck.py`. The
 `.ps1` files are the Windows versions of the `sh` ones.

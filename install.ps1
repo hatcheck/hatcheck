@@ -15,9 +15,8 @@
 #   cx                      codex with a ~\.codex-<name> home: cx work resume <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (cl.ps1 --as claude-z)
 #
-# The commands from before the rename are added too, for now: claude-recent-sessions,
-# claude-usage, claude-where, claude-move-session and claude-provider run hatcheck,
-# hatcheck usage, where, move and provider.
+# Launchers this script made for the commands hatcheck replaced (claude-recent-sessions,
+# claude-usage, claude-where, claude-move-session, claude-provider) are removed.
 #
 #   -Force  replace .cmd files that already exist under those names
 param(
@@ -38,18 +37,33 @@ $commands = [ordered]@{
     "cx"                     = "$powershell `"$repo\cx.ps1`" %*"
     "claude-z"               = "$powershell `"$repo\cl.ps1`" --as claude-z %*"
     "claude-k"               = "$powershell `"$repo\cl.ps1`" --as claude-k %*"
-    "claude-recent-sessions" = "$python `"$repo\claude-recent-sessions.py`" %*"
-    "claude-usage"           = "$python `"$repo\claude-usage.py`" %*"
-    "claude-where"           = "$python `"$repo\claude-where`" %*"
-    "claude-move-session"    = "$python `"$repo\claude-move-session.py`" %*"
-    "claude-provider"        = "$python `"$repo\claude-provider.py`" %*"
+}
+# The commands hatcheck replaced, and its subcommand that does their job.
+$replaced = [ordered]@{
+    "claude-recent-sessions" = ""
+    "claude-usage"           = " usage"
+    "claude-where"           = " where"
+    "claude-move-session"    = " move"
+    "claude-provider"        = " provider"
 }
 
 function Test-Ours($path) {
     (Test-Path -LiteralPath $path -PathType Leaf) -and (Select-String -LiteralPath $path -SimpleMatch $markers -Quiet)
 }
 
+# Launchers for the commands hatcheck replaced, whose scripts are gone from this repo.
+function Remove-Replaced {
+    foreach ($name in $replaced.Keys) {
+        $path = Join-Path $Bin "$name.cmd"
+        if (Test-Ours $path) {
+            Remove-Item -LiteralPath $path
+            Write-Output "Removed ${path}: it's hatcheck$($replaced[$name]) now"
+        }
+    }
+}
+
 if ($Uninstall) {
+    Remove-Replaced
     foreach ($name in $commands.Keys) {
         $path = Join-Path $Bin "$name.cmd"
         if (Test-Ours $path) {
@@ -66,6 +80,7 @@ if ($repo -match '[^\x20-\x7e]') {
     Write-Warning "The repo path has non-ASCII characters, which .cmd files may not read correctly: $repo"
 }
 New-Item -ItemType Directory -Force -Path $Bin | Out-Null
+Remove-Replaced
 $skipped = 0
 foreach ($name in $commands.Keys) {
     $path = Join-Path $Bin "$name.cmd"
