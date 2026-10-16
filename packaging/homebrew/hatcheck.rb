@@ -15,8 +15,6 @@ class Hatcheck < Formula
 
   def install
     libexec.install "hatcheck.py", "hatcheck", "cl", "cx"
-    # The Claude Desktop instance maker, which hatcheck desktop new runs; macOS only.
-    libexec.install "make-claude-instance.sh", "claude-launcher", "recolor-icon.py" if OS.mac?
     python = Formula["python@3.13"].opt_bin/"python3.13"
     # hatcheck and hat run with Homebrew's Python; hat names itself hat in its messages.
     (bin/"hatcheck").write <<~SH

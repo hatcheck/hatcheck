@@ -13,10 +13,9 @@ the updater. What's left needs accounts and certificates only you can set up, an
   GitHub Pages when you run it, once Pages is on for the repo.
 - **Intel Macs:** the workflow builds for them too, on GitHub's `macos-15-intel` runner; untested
   here, with no Intel Mac at hand.
-- **Desktop instances** in the app are made with `make-claude-instance.sh`, which isn't inside the
-  app: the engine finds it in the hatcheck repo installed with `install.sh` or Homebrew, and says
-  so when it isn't there. Issue #1 (Aaron Oxborrow's scripts) decides whether it can ship inside
-  the app.
+- **Desktop instances** are made by the engine itself, `hatcheck desktop new`, a rewrite that
+  replaced `make-claude-instance.sh` ([docs/desktop-instances.md](../desktop-instances.md)), so the
+  packaged app makes them too and nothing of Aaron Oxborrow's scripts remains.
 - **Updates:** the updater plugin is built without its `zip` feature, because the `zip` versions it
   asks for are yanked; Tauri 2's update files don't need it.
 
@@ -51,8 +50,8 @@ Codex's files is reimplemented in the app.
   out, then a confirmation.
 - **Profiles and homes:** create one. Signing in opens `cl <name>` or `cx <name> login` in a terminal,
   so the login stays with Claude Code and Codex.
-- **Claude Desktop instances (macOS):** create one with its own colour, and launch or focus it. This
-  replaces `make-claude-instance.sh`.
+- **Claude Desktop instances (macOS):** create one with its own colour, and launch or focus it,
+  through `hatcheck desktop`, which replaced `make-claude-instance.sh`.
 
 ## How it's built
 
@@ -112,9 +111,10 @@ Phase 0 is useful without the app, for scripts and status bars, so it came first
 - **Formats change.** Claude Code's and Codex's session files and usage endpoints aren't documented
   and can change with any release. The app has to cope: show what it can and say what it can't. The
   auto-updater gets fixes to users quickly.
-- **Licensing.** The repo needs a license before any binary ships. The Desktop-instance feature
-  needs Aaron Oxborrow's permission for his scripts ([issue #1](https://github.com/yilab/hatcheck/issues/1))
-  or our own rewrite; the `--user-data-dir` technique itself is free to use.
+- **Licensing.** The repo needs a license before any binary ships. The Desktop-instance feature was
+  rewritten in October 2026 (`hatcheck desktop`), so it no longer depends on Aaron Oxborrow's
+  scripts ([issue #1](https://github.com/yilab/hatcheck/issues/1)); the `--user-data-dir` technique
+  itself is free to use.
 - **Three platforms to maintain.** Start with macOS only.
 
 ## Decisions needed

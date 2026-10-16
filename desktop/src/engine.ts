@@ -139,7 +139,7 @@ export const signIn = (profile: string) => engine(["open", "--login", profile]);
 export const instances = () => json<{ instances: Instance[] }>(["desktop", "--json"]);
 export const openInstance = (name: string) => engine(["desktop", "open", name]);
 export const newInstance = (name: string, display: string, hue: number) =>
-  engine(["desktop", "new", name, display, String(hue)]);
+  engine(["desktop", "new", name, display, "--hue", String(hue)]);
 
 export const version = async () => (await engine(["--version"])).trim();
 

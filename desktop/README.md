@@ -29,8 +29,7 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
     `cl <name>` or `cx <name> login` in a terminal (`hatcheck open --login`), so the login stays
     with Claude Code and Codex.
   - *Desktop* (macOS): the Claude Desktop instances, and **Make one** with its own colour
-    (`hatcheck desktop new`). The script that makes them isn't inside the app; the engine finds it
-    in the hatcheck repo installed with `install.sh` or Homebrew.
+    (`hatcheck desktop new`), and remove them.
   - *Settings:* live usage, how often to refresh, notifications, which terminal Resume opens, and
     **Check for updates**.
 

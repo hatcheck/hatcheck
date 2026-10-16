@@ -6,7 +6,7 @@ import subprocess
 import sys
 import unittest
 
-from helpers import NOW, REPO, WINDOWS, FakeHome, command, iso, load, write
+from helpers import NOW, FakeHome, command, iso
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 B = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -145,36 +145,6 @@ class MoreJson(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.h.home, ".codex-fresh")))
         code, out = self.h.run("open", "--login", "work", "--print")
         self.assertIn(".claude-work", out)
-
-    def test_desktop_instances(self):
-        apps = self.h.folder("Applications")
-        write(os.path.join(apps, "Claude Work.app", "Contents", "MacOS", "config.sh"), "INSTANCE_NAME=work\n")
-        write(os.path.join(apps, "Claude Code URL Handler.app", "Contents", "Info.plist"), "<plist/>")
-        found = load("desktop").instances([apps])
-        self.assertEqual([(i["name"], i["display"], i["app"]) for i in found],
-                         [("work", "Work", os.path.join(apps, "Claude Work.app"))])
-        self.assertTrue(found[0]["data_dir"].endswith(os.path.join(".claude-instances", "work")))
-
-    def test_instance_script_is_found_from_a_packaged_engine(self):
-        """The app's bundled engine has no make-claude-instance.sh beside it: it finds the one
-        in the repo that the hatcheck on the PATH links to, or one on the PATH."""
-        d = load("desktop")
-        self.assertEqual(d.instance_script(), os.path.join(REPO, "make-claude-instance.sh"))  # from the repo itself
-        engine = self.h.folder("engine")  # where a bundled engine runs from: nothing beside it
-        self.assertIsNone(d.instance_script(engine, path=self.h.folder("empty-bin")))
-        bindir = self.h.folder("bin")  # the script beside the hatcheck command on the PATH
-        write(os.path.join(bindir, "hatcheck.cmd" if WINDOWS else "hatcheck"), "@echo off\n" if WINDOWS else "#!/bin/sh\n")
-        write(os.path.join(bindir, "make-claude-instance.sh"), "#!/bin/sh\n")
-        if not WINDOWS:
-            os.chmod(os.path.join(bindir, "hatcheck"), 0o755)
-        self.assertEqual(d.instance_script(engine, path=bindir), os.path.join(bindir, "make-claude-instance.sh"))
-        if not WINDOWS:  # as install.sh installs it: a link into the clone
-            clone, linked = self.h.folder("clone"), self.h.folder("linked-bin")
-            write(os.path.join(clone, "hatcheck.py"), "#!/usr/bin/env python3\n")
-            write(os.path.join(clone, "make-claude-instance.sh"), "#!/bin/sh\n")
-            os.chmod(os.path.join(clone, "hatcheck.py"), 0o755)
-            os.symlink(os.path.join(clone, "hatcheck.py"), os.path.join(linked, "hatcheck"))
-            self.assertEqual(d.instance_script(engine, path=linked), os.path.join(clone, "make-claude-instance.sh"))
 
 
 if __name__ == "__main__":

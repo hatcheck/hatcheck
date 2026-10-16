@@ -792,12 +792,6 @@ from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behi
 
 ## Files in this repo
 
-Claude Desktop instances (macOS):
-
-- **`make-claude-instance.sh`** — builds the `.app` wrapper (Info.plist, config, smart launcher) and optionally recolors the icon.
-- **`claude-launcher`** — the self-contained smart launcher template (embedded into each wrapper).
-- **`recolor-icon.py`** — hue/saturation recolor of the `.icns` (used by the helper; needs Pillow).
-
 Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 
 - **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
@@ -814,7 +808,8 @@ Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
   - **`best.py`** — which account to use now, and where to carry a session.
   - **`bind.py`** and **`unbind.py`** — folder bindings, and the warning hook.
   - **`show.py`** — a session's conversation, read-only.
-  - **`desktop.py`** — Claude Desktop instances on macOS: list, open, make one.
+  - **`desktop.py`** — Claude Desktop instances on macOS: make, list, open and remove them
+    ([docs/desktop-instances.md](docs/desktop-instances.md)).
   - **`launch.py`** — `cl`, `cx`, `claude-z` and `claude-k` in Python, for package installs.
   - **`provider.py`** — the Z.ai and Kimi keys and models behind `claude-z`, `claude-k`, `cl -z` and `cl -k`.
 - **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile, on Z.ai or Kimi with `-z` or
@@ -845,11 +840,12 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
 
 ## Credits
 
-- **Claude Desktop instances:** the `make-claude-instance.sh`, `claude-launcher` and
-  `recolor-icon.py` scripts, and the Desktop sections of this README, are by
-  [Aaron Oxborrow](https://github.com/aoxborrow), from his
-  [gist](https://gist.github.com/aoxborrow/5a3a0ac0aa37819cc19439b70a552221) that this repo started
-  as a fork of. They build on the core `--user-data-dir` isolation technique from
+- **Claude Desktop instances:** this repo started as a fork of
+  [Aaron Oxborrow](https://github.com/aoxborrow)'s
+  [gist](https://gist.github.com/aoxborrow/5a3a0ac0aa37819cc19439b70a552221), whose scripts made
+  colour-coded launchers for isolated instances. On 16 October 2026 his scripts and his sections of
+  this README were replaced by a rewrite, `hatcheck desktop`, so none of his code or text remains.
+  The idea both implement, running Claude Desktop with `--user-data-dir`, is from
   [Philipp Stracker's gist](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
   ([write-up](https://philippstracker.com/multiple-claude-instances/)), itself a cleaned-up version
   of [weidwonder/claude-desktop-multi-instance](https://github.com/weidwonder/claude-desktop-multi-instance).

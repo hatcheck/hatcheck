@@ -69,11 +69,11 @@
       <form id="add-instance" class="inline-form">
         <input id="inst-name" placeholder="name, such as work" pattern="[A-Za-z0-9._-]+" required />
         <input id="inst-display" placeholder="shown as, such as Work" required />
-        <label class="hue">Colour <input id="inst-hue" type="range" min="0" max="255" value="135" />
+        <label class="hue">Colour <input id="inst-hue" type="range" min="0" max="360" value="190" />
           <span id="hue-swatch" class="swatch"></span></label>
         <button type="submit">Make it</button>
       </form>
-      <p class="note">Makes <code>/Applications/Claude NAME.app</code> with <code>make-claude-instance.sh</code> from the hatcheck repo, installed with its <code>install.sh</code> or Homebrew.</p>
+      <p class="note">Makes <code>/Applications/Claude NAME.app</code>, a launcher with an icon of that colour, and <code>~/.claude-instances/NAME</code> for its data. Recolouring needs Pillow on this Mac; without it the launcher gets the stock icon.</p>
     </section>
 
     <section id="tab-settings" class="tab-body" hidden>

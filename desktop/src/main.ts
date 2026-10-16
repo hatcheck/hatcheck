@@ -228,7 +228,7 @@ async function loadInstances() {
 }
 
 function hueColor(hue: number) {
-  return `hsl(${Math.round((hue / 255) * 360 + 20) % 360} 70% 50%)`; // Claude's orange, turned by the hue shift
+  return `hsl(${(Math.round(hue) + 20) % 360} 70% 50%)`; // Claude's orange, turned by that many degrees
 }
 
 // Settings.
