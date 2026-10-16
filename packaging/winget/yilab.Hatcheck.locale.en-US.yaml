@@ -1,0 +1,15 @@
+PackageIdentifier: yilab.Hatcheck
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Yi Wang
+PackageName: Hatcheck
+ShortDescription: Claude and ChatGPT plans and recent sessions, in the system tray.
+Description: What's left of every Claude and ChatGPT plan at a glance, and recent Claude Code and Codex sessions to resume. Unofficial; not made by, affiliated with or endorsed by Anthropic or OpenAI.
+PackageUrl: https://github.com/yilab/hatcheck
+License: See the repository
+Tags:
+  - claude
+  - codex
+  - developer-tools
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

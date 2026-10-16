@@ -1,0 +1,31 @@
+[package]
+name = "hatcheck-desktop"
+version = "0.1.0"
+description = "Hatcheck: what's left of every Claude and ChatGPT plan, and your recent sessions, in the menu bar"
+authors = ["Yi Wang"]
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+name = "hatcheck_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
+tauri-plugin-notification = "2.7"
+tauri-plugin-clipboard-manager = "2.5"
+tauri-plugin-process = "2.4"
+# Without its zip feature: zip 4, which it asks for, is yanked, and Tauri 2's update files
+# (installers, an AppImage, a .app.tar.gz) don't need it.
+tauri-plugin-updater = { version = "2.14", default-features = false, features = ["rustls-tls", "system-proxy"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

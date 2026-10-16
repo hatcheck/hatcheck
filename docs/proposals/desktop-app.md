@@ -1,6 +1,24 @@
 # Proposal: a Hatcheck desktop app
 
-**Status:** proposal, nothing built yet (October 2026).
+**Status:** built, October 2026, in [`desktop/`](../../desktop/README.md), as proposed: Tauri v2, the
+CLI inside as a PyInstaller sidecar, the menu bar (version 1) and the main window (version 2). The
+release workflow builds macOS (Apple silicon), Windows and Linux, with a stable and a beta channel and
+the updater. What's left needs accounts and certificates only you can set up, and decisions:
+
+- **Signing:** a Developer ID certificate for macOS (and notarizing), and one for Windows. Until
+  then the builds are unsigned, which is fine for your own use; the workflow signs once the secrets
+  are set.
+- **Publishing:** the first `desktop-v*` tag, the Homebrew cask and the winget manifest
+  (`packaging/`), and the landing page, which is in `site/`: `.github/workflows/pages.yml` puts it on
+  GitHub Pages when you run it, once Pages is on for the repo.
+- **Intel Macs:** the workflow builds for them too, on GitHub's `macos-15-intel` runner; untested
+  here, with no Intel Mac at hand.
+- **Desktop instances** in the app are made with `make-claude-instance.sh`, which isn't inside the
+  app: the engine finds it in the hatcheck repo installed with `install.sh` or Homebrew, and says
+  so when it isn't there. Issue #1 (Aaron Oxborrow's scripts) decides whether it can ship inside
+  the app.
+- **Updates:** the updater plugin is built without its `zip` feature, because the `zip` versions it
+  asks for are yanked; Tauri 2's update files don't need it.
 
 ## Summary
 
@@ -69,12 +87,12 @@ Codex's files is reimplemented in the app.
 
 | Phase | Scope | Rough effort |
 |---|---|---|
-| 0 | `--json` output and `hatcheck open` in the CLI | 2–3 days |
-| 1 | macOS menu-bar app, unsigned, for our own use | 1–2 weeks |
-| 2 | The main window, then a signed and notarized release | 2–4 weeks |
-| 3 | Windows and Linux builds, auto-update channels | 2–3 weeks |
+| 0 | `--json` output and `hatcheck open` in the CLI | done (October 2026) |
+| 1 | macOS menu-bar app, unsigned, for our own use | done |
+| 2 | The main window, then a signed and notarized release | window done; signing waits for the certificate |
+| 3 | Windows and Linux builds, auto-update channels | done in the workflow; the first release is yours to tag |
 
-Phase 0 is useful without the app, for scripts and status bars, so it comes first either way.
+Phase 0 is useful without the app, for scripts and status bars, so it came first; it's built.
 
 ## Distribution and costs
 
@@ -87,7 +105,7 @@ Phase 0 is useful without the app, for scripts and status bars, so it comes firs
 - **Linux:** an AppImage and a `.deb`.
 - **Updates:** stable releases from tags, and betas as GitHub pre-releases.
 - **Website:** a landing page with the downloads, at hatcheck.dev if it's still free, or
-  hatcheck.yilab.com.
+  hatcheck.yilab.com. The page is `site/index.html`; `pages.yml` publishes it on GitHub Pages by hand.
 
 ## Risks
 

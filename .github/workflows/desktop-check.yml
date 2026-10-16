@@ -1,0 +1,35 @@
+name: desktop-check
+
+# On each change to the app: its pages type-check and build, and its Rust code compiles.
+on:
+  push:
+    paths: ["desktop/**", "hatcheck/**", ".github/workflows/desktop-check.yml"]
+  pull_request:
+    paths: ["desktop/**", "hatcheck/**"]
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Pages
+        working-directory: desktop
+        run: npm ci && npm run build
+      - name: Rust
+        working-directory: desktop/src-tauri
+        run: |
+          # Tauri wants the engine beside it; a stand-in will do for compiling.
+          triple=$(rustc -vV | sed -n 's/^host: //p')
+          mkdir -p binaries
+          printf '#!/bin/sh\n' > "binaries/hatcheck-$triple" && chmod +x "binaries/hatcheck-$triple"
+          cargo check

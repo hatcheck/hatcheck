@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the popover and the main window may do: run the hatcheck engine (a command of the app), show and hide windows, notify, copy text, update.",
+  "windows": ["tray", "main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-close",
+    "notification:default",
+    "clipboard-manager:allow-write-text",
+    "updater:default",
+    "process:allow-restart"
+  ]
+}

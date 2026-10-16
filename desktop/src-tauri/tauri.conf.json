@@ -1,0 +1,72 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Hatcheck",
+  "version": "0.1.0",
+  "identifier": "com.yilab.hatcheck",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "tray",
+        "url": "tray.html",
+        "title": "Hatcheck",
+        "width": 420,
+        "height": 640,
+        "visible": false,
+        "decorations": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": true
+      },
+      {
+        "label": "main",
+        "url": "index.html",
+        "title": "Hatcheck",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 860,
+        "minHeight": 540,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "DeveloperTool",
+    "shortDescription": "Claude and ChatGPT plans and sessions, in the menu bar",
+    "longDescription": "What's left of every Claude and ChatGPT plan at a glance, recent Claude Code and Codex sessions to resume, and the right Claude Desktop instance a click away. A front end to the hatcheck CLI. Unofficial: not made by, affiliated with or endorsed by Anthropic or OpenAI.",
+    "copyright": "Yi Wang",
+    "externalBin": [
+      "binaries/hatcheck"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFCMDZDNjcwN0EyOEY3QUUKUldTdTl5aDZjTVlHRzcrcFdzR1U0T0lRM2k5SjZ4cFdJUC9VM1M5clBFZEF0RXdHeXo0Mkx4OG8K",
+      "endpoints": [
+        "https://github.com/yilab/hatcheck/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

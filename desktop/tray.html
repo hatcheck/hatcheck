@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hatcheck</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="popover">
+    <header class="bar-top">
+      <span class="brand"><span class="logo" aria-hidden="true"></span>Hatcheck</span>
+      <span class="spacer"></span>
+      <button id="refresh" class="icon" title="Refresh">⟳</button>
+      <button id="open-main" class="icon" title="Open the Hatcheck window">⧉</button>
+    </header>
+    <main id="content">
+      <section>
+        <h2>Plans <span id="plans-note" class="note"></span></h2>
+        <div id="plans" class="loading">Loading…</div>
+      </section>
+      <section>
+        <h2>Recent sessions <span class="note">last 24h</span></h2>
+        <div id="sessions" class="loading">Loading…</div>
+      </section>
+      <section id="desktop-section" hidden>
+        <h2>Claude Desktop</h2>
+        <div id="instances" class="instances"></div>
+      </section>
+    </main>
+    <footer class="bar-bottom">
+      <span id="version" class="note">Unofficial</span>
+      <span class="spacer"></span>
+      <button id="settings" class="link">Settings</button>
+      <button id="quit" class="link">Quit</button>
+    </footer>
+    <script type="module" src="/src/tray.ts"></script>
+  </body>
+</html>

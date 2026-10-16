@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hatcheck</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="window">
+    <nav class="tabs">
+      <span class="brand"><span class="logo" aria-hidden="true"></span>Hatcheck</span>
+      <button data-tab="sessions" class="tab active">Sessions</button>
+      <button data-tab="plans" class="tab">Plans</button>
+      <button data-tab="profiles" class="tab">Profiles</button>
+      <button data-tab="desktop" class="tab" id="desktop-tab">Desktop</button>
+      <button data-tab="settings" class="tab">Settings</button>
+      <span class="spacer"></span>
+      <button id="reload" class="icon" title="Refresh">⟳</button>
+    </nav>
+
+    <section id="tab-sessions" class="tab-body">
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Search titles and folders" />
+        <select id="filter-agent">
+          <option value="">Claude Code and Codex</option>
+          <option value="claude">Claude Code</option>
+          <option value="codex">Codex</option>
+        </select>
+        <select id="filter-profile"><option value="">Every profile</option></select>
+        <select id="filter-hours">
+          <option value="24">Last 24 hours</option>
+          <option value="72">Last 3 days</option>
+          <option value="168" selected>Last week</option>
+          <option value="720">Last 30 days</option>
+        </select>
+        <label class="check"><input id="filter-all" type="checkbox" /> Desktop, SDK, Codex app</label>
+      </div>
+      <div class="split">
+        <div id="session-list" class="list loading">Loading…</div>
+        <div id="session-detail" class="detail"><p class="empty">Pick a session to see its conversation.</p></div>
+      </div>
+    </section>
+
+    <section id="tab-plans" class="tab-body" hidden>
+      <p class="lead">What's left of each plan, sorted as <code>hatcheck usage</code> sorts it: accounts with Fable left first,
+        the soonest Fable reset on top. The second bar is the time left until the limit resets.</p>
+      <div id="plans" class="plans loading">Loading…</div>
+    </section>
+
+    <section id="tab-profiles" class="tab-body" hidden>
+      <p class="lead">Each Claude Code profile (<code>~/.claude-NAME</code>) and Codex home (<code>~/.codex-NAME</code>) has its own
+        login. Signing in happens in Claude Code and Codex, in a terminal; Hatcheck never sees a password or token.</p>
+      <div id="profiles" class="profiles loading">Loading…</div>
+      <h3>Add one</h3>
+      <form id="add-profile" class="inline-form">
+        <select id="add-agent">
+          <option value="claude">Claude Code profile</option>
+          <option value="codex">Codex home</option>
+        </select>
+        <input id="add-name" placeholder="name, such as work" pattern="[A-Za-z0-9._-]+" required />
+        <button type="submit">Sign in, in a terminal</button>
+      </form>
+    </section>
+
+    <section id="tab-desktop" class="tab-body" hidden>
+      <p class="lead">Claude Desktop instances, each with its own data folder and login. Opening one brings it forward if it's running.</p>
+      <div id="instance-list" class="instance-list loading">Loading…</div>
+      <h3>Make one</h3>
+      <form id="add-instance" class="inline-form">
+        <input id="inst-name" placeholder="name, such as work" pattern="[A-Za-z0-9._-]+" required />
+        <input id="inst-display" placeholder="shown as, such as Work" required />
+        <label class="hue">Colour <input id="inst-hue" type="range" min="0" max="255" value="135" />
+          <span id="hue-swatch" class="swatch"></span></label>
+        <button type="submit">Make it</button>
+      </form>
+      <p class="note">Makes <code>/Applications/Claude NAME.app</code> with <code>make-claude-instance.sh</code> from the hatcheck repo, installed with its <code>install.sh</code> or Homebrew.</p>
+    </section>
+
+    <section id="tab-settings" class="tab-body" hidden>
+      <div class="settings">
+        <label class="check"><input id="set-live" type="checkbox" />
+          Ask for live usage. Off: show what Claude Code and Codex last saved. On: ask the usage endpoints with each profile's
+          saved login, which is read and never refreshed or sent anywhere else; they rate-limit, so not too often.</label>
+        <label>Refresh every <input id="set-minutes" type="number" min="1" max="120" /> minutes</label>
+        <label class="check"><input id="set-notify" type="checkbox" /> Notify me when a limit runs low, and when it resets</label>
+        <label>Low means <input id="set-low" type="number" min="1" max="50" />% or less left</label>
+        <label>Terminal for Resume
+          <select id="set-terminal">
+            <option value="">Usual one</option>
+            <option value="terminal">Terminal</option>
+            <option value="iterm">iTerm2</option>
+            <option value="ghostty">Ghostty</option>
+            <option value="wezterm">WezTerm</option>
+            <option value="wt">Windows Terminal</option>
+            <option value="powershell">PowerShell</option>
+            <option value="gnome-terminal">GNOME Terminal</option>
+            <option value="konsole">Konsole</option>
+            <option value="kitty">kitty</option>
+          </select></label>
+        <div class="row"><button id="check-updates">Check for updates</button> <span id="update-note" class="note"></span></div>
+      </div>
+      <div class="about">
+        <h3>About</h3>
+        <p><strong>Hatcheck</strong> <span id="about-version"></span>: Claude Code and Codex accounts on one computer, each kept apart.
+          A front end to the <code>hatcheck</code> command.</p>
+        <p class="note">Unofficial: not made by, affiliated with or endorsed by Anthropic or OpenAI. Claude, Claude Code and
+          Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI.</p>
+        <p class="note">It shows what each plan has left and helps you pick an account you may use for the work at hand; it never
+          switches accounts by itself.</p>
+      </div>
+    </section>
+
+    <div id="dialog" class="dialog" hidden>
+      <div class="dialog-box">
+        <h3 id="dialog-title"></h3>
+        <div id="dialog-body"></div>
+        <div id="dialog-actions" class="dialog-actions"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
