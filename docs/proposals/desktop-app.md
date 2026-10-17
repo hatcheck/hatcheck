@@ -9,8 +9,7 @@ the updater. What's left needs accounts and certificates only you can set up, an
   then the builds are unsigned, which is fine for your own use; the workflow signs once the secrets
   are set.
 - **Publishing:** the first `desktop-v*` tag, the Homebrew cask and the winget manifest
-  (`packaging/`), and the landing page, which is in `site/`: `.github/workflows/pages.yml` puts it on
-  GitHub Pages when you run it, once Pages is on for the repo.
+  (`packaging/`). The landing page is up at hatcheck.dev, served from Cloudflare out of `site/`.
 - **Intel Macs:** the workflow builds for them too, on GitHub's `macos-15-intel` runner; untested
   here, with no Intel Mac at hand.
 - **Desktop instances** are made by the engine itself, `hatcheck desktop new`, a rewrite that
@@ -103,8 +102,8 @@ Phase 0 is useful without the app, for scripts and status bars, so it came first
   warnings.
 - **Linux:** an AppImage and a `.deb`.
 - **Updates:** stable releases from tags, and betas as GitHub pre-releases.
-- **Website:** a landing page with the downloads, at hatcheck.dev if it's still free, or
-  hatcheck.yilab.com. The page is `site/index.html`; `pages.yml` publishes it on GitHub Pages by hand.
+- **Website:** a landing page with the downloads, at hatcheck.dev. The page is `site/index.html`,
+  served from Cloudflare; `wrangler deploy` in `site/` ships it.
 
 ## Risks
 

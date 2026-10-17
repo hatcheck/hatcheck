@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Hatcheck">
+  <defs>
+    <mask id="check">
+      <rect width="64" height="64" fill="#fff"/>
+      <path d="M24 29l6 6 11-14" fill="none" stroke="#000" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g fill="#4f46e5" mask="url(#check)">
+    <path d="M20 10h24q3 0 3 3l-2 34H19l-2-34q0-3 3-3z"/>
+    <rect x="10" y="44" width="44" height="8" rx="4"/>
+  </g>
+</svg>

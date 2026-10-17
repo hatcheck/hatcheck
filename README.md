@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yilab/hatcheck/main/site/logo-wordmark-dark.svg">
+    <img src="https://raw.githubusercontent.com/yilab/hatcheck/main/site/logo-wordmark.svg" alt="Hatcheck" width="360">
+  </picture>
+</p>
+
 # Hatcheck
 
 Several Claude accounts on one computer, each kept apart: isolated Claude Desktop instances on
@@ -820,7 +827,9 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
 `.ps1` files are the Windows versions of the `sh` ones.
 
 - **`desktop/`** — the desktop app: Tauri, with the CLI inside it ([its README](desktop/README.md)).
-- **`site/`** — the landing page, one self-contained file; `.github/workflows/pages.yml` publishes it when run by hand.
+- **`site/`** — the landing page, one self-contained file, served at [hatcheck.dev](https://hatcheck.dev)
+  from Cloudflare as static assets; `wrangler deploy` in that folder ships it. The logo lives there too:
+  `logo.svg` and `logo-dark.svg` (the mark), `logo-wordmark.svg` and `logo-wordmark-dark.svg`, `favicon.svg`.
 - **`docs/proposals/`** — the plans these came from: [the CLI features](docs/proposals/cli-features.md)
   and [the desktop app](docs/proposals/desktop-app.md).
 - **`tests/`** — tests for the CLI tools against throwaway home folders:

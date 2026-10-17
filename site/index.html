@@ -1,15 +1,17 @@
 <!doctype html>
-<!-- Hatcheck's landing page: one file, no outside requests. .github/workflows/pages.yml puts
-     it on GitHub Pages when run by hand; a custom domain goes in a CNAME file beside it. -->
+<!-- Hatcheck's landing page: one file, no outside requests, served at hatcheck.dev from
+     Cloudflare as static assets; `wrangler deploy` in this folder ships it (see wrangler.jsonc). -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <title>Hatcheck</title>
   <meta name="description" content="Claude Code and Codex accounts on one computer, each kept apart: recent sessions, plan usage and resume commands across all of them, in the terminal and the menu bar.">
   <link rel="canonical" href="https://hatcheck.dev/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hatcheck.dev/">
+  <meta property="og:image" content="https://hatcheck.dev/og.png">
   <meta property="og:title" content="Hatcheck">
   <meta property="og:description" content="Claude Code and Codex accounts on one computer, each kept apart: recent sessions, plan usage and resume commands across all of them.">
   <style>
@@ -71,12 +73,16 @@
 <body>
   <header class="wrap">
     <div class="hero">
-      <svg viewBox="0 0 100 100" role="img" aria-label="Hatcheck: a top hat">
-        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f37c9"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
-        <rect width="100" height="100" fill="url(#g)"/>
-        <rect x="35" y="26" width="30" height="40" rx="4" fill="#fff"/>
-        <rect x="35" y="52" width="30" height="6" fill="#f5b342"/>
-        <rect x="24" y="62" width="52" height="9" rx="4.5" fill="#fff"/>
+      <svg viewBox="0 0 64 64" role="img" aria-label="Hatcheck: a top hat with a check">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f37c9"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
+          <mask id="check"><rect width="64" height="64" fill="#fff"/><path d="M23 29l7 7 12-15" fill="none" stroke="#000" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/></mask>
+        </defs>
+        <rect width="64" height="64" rx="14" fill="url(#g)"/>
+        <g transform="translate(5.5 5.5) scale(0.83)" fill="#fff" mask="url(#check)">
+          <path d="M20 10h24q3 0 3 3l-2 34H19l-2-34q0-3 3-3z"/>
+          <rect x="10" y="44" width="44" height="8" rx="4"/>
+        </g>
       </svg>
       <div>
         <h1>Hatcheck</h1>

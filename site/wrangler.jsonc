@@ -1,0 +1,16 @@
+// The landing page on Cloudflare, as static assets with no Worker code: `wrangler deploy`
+// from this folder ships index.html and attaches hatcheck.dev and www.hatcheck.dev (the
+// zone is in the same Cloudflare account, so Wrangler makes the DNS records itself). Both
+// hosts serve the page; its canonical link names the bare domain. .assetsignore keeps
+// these files out of the upload.
+{
+  "name": "hatcheck-site",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./"
+  },
+  "routes": [
+    { "pattern": "hatcheck.dev", "custom_domain": true },
+    { "pattern": "www.hatcheck.dev", "custom_domain": true }
+  ]
+}
