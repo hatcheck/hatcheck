@@ -55,8 +55,8 @@ npm run tauri dev       # or run it from source, with the pages reloading as the
 ```
 
 `npm run dev` alone serves the pages in a browser with sample data, for working on them.
-`Hatcheck.app/Contents/MacOS/hatcheck-desktop --selftest` runs the bundled engine as the app does
-and prints what it got, without opening a window. `npm run icons` redraws the icons
+`Hatcheck.app/Contents/MacOS/hatcheck-desktop --selftest` runs the bundled engine as the app does,
+each call twice with how long it took, and prints what it got, without opening a window. `npm run icons` redraws the icons
 (`scripts/make-icons.py`, with Pillow, from the logo's shapes in `site/favicon.svg`) and makes every
 size: the app icon, a black menu-bar icon that macOS tints as a template, and a coloured tray
 icon for Windows and Linux, which show tray icons as they are.
@@ -64,8 +64,10 @@ icon for Windows and Linux, which show tray icons as they are.
 ## Layout
 
 - `src-tauri/src/lib.rs`: the menu-bar icon and its popover window, the main window, and `engine`,
-  the command the pages call to run `hatcheck`. It gives the engine the PATH your login shell
-  sets, so it finds `cl` and `cx`.
+  the command the pages call to run `hatcheck`. It keeps up to two engines running
+  (`hatcheck serve`, which takes a command per line of JSON) so a call doesn't wait for one to
+  start, and runs the engine once per call if that fails. It gives the engine the PATH your login
+  shell sets, so it finds `cl` and `cx`.
 - `tray.html`, `src/tray.ts`: the popover, which also refreshes in the background and sends the
   notifications. `index.html`, `src/main.ts`: the main window.
 - `src/engine.ts`: each engine call and the shape of its JSON. `src/format.ts`: bars, times and

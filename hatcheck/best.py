@@ -34,9 +34,15 @@ import time
 def load_sibling(name, file):
     sys.dont_write_bytecode = True  # leave no __pycache__ folder beside the scripts
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), file)
+    if name in sys.modules:  # loaded once per process: hatcheck serve runs many commands in one
+        return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = sys.modules[name] = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        del sys.modules[name]
+        raise
     return module
 
 

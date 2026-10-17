@@ -928,9 +928,15 @@ def load_usage_module():
     if not os.path.isfile(path):
         return None
     sys.dont_write_bytecode = True  # leave no __pycache__ folder beside the scripts
+    if "hatcheck_usage" in sys.modules:  # loaded once per process: hatcheck serve runs many commands in one
+        return sys.modules["hatcheck_usage"]
     spec = importlib.util.spec_from_file_location("hatcheck_usage", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = sys.modules["hatcheck_usage"] = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        del sys.modules["hatcheck_usage"]
+        raise
     return module
 
 
