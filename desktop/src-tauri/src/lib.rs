@@ -149,7 +149,12 @@ pub fn run() {
             let quit = MenuItem::with_id(app, "quit", "Quit Hatcheck", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let menu = Menu::with_items(app, &[&open, &refresh, &separator, &quit])?;
+            // macOS tints a black template image to suit the menu bar. Windows and Linux show an
+            // icon as it is, so they get the coloured tile, which reads on light and dark taskbars.
+            #[cfg(target_os = "macos")]
             let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+            #[cfg(not(target_os = "macos"))]
+            let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-color.png"))?;
             TrayIconBuilder::with_id("hatcheck")
                 .icon(icon)
                 .icon_as_template(true)

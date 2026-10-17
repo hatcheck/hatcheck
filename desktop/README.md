@@ -57,7 +57,9 @@ npm run tauri dev       # or run it from source, with the pages reloading as the
 `npm run dev` alone serves the pages in a browser with sample data, for working on them.
 `Hatcheck.app/Contents/MacOS/hatcheck-desktop --selftest` runs the bundled engine as the app does
 and prints what it got, without opening a window. `npm run icons` redraws the icons
-(`scripts/make-icons.py`, with Pillow) and makes every size.
+(`scripts/make-icons.py`, with Pillow, from the logo's shapes in `site/favicon.svg`) and makes every
+size: the app icon, a black menu-bar icon that macOS tints as a template, and a coloured tray
+icon for Windows and Linux, which show tray icons as they are.
 
 ## Layout
 
