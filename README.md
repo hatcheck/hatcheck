@@ -442,6 +442,10 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
   Code's last saved snapshot is used instead and named at the bottom with its age.
 - A session that ran in a folder [bound](#hatcheck-bind-tie-a-folder-to-a-profile) to another
   profile is marked `⚠ folder bound to ~/.claude-work`, so it's easy to spot and `hatcheck move`.
+- What it reads from each session file is cached, in `sessions.json` in `~/Library/Caches/hatcheck`
+  on macOS (`%LOCALAPPDATA%\hatcheck\Cache` on Windows, `~/.cache/hatcheck` elsewhere, or
+  `$HATCHECK_CACHE_DIR`). A repeat run reads only what was added to a session since, so a session
+  that's still being written costs little however long it is. Deleting the folder is always safe.
 
 | Option       | What it does                                                                  |
 |--------------|-------------------------------------------------------------------------------|

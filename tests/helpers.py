@@ -1,6 +1,7 @@
 """Shared test helpers: a throwaway home folder with Claude Code profiles, Codex homes and
 their sessions, and a way to run the scripts against it. Nothing here reads your real
 profiles, the macOS Keychain or the network."""
+import atexit
 import base64
 import importlib.util
 import json
@@ -19,6 +20,10 @@ SUBCOMMANDS = ("sessions", "usage", "where", "move", "open", "show", "best", "bi
 NOW = time.time()
 WINDOWS = os.name == "nt"
 sys.dont_write_bytecode = True  # leave no __pycache__ beside the scripts
+# Code a test runs in this process keeps its cache here, not in your cache folder; the
+# scripts a test runs keep theirs in its fake home (FakeHome.env).
+os.environ["HATCHECK_CACHE_DIR"] = tempfile.mkdtemp(prefix="cma-cache-")
+atexit.register(shutil.rmtree, os.environ["HATCHECK_CACHE_DIR"], True)
 
 
 def iso(t):
@@ -192,7 +197,9 @@ class FakeHome:
                if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
                and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "HATCHECK_"))}
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
-                   PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"))
+                   PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"),
+                   LOCALAPPDATA=os.path.join(self.home, "AppData", "Local"),
+                   XDG_CACHE_HOME=os.path.join(self.home, ".cache"))  # caches stay in this home too
         if sys.platform == "darwin":
             env["PATH"] = "/bin"  # has ps, but not the security tool, so the real Keychain stays untouched
         return env

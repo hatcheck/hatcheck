@@ -72,9 +72,14 @@ Desktop when its most recent activity came from Claude Desktop. Sessions still
 open in a terminal are always listed, even when idle longer than HOURS, and
 marked so you don't resume them twice. A session that ran in a folder tied to
 another profile with hatcheck bind is marked "⚠ folder bound to ...".
+
+What it reads from each session file is cached in hatcheck's cache folder (see cache_dir),
+so a repeat run reads only what was appended to a session since.
 """
 import argparse
+import atexit
 import glob
+import hashlib
 import importlib.util
 import json
 import mmap
@@ -208,40 +213,74 @@ def open_sessions(profiles):
     return live
 
 
-def lines_backward(mm):
+def lines_backward(mm, stop=0):
+    """The lines of a file, the last first, down to the one that starts at stop (the start
+    of a line)."""
     end = len(mm)
-    if end and mm[end - 1:end] == b"\n":
+    if end > stop and mm[end - 1:end] == b"\n":
         end -= 1
-    while end > 0:
-        start = mm.rfind(b"\n", 0, end) + 1
+    while end > stop:
+        i = mm.rfind(b"\n", stop, end)
+        start = i + 1 if i >= 0 else stop
         yield mm[start:end]
         end = start - 1
 
 
-def last_record(mm, rtype):
-    """Last top-level record of the given type, found without parsing the whole file."""
+def line_at(mm, i):
+    """The line holding byte i, parsed, or None when it isn't JSON; and where it starts."""
+    start = mm.rfind(b"\n", 0, i) + 1
+    stop = mm.find(b"\n", i)
+    try:
+        return json.loads(mm[start:stop if stop >= 0 else len(mm)]), start
+    except ValueError:
+        return None, start
+
+
+def last_record(mm, rtype, stop=0):
+    """Last top-level record of the given type from stop on, found without parsing the whole file."""
     key = b'"type":"' + rtype.encode() + b'"'
     end = len(mm)
     while True:
-        i = mm.rfind(key, 0, end)
+        i = mm.rfind(key, stop, end)
         if i < 0:
             return None
-        start = mm.rfind(b"\n", 0, i) + 1
-        stop = mm.find(b"\n", i)
-        try:
-            record = json.loads(mm[start:stop if stop >= 0 else len(mm)])
-            if record.get("type") == rtype:
-                return record
-        except ValueError:
-            pass
-        if start == 0:
+        record, start = line_at(mm, i)
+        if isinstance(record, dict) and record.get("type") == rtype:
+            return record
+        if start <= stop:
             return None
         end = start
 
 
-def last_model(mm):
-    """The model behind the newest reply, skipping Claude Code's own <synthetic> ones."""
-    for line in lines_backward(mm):
+# The record types read_session wants the newest of, and the field it reads from each.
+LAST_TYPES = {"relocated": "relocatedCwd", "continued-in": "continuedInSessionId", "custom-title": "customTitle",
+              "ai-title": "aiTitle", "agent-name": "agentName", "last-prompt": "lastPrompt"}
+LAST_TYPES_KEY = re.compile(rb'"type":"(%s)"' % b"|".join(re.escape(t.encode()) for t in LAST_TYPES))
+
+
+def last_fields(mm, stop=0):
+    """Field -> value, from the newest record of each type in LAST_TYPES that appears from
+    stop on; types that don't appear are left out. One pass over the file: most of these
+    types are in no file at all, and a search per type would read every file to its start."""
+    starts = {}
+    for m in LAST_TYPES_KEY.finditer(mm, stop):
+        starts.setdefault(m.group(1).decode(), []).append(m.start())
+    found = {}
+    for rtype, positions in starts.items():
+        below = None  # the start of the newest line already ruled out
+        for i in reversed(positions):
+            if below is not None and i >= below:
+                continue
+            record, below = line_at(mm, i)
+            if isinstance(record, dict) and record.get("type") == rtype:
+                found[LAST_TYPES[rtype]] = record.get(LAST_TYPES[rtype])
+                break
+    return found
+
+
+def last_model(mm, stop=0):
+    """The model behind the newest reply from stop on, skipping Claude Code's own <synthetic> ones."""
+    for line in lines_backward(mm, stop):
         if b'"type":"assistant"' not in line or b'"model":"' not in line:
             continue
         try:
@@ -276,22 +315,62 @@ def prompt_text(record):
     return None
 
 
-def first_cwd_and_prompt(mm, want_prompt):
+def head_facts(mm):
+    """From the top of a transcript: the first cwd and the first prompt, looked for in the
+    first 2000 lines, and whether the search was over before the end of the file, so that
+    appending to the file can't change them."""
     cwd = prompt = None
     mm.seek(0)
     for n, line in enumerate(iter(mm.readline, b"")):
-        if cwd and (prompt or not want_prompt or n > 2000):
-            break
+        if cwd and (prompt or n > 2000):
+            return cwd, prompt, True
         if b'"cwd":"' not in line:
             continue
         try:
             record = json.loads(line)
         except ValueError:
             continue
+        if not isinstance(record, dict):
+            continue
         cwd = cwd or record.get("cwd")
-        if want_prompt and not prompt and record.get("type") == "user" and not record.get("isMeta"):
+        if not prompt and record.get("type") == "user" and not record.get("isMeta"):
             prompt = prompt_text(record)
-    return cwd, prompt
+    return cwd, prompt, False
+
+
+def newest_activity(mm, stop=0):
+    """Walking back from the end of a transcript to stop: the newest record that has an
+    entrypoint and a timestamp, and whether a user or assistant message turned up, where
+    the walk ends. A session with only slash commands such as /usage has no message."""
+    last = None
+    for line in lines_backward(mm, stop):
+        if b'"entrypoint":"' not in line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        if last is None and record.get("entrypoint") and record.get("timestamp"):
+            last = record
+        if record.get("type") in ("user", "assistant"):
+            return last, True
+    return last, False
+
+
+def claude_facts(mm, old, start):
+    """What read_session needs from a transcript. With old, the facts about the file up to
+    start (it has only grown since), it reads from start on and takes the rest from old."""
+    last, has_messages = newest_activity(mm, start)
+    fields, model = last_fields(mm, start), last_model(mm, start)
+    if old is not None:
+        if not has_messages:  # the walk back would have gone on into what old covers
+            last, has_messages = last if last is not None else old["last"], old["has_messages"]
+        fields, model = dict(old["fields"], **fields), model or old["model"]
+    head = old["head"] if old is not None and old["head"][2] else head_facts(mm)
+    return {"last": last and {k: last.get(k) for k in ("entrypoint", "timestamp", "cwd", "gitBranch")},
+            "has_messages": has_messages, "fields": fields, "model": model, "head": list(head)}
 
 
 def parse_time(stamp):
@@ -320,42 +399,123 @@ def resume_dir(folder, candidates):
     return paths[0] if paths else None
 
 
-def read_session(path):
-    """Summary of one transcript, or None when it holds no conversation."""
+# What read_session and read_codex_session take from each file is cached, by file, in
+# sessions.json in hatcheck's cache folder: a repeat run reads only what was appended to a
+# session since, which matters for the big ones still being written. Claude Code and Codex
+# only ever append to a session's file.
+CACHE_VERSION = 1
+_cache = None  # file -> entry, read on first use and written back at exit when it changed
+_cache_changed = False
+
+
+def cache_dir():
+    """Where hatcheck keeps what it can work out again: $HATCHECK_CACHE_DIR, or
+    ~/Library/Caches/hatcheck on macOS, %LOCALAPPDATA%\\hatcheck\\Cache on Windows and
+    $XDG_CACHE_HOME/hatcheck (~/.cache/hatcheck) elsewhere."""
+    if os.environ.get("HATCHECK_CACHE_DIR"):
+        return os.environ["HATCHECK_CACHE_DIR"]
+    if sys.platform == "darwin":
+        return os.path.join(HOME, "Library", "Caches", "hatcheck")
+    if os.name == "nt":
+        return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.join(HOME, "AppData", "Local"),
+                            "hatcheck", "Cache")
+    return os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "hatcheck")
+
+
+def session_cache():
+    global _cache
+    if _cache is None:
+        _cache = {}
+        try:
+            with open(os.path.join(cache_dir(), "sessions.json"), encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict) and data.get("version") == CACHE_VERSION and isinstance(data.get("files"), dict):
+                _cache = data["files"]
+        except (OSError, ValueError):
+            pass  # none yet, or unreadable: start over
+        atexit.register(save_session_cache)
+    return _cache
+
+
+def save_session_cache():
+    """Write the cache back if it changed, without files that are gone or unused for 30 days."""
+    global _cache_changed
+    if not _cache_changed:
+        return
+    _cache_changed = False
+    now = time.time()
+    files = {path: entry for path, entry in _cache.items()
+             if now - entry.get("seen", 0) < 30 * 86400 and os.path.exists(path)}
+    path = os.path.join(cache_dir(), "sessions.json")
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump({"version": CACHE_VERSION, "files": files}, fh, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, path)
+    except OSError:  # only a cache: the next run reads the files again
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+def fingerprint(mm, end):
+    """A hash of a file's first and last 4 KB before end, to tell that the file up to end is
+    still what was read."""
+    h = hashlib.blake2b(digest_size=16)
+    h.update(mm[:min(end, 4096)])
+    h.update(mm[max(end - 4096, 0):end])
+    return h.hexdigest()
+
+
+def file_facts(path, kind, reader):
+    """reader's facts about a session file, and the file's size: as last read when the file
+    hasn't changed since, read on from where that read stopped when it has only grown, or
+    read whole. A file of nothing gives (None, 0)."""
+    global _cache_changed
+    cache, key = session_cache(), os.path.abspath(path)
     with open(path, "rb") as fh:
-        size = os.fstat(fh.fileno()).st_size
-        if size == 0:
-            return None
+        st = os.fstat(fh.fileno())  # before reading, so that a write after this shows next time
+        if st.st_size == 0:
+            return None, 0
+        # The change time too: it moves with every write, even when the size and the
+        # modification time are put back afterwards.
+        stamp = [st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
+        entry = cache.get(key)
+        if not (isinstance(entry, dict) and entry.get("kind") == kind):
+            entry = None
+        if entry and entry.get("stamp") == stamp:
+            if time.time() - entry.get("seen", 0) > 86400:
+                entry["seen"], _cache_changed = int(time.time()), True
+            return entry["facts"], st.st_size
         mm = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
     try:
-        # Walk back to the newest record (last activity), then on to the newest
-        # user/assistant message; sessions with only slash commands like /usage have none.
-        last, has_messages = None, False
-        for line in lines_backward(mm):
-            if b'"entrypoint":"' not in line:
-                continue
-            try:
-                record = json.loads(line)
-            except ValueError:
-                continue
-            if last is None and record.get("entrypoint") and record.get("timestamp"):
-                last = record
-            if record.get("type") in ("user", "assistant"):
-                has_messages = True
-                break
-        if last is None:
-            return None
-        relocated = last_record(mm, "relocated") or {}
-        continued = last_record(mm, "continued-in") or {}
-        titles = [(last_record(mm, t) or {}).get(k) for t, k in
-                  (("custom-title", "customTitle"), ("ai-title", "aiTitle"),
-                   ("agent-name", "agentName"), ("last-prompt", "lastPrompt"))]
-        start_cwd, first_prompt = first_cwd_and_prompt(mm, want_prompt=not any(titles))
-        model = last_model(mm)
+        old, start = None, 0
+        scanned = entry.get("scanned") if entry else None
+        if entry and entry["stamp"][0] == st.st_ino and isinstance(scanned, int) and 0 < scanned <= len(mm) \
+                and entry.get("check") == fingerprint(mm, scanned):
+            old, start = entry["facts"], scanned
+        facts = reader(mm, old, start)
+        scanned = mm.rfind(b"\n") + 1  # up to the last whole line; one still being written is read again
+        cache[key] = {"kind": kind, "stamp": stamp, "scanned": scanned, "check": fingerprint(mm, scanned),
+                      "facts": facts, "seen": int(time.time())}
+        _cache_changed = True
     finally:
         mm.close()
+    return facts, st.st_size
+
+
+def read_session(path):
+    """Summary of one transcript, or None when it holds no conversation."""
+    facts, size = file_facts(path, "claude", claude_facts)
+    if facts is None or facts["last"] is None:
+        return None
+    last, fields = facts["last"], facts["fields"]
+    titles = [fields.get(k) for k in ("customTitle", "aiTitle", "agentName", "lastPrompt")]
+    start_cwd, first_prompt, _ = facts["head"]
     folder = os.path.basename(os.path.dirname(path))
-    cwd = resume_dir(folder, [relocated.get("relocatedCwd"), start_cwd, last.get("cwd")])
+    cwd = resume_dir(folder, [fields.get("relocatedCwd"), start_cwd, last.get("cwd")])
     return {
         "id": os.path.basename(path)[:-len(".jsonl")],
         "when": parse_time(last["timestamp"]) or os.path.getmtime(path),
@@ -366,10 +526,10 @@ def read_session(path):
         # well; the copy under the resolved path is the one `--resume` reads.
         "canonical": bool(cwd) and encode_project(os.path.realpath(cwd)) == folder,
         "size": size,
-        "has_messages": has_messages,
+        "has_messages": facts["has_messages"],
         "title": " ".join(next((t for t in titles + [first_prompt] if t), "(untitled)").split()),
-        "continued_in": continued.get("continuedInSessionId"),
-        "model": model,
+        "continued_in": fields.get("continuedInSessionId"),
+        "model": facts["model"],
     }
 
 
@@ -431,64 +591,88 @@ def codex_entrypoint(meta):
     return {"vscode": "Codex IDE", "exec": "codex exec"}.get(source, str(source or "?"))
 
 
-def read_codex_session(path, names):
-    """Summary of one Codex session file, like read_session's, or None when it holds no
-    conversation."""
-    with open(path, "rb") as fh:
-        size = os.fstat(fh.fileno()).st_size
-        if size == 0:
-            return None
-        mm = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
-    try:
+def codex_head(mm):
+    """From the top of a Codex session: your first message, and the first one that doesn't
+    start with <, which names the session, looked for in the first 5000 lines; and whether
+    the search was over before the end of the file."""
+    prompt = title = None
+    mm.seek(0)
+    for n, line in enumerate(iter(mm.readline, b"")):
+        if title or n > 5000:
+            return prompt, title, True
+        if not any(k in line for k in (b'"UserMessage"', b'"user_message"', b'"role":"user"')):
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        text = codex_prompt(record) if isinstance(record, dict) else None
+        prompt = prompt or text
+        title = text if text and not text.lstrip().startswith("<") else None
+    return prompt, title, False
+
+
+def codex_facts(mm, old, start):
+    """What read_codex_session needs from a Codex session file, read from start on with old
+    for what comes before, as claude_facts does."""
+    if old is None or old.get("meta") is None:
+        old, start = None, 0
+        mm.seek(0)
         try:
             first = json.loads(mm.readline())
         except ValueError:
-            return None
+            return {"meta": None}
         meta = first.get("payload") if isinstance(first, dict) and first.get("type") == "session_meta" else None
         if not isinstance(meta, dict):
-            return None
-        last = None  # the newest record: the last activity
-        for line in lines_backward(mm):
-            try:
-                record = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(record, dict) and parse_time(record.get("timestamp")):
-                last = record
-                break
-        context = last_record(mm, "turn_context") or {}
-        prompt = title = None
-        mm.seek(0)
-        for n, line in enumerate(iter(mm.readline, b"")):
-            if title or n > 5000:
-                break
-            if not any(k in line for k in (b'"UserMessage"', b'"user_message"', b'"role":"user"')):
-                continue
-            try:
-                record = json.loads(line)
-            except ValueError:
-                continue
-            text = codex_prompt(record) if isinstance(record, dict) else None
-            prompt = prompt or text
-            title = text if text and not text.lstrip().startswith("<") else None
-    finally:
-        mm.close()
+            return {"meta": None}
+        git = meta.get("git")
+        meta = {"id": meta.get("id"), "cwd": meta.get("cwd"), "source": meta.get("source"),
+                "originator": meta.get("originator"), "thread_source": meta.get("thread_source"),
+                "branch": git.get("branch") if isinstance(git, dict) else None, "started": first.get("timestamp")}
+    else:
+        meta = old["meta"]
+    last = None  # the newest record's time: the last activity
+    for line in lines_backward(mm, start):
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(record, dict) and parse_time(record.get("timestamp")):
+            last = record["timestamp"]
+            break
+    context = last_record(mm, "turn_context", start)
+    if context is not None:
+        payload = context.get("payload")
+        model = payload.get("model") if isinstance(payload, dict) else None
+    else:
+        model = old["model"] if old else None
+    head = old["head"] if old is not None and old["head"][2] else codex_head(mm)
+    return {"meta": meta, "last": last or (old["last"] if old else None), "model": model, "head": list(head)}
+
+
+def read_codex_session(path, names):
+    """Summary of one Codex session file, like read_session's, or None when it holds no
+    conversation."""
+    facts, size = file_facts(path, "codex", codex_facts)
+    if facts is None or facts["meta"] is None:
+        return None
+    meta = facts["meta"]
+    prompt, title, _ = facts["head"]
     match = CODEX_FILE.search(path)
     sid = meta.get("id") or (match.group(1) if match else os.path.basename(path))
-    cwd = meta.get("cwd")
     return {
         "agent": "codex",
         "id": sid,
-        "when": parse_time((last or first).get("timestamp")) or os.path.getmtime(path),
+        "when": parse_time(facts["last"] or meta.get("started")) or os.path.getmtime(path),
         "entrypoint": codex_entrypoint(meta),
-        "branch": (meta.get("git") or {}).get("branch") if isinstance(meta.get("git"), dict) else None,
-        "cwd": cwd,
+        "branch": meta.get("branch"),
+        "cwd": meta.get("cwd"),
         "canonical": True,
         "size": size,
         "has_messages": prompt is not None,
         "title": " ".join((names.get(sid) or title or prompt or "(untitled)").split()),
         "continued_in": None,
-        "model": ((context.get("payload") or {}) if isinstance(context.get("payload"), dict) else {}).get("model"),
+        "model": facts["model"],
     }
 
 
