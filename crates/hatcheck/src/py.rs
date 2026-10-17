@@ -345,6 +345,31 @@ pub fn int(text: &str) -> Option<i64> {
     clean.parse::<i64>().ok().map(|n| sign * n)
 }
 
+/// Python's float(text) for a str: digits with single underscores between them, an exponent,
+/// inf and nan, whitespace around.
+pub fn float(text: &str) -> Option<f64> {
+    let t = strip(text);
+    if t.contains('_') {
+        let c: Vec<char> = t.chars().collect();
+        for (i, ch) in c.iter().enumerate() {
+            if *ch == '_'
+                && !(i > 0
+                    && c[i - 1].is_ascii_digit()
+                    && c.get(i + 1).is_some_and(char::is_ascii_digit))
+            {
+                return None;
+            }
+        }
+    }
+    let clean: String = t.chars().filter(|c| *c != '_').collect();
+    let lower = clean.to_lowercase();
+    let body = lower.trim_start_matches(['+', '-']);
+    if matches!(body, "inf" | "infinity" | "nan") || clean.chars().any(|c| c.is_ascii_digit()) {
+        return clean.parse::<f64>().ok();
+    }
+    None
+}
+
 /// json.dumps(v, ensure_ascii=False): on one line, with Python's ", " and ": ".
 pub fn dumps_compact(v: &Value) -> String {
     let mut out = String::new();

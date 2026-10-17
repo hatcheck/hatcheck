@@ -5,6 +5,7 @@
 pub mod args;
 pub mod cli;
 pub mod conv;
+pub mod desktop;
 pub mod facts;
 pub mod find;
 pub mod open_cmd;

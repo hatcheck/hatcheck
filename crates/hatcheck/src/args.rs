@@ -1,6 +1,7 @@
 //! The command lines Python's argparse read, read the same way: long options and unique
-//! prefixes of them, --opt=value, -n1, --, positionals among the options, -h and --help, and
-//! argparse's usage line, help layout and error messages (exit code 2).
+//! prefixes of them, --opt=value, -n1, -abc, --, positionals among the options, exclusive
+//! groups, subcommands, -h and --help, and argparse's usage line, help layout and error
+//! messages (exit code 2), with text wrapped as textwrap wraps it.
 
 use std::collections::HashMap;
 
@@ -42,6 +43,7 @@ pub struct Parser {
     opts: Vec<Opt>,
     pos: Vec<Pos>,
     groups: Vec<Vec<&'static str>>,
+    subs: Option<(&'static str, Vec<(&'static str, String)>)>,
 }
 
 /// A word on the command line, as argparse sorts them.
@@ -56,12 +58,15 @@ enum Word<'a> {
 pub struct Args {
     values: HashMap<&'static str, Vec<String>>,
     flags: HashMap<&'static str, usize>,
+    /// The words after a subcommand, for its own parser.
+    pub rest: Vec<String>,
 }
 
 impl Args {
     pub fn flag(&self, dest: &str) -> bool {
         self.flags.get(dest).is_some_and(|n| *n > 0)
     }
+
     /// The last value given for dest.
     pub fn value(&self, dest: &str) -> Option<&str> {
         self.values
@@ -69,6 +74,7 @@ impl Args {
             .and_then(|v| v.last())
             .map(String::as_str)
     }
+
     pub fn values(&self, dest: &str) -> &[String] {
         self.values.get(dest).map_or(&[], Vec::as_slice)
     }
@@ -96,6 +102,7 @@ impl Stop {
     }
 }
 
+/// argparse's width: the terminal's, less two.
 fn width() -> usize {
     crate::out::columns(80).saturating_sub(2).max(11)
 }
@@ -116,13 +123,8 @@ impl Parser {
             }],
             pos: Vec::new(),
             groups: Vec::new(),
+            subs: None,
         }
-    }
-
-    /// Options that can't be given together (add_mutually_exclusive_group), by dest.
-    pub fn exclusive(mut self, dests: &[&'static str]) -> Parser {
-        self.groups.push(dests.to_vec());
-        self
     }
 
     pub fn flag(mut self, flags: &[&'static str], dest: &'static str, help: &str) -> Parser {
@@ -194,6 +196,22 @@ impl Parser {
         self
     }
 
+    /// Options that can't be given together (add_mutually_exclusive_group), by dest.
+    pub fn exclusive(mut self, dests: &[&'static str]) -> Parser {
+        self.groups.push(dests.to_vec());
+        self
+    }
+
+    /// Subcommands (add_subparsers): the first word names one, under dest, and the words after
+    /// it are left for its own parser, in Args::rest.
+    pub fn subcommands(mut self, dest: &'static str, commands: &[(&'static str, &str)]) -> Parser {
+        self.subs = Some((
+            dest,
+            commands.iter().map(|(n, h)| (*n, h.to_string())).collect(),
+        ));
+        self
+    }
+
     pub fn epilog(mut self, text: &str) -> Parser {
         self.epilog = text.into();
         self
@@ -209,8 +227,21 @@ impl Parser {
         ))
     }
 
-    /// What a word is to argparse's _parse_optional: a word for the positionals, an option
-    /// it doesn't know, or an option with what came attached to it (`=value` or `-n5`).
+    fn find(&self, flag: &str) -> Option<&Opt> {
+        self.opts.iter().find(|o| o.flags.contains(&flag))
+    }
+
+    /// The flag of o that a word names.
+    fn flag_of(&self, o: &Opt, name: &str) -> &'static str {
+        o.flags
+            .iter()
+            .copied()
+            .find(|f| *f == name)
+            .unwrap_or(o.flags[0])
+    }
+
+    /// What a word is to argparse's _parse_optional: a word for the positionals, an option it
+    /// doesn't know, or an option with what came attached to it (`=value` or `-n5`).
     fn classify<'a>(&'a self, arg: &str) -> Result<Word<'a>, String> {
         if arg.is_empty() || !arg.starts_with('-') || arg == "-" {
             return Ok(Word::Positional);
@@ -264,7 +295,8 @@ impl Parser {
                 return Err(format!("ambiguous option: {arg} could match {options}"));
             }
         }
-        // -5 or -.5: a negative number, so a word, as no option here looks like one.
+        // -5 or -.5 is a negative number, so a word, as no option here looks like one; and a
+        // word with a space in it was meant as a word.
         let mut chars = arg.chars().skip(1).peekable();
         if chars.peek() == Some(&'.') {
             chars.next();
@@ -273,15 +305,6 @@ impl Parser {
             return Ok(Word::Positional);
         }
         Ok(Word::Unknown)
-    }
-
-    /// The flag of o that a word names.
-    fn flag_of(&self, o: &Opt, name: &str) -> &'static str {
-        o.flags
-            .iter()
-            .copied()
-            .find(|f| *f == name)
-            .unwrap_or(o.flags[0])
     }
 
     /// argparse's "not allowed with" for a second option from the same exclusive group.
@@ -307,6 +330,16 @@ impl Parser {
     }
 
     pub fn parse(&self, argv: &[String]) -> Result<Args, Stop> {
+        let (args, extras) = self.parse_known(argv)?;
+        if !extras.is_empty() {
+            return Err(self.error(&format!("unrecognized arguments: {}", extras.join(" "))));
+        }
+        Ok(args)
+    }
+
+    /// parse_known_args: what the words said, and the words it didn't know, which a
+    /// subcommand's parser leaves to its parent to report.
+    pub fn parse_known(&self, argv: &[String]) -> Result<(Args, Vec<String>), Stop> {
         let mut seen_in_group: Vec<(usize, &'static str)> = Vec::new();
         let mut args = Args::default();
         let mut words: Vec<String> = Vec::new();
@@ -324,18 +357,33 @@ impl Parser {
                 only_words = true;
                 continue;
             }
-            let (mut opt, mut flag, mut explicit, mut sep) =
-                match self.classify(&arg).map_err(|m| self.error(&m))? {
-                    Word::Positional => {
-                        words.push(arg);
-                        continue;
+            let word = self.classify(&arg).map_err(|m| self.error(&m))?;
+            let (mut opt, mut flag, mut explicit, mut sep) = match word {
+                Word::Positional => {
+                    if let Some((dest, commands)) = &self.subs {
+                        if !commands.iter().any(|c| c.0 == arg) {
+                            let choices = commands
+                                .iter()
+                                .map(|c| format!("'{}'", c.0))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            return Err(self.error(&format!(
+                                "argument {dest}: invalid choice: '{arg}' (choose from {choices})"
+                            )));
+                        }
+                        args.values.entry(dest).or_default().push(arg);
+                        args.rest = argv[i..].to_vec();
+                        break;
                     }
-                    Word::Unknown => {
-                        extras.push(arg);
-                        continue;
-                    }
-                    Word::Opt(o, f, e, s) => (o, f, e, s),
-                };
+                    words.push(arg);
+                    continue;
+                }
+                Word::Unknown => {
+                    extras.push(arg);
+                    continue;
+                }
+                Word::Opt(o, f, e, s) => (o, f, e, s),
+            };
             // As consume_optional: -xyz is -x -y -z when they take nothing.
             loop {
                 if opt.dest == "help" {
@@ -387,7 +435,6 @@ impl Parser {
                     }
                     None => {
                         let next_is_word = i < argv.len()
-                            && !only_words
                             && argv[i] != "--"
                             && matches!(self.classify(&argv[i]), Ok(Word::Positional));
                         if !next_is_word {
@@ -425,14 +472,13 @@ impl Parser {
                 },
                 Count::Optional => {
                     if left > needed[k] {
-                        let w = words.next().unwrap();
+                        let w = words.next().unwrap_or_default();
                         args.values.entry(p.name).or_default().push(w);
                     }
                 }
                 Count::Any => {
-                    let n = left.saturating_sub(needed[k]);
-                    for _ in 0..n {
-                        let w = words.next().unwrap();
+                    for _ in 0..left.saturating_sub(needed[k]) {
+                        let w = words.next().unwrap_or_default();
                         args.values.entry(p.name).or_default().push(w);
                     }
                 }
@@ -445,14 +491,7 @@ impl Parser {
             )));
         }
         extras.extend(words);
-        if !extras.is_empty() {
-            return Err(self.error(&format!("unrecognized arguments: {}", extras.join(" "))));
-        }
-        Ok(args)
-    }
-
-    fn find(&self, flag: &str) -> Option<&Opt> {
-        self.opts.iter().find(|o| o.flags.contains(&flag))
+        Ok((args, extras))
     }
 
     fn opt_usage(o: &Opt) -> String {
@@ -472,15 +511,52 @@ impl Parser {
         }
     }
 
+    /// The usage parts of the options: one each, and for an exclusive group, where its first
+    /// option comes, one per member, "[--a |" and "--b]", as Python 3.14 has them, so a line
+    /// may break inside the group.
+    fn opt_parts(&self) -> Vec<String> {
+        let mut parts = Vec::new();
+        let mut done: Vec<usize> = Vec::new();
+        for o in self.opts.iter().filter(|o| !o.hidden) {
+            match self.groups.iter().position(|g| g.contains(&o.dest)) {
+                Some(g) if done.contains(&g) => {}
+                Some(g) => {
+                    done.push(g);
+                    let members: Vec<String> = self.groups[g]
+                        .iter()
+                        .filter_map(|d| self.opts.iter().find(|o| o.dest == *d))
+                        .map(|o| {
+                            let u = Parser::opt_usage(o);
+                            u[1..u.len() - 1].to_string()
+                        })
+                        .collect();
+                    let last = members.len().saturating_sub(1);
+                    for (i, m) in members.into_iter().enumerate() {
+                        let open = if i == 0 { "[" } else { "" };
+                        let close = if i == last { "]" } else { " |" };
+                        parts.push(format!("{open}{m}{close}"));
+                    }
+                }
+                None => parts.push(Parser::opt_usage(o)),
+            }
+        }
+        parts
+    }
+
+    fn pos_parts(&self) -> Vec<String> {
+        let mut parts: Vec<String> = self.pos.iter().map(Parser::pos_usage).collect();
+        if let Some((_, commands)) = &self.subs {
+            parts.push(format!(
+                "{{{}}} ...",
+                commands.iter().map(|c| c.0).collect::<Vec<_>>().join(",")
+            ));
+        }
+        parts
+    }
+
     /// argparse's usage line, wrapped as it wraps it.
     pub fn usage(&self) -> String {
-        let opt_parts: Vec<String> = self
-            .opts
-            .iter()
-            .filter(|o| !o.hidden)
-            .map(Parser::opt_usage)
-            .collect();
-        let pos_parts: Vec<String> = self.pos.iter().map(Parser::pos_usage).collect();
+        let (opt_parts, pos_parts) = (self.opt_parts(), self.pos_parts());
         let width = width();
         let prefix = "usage: ";
         let usage = std::iter::once(self.prog.clone())
@@ -488,7 +564,7 @@ impl Parser {
             .chain(pos_parts.iter().cloned())
             .collect::<Vec<_>>()
             .join(" ");
-        if prefix.len() + usage.len() <= width {
+        if prefix.len() + usage.chars().count() <= width {
             return format!("{prefix}{usage}\n");
         }
         // As argparse's get_lines: parts packed into lines under the first one's words.
@@ -501,13 +577,13 @@ impl Parser {
                 indent.len() - 1
             };
             for part in parts {
-                if line_len + 1 + part.len() > width && !line.is_empty() {
+                if line_len + 1 + part.chars().count() > width && !line.is_empty() {
                     lines.push(format!("{indent}{}", line.join(" ")));
                     line.clear();
                     line_len = indent.len() - 1;
                 }
                 line.push(part);
-                line_len += part.len() + 1;
+                line_len += part.chars().count() + 1;
             }
             if !line.is_empty() {
                 lines.push(format!("{indent}{}", line.join(" ")));
@@ -547,7 +623,8 @@ impl Parser {
         }
     }
 
-    /// argparse's --help: usage, description, the positionals and the options, then the epilog.
+    /// argparse's --help: usage, description, the positionals and the options, then the epilog,
+    /// laid out as its HelpFormatter lays them out: one help column for all of them.
     pub fn help(&self) -> String {
         let width = width();
         let mut out = self.usage() + "\n";
@@ -555,26 +632,60 @@ impl Parser {
             out += &wrap(&self.description, width, "", "").join("\n");
             out += "\n\n";
         }
-        let entries = |items: Vec<(String, &str)>| -> String {
-            let longest = items
+        // (indent, invocation, help) for every entry; subcommands sit two further in.
+        let mut positional: Vec<(usize, String, &str)> = Vec::new();
+        if let Some((_, commands)) = &self.subs {
+            positional.push((
+                2,
+                format!(
+                    "{{{}}}",
+                    commands.iter().map(|c| c.0).collect::<Vec<_>>().join(",")
+                ),
+                "",
+            ));
+            positional.extend(
+                commands
+                    .iter()
+                    .map(|(name, help)| (4, name.to_string(), help.as_str())),
+            );
+        }
+        positional.extend(
+            self.pos
                 .iter()
-                .map(|(inv, _)| inv.len() + 2)
-                .max()
-                .unwrap_or(0);
-            let help_at = (longest + 2).min(24.min(width.saturating_sub(20).max(4)));
-            let help_width = width.saturating_sub(help_at).max(11);
+                .map(|p| (2, p.metavar.unwrap_or(p.name).to_string(), p.help.as_str())),
+        );
+        let options: Vec<(usize, String, &str)> = self
+            .opts
+            .iter()
+            .filter(|o| !o.hidden)
+            .map(|o| (2, Parser::invocation(o), o.help.as_str()))
+            .collect();
+        let longest = positional
+            .iter()
+            .chain(&options)
+            .map(|(indent, inv, _)| inv.chars().count() + indent)
+            .max()
+            .unwrap_or(0);
+        let max_help = 24.min(width.saturating_sub(20).max(4));
+        let help_at = (longest + 2).min(max_help);
+        let help_width = width.saturating_sub(help_at).max(11);
+        let entries = |items: &[(usize, String, &str)]| -> String {
             let mut text = String::new();
-            for (inv, help) in items {
-                let lines = wrap(help, help_width, "", "");
+            for (indent, inv, help) in items {
+                let pad = " ".repeat(*indent);
                 if help.is_empty() {
-                    text += &format!("  {inv}\n");
-                } else if inv.len() + 2 <= help_at - 2 {
-                    text += &format!("  {inv:<w$}  {}\n", lines[0], w = help_at - 4);
+                    text += &format!("{pad}{inv}\n");
+                    continue;
+                }
+                let lines = wrap(help, help_width, "", "");
+                let action_width = help_at.saturating_sub(indent + 2);
+                if inv.chars().count() <= action_width {
+                    text += &format!("{pad}{inv:<action_width$}  {}\n", lines[0]);
                     for l in &lines[1..] {
                         text += &format!("{}{l}\n", " ".repeat(help_at));
                     }
                 } else {
-                    text += &format!("  {inv}\n");
+                    text += &format!("{pad}{inv}\n");
                     for l in &lines {
                         text += &format!("{}{l}\n", " ".repeat(help_at));
                     }
@@ -582,24 +693,13 @@ impl Parser {
             }
             text
         };
-        if !self.pos.is_empty() {
+        if !positional.is_empty() {
             out += "positional arguments:\n";
-            out += &entries(
-                self.pos
-                    .iter()
-                    .map(|p| (p.metavar.unwrap_or(p.name).to_string(), p.help.as_str()))
-                    .collect(),
-            );
+            out += &entries(&positional);
             out += "\n";
         }
         out += "options:\n";
-        out += &entries(
-            self.opts
-                .iter()
-                .filter(|o| !o.hidden)
-                .map(|o| (Parser::invocation(o), o.help.as_str()))
-                .collect(),
-        );
+        out += &entries(&options);
         if !self.epilog.is_empty() {
             out += "\n";
             out += &wrap(&self.epilog, width, "", "").join("\n");
@@ -609,27 +709,135 @@ impl Parser {
     }
 }
 
-/// textwrap.wrap(text, width) after argparse folds the whitespace: words packed greedily.
-pub fn wrap(text: &str, width: usize, first: &str, rest: &str) -> Vec<String> {
-    let words: Vec<&str> = text.split_whitespace().collect();
-    let mut lines = Vec::new();
-    let mut line = first.to_string();
-    let mut empty = true;
-    for w in words {
-        let w_len = w.chars().count();
-        if !empty && line.chars().count() + 1 + w_len > width {
-            lines.push(line);
-            line = rest.to_string();
-            empty = true;
+/// \w in a Python str pattern: letters, digits and the underscore.
+fn is_word(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// textwrap's letter, [^\d\W]: a word character that isn't a digit.
+fn is_letter(c: char) -> bool {
+    is_word(c) && !c.is_numeric()
+}
+
+/// textwrap's word punctuation, [\w!"'&.,?].
+fn is_word_punct(c: char) -> bool {
+    is_word(c) || "!\"'&.,?".contains(c)
+}
+
+/// The chunks textwrap.TextWrapper splits text into: runs of spaces, words, the parts of a
+/// hyphenated word (after each hyphen it may break at), and em-dashes between words.
+fn chunks(text: &str) -> Vec<String> {
+    let c: Vec<char> = text.chars().collect();
+    let n = c.len();
+    let at = |i: usize| -> Option<char> { c.get(i).copied() };
+    let space = |i: usize| at(i).is_some_and(|ch| ch == ' ');
+    // An em-dash at i: two or more hyphens after word punctuation, before a word character.
+    let em_dash = |i: usize| -> Option<usize> {
+        if i == 0 || !is_word_punct(c[i - 1]) {
+            return None;
         }
-        if !empty {
-            line.push(' ');
+        let mut j = i;
+        while at(j) == Some('-') {
+            j += 1;
         }
-        line.push_str(w);
-        empty = false;
+        (j - i >= 2 && at(j).is_some_and(is_word)).then_some(j)
+    };
+    let mut out = Vec::new();
+    let mut p = 0;
+    while p < n {
+        if space(p) {
+            let mut q = p;
+            while space(q) {
+                q += 1;
+            }
+            out.push(c[p..q].iter().collect());
+            p = q;
+            continue;
+        }
+        if let Some(q) = em_dash(p) {
+            out.push(c[p..q].iter().collect());
+            p = q;
+            continue;
+        }
+        // A word, as short as it can be: up to a hyphen it may break after, the end of the
+        // word, or an em-dash.
+        let mut k = p + 1;
+        let end = loop {
+            if k >= n || space(k) {
+                break k;
+            }
+            if c[k] == '-' {
+                let behind = (k >= 2 && is_letter(c[k - 2]) && is_letter(c[k - 1]))
+                    || (k >= 3 && is_letter(c[k - 3]) && c[k - 2] == '-' && is_letter(c[k - 1]));
+                let ahead = at(k + 1).is_some_and(is_letter)
+                    && (at(k + 2).is_some_and(is_letter)
+                        || (at(k + 2) == Some('-') && at(k + 3).is_some_and(is_letter)));
+                if behind && ahead {
+                    break k + 1;
+                }
+                if em_dash(k).is_some() {
+                    break k;
+                }
+            }
+            k += 1;
+        };
+        out.push(c[p..end].iter().collect());
+        p = end;
     }
-    if !empty || lines.is_empty() {
-        lines.push(line);
+    out
+}
+
+/// textwrap.wrap(text, width) after argparse folds the text's whitespace: the first line
+/// starting with first and the rest with rest.
+pub fn wrap(text: &str, width: usize, first: &str, rest: &str) -> Vec<String> {
+    let folded = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut pending: Vec<String> = chunks(&folded);
+    pending.reverse();
+    let mut lines: Vec<String> = Vec::new();
+    let len = |s: &str| s.chars().count();
+    while !pending.is_empty() {
+        let indent = if lines.is_empty() { first } else { rest };
+        let room = width.saturating_sub(len(indent)).max(1);
+        if !lines.is_empty() && pending.last().is_some_and(|c| c.trim().is_empty()) {
+            pending.pop();
+        }
+        let mut line: Vec<String> = Vec::new();
+        let mut used = 0;
+        while let Some(chunk) = pending.last() {
+            if used + len(chunk) <= room {
+                used += len(chunk);
+                line.push(pending.pop().unwrap_or_default());
+            } else {
+                break;
+            }
+        }
+        if let Some(chunk) = pending.last().cloned().filter(|c| len(c) > room) {
+            // A word longer than a line: broken, after a hyphen if there's one in reach.
+            let space_left = room.saturating_sub(used).max(1);
+            let chars: Vec<char> = chunk.chars().collect();
+            let mut cut = space_left.min(chars.len());
+            if chars.len() > space_left {
+                if let Some(h) = chars[..space_left].iter().rposition(|ch| *ch == '-') {
+                    if h > 0 && chars[..h].iter().any(|ch| *ch != '-') {
+                        cut = h + 1;
+                    }
+                }
+            }
+            line.push(chars[..cut].iter().collect());
+            *pending.last_mut().unwrap() = chars[cut..].iter().collect();
+            if pending.last().is_some_and(|c| c.is_empty()) {
+                pending.pop();
+            }
+        }
+        if line.last().is_some_and(|c| c.trim().is_empty()) {
+            line.pop();
+        }
+        if !line.is_empty() {
+            lines.push(format!("{indent}{}", line.concat()));
+        }
+    }
+    if lines.is_empty() {
+        lines.push(first.to_string());
     }
     lines
 }
@@ -680,6 +888,23 @@ mod tests {
         );
         assert!(
             matches!(parser().parse(&argv(&["--help"])), Err(Stop::Help(h)) if h.starts_with("usage: hatcheck [-h]"))
+        );
+    }
+
+    #[test]
+    fn wraps_as_textwrap_does() {
+        assert_eq!(
+            chunks("a well-known --all-folders e.g. 5-hour"),
+            vec!["a", " ", "well-", "known", " ", "--all-", "folders", " ", "e.g.", " ", "5-hour"]
+        );
+        assert_eq!(chunks("word--word"), vec!["word", "--", "word"]);
+        assert_eq!(
+            wrap("the per-model limits are listed", 12, "", ""),
+            vec!["the per-", "model limits", "are listed"]
+        );
+        assert_eq!(
+            wrap("abcdefghijkl", 5, "", ""),
+            vec!["abcde", "fghij", "kl"]
         );
     }
 }

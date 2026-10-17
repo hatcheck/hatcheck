@@ -41,8 +41,9 @@ import tempfile
 
 HOME = os.path.expanduser("~")
 INSTANCES = os.path.join(HOME, ".claude-instances")
-CLAUDE_APP = "/Applications/Claude.app"
-APPS_DIR = "/Applications"
+# Where Claude Desktop is and where launchers go; the tests point both at a folder of their own.
+CLAUDE_APP = os.environ.get("HATCHECK_CLAUDE_APP") or "/Applications/Claude.app"
+APPS_DIR = os.environ.get("HATCHECK_APPS_DIR") or "/Applications"
 APP_FOLDERS = (APPS_DIR, os.path.join(HOME, "Applications"))
 NAME_OK = re.compile(r"[A-Za-z0-9._-]+")
 
@@ -181,6 +182,14 @@ def stock_icon(claude_app):
     return path if os.path.isfile(path) else None
 
 
+def pillow():
+    try:
+        import PIL  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def recolour(src, dst, hue, saturation):
     """Write the icon at src to dst with every hue turned by `hue` degrees and the saturation
     scaled by `saturation`. False, with nothing written, when that can't be done here: no Pillow,
@@ -300,9 +309,15 @@ def main(argv=None, prog=None):
             made = make_instance(args.name, args.display, args.hue, args.saturation, args.replace)
         except (ValueError, FileNotFoundError, FileExistsError) as e:
             sys.exit(str(e))
-        print("Made %s%s." % (made["app"], ", with a recoloured icon" if made["recoloured"] else
-                                           "" if args.hue % 360 == 0 and args.saturation == 1.0 else
-                                           ", with the stock icon (recolouring needs Pillow: pip install Pillow)"))
+        if made["recoloured"]:
+            how = ", with a recoloured icon"
+        elif args.hue % 360 == 0 and args.saturation == 1.0:
+            how = ""
+        elif not pillow():
+            how = ", with the stock icon (recolouring needs Pillow: pip install Pillow)"
+        else:
+            how = ", with the stock icon (it couldn't be recoloured)"
+        print("Made %s%s." % (made["app"], how))
         if made["data_dir"]:
             print("Its data folder is %s: sign in there once, on first launch." % made["data_dir"])
         else:

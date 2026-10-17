@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 
-from helpers import WINDOWS, FakeHome, load, write
+from helpers import WINDOWS, FakeHome, load, python_only, write
 
 MAC = sys.platform == "darwin"
 
@@ -22,6 +22,7 @@ def pillow():
         return False
 
 
+@python_only
 class Desktop(unittest.TestCase):
     def setUp(self):
         self.h = h = FakeHome()
