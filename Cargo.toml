@@ -1,5 +1,5 @@
-# The Rust port of hatcheck (crates/hatcheck), which is replacing the Python CLI in hatcheck/
-# command by command; see docs/rust-port.md. The desktop app is its own project for now.
+# The Rust port of hatcheck (crates/hatcheck), which replaces the Python CLI in hatcheck/; see
+# docs/rust-port.md. The desktop app is its own project, which runs the hatcheck binary.
 [workspace]
 members = ["crates/hatcheck"]
 exclude = ["desktop/src-tauri"]

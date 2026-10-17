@@ -55,7 +55,7 @@ fn engine_path() -> PathBuf {
 /// on Windows, no console window.
 fn engine_command() -> Command {
     let mut cmd = Command::new(engine_path());
-    cmd.env("NO_COLOR", "1").env("PYTHONIOENCODING", "utf-8");
+    cmd.env("NO_COLOR", "1").env("PYTHONIOENCODING", "utf-8"); // UTF-8 for a Python hatcheck on the PATH
     if let Some(Some(path)) = LOGIN_PATH.get() {
         cmd.env("PATH", path);
     }
@@ -90,7 +90,8 @@ fn run_once(args: &[String], terminal: Option<&str>) -> Result<String, String> {
 
 /// How long a command may take: enough for live usage of several accounts on a slow network.
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(120);
-/// How long a new engine may take to answer at all: the bundled one unpacks itself first.
+/// How long a new engine may take to answer at all: the system may check a new binary before it
+/// first runs, and a hatcheck found on the PATH may be the Python one, which starts slower.
 const START_TIMEOUT: Duration = Duration::from_secs(30);
 /// Engines kept running between calls. Calls that overlap get one each; spare ones beyond
 /// these are stopped when they're done.

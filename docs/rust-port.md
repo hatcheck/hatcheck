@@ -10,7 +10,7 @@ where the bundled Python engine takes 649 ms, from a 2.8 MB binary instead of 8.
 ## Why
 
 - **One binary per platform, and no Python.** Users get `hatcheck` and `hat` as a single executable,
-  and the desktop app links the code instead of shipping a 8 MB PyInstaller engine beside itself.
+  and the desktop app ships the 2.8 MB binary as its engine instead of an 8 MB PyInstaller one.
   That engine needs signing and notarizing on its own, costs about 0.3 s to unpack on every start,
   and is the kind of single-file bundle Windows Defender tends to flag.
 - **Speed.** The session list reads hundreds of megabytes of transcripts. On the same profiles the
@@ -102,8 +102,10 @@ until it links the crate.
   `uv tool install hatcheck` and `pipx install hatcheck` install the binary.
 - **Homebrew and winget** install the binaries, the launchers' included, and the `cl` and `cx`
   scripts go; `install.sh` and `install.ps1` link the binaries.
-- **The desktop app** depends on the crate and calls it directly; `scripts/build-engine.py` and the
-  sidecar go.
+- **The desktop app** runs the Rust binary as its engine, still a sidecar running `hatcheck serve`:
+  `npm run engine` builds it with cargo. Done. It stays a separate process rather than linking the
+  crate, because `serve` sets environment variables for each command, which a process with other
+  threads can't do safely, and a command can end its process, which only the engine should do.
 - **The Python code goes**, with `tests/` kept as the conformance suite until the Rust crate's own
   tests cover the same ground.
 

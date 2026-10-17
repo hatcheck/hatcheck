@@ -18,6 +18,8 @@ class Packaging(unittest.TestCase):
         self.assertEqual(re.search(r'__version__ = "([^"]+)"', text("hatcheck", "__init__.py")).group(1), version)
         self.assertEqual(load("cli").version(), version)
         self.assertIn("refs/tags/v%s.tar.gz" % version, text("packaging", "homebrew", "hatcheck.rb"))
+        # The Rust port's, which its --version prints.
+        self.assertEqual(re.search(r'^version = "([^"]+)"', text("Cargo.toml"), re.M).group(1), version)
 
     def test_one_license(self):
         self.assertTrue(text("LICENSE").startswith("MIT License\n\nCopyright (c) "))

@@ -43,13 +43,12 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
 
 ## Build it
 
-Needs Node 22, Rust (1.90 or newer) and [uv](https://docs.astral.sh/uv/), which fetches PyInstaller
-for the engine.
+Needs Node 22 and Rust (1.90 or newer).
 
 ```bash
 cd desktop
 npm install
-npm run engine          # the hatcheck CLI as src-tauri/binaries/hatcheck-<target triple>
+npm run engine          # the hatcheck binary, from crates/hatcheck, as src-tauri/binaries/hatcheck-<target triple>
 npm run tauri build     # src-tauri/target/release/bundle/: Hatcheck.app and a .dmg on macOS
 npm run tauri dev       # or run it from source, with the pages reloading as they change
 ```
@@ -72,7 +71,8 @@ icon for Windows and Linux, which show tray icons as they are.
   notifications. `index.html`, `src/main.ts`: the main window.
 - `src/engine.ts`: each engine call and the shape of its JSON. `src/format.ts`: bars, times and
   paths. `src/sample.ts`: the sample data for the browser.
-- `scripts/build-engine.py`: PyInstaller, through uvx, for the engine.
+- `scripts/build-engine.mjs`: the engine, the hatcheck binary built with cargo from the repo's
+  `crates/hatcheck`, named for the target as Tauri wants its sidecars.
 
 ## Releases
 

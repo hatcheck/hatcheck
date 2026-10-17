@@ -2,5 +2,5 @@ node_modules/
 dist/
 src-tauri/target/
 src-tauri/gen/
-# Built by scripts/build-engine.py: the hatcheck engine for this machine.
+# Built by scripts/build-engine.mjs: the hatcheck engine for this machine.
 src-tauri/binaries/hatcheck-*

@@ -40,14 +40,13 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v6
       - name: Linux libraries
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-      - name: The hatcheck engine, as a standalone binary
-        run: uv run --no-project python desktop/scripts/build-engine.py
+      - name: The hatcheck engine, the Rust binary
+        run: node desktop/scripts/build-engine.mjs
       - name: Signing, where its secrets are set
         shell: bash
         env:
