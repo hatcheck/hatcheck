@@ -27,9 +27,15 @@ import sys
 def load_sessions():
     sys.dont_write_bytecode = True  # leave no __pycache__ folder beside the scripts
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "sessions.py")
+    if "hatcheck_sessions" in sys.modules:  # loaded once per process: hatcheck serve runs many commands in one
+        return sys.modules["hatcheck_sessions"]
     spec = importlib.util.spec_from_file_location("hatcheck_sessions", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = sys.modules["hatcheck_sessions"] = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        del sys.modules["hatcheck_sessions"]
+        raise
     return module
 
 
