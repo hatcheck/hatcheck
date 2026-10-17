@@ -8,15 +8,15 @@ class Hatcheck < Formula
   desc "Claude Code and Codex accounts on one computer, each kept apart"
   homepage "https://github.com/yilab/hatcheck"
   url "https://github.com/yilab/hatcheck/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "541c02b050f6a3bac943b5a4622487441cc98b832773688068ab6a552e05ebb9"
   license "MIT"
   head "https://github.com/yilab/hatcheck.git", branch: "main"
 
-  depends_on "python@3.13"
+  depends_on "python@3.15"
 
   def install
     libexec.install "hatcheck.py", "hatcheck", "cl", "cx"
-    python = Formula["python@3.13"].opt_bin/"python3.13"
+    python = formula_opt_bin("python@3.15")/"python3.15"
     # hatcheck and hat run with Homebrew's Python; hat names itself hat in its messages.
     (bin/"hatcheck").write <<~SH
       #!/bin/sh
