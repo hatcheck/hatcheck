@@ -4,12 +4,16 @@
 
 pub mod args;
 pub mod cli;
+pub mod conv;
 pub mod facts;
+pub mod find;
+pub mod open_cmd;
 pub mod ospath;
 pub mod out;
 pub mod paths;
 pub mod py;
 pub mod sessions;
+pub mod show;
 pub mod times;
 pub mod usage;
 pub mod where_cmd;

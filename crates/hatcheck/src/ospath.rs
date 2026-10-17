@@ -235,6 +235,57 @@ pub fn getmtime(p: &str) -> std::io::Result<f64> {
     })
 }
 
+/// shutil.which(name): the program's path on the PATH, or None. A name with a separator in
+/// it is checked as it is; on Windows the PATHEXT extensions are tried too.
+pub fn which(name: &str) -> Option<String> {
+    let runnable = |p: &std::path::Path| {
+        let Ok(m) = fs::metadata(p) else { return false };
+        if m.is_dir() {
+            return false;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            m.permissions().mode() & 0o111 != 0
+        }
+        #[cfg(not(unix))]
+        {
+            true
+        }
+    };
+    let extensions: Vec<String> = if WINDOWS {
+        let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+        let lower = name.to_lowercase();
+        let mut exts: Vec<String> = pathext
+            .split(';')
+            .filter(|e| !e.is_empty())
+            .map(str::to_string)
+            .collect();
+        if exts.iter().any(|e| lower.ends_with(&e.to_lowercase())) {
+            exts.insert(0, String::new());
+        }
+        exts
+    } else {
+        vec![String::new()]
+    };
+    if name.contains('/') || (WINDOWS && name.contains('\\')) {
+        return extensions
+            .iter()
+            .map(|e| format!("{name}{e}"))
+            .find(|p| runnable(std::path::Path::new(p)));
+    }
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        for e in &extensions {
+            let candidate = dir.join(format!("{name}{e}"));
+            if runnable(&candidate) {
+                return Some(candidate.to_string_lossy().into_owned());
+            }
+        }
+    }
+    None
+}
+
 /// One component of a glob pattern: a name, or `prefix*suffix`.
 #[derive(Clone, Copy)]
 pub enum Part<'a> {

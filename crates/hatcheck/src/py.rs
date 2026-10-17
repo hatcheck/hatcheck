@@ -287,6 +287,99 @@ pub fn lstrip(text: &str) -> &str {
     text.trim_start_matches(is_space)
 }
 
+/// str.splitlines(): lines split at every line boundary Python knows, the ends dropped.
+pub fn splitlines(text: &str) -> Vec<&str> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        let end = match c {
+            '\r' => {
+                if let Some(&(_, '\n')) = chars.peek() {
+                    chars.next();
+                    i + 2
+                } else {
+                    i + 1
+                }
+            }
+            '\n' | '\x0b' | '\x0c' | '\x1c' | '\x1d' | '\x1e' | '\u{85}' | '\u{2028}'
+            | '\u{2029}' => i + c.len_utf8(),
+            _ => continue,
+        };
+        lines.push(&text[start..i]);
+        start = end;
+    }
+    if start < text.len() {
+        lines.push(&text[start..]);
+    }
+    lines
+}
+
+/// The first n characters of text, as text[:n] gives them.
+pub fn head(text: &str, n: usize) -> &str {
+    match text.char_indices().nth(n) {
+        Some((i, _)) => &text[..i],
+        None => text,
+    }
+}
+
+/// Python's int(text) for a str: an optional sign, digits with single underscores between
+/// them, whitespace around.
+pub fn int(text: &str) -> Option<i64> {
+    let t = strip(text);
+    let (sign, digits) = match t.strip_prefix('-') {
+        Some(rest) => (-1, rest),
+        None => (1, t.strip_prefix('+').unwrap_or(t)),
+    };
+    if digits.is_empty()
+        || digits.starts_with('_')
+        || digits.ends_with('_')
+        || digits.contains("__")
+    {
+        return None;
+    }
+    let clean: String = digits.chars().filter(|c| *c != '_').collect();
+    if !clean.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    clean.parse::<i64>().ok().map(|n| sign * n)
+}
+
+/// json.dumps(v, ensure_ascii=False): on one line, with Python's ", " and ": ".
+pub fn dumps_compact(v: &Value) -> String {
+    let mut out = String::new();
+    write_compact(&mut out, v);
+    out
+}
+
+fn write_compact(out: &mut String, v: &Value) {
+    match v {
+        Value::Array(a) => {
+            out.push('[');
+            for (i, item) in a.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                write_compact(out, item);
+            }
+            out.push(']');
+        }
+        Value::Object(o) => {
+            out.push('{');
+            for (i, (k, item)) in o.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                write_str(out, k);
+                out.push_str(": ");
+                write_compact(out, item);
+            }
+            out.push('}');
+        }
+        other => write_json(out, other, 0),
+    }
+}
+
 /// json.dumps(v, ensure_ascii=False, indent=2), as Python writes it.
 pub fn dumps(v: &Value) -> String {
     let mut out = String::new();
@@ -411,6 +504,33 @@ mod tests {
     fn json_as_python_dumps_it() {
         let v = json!({"a": [1, 2.0, "é\n"], "b": {}, "c": [], "d": null});
         assert_eq!(dumps(&v), "{\n  \"a\": [\n    1,\n    2.0,\n    \"é\\n\"\n  ],\n  \"b\": {},\n  \"c\": [],\n  \"d\": null\n}");
+    }
+
+    #[test]
+    fn lines_and_ints() {
+        assert_eq!(
+            splitlines("a\nb\r\nc\rd\x0ce\u{2028}f\n"),
+            vec!["a", "b", "c", "d", "e", "f"]
+        );
+        assert_eq!(splitlines(""), Vec::<&str>::new());
+        assert_eq!(splitlines("\n\n"), vec!["", ""]);
+        assert_eq!(
+            (
+                int(" 5 "),
+                int("+5"),
+                int("-3"),
+                int("1_000"),
+                int("1__0"),
+                int("x"),
+                int("")
+            ),
+            (Some(5), Some(5), Some(-3), Some(1000), None, None, None)
+        );
+        assert_eq!(
+            dumps_compact(&json!({"a": [1, 2.5], "b": {}})),
+            "{\"a\": [1, 2.5], \"b\": {}}"
+        );
+        assert_eq!(head("héllo", 2), "hé");
     }
 
     #[test]

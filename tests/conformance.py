@@ -16,7 +16,7 @@ import unittest
 TESTS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TESTS)
 
-# The tests of what the Rust port has: hatcheck sessions, usage and where.
+# The tests of what the Rust port has: hatcheck sessions, usage, where, open and show.
 PORTED = [
     "test_recent_sessions",
     "test_usage",
@@ -24,6 +24,9 @@ PORTED = [
     "test_session_cache",
     "test_json.Json",
     "test_json.MoreJson.test_where",
+    "test_json.MoreJson.test_show",
+    "test_json.MoreJson.test_login_prints_without_making_anything",
+    "test_open_best.Open",
 ]
 
 

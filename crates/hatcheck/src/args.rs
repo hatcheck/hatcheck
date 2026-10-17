@@ -41,6 +41,7 @@ pub struct Parser {
     pub epilog: String,
     opts: Vec<Opt>,
     pos: Vec<Pos>,
+    groups: Vec<Vec<&'static str>>,
 }
 
 /// A word on the command line, as argparse sorts them.
@@ -114,7 +115,14 @@ impl Parser {
                 hidden: false,
             }],
             pos: Vec::new(),
+            groups: Vec::new(),
         }
+    }
+
+    /// Options that can't be given together (add_mutually_exclusive_group), by dest.
+    pub fn exclusive(mut self, dests: &[&'static str]) -> Parser {
+        self.groups.push(dests.to_vec());
+        self
     }
 
     pub fn flag(mut self, flags: &[&'static str], dest: &'static str, help: &str) -> Parser {
@@ -276,7 +284,30 @@ impl Parser {
             .unwrap_or(o.flags[0])
     }
 
+    /// argparse's "not allowed with" for a second option from the same exclusive group.
+    fn conflicts(&self, opt: &Opt, seen: &mut Vec<(usize, &'static str)>) -> Result<(), Stop> {
+        for (g, group) in self.groups.iter().enumerate() {
+            if !group.contains(&opt.dest) {
+                continue;
+            }
+            if let Some((_, other)) = seen.iter().find(|(k, d)| *k == g && *d != opt.dest) {
+                let other = self
+                    .opts
+                    .iter()
+                    .find(|o| o.dest == *other)
+                    .map_or(String::new(), |o| o.flags.join("/"));
+                return Err(self.error(&format!(
+                    "argument {}: not allowed with argument {other}",
+                    opt.flags.join("/")
+                )));
+            }
+            seen.push((g, opt.dest));
+        }
+        Ok(())
+    }
+
     pub fn parse(&self, argv: &[String]) -> Result<Args, Stop> {
+        let mut seen_in_group: Vec<(usize, &'static str)> = Vec::new();
         let mut args = Args::default();
         let mut words: Vec<String> = Vec::new();
         let mut extras: Vec<String> = Vec::new();
@@ -310,6 +341,7 @@ impl Parser {
                 if opt.dest == "help" {
                     return Err(Stop::Help(self.help()));
                 }
+                self.conflicts(opt, &mut seen_in_group)?;
                 let names = opt.flags.join("/");
                 match explicit.take() {
                     Some(exp) if opt.takes == Takes::Nothing => {

@@ -1,7 +1,7 @@
 # The Rust port
 
-Status: started 17 October 2026. `hatcheck sessions` (the plain `hatcheck` list), `hatcheck usage` and
-`hatcheck where` are ported; the rest of the CLI is still Python, in `hatcheck/`.
+Status: started 17 October 2026. `hatcheck sessions` (the plain `hatcheck` list), `usage`, `where`,
+`open` and `show` are ported; the rest of the CLI is still Python, in `hatcheck/`.
 
 ## Why
 
@@ -26,8 +26,9 @@ Python version can be swapped for the Rust one at any point.
   `python_only` and skipped there. The Rust crate has unit tests of its own for what those covered.
 - **Real data, side by side.** Before a subcommand counts as ported, its output is compared with
   Python's on real profiles, byte for byte, read-only, with `PATH=/bin` so the Keychain is never
-  asked and `--cached` so nothing goes to the network. Sessions, usage and where match on a week
-  of sessions in 15 profiles and homes.
+  asked and `--cached` so nothing goes to the network. Everything ported so far matches: a year of
+  session lists (550 sessions, 295 of them Codex's), usage, and `where`, `open --print` and `show`
+  for 24 sessions of both agents.
 - **Python's behaviour, kept on purpose.** `crates/hatcheck/src/py.rs` reproduces what the output
   depends on: ints and floats kept apart (63 and 63.0 print differently), truthiness, `round`
   rounding half to even, `%d`, `%g`, a float's repr and `json.dumps(indent=2)`. `times.rs` reads
@@ -45,6 +46,9 @@ Python version can be swapped for the Rust one at any point.
 | `facts.rs` | reading transcripts and Codex session files, and their cache |
 | `usage.rs` | `usage.py`: accounts, live and cached usage, bars, the Fable order |
 | `where_cmd.rs` | `where.py` |
+| `open_cmd.rs`, `show.rs` | `open.py` (the session picker and the terminals) and `show.py` |
+| `find.rs` | finding a session's copies, the newest one in a folder, and `place` (`--from`, `--login`) |
+| `conv.rs` | a session as a conversation: `read_claude` and `read_codex` from `move.py` |
 | `paths.rs` | profiles, Codex homes, quoting, the resume commands, folder bindings |
 | `args.rs`, `py.rs`, `times.rs`, `ospath.rs`, `widths.rs`, `out.rs` | the Python behaviour above |
 
@@ -61,8 +65,7 @@ until it links the crate.
 
 In the order that suits the desktop app, which calls them:
 
-1. `show`, `open` (with `--login`) and `desktop` (Claude Desktop instances, with the icon recolour
-   that uses Pillow now).
+1. `desktop` (Claude Desktop instances, with the icon recolour that uses Pillow now).
 2. `serve`, the protocol the app speaks to its engine today, so the app can run the Rust binary
    before it links the crate.
 3. `best`, `bind` and `unbind` (with the session-start hook), `provider`.

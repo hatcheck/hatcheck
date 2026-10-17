@@ -1,13 +1,13 @@
 //! The hatcheck command: picks the subcommand and runs it, as hatcheck/cli.py does.
 
-use crate::{out, sessions, usage, where_cmd};
+use crate::{open_cmd, out, sessions, show, usage, where_cmd};
 
 pub const SUBCOMMANDS: &[&str] = &[
     "sessions", "usage", "where", "move", "open", "show", "best", "bind", "unbind", "desktop",
     "provider",
 ];
 /// The subcommands the Rust port has so far; the rest are still Python's (hatcheck/).
-pub const PORTED: &[&str] = &["sessions", "usage", "where"];
+pub const PORTED: &[&str] = &["sessions", "usage", "where", "open", "show"];
 
 const HELP: &str =
     "hatcheck: Claude Code and Codex accounts on one computer, each kept apart. Lists
@@ -103,6 +103,8 @@ pub fn main(argv0: &str, mut argv: Vec<String>) -> i32 {
         "sessions" => sessions::main(&argv, &prog),
         "usage" => usage::main(&argv, &prog),
         "where" => where_cmd::main(&argv, &prog),
+        "open" => open_cmd::main(&argv, &prog),
+        "show" => show::main(&argv, &prog),
         other => {
             out::eprint(&format!(
                 "{me} {other} isn't in the Rust port yet; the Python hatcheck has it\n"

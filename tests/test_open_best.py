@@ -8,7 +8,7 @@ import tempfile
 import time
 import unittest
 
-from helpers import NOW, REPO, WINDOWS, FakeHome, iso, load, write
+from helpers import ENGINE, NOW, REPO, WINDOWS, FakeHome, iso, load, python_only, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 B = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -16,7 +16,8 @@ X = "019f0000-aaaa-7000-8000-000000000001"
 
 
 def run(h, args, cwd=None, **env):
-    p = subprocess.run([sys.executable, os.path.join(REPO, "hatcheck.py")] + list(args), cwd=cwd or h.root,
+    argv = [ENGINE] if ENGINE else [sys.executable, os.path.join(REPO, "hatcheck.py")]
+    p = subprocess.run(argv + list(args), cwd=cwd or h.root,
                        env=dict(h.env(), **env), capture_output=True, text=True, encoding="utf-8")
     return p.returncode, p.stdout + p.stderr
 
@@ -94,6 +95,7 @@ class Open(unittest.TestCase):
         self.assertIn("Couldn't open a terminal", out)
         self.assertIn("Run these instead:", out)
 
+    @python_only
     def test_terminal_commands(self):
         o = load("open")
         cwd, command, shell = "/w/my app", "cl work --resume 1", "/bin/zsh"
@@ -118,6 +120,7 @@ class Open(unittest.TestCase):
         self.assertEqual(argv[:3], ["wt", "-d", "C:\\w"])
         self.assertEqual(argv[-1], "$env:X=1\\; claude\\; $env:X=$null")  # wt's own separator, escaped
 
+    @python_only
     @unittest.skipUnless(sys.platform == "darwin" and os.path.exists("/usr/bin/osacompile"), "macOS AppleScript")
     def test_terminal_applescript_compiles(self):
         argv, _ = load("open").terminal_argv("terminal", '/w/a "b"', "cl work --resume 1", "/bin/zsh")

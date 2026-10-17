@@ -540,6 +540,12 @@ pub fn codex_text(content: &Value) -> String {
         .collect()
 }
 
+/// Whether text is one of the messages Codex adds to a conversation itself.
+pub fn is_codex_harness(text: &str) -> bool {
+    let lead = py::lstrip(text);
+    CODEX_HARNESS.iter().any(|h| lead.starts_with(h))
+}
+
 /// What you typed, from a Codex record holding one of your messages, or None (also for the
 /// messages Codex adds itself).
 pub fn codex_prompt(record: &Value) -> Option<String> {
