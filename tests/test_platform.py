@@ -81,6 +81,19 @@ class PrintedCommands(unittest.TestCase):
             self.assertEqual(s.shell_path("/home/me/My Code"), "~/'My Code'")
             self.assertEqual(s.shell_path("/srv/x"), "/srv/x")
 
+    def test_move_rerun_command_quotes_values_not_flags(self):
+        m = load("move")
+        args = types.SimpleNamespace(session="11111111", profile="b", source=None, no_keep=False, dry_run=False)
+        self.assertEqual(m.rerun_command("hatcheck move", args, self.windows(), "--fork"),
+                         "hatcheck move 11111111 b --fork")
+        args.source, args.dry_run = "my profile", True
+        self.assertEqual(m.rerun_command("hatcheck move", args, self.windows(), "--fork"),
+                         "hatcheck move 11111111 b --from 'my profile' --dry-run --fork")
+        posix = load("sessions")
+        posix.powershell = lambda: False
+        self.assertEqual(m.rerun_command("hatcheck move", args, posix, "--fork"),
+                         "hatcheck move 11111111 b --from 'my profile' --dry-run --fork")
+
     def test_windows_paths_in_transcripts_are_repointed(self):
         m = load("move")
         old, new = "C:\\Users\\me\\.claude\\projects\\X\\" + ID, "C:\\Users\\me\\.claude-b\\projects\\X\\" + ID

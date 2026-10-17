@@ -1115,6 +1115,18 @@ def main(argv=None, prog=None):
     run(args, parser)
 
 
+def rerun_command(prog, args, sessions, *flags):
+    """This command again, with flags added: what to run next. The session, profile and
+    source are quoted for the shell the command is printed for; the flags stay bare, so
+    PowerShell's quoting of words that start with - doesn't turn --fork into '--fork'."""
+    quote = sessions.ps_quote if sessions.powershell() else shlex.quote
+    words = [quote(args.session), quote(args.profile)]
+    if args.source:
+        words += ["--from", quote(args.source)]
+    words += [flag for flag, on in (("--no-keep", args.no_keep), ("--dry-run", args.dry_run)) if on]
+    return " ".join([prog] + words + list(flags))
+
+
 def run(args, parser):
     """The move itself, saying what it does as it goes, and filling in args.report."""
     try:
@@ -1178,11 +1190,7 @@ def run(args, parser):
                  "the original is kept. Run it again without --no-keep.")
 
     def again(*flags):
-        """This command again, with flags added: what to run next."""
-        quote = sessions.ps_quote if sessions.powershell() else shlex.quote
-        words = [args.session, args.profile] + (["--from", args.source] if args.source else []) + \
-            [flag for flag, on in (("--no-keep", args.no_keep), ("--dry-run", args.dry_run)) if on] + list(flags)
-        return " ".join([parser.prog] + [quote(w) for w in words])
+        return rerun_command(parser.prog, args, sessions, *flags)
 
     if not converting and agent == "claude":
         resume_sid, cwd = move_claude(args, sessions, usage, sid, source, files, target, again)
