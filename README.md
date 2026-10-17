@@ -569,6 +569,21 @@ tool output and `/rewind` snapshots. Its message IDs stay the same, as in Claude
 Resuming a fork, a round trip and a copy that went on in both profiles were tested with the real
 `claude` (2.1.301).
 
+When more than one profile has the session, you're asked which copy to take. The one used last
+comes first and is the default, and each other one says how it stands to it:
+
+```
+$ hatcheck move 4215508b hp-alan
+Session 4215508b is in 3 profiles:
+  1. ~/.claude-hp-aria    Oct 17 14:02   312 prompts  used last
+  2. ~/.claude-hp-yi      Oct 16 09:11   298 prompts  14 prompts behind 1
+  3. ~/.claude-hp-aiqing  Oct 12 18:40   201 prompts  went its own way after Oct 11 20:15: 2 prompts of its own
+Which one? [1]
+```
+
+A number, a profile's name or Enter picks one. When the output isn't a terminal, as in a script or
+with `--json`, the copy used last is taken and a line says so; `--from` always decides.
+
 #### With Codex
 
 `codex` is `~/.codex` and `codex:<name>` is `~/.codex-<name>`, as a place to copy to or `--from`:
@@ -613,7 +628,7 @@ Resume it now in ~/.claude-work? [y/N]
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it                                           |
 | `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, `default` for `~/.claude`, `codex` for `~/.codex`, `codex:NAME` for `~/.codex-NAME`, or a path |
-| `--from PROFILE` | the profile or home to take it from, when more than one has it               |
+| `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--no-keep`      | delete the original once the copy is checked, which moves it (not when converting) |
 | `--fork`         | copy it in as a new session with its own ID, leaving a copy already there as it is (a converted session always gets one) |
 | `--dry-run`      | show what would be copied, converted and deleted, and change nothing         |

@@ -10,7 +10,9 @@ Usage:
   SESSION   : the session ID, or the start of it, of a Claude Code or Codex session.
   PROFILE   : where it goes: NAME for ~/.claude-NAME, default for ~/.claude,
               codex for ~/.codex, codex:NAME for ~/.codex-NAME, or a path.
-  --from    : the profile or home to take it from, when more than one has it.
+  --from    : the profile or home to take it from, when more than one has it. Without it,
+              the copies are listed and you pick one, the one used last being the default;
+              a script or --json gets that one.
   --no-keep : delete the original once the copy is checked, which moves it.
               Not when the session is converted, since that leaves things out.
   --fork    : copy it in as a new session with its own ID, as claude --fork-session
@@ -272,12 +274,15 @@ def since_split(ours, theirs, agent, sessions):
     n = shared_lines(a, b)
     when = next((r["timestamp"] for r in reversed(list(records_of(a[:n]))) if r.get("timestamp")), None)
 
-    def prompts(lines):
-        if agent == "codex":  # each prompt is in a user_message event, and again as a response item
-            return sum(1 for r in records_of(lines) if r.get("type") == "event_msg" and sessions.codex_prompt(r))
-        return sum(1 for r in records_of(lines) if r.get("type") == "user" and not r.get("isMeta")
-                   and not r.get("isSidechain") and sessions.prompt_text(r))
-    return n, when, prompts(a[n:]), prompts(b[n:])
+    return n, when, count_prompts(a[n:], agent, sessions), count_prompts(b[n:], agent, sessions)
+
+
+def count_prompts(lines, agent, sessions):
+    """How many prompts these lines of a session hold."""
+    if agent == "codex":  # each prompt is in a user_message event, and again as a response item
+        return sum(1 for r in records_of(lines) if r.get("type") == "event_msg" and sessions.codex_prompt(r))
+    return sum(1 for r in records_of(lines) if r.get("type") == "user" and not r.get("isMeta")
+               and not r.get("isSidechain") and sessions.prompt_text(r))
 
 
 def last_time(data):
@@ -288,6 +293,87 @@ def last_time(data):
 def time_text(stamp, sessions):
     t = sessions.parse_time(stamp) if isinstance(stamp, str) else None
     return time.strftime("%b %d %H:%M", time.localtime(t)) if t else "an earlier move"
+
+
+ask = input  # the prompt for which copy to take; tests replace it
+
+
+def interactive():
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def copies_used_last_first(where, agent, sessions):
+    """The copies of one session, {folder: [files]}, as dicts, the one written last first:
+    folder, files, file (the transcript), data, when (its last record's time, if it has one)
+    and time (that, or the file's modification time)."""
+    copies = []
+    for folder, files in where.items():
+        path = max(files, key=os.path.getmtime)
+        data = read(path)
+        when = last_time(data)
+        t = sessions.parse_time(when) if when else None
+        copies.append({"folder": folder, "files": files, "file": path, "data": data, "when": when,
+                       "time": t if t else os.path.getmtime(path)})
+    return sorted(copies, key=lambda c: -c["time"])
+
+
+def copy_lines(copies, agent, sessions, show):
+    """One line per copy: where, when it was last written, its prompts, and how it stands to
+    the first one, the one used last."""
+    newest, width = copies[0], max(len(show(c["folder"])) for c in copies)
+    lines = []
+    for i, c in enumerate(copies):
+        total = count_prompts(lines_of(c["data"]), agent, sessions)
+        if i == 0:
+            standing = "used last"
+        else:
+            _, split, mine, other = since_split(newest["data"], c["data"], agent, sessions)
+            if mine == 0 and other == 0:
+                standing = "the same as 1"
+            elif other == 0:
+                standing = "%d prompt%s behind 1" % (mine, "s" * (mine != 1))
+            elif mine == 0:
+                standing = "%d prompt%s beyond 1" % (other, "s" * (other != 1))
+            else:
+                standing = "went its own way after %s: %d prompt%s of its own" % (
+                    time_text(split, sessions), other, "s" * (other != 1))
+        lines.append("%-*s  %s  %4d prompt%s  %s" % (width, show(c["folder"]), time.strftime("%b %d %H:%M", time.localtime(c["time"])),
+                                                      total, " " if total == 1 else "s", standing))
+    return lines
+
+
+def choose_source(sid, where, agent, sessions, show, args):
+    """Which copy to take when several profiles have the session: the one used last, unless
+    you pick another at the prompt. A script, a pipe or --json gets the one used last."""
+    copies = copies_used_last_first(where, agent, sessions)
+    args.report["copies"] = [c["folder"] for c in copies]
+    args.report["source_choice"] = "used last"
+    if args.json or not interactive():
+        print("Session %s is in %s too. Taking the copy in %s, used last; --from picks another."
+              % (sid[:8], ", ".join(show(c["folder"]) for c in copies[1:]), show(copies[0]["folder"])))
+        return copies[0]["folder"]
+    print("Session %s is in %d profiles:" % (sid[:8], len(copies)))
+    for i, line in enumerate(copy_lines(copies, agent, sessions, show), 1):
+        print("  %d. %s" % (i, line))
+    while True:
+        try:
+            answer = ask("Which one? [1] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            sys.exit("Nothing copied.")
+        if not answer:
+            return copies[0]["folder"]
+        if answer.isdigit() and 1 <= int(answer) <= len(copies):
+            return copies[int(answer) - 1]["folder"]
+        for c in copies:
+            folder = c["folder"]
+            base = os.path.basename(folder)
+            short = base.split("-", 1)[1] if "-" in base else "default"
+            names = {show(folder), folder, base, short, "%s:%s" % (agent, short)}
+            if answer in names:
+                return folder
+        args.report["source_choice"] = "asked"
+        print("Answer with a number from 1 to %d, or the profile's name." % len(copies))
 
 
 def copy(src, dst, pairs, ids=None):
@@ -1173,8 +1259,10 @@ def run(args, parser):
                  % (args.session, len(found), "\n".join(lines[:10] + ["  …"] * (len(lines) > 10))))
     ((agent, sid), where), = found.items()
     if len(where) > 1:
-        sys.exit("Session %s is in %s; pick one with --from" % (sid, " and ".join(map(show, where))))
-    (source, files), = where.items()
+        source = choose_source(sid, where, agent, sessions, show, args)
+    else:
+        source, = where
+    files = where[source]
     if agent == target_agent and os.path.realpath(source) == os.path.realpath(target):
         sys.exit("Session %s is already in %s" % (sid, show(target)))
 

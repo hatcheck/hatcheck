@@ -1,4 +1,7 @@
 """hatcheck move against a throwaway home."""
+import contextlib
+import glob
+import io
 import json
 import os
 import re
@@ -6,6 +9,7 @@ import select
 import subprocess
 import sys
 import time
+import types
 import unittest
 
 from helpers import NOW, WINDOWS, FakeHome, command, iso, load, rec, write
@@ -216,14 +220,42 @@ class MoveSession(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.transcript))  # the original stays
 
     def test_which_session_and_where(self):
-        self.h.session(self.b, self.cwd, S2, "In b")
-        self.h.session(self.default, self.cwd, S2, "In default")
-        code, out = self.h.run(SCRIPT, S2[:8], "a2")
-        self.assertEqual(code, 1)
-        self.assertIn("pick one with --from", out)
-        code, out = self.h.run(SCRIPT, S2[:8], "a2", "--from", "b")
+        self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
+        self.h.session(self.default, self.cwd, S2, "In default", minutes_ago=3)
+        code, out = self.h.run(SCRIPT, S2[:8], "a2")  # piped, so no asking: the copy used last, and a note
+        self.assertEqual(code, 0, out)
+        self.assertIn("Session %s is in %s too. Taking the copy in %s, used last; --from picks another."
+                      % (S2[:8], self.h.shown(self.b), self.h.shown(self.default)), out)
+        self.assertIn('"In default"', out)
+        code, out = self.h.run(SCRIPT, S2[:8], "a2", "--from", "b", "--fork")
         self.assertEqual(code, 0, out)
         self.assertIn('"In b"', out)
+        code, out = self.h.run(SCRIPT, S2[:8], "a2", "--json")
+        self.assertEqual(code, 0, out)
+        report = json.loads(out[out.index("{"):])
+        self.assertEqual(report["copies"], [self.default, self.b])
+        self.assertEqual(report["source_choice"], "used last")
+
+    def test_asks_which_copy_in_a_terminal(self):
+        m, s = load("move"), load("sessions")
+        self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
+        self.h.session(self.default, self.cwd, S2, "In default", minutes_ago=3)
+        where = {p: glob.glob(os.path.join(p, "projects", "*", S2 + ".jsonl")) for p in (self.b, self.default)}
+        args = types.SimpleNamespace(json=False, report={})
+        answers = iter(["", "2", "zzz", "b", "default"])
+        was = m.ask, m.interactive
+        m.ask, m.interactive = (lambda prompt: next(answers)), (lambda: True)
+        self.addCleanup(setattr, m, "ask", was[0])
+        self.addCleanup(setattr, m, "interactive", was[1])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            picked = [m.choose_source(S2, where, "claude", s, s.shell_path, args) for _ in range(4)]
+        self.assertEqual(picked, [self.default, self.b, self.b, self.default])  # Enter, 2, zzz then b, default
+        text = out.getvalue()
+        self.assertIn("Session %s is in 2 profiles:" % S2[:8], text)
+        self.assertIn("used last", text.splitlines()[1])
+        self.assertIn("2. ", text.splitlines()[2])
+        self.assertEqual(text.count("Answer with a number from 1 to 2, or the profile's name."), 1)
         self.h.session(self.b, self.cwd, S2[:8] + "-9999-4999-8999-999999999999", "Same prefix")
         code, out = self.h.run(SCRIPT, S2[:8], "fresh", "--from", "b")
         self.assertIn("matches 2 sessions", out)
