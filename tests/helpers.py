@@ -73,6 +73,46 @@ def argv_of(script):
     return [sys.executable] + command(script)
 
 
+INTERRUPT = object()  # for in_terminal: Ctrl+C at that prompt, as SIGINT
+
+
+def in_terminal(argv, replies, env, cwd):
+    """Run argv on a pseudo-terminal, as someone at one would: each (prompt, keys) in replies
+    is typed once that prompt shows, in order. keys are bytes (b"y\\n"; b"\\x04" ends the input)
+    or INTERRUPT. Returns the exit code and everything it showed, with \\n line ends. Not on
+    Windows."""
+    import pty
+    import select
+    import signal
+    master, slave = pty.openpty()
+    p = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave, env=env, cwd=cwd)
+    os.close(slave)
+    out, seen, replies, deadline = b"", 0, list(replies), time.time() + 30
+    while time.time() < deadline:
+        ready, _, _ = select.select([master], [], [], 0.2)
+        if ready:
+            try:
+                chunk = os.read(master, 4096)
+            except OSError:  # Linux, once the other end has closed
+                chunk = b""
+            if not chunk:
+                break
+            out += chunk
+        elif p.poll() is not None:
+            break
+        if replies and replies[0][0] in out[seen:]:
+            prompt, keys = replies.pop(0)
+            seen = out.index(prompt, seen) + len(prompt)
+            time.sleep(0.1)  # so it's reading by now
+            if keys is INTERRUPT:
+                p.send_signal(signal.SIGINT)
+            else:
+                os.write(master, keys)
+    p.wait(timeout=10)
+    os.close(master)
+    return p.returncode, out.decode("utf-8", "replace").replace("\r\n", "\n")
+
+
 def load(script):
     """One of the repo's scripts, imported as a module: a module of the hatcheck/ folder by its
     name (usage, cli), or another script by its file name."""

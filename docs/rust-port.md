@@ -1,8 +1,8 @@
 # The Rust port
 
-Status: started 17 October 2026. `hatcheck sessions` (the plain `hatcheck` list), `usage`, `where`,
-`open`, `show`, `desktop`, `best`, `bind`, `unbind`, `provider` and `serve` are ported: every
-subcommand but `move`. The launchers (`cl`, `cx`, `claude-z`, `claude-k`) are still scripts.
+Status: started 17 October 2026. Every subcommand is ported: `hatcheck sessions` (the plain
+`hatcheck` list), `usage`, `where`, `move`, `open`, `show`, `desktop`, `best`, `bind`, `unbind`,
+`provider` and `serve`. The launchers (`cl`, `cx`, `claude-z`, `claude-k`) are still scripts.
 The desktop app's self-test passes with the Rust binary as its engine: its first call takes 51 ms
 where the bundled Python engine takes 649 ms, from a 2.8 MB binary instead of 8.1 MB.
 
@@ -33,7 +33,13 @@ Python version can be swapped for the Rust one at any point.
   session lists (550 sessions, 295 of them Codex's), usage, and `where`, `open --print` and `show`
   for 24 sessions of both agents; `best`, `bind` and `provider` on real accounts, bindings and
   provider settings; the help and errors of every ported command at several terminal widths;
-  and Claude Desktop's real icon recoloured at four settings, every pixel the same.
+  and Claude Desktop's real icon recoloured at four settings, every pixel the same. `move` was
+  compared with `--dry-run` only, in text and as JSON, on 91 real sessions: 26 copies between
+  profiles, 30 Codex sessions converted for Claude Code and 23 Claude Code sessions for Codex
+  (six of them long enough to leave turns out), and the refusals of open and empty sessions.
+- **Moves for real, in fake homes.** Every command the `move` tests run, with `--dry-run` and
+  `--dry-run --json` runs of it beside it, was run by both versions in fake homes built at the same
+  paths: the same output, and the same files left, with the same bytes, permissions and times.
 - **Python's behaviour, kept on purpose.** `crates/hatcheck/src/py.rs` reproduces what the output
   depends on: ints and floats kept apart (63 and 63.0 print differently), truthiness, `round`
   rounding half to even, `%d`, `%g`, a float's repr and `json.dumps(indent=2)`. `times.rs` reads
@@ -56,6 +62,7 @@ Python version can be swapped for the Rust one at any point.
 | `where_cmd.rs` | `where.py` |
 | `open_cmd.rs`, `show.rs` | `open.py` (the session picker and the terminals) and `show.py` |
 | `find.rs` | finding a session's copies, the newest one in a folder, and `place` (`--from`, `--login`) |
+| `move_cmd.rs` | `move.py`: copies, updates, forks and conversions, and the copy chooser |
 | `conv.rs` | a session as a conversation: `read_claude` and `read_codex` from `move.py` |
 | `desktop.rs` | `desktop.py`: Claude Desktop instances, their launchers and recoloured icons |
 | `serve.rs` | `hatcheck serve`, the desktop app's line-by-line JSON protocol, as in `cli.py` |
@@ -75,15 +82,15 @@ until it links the crate.
   itself, where Python's runs its interpreter and `hatcheck.py`.
 - **A recolour that fails** says the icon couldn't be recoloured; Python's says so too now, and
   still asks for Pillow when that's what's missing, which the Rust port never needs.
+- **Ctrl+C at a `move` prompt on Windows** ends hatcheck there and then. Elsewhere it's taken as
+  Python takes it: no copy at "Which one?", and no to "Resume it now?".
+- **A Codex lock file that can't be opened** stops the move with the error, where Python's
+  stopped with a traceback.
 
 ## Still to port
 
-In the order that suits the desktop app, which calls them:
-
-1. `move`, the largest: copies, fast-forwards and forks between profiles, and conversion between
-   Claude Code and Codex.
-2. The launchers `cl`, `cx`, `claude-z` and `claude-k`, now shell and PowerShell scripts, and
-   Python for the PyPI package.
+The launchers `cl`, `cx`, `claude-z` and `claude-k`, now shell and PowerShell scripts, and
+Python for the PyPI package.
 
 Then the switch:
 

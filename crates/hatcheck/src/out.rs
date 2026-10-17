@@ -10,10 +10,25 @@ thread_local! {
 }
 
 /// Run f with what it prints kept, not written: (its result, its stdout, its stderr).
+/// Captures nest, as redirect_stdout does: move --json under hatcheck serve sets its text
+/// aside and prints its report into serve's capture, not past it.
 pub fn captured<T>(f: impl FnOnce() -> T) -> (T, String, String) {
-    CAPTURE.with(|c| *c.borrow_mut() = Some((String::new(), String::new())));
+    /// Puts the outer capture back, even when f panics.
+    struct Outer(Option<Option<(String, String)>>);
+    impl Drop for Outer {
+        fn drop(&mut self) {
+            if let Some(outer) = self.0.take() {
+                CAPTURE.with(|c| *c.borrow_mut() = outer);
+            }
+        }
+    }
+    let mut outer =
+        Outer(Some(CAPTURE.with(|c| {
+            c.borrow_mut().replace((String::new(), String::new()))
+        })));
     let result = f();
-    let (out, err) = CAPTURE.with(|c| c.borrow_mut().take()).unwrap_or_default();
+    let mine = CAPTURE.with(|c| std::mem::replace(&mut *c.borrow_mut(), outer.0.take().flatten()));
+    let (out, err) = mine.unwrap_or_default();
     (result, out, err)
 }
 

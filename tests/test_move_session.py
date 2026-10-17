@@ -5,14 +5,12 @@ import io
 import json
 import os
 import re
-import select
 import subprocess
 import sys
-import time
 import types
 import unittest
 
-from helpers import NOW, WINDOWS, FakeHome, command, iso, load, rec, write
+from helpers import INTERRUPT, NOW, WINDOWS, FakeHome, argv_of, in_terminal, iso, load, python_only, rec, write
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
@@ -236,6 +234,7 @@ class MoveSession(unittest.TestCase):
         self.assertEqual(report["copies"], [self.default, self.b])
         self.assertEqual(report["source_choice"], "used last")
 
+    @python_only
     def test_asks_which_copy_in_a_terminal(self):
         m, s = load("move"), load("sessions")
         self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
@@ -256,11 +255,46 @@ class MoveSession(unittest.TestCase):
         self.assertIn("used last", text.splitlines()[1])
         self.assertIn("2. ", text.splitlines()[2])
         self.assertEqual(text.count("Answer with a number from 1 to 2, or the profile's name."), 1)
+
+    @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
+    def test_picks_a_copy_in_a_terminal(self):
+        self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
+        self.h.session(self.default, self.cwd, S2, "In default", minutes_ago=3)
+        ask = b"Which one? [1] "
+
+        def run(*replies, args=("--dry-run",)):
+            return in_terminal(argv_of(SCRIPT) + [S2[:8], "a2"] + list(args), replies, self.h.env(), self.h.root)
+        code, out = run((ask, b"zzz\n"), (ask, b"b\n"))
+        self.assertEqual(code, 0, out)
+        lines = out.splitlines()
+        self.assertEqual(lines[0], "Session %s is in 2 profiles:" % S2[:8])
+        self.assertRegex(lines[1], r"^  1\. %s +[A-Z][a-z]{2} \d\d \d\d:\d\d +1 prompt +used last$"
+                         % re.escape(self.h.shown(self.default)))
+        self.assertTrue(lines[2].startswith("  2. %s " % self.h.shown(self.b)), lines[2])
+        self.assertEqual(out.count("Answer with a number from 1 to 2, or the profile's name."), 1)
+        self.assertIn('Would copy session %s "In b"' % S2[:8], out)
+        code, out = run((ask, b"\n"))  # Enter: the one used last
+        self.assertIn('Would copy session %s "In default"' % S2[:8], out)
+        code, out = run((ask, b"2\n"))
+        self.assertIn('Would copy session %s "In b"' % S2[:8], out)
+        for keys in (b"\x04", INTERRUPT):  # the end of input, and Ctrl+C
+            code, out = run((ask, keys))
+            self.assertEqual(code, 1, out)
+            self.assertTrue(out.rstrip().endswith("Nothing copied."), out)
+        code, out = run((ask, b"default\n"), (b"[y/N] ", b"\n"), args=())
+        self.assertEqual(code, 0, out)
+        self.assertIn('Copied session %s "In default"' % S2[:8], out)
+        self.assertIn("Resume it now in %s? [y/N]" % self.h.shown(self.a2), out)
+
+    def test_more_than_one_match_and_no_such_profile(self):
+        self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
         self.h.session(self.b, self.cwd, S2[:8] + "-9999-4999-8999-999999999999", "Same prefix")
         code, out = self.h.run(SCRIPT, S2[:8], "fresh", "--from", "b")
-        self.assertIn("matches 2 sessions", out)
+        self.assertEqual(code, 1, out)
+        self.assertIn("%s matches 2 sessions; give more of the ID:\n  %s  %s\n" % (S2[:8], S2, self.h.shown(self.b)), out)
         code, out = self.h.run(SCRIPT, S1[:8], "nosuch")
-        self.assertIn("isn't a profile folder", out)
+        self.assertEqual(code, 1, out)
+        self.assertIn("isn't a profile folder. Sign in there first, e.g. with: cl nosuch", out)
 
     def test_session_last_on_a_provider(self):
         self.h.session(self.b, self.cwd, S2, "On Kimi", model="k3")
@@ -322,6 +356,7 @@ class ResumeNow(unittest.TestCase):
         line = "CLAUDE_CONFIG_DIR=%s cwd=%s args=--resume %s" % (config_dir, self.cwd, S1)
         self.assertIn(line.lower() if WINDOWS else line, out.lower() if WINDOWS else out)
 
+    @python_only
     def test_runs_claude_in_the_new_profile(self):
         snippet = ("import sys; sys.path.insert(0, %r); from helpers import load; "
                    "load('move').resume_now(*sys.argv[1:])" % os.path.dirname(os.path.abspath(__file__)))
@@ -334,40 +369,22 @@ class ResumeNow(unittest.TestCase):
 
     @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
     def test_asks_in_a_terminal(self):
-        import pty
-
-        def run(answer):
-            master, slave = pty.openpty()
-            p = subprocess.Popen([sys.executable] + command(SCRIPT) + [S1[:8], "b"], stdin=slave,
-                                 stdout=slave, stderr=slave, env=self.env, cwd=self.h.root)
-            os.close(slave)
-            out, sent, deadline = b"", False, time.time() + 30
-            while time.time() < deadline:
-                ready, _, _ = select.select([master], [], [], 0.2)
-                if ready:
-                    try:
-                        chunk = os.read(master, 4096)
-                    except OSError:  # Linux, once the other end has closed
-                        chunk = b""
-                    if not chunk:
-                        break
-                    out += chunk
-                elif p.poll() is not None:
-                    break
-                if not sent and b"[y/N]" in out:
-                    os.write(master, answer + b"\n")
-                    sent = True
-            p.wait(timeout=10)
-            os.close(master)
-            return p.returncode, out.decode("utf-8", "replace").replace("\r\n", "\n")
-
-        code, out = run(b"")
+        def run(args, keys, env=None):
+            return in_terminal(argv_of(SCRIPT) + args, [(b"[y/N] ", keys)], env or self.env, self.h.root)
+        code, out = run([S1[:8], "b"], b"\n")
         self.assertEqual(code, 0, out)
         self.assertIn("Resume it now in %s? [y/N]" % self.h.shown(self.b), out)
         self.assertNotIn("args=", out)  # Enter means no
-        code, out = run(b"y")
+        code, out = run([S1[:8], "b"], b"y\n")
         self.assertEqual(code, 0, out)
         self.expect(out, self.b)
+        code, out = run([S1[:8], "b"], INTERRUPT)  # Ctrl+C: no, as Enter is
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("args=", out)
+        # Back to ~/.claude, where plain claude looks: CLAUDE_CONFIG_DIR unset, even when it was set.
+        code, out = run([S1[:8], "default", "--from", "b"], b"y\n", dict(self.env, CLAUDE_CONFIG_DIR=self.default))
+        self.assertEqual(code, 0, out)
+        self.expect(out, "unset")
 
 
 if __name__ == "__main__":

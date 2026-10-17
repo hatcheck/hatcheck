@@ -394,6 +394,61 @@ pub fn dumps_ascii(v: &Value) -> String {
     out
 }
 
+/// json.dumps(v, ensure_ascii=False, separators=(",", ":")): as Claude Code and Codex write
+/// their lines, and as the Python version rewrote a line it changed.
+pub fn dumps_tight(v: &Value) -> String {
+    let mut out = String::new();
+    write_tight(&mut out, v);
+    out
+}
+
+fn write_tight(out: &mut String, v: &Value) {
+    match v {
+        Value::Array(a) => {
+            out.push('[');
+            for (i, item) in a.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_tight(out, item);
+            }
+            out.push(']');
+        }
+        Value::Object(o) => {
+            out.push('{');
+            for (i, (k, item)) in o.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_str(out, k);
+                out.push(':');
+                write_tight(out, item);
+            }
+            out.push('}');
+        }
+        other => write_json(out, other, 0),
+    }
+}
+
+/// Python's == for JSON values: numbers by value (1, 1.0 and true alike), dicts whatever
+/// their order, lists in order.
+pub fn same(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Array(x), Value::Array(y)) => {
+            x.len() == y.len() && x.iter().zip(y).all(|(p, q)| same(p, q))
+        }
+        (Value::Object(x), Value::Object(y)) => {
+            x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| same(v, w)))
+        }
+        (Value::String(x), Value::String(y)) => x == y,
+        (Value::Null, Value::Null) => true,
+        _ => match (Num::of(a), Num::of(b)) {
+            (Some(x), Some(y)) => x.f() == y.f(),
+            _ => false,
+        },
+    }
+}
+
 fn write_compact(out: &mut String, v: &Value) {
     match v {
         Value::Array(a) => {
@@ -573,6 +628,19 @@ mod tests {
             "{\"a\": [1, 2.5], \"b\": {}}"
         );
         assert_eq!(head("héllo", 2), "hé");
+    }
+
+    #[test]
+    fn tight_json_and_equality() {
+        assert_eq!(
+            dumps_tight(&json!({"a": [1, 2.5, "x\ny"], "b": {}, "é": null})),
+            "{\"a\":[1,2.5,\"x\\ny\"],\"b\":{},\"é\":null}"
+        );
+        assert!(same(
+            &json!({"a": 1, "b": [true]}),
+            &json!({"b": [1], "a": 1.0})
+        ));
+        assert!(!same(&json!([1, 2]), &json!([2, 1])));
     }
 
     #[test]

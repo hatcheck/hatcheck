@@ -557,6 +557,68 @@ mod tests {
     use super::*;
 
     #[test]
+    fn follows_the_conversation_past_rewinds_and_compactions() {
+        fn msg(uuid: &str, parent: Option<&str>, role: &str, text: &str) -> serde_json::Value {
+            let content = if role == "user" {
+                serde_json::json!(text)
+            } else {
+                serde_json::json!([{"type": "text", "text": text}])
+            };
+            serde_json::json!({"type": role, "uuid": uuid, "parentUuid": parent, "timestamp": "2026-10-17T21:58:36Z", "cwd": "/w",
+                               "message": {"role": role, "content": content}})
+        }
+        let mut summary = msg("8", Some("7"), "user", "Summary of the above");
+        summary["isCompactSummary"] = serde_json::json!(true);
+        let records = [
+            msg("1", None, "user", "first"),
+            msg("2", Some("1"), "assistant", "one"),
+            msg("3", Some("2"), "user", "undone by /rewind"),
+            msg("4", Some("3"), "assistant", "dropped"),
+            msg("5", Some("2"), "user", "second"),
+            msg("6", Some("5"), "assistant", "two"),
+            serde_json::json!({"type": "system", "subtype": "compact_boundary", "uuid": "7", "parentUuid": null, "logicalParentUuid": "6"}),
+            summary,
+            msg(
+                "9",
+                Some("8"),
+                "user",
+                "<command-name>/model</command-name>",
+            ),
+            msg("10", Some("9"), "user", "third"),
+            msg("11", Some("10"), "assistant", "three"),
+        ];
+        let dir = std::env::temp_dir().join(format!("hatcheck-rewinds-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("aaaaaaaa-0000-4000-8000-000000000001.jsonl");
+        std::fs::write(
+            &path,
+            records
+                .iter()
+                .map(|r| r.to_string() + "\n")
+                .collect::<String>(),
+        )
+        .unwrap();
+        let conv = read_claude(&path.to_string_lossy());
+        std::fs::remove_dir_all(&dir).unwrap();
+        let conv = conv.unwrap();
+        let texts: Vec<(String, String)> = conv
+            .turns
+            .iter()
+            .map(|(role, t, _)| (role.clone(), t.join(" ")))
+            .collect();
+        let want = [
+            ("user", "first"),
+            ("assistant", "one"),
+            ("user", "second"),
+            ("assistant", "two"),
+            ("user", "third"),
+            ("assistant", "three"),
+        ];
+        assert_eq!(texts, want.map(|(r, t)| (r.to_string(), t.to_string())));
+        assert_eq!(conv.cwd.as_deref(), Some("/w"));
+    }
+
+    #[test]
     fn clips_as_move_does() {
         assert_eq!(clip("a\nb\nc", (2, 100)), "a\nb\n… (1 more line)");
         assert_eq!(clip("abcdef", (5, 3)), "abc …");

@@ -10,6 +10,7 @@ pub mod conv;
 pub mod desktop;
 pub mod facts;
 pub mod find;
+pub mod move_cmd;
 pub mod open_cmd;
 pub mod ospath;
 pub mod out;

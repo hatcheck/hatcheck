@@ -9,7 +9,7 @@ import sys
 import unittest
 from unittest import mock
 
-from helpers import NOW, WINDOWS, FakeHome, iso, load, rec, write
+from helpers import NOW, WINDOWS, FakeHome, argv_of, in_terminal, iso, load, python_only, rec, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 X = "019f0000-aaaa-7000-8000-000000000001"  # Codex IDs are version 7 UUIDs
@@ -219,6 +219,7 @@ class Moves(unittest.TestCase):
         code, out = self.h.run(MOVE, X[:13], "work")
         self.assertEqual(code, 0, out)
 
+    @python_only
     def test_where_it_goes(self):
         m = load(MOVE)
         home = m.HOME
@@ -230,6 +231,7 @@ class Moves(unittest.TestCase):
         self.assertEqual(m.place(os.path.join(self.h.home, ".codex-same")), ("codex", self.same))
 
 
+@python_only
 class Converting(unittest.TestCase):
     def setUp(self):
         self.m = load(MOVE)
@@ -284,6 +286,7 @@ class Converting(unittest.TestCase):
 class ResumeInCodex(unittest.TestCase):
     """The y in "Resume it now in ...? [y/N]" for a Codex home: codex resume <id>, with its CODEX_HOME."""
 
+    @python_only
     def test_runs_codex_in_the_new_home(self):
         h = FakeHome()
         self.addCleanup(h.cleanup)
@@ -304,6 +307,24 @@ class ResumeInCodex(unittest.TestCase):
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
             line = "CODEX_HOME=%s cwd=%s args=resume %s" % (shown or home, cwd, X)
             self.assertIn(line.lower() if WINDOWS else line, p.stdout.lower() if WINDOWS else p.stdout)
+
+    @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
+    def test_asks_in_a_terminal(self):
+        h = FakeHome()
+        self.addCleanup(h.cleanup)
+        cwd, bindir = h.folder("code", "api"), os.path.join(h.root, "fakebin")
+        write(os.path.join(bindir, "codex"), '#!/bin/sh\necho "CODEX_HOME=${CODEX_HOME-unset} cwd=$(pwd) args=$*"\n')
+        os.chmod(os.path.join(bindir, "codex"), 0o755)
+        codex, same = h.codex_home("default", "acct-1"), h.codex_home("same", "acct-1")
+        h.codex_session(codex, cwd, X, "Fix the uploader", 30)
+        env = dict(h.env(), PATH=bindir + os.pathsep + "/bin", CODEX_HOME=os.path.join(h.home, ".codex-elsewhere"))
+        # Copied to ~/.codex-same and resumed there; then back in ~/.codex, CODEX_HOME unset.
+        for args, shown in (([X[:13], "codex:same"], same), ([X[:13], "codex", "--from", "codex:same"], "unset")):
+            code, out = in_terminal(argv_of(MOVE) + args, [(b"[y/N] ", b"y\n")], env, h.root)
+            self.assertEqual(code, 0, out)
+            self.assertIn("Resume it now in %s? [y/N]" % h.shown(os.path.join(h.home, ".codex-same" if shown == same
+                                                                               else ".codex")), out)
+            self.assertIn("CODEX_HOME=%s cwd=%s args=resume %s" % (shown, cwd, X), out)
 
 
 if __name__ == "__main__":

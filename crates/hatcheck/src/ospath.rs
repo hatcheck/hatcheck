@@ -194,6 +194,32 @@ pub fn realpath(p: &str) -> String {
 }
 
 /// os.path.normcase(p): lower case with backslashes on Windows, unchanged elsewhere.
+/// os.path.relpath(path, start): path from start, with .. for each folder to go up.
+pub fn relpath(path: &str, start: &str) -> String {
+    let (from, to) = (abspath(start), abspath(path));
+    let parts = |p: &str| -> Vec<String> {
+        splitdrive(p)
+            .1
+            .split(is_sep)
+            .filter(|x| !x.is_empty())
+            .map(String::from)
+            .collect()
+    };
+    let (from, to) = (parts(&from), parts(&to));
+    let shared = from
+        .iter()
+        .zip(&to)
+        .take_while(|(a, b)| normcase(a) == normcase(b))
+        .count();
+    let mut rel: Vec<String> = vec!["..".to_string(); from.len() - shared];
+    rel.extend(to[shared..].iter().cloned());
+    if rel.is_empty() {
+        ".".into()
+    } else {
+        rel.join(SEP)
+    }
+}
+
 pub fn normcase(p: &str) -> String {
     if WINDOWS {
         p.replace('/', "\\").to_lowercase()

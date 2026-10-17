@@ -186,7 +186,7 @@ pub fn read_oauth(profile: &str) -> Value {
 }
 
 /// The profile's signed-in account (oauthAccount), and the usage snapshot Claude Code saved.
-fn read_config(profile: &str) -> (Value, Value) {
+pub fn read_config(profile: &str) -> (Value, Value) {
     let Some(config) = std::fs::read_to_string(config_path(profile))
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
