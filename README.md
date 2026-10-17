@@ -382,7 +382,8 @@ which is listed too. Codex files its sessions by the date they started, archived
 
 ### `hatcheck`: what to resume
 
-`hat` is the short name: `hat`, `hat usage`, `hat move …` and so on work the same.
+`hat` is the short name: `hat`, `hat usage`, `hat move …` and so on work the same. `hat check` is the name
+in two words, so it's `hat` again: `hat check` lists sessions and `hat check usage` is `hat usage`.
 
 Lists the Claude Code sessions from every `~/.claude*` profile, and the Codex sessions from every
 `~/.codex*` home, that were active in the last 24 hours or are still open, grouped by folder and
@@ -843,7 +844,7 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
 
 - **`desktop/`** — the desktop app: Tauri, with the CLI inside it ([its README](desktop/README.md)).
 - **`site/`** — the landing page, one self-contained file, served at [hatcheck.dev](https://hatcheck.dev)
-  from Cloudflare as static assets; `wrangler deploy` in that folder ships it. The logo lives there too:
+  from Cloudflare as static assets; `site/deploy.sh` ships it. The logo lives there too:
   `logo.svg` and `logo-dark.svg` (the mark), `logo-wordmark.svg` and `logo-wordmark-dark.svg`, `favicon.svg`.
 - **`docs/proposals/`** — the plans these came from: [the CLI features](docs/proposals/cli-features.md)
   and [the desktop app](docs/proposals/desktop-app.md).

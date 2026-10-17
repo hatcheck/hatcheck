@@ -211,6 +211,13 @@ class Commands(unittest.TestCase):
         self.assertIn("usage: hat usage", out)
         code, out = self.run_command([sys.executable, hatcheck, "--as", "hat", "nope"])
         self.assertIn("hat: there's no 'nope' subcommand; see hat --help", out)
+        code, out = self.run_command([sys.executable, hatcheck, "--as", "hat", "check", "3d", "--no-usage"])
+        self.assertEqual(code, 0, out)  # hat check: hat again, so the session list
+        self.assertIn("cl work --resume " + ID, out)
+        code, out = self.run_command([sys.executable, hatcheck, "--as", "hat", "check", "usage", "--help"])
+        self.assertIn("usage: hat usage", out)
+        code, out = self.run_command([sys.executable, hatcheck, "--as", "hat", "check", "nope"])
+        self.assertIn("hat: there's no 'nope' subcommand; see hat --help", out)
         if not WINDOWS:  # a link named hat, as install.sh makes
             os.symlink(hatcheck, os.path.join(self.bin, "hat"))
             code, out = self.run_command(["hat", "where", "--help"])

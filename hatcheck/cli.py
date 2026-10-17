@@ -6,6 +6,7 @@ plan, and carries sessions between accounts and agents.
 Usage:
     hatcheck [sessions] [HOURS] ...    recent sessions in every profile and home, with
                                        resume commands and plan usage (the default)
+    hat check ...                      the same as hat (or hatcheck): the name in two words
     hatcheck usage ...                 plan usage left for every profile and home
     hatcheck where SESSION             where a session is stored, by its ID or the start of it
     hatcheck move SESSION PROFILE ...  copy a session to another profile or home, or convert
@@ -60,6 +61,8 @@ def main(argv=None):
     if len(argv) >= 2 and argv[0] == "--as":
         name, argv = argv[1], argv[2:]
     me = "hat" if name == "hat" else "hatcheck"
+    if argv and argv[0] == "check":  # hat check: the whole name again, so the same as hat
+        argv.pop(0)
     if argv and argv[0] in SUBCOMMANDS:
         command = argv.pop(0)
         prog = me + " " + command
