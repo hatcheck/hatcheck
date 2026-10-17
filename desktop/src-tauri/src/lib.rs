@@ -20,15 +20,25 @@ fn login_path() -> Option<String> {
         return None;
     }
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-    let out = Command::new(shell).args(["-l", "-c", "printf %s \"$PATH\""]).output().ok()?;
+    let out = Command::new(shell)
+        .args(["-l", "-c", "printf %s \"$PATH\""])
+        .output()
+        .ok()?;
     let path = String::from_utf8(out.stdout).ok()?;
     (out.status.success() && !path.trim().is_empty()).then(|| path.trim().to_string())
 }
 
 /// The engine: hatcheck beside this executable (the sidecar), or else hatcheck on the PATH.
 fn engine_path() -> PathBuf {
-    let name = if cfg!(windows) { "hatcheck.exe" } else { "hatcheck" };
-    if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
+    let name = if cfg!(windows) {
+        "hatcheck.exe"
+    } else {
+        "hatcheck"
+    };
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    {
         let beside = dir.join(name);
         if beside.is_file() {
             return beside;
@@ -40,7 +50,9 @@ fn engine_path() -> PathBuf {
 /// Run the engine with args: its output, or its error message.
 fn run_engine(args: &[String], terminal: Option<&str>) -> Result<String, String> {
     let mut cmd = Command::new(engine_path());
-    cmd.args(args).env("NO_COLOR", "1").env("PYTHONIOENCODING", "utf-8");
+    cmd.args(args)
+        .env("NO_COLOR", "1")
+        .env("PYTHONIOENCODING", "utf-8");
     if let Some(Some(path)) = LOGIN_PATH.get() {
         cmd.env("PATH", path);
     }
@@ -52,12 +64,18 @@ fn run_engine(args: &[String], terminal: Option<&str>) -> Result<String, String>
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: no console flashing up
     }
-    let out = cmd.output().map_err(|e| format!("Couldn't run the hatcheck engine ({e})"))?;
+    let out = cmd
+        .output()
+        .map_err(|e| format!("Couldn't run the hatcheck engine ({e})"))?;
     if out.status.success() {
         return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
     }
     let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    Err(if err.is_empty() { format!("hatcheck exited with {}", out.status) } else { err })
+    Err(if err.is_empty() {
+        format!("hatcheck exited with {}", out.status)
+    } else {
+        err
+    })
 }
 
 /// For the web pages: run the engine, off the main thread.
@@ -100,7 +118,9 @@ fn show_main(app: &AppHandle, tab: Option<String>) {
 /// Show the popover under the menu-bar icon (above it when the taskbar is at the bottom, as
 /// on Windows), or hide it if it's showing.
 fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
-    let Some(win) = app.get_webview_window("tray") else { return };
+    let Some(win) = app.get_webview_window("tray") else {
+        return;
+    };
     if win.is_visible().unwrap_or(false) {
         let _ = win.hide();
         return;
@@ -108,13 +128,23 @@ fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
     let scale = win.scale_factor().unwrap_or(1.0);
     let icon_at = rect.position.to_physical::<f64>(scale);
     let icon_size = rect.size.to_physical::<f64>(scale);
-    let size = win.outer_size().map(|s| (s.width as f64, s.height as f64)).unwrap_or((420.0 * scale, 640.0 * scale));
+    let size = win
+        .outer_size()
+        .map(|s| (s.width as f64, s.height as f64))
+        .unwrap_or((420.0 * scale, 640.0 * scale));
     let screen = win
         .current_monitor()
         .ok()
         .flatten()
         .or_else(|| win.primary_monitor().ok().flatten())
-        .map(|m| (m.position().x as f64, m.position().y as f64, m.size().width as f64, m.size().height as f64));
+        .map(|m| {
+            (
+                m.position().x as f64,
+                m.position().y as f64,
+                m.size().width as f64,
+                m.size().height as f64,
+            )
+        });
     let mut x = icon_at.x + icon_size.width / 2.0 - size.0 / 2.0;
     let mut y = icon_at.y + icon_size.height + 6.0 * scale;
     if let Some((sx, sy, sw, sh)) = screen {
@@ -139,7 +169,12 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![engine, open_main, hide_popover, quit])
+        .invoke_handler(tauri::generate_handler![
+            engine,
+            open_main,
+            hide_popover,
+            quit
+        ])
         .setup(|app| {
             // A menu-bar app: no Dock icon, and no app menu of its own on macOS.
             #[cfg(target_os = "macos")]
@@ -170,7 +205,13 @@ pub fn run() {
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, rect, .. } = event {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        rect,
+                        ..
+                    } = event
+                    {
                         toggle_popover(tray.app_handle(), rect);
                     }
                 })
@@ -211,7 +252,9 @@ pub fn selftest() -> i32 {
                 let summary = match serde_json::from_str::<serde_json::Value>(&out) {
                     Ok(v) => format!(
                         "JSON with {}",
-                        v.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>().join(", ")).unwrap_or_default()
+                        v.as_object()
+                            .map(|o| o.keys().cloned().collect::<Vec<_>>().join(", "))
+                            .unwrap_or_default()
                     ),
                     Err(_) => out.trim().to_string(),
                 };
