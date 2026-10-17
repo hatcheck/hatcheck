@@ -773,7 +773,7 @@ pub fn is_fable(row: &Value) -> bool {
 
 /// (% left, next reset) of a limits[] row. A snapshot's meter that has reset since it was
 /// saved counts as full, until the reset after.
-fn meter_state(row: &Value, saved_at: Option<f64>, now: f64) -> (f64, Option<f64>) {
+pub fn meter_state(row: &Value, saved_at: Option<f64>, now: f64) -> (f64, Option<f64>) {
     let mut reset = s(get(row, "resets_at")).and_then(times::parse_time);
     let window = Num::of(&row_window(row)).map(Num::f).filter(|w| *w != 0.0);
     match percent_left(get(row, "percent"), get(row, "resets_at"), saved_at, now) {

@@ -377,6 +377,23 @@ pub fn dumps_compact(v: &Value) -> String {
     out
 }
 
+/// json.dumps(v): on one line, and everything beyond ASCII written as \uXXXX, as Python's
+/// default ensure_ascii has it.
+pub fn dumps_ascii(v: &Value) -> String {
+    let mut out = String::new();
+    for c in dumps_compact(v).chars() {
+        if c.is_ascii() {
+            out.push(c);
+        } else {
+            let mut units = [0u16; 2];
+            for unit in c.encode_utf16(&mut units) {
+                out.push_str(&format!("\\u{:04x}", unit));
+            }
+        }
+    }
+    out
+}
+
 fn write_compact(out: &mut String, v: &Value) {
     match v {
         Value::Array(a) => {

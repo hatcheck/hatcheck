@@ -3,6 +3,8 @@
 //! output (docs/rust-port.md); the desktop app is to link it in place of its bundled engine.
 
 pub mod args;
+pub mod best;
+pub mod bind;
 pub mod cli;
 pub mod conv;
 pub mod desktop;
@@ -12,6 +14,7 @@ pub mod open_cmd;
 pub mod ospath;
 pub mod out;
 pub mod paths;
+pub mod provider;
 pub mod py;
 pub mod serve;
 pub mod sessions;

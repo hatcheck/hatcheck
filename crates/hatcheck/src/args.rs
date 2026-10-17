@@ -10,6 +10,8 @@ use std::collections::HashMap;
 pub enum Takes {
     Nothing,
     Value,
+    /// nargs="?": the next word if there's one that isn't an option, else this.
+    Maybe(&'static str),
 }
 
 /// How many words a positional takes.
@@ -27,6 +29,7 @@ pub struct Opt {
     pub metavar: &'static str,
     pub help: String,
     pub hidden: bool,
+    pub choices: Vec<&'static str>,
 }
 
 pub struct Pos {
@@ -120,6 +123,7 @@ impl Parser {
                 metavar: "",
                 help: "show this help message and exit".into(),
                 hidden: false,
+                choices: Vec::new(),
             }],
             pos: Vec::new(),
             groups: Vec::new(),
@@ -135,6 +139,7 @@ impl Parser {
             metavar: "",
             help: help.into(),
             hidden: false,
+            choices: Vec::new(),
         });
         self
     }
@@ -153,6 +158,28 @@ impl Parser {
             metavar,
             help: help.into(),
             hidden: false,
+            choices: Vec::new(),
+        });
+        self
+    }
+
+    /// An option argparse lists nowhere (help=SUPPRESS) that takes one of choices, or const
+    /// when no word follows it (nargs="?").
+    pub fn hidden_choice(
+        mut self,
+        flags: &[&'static str],
+        dest: &'static str,
+        constant: &'static str,
+        choices: &[&'static str],
+    ) -> Parser {
+        self.opts.push(Opt {
+            flags: flags.to_vec(),
+            dest,
+            takes: Takes::Maybe(constant),
+            metavar: "",
+            help: String::new(),
+            hidden: true,
+            choices: choices.to_vec(),
         });
         self
     }
@@ -166,6 +193,7 @@ impl Parser {
             metavar: "",
             help: String::new(),
             hidden: true,
+            choices: Vec::new(),
         });
         self
     }
@@ -391,6 +419,37 @@ impl Parser {
                 }
                 self.conflicts(opt, &mut seen_in_group)?;
                 let names = opt.flags.join("/");
+                let choose = |value: String| -> Result<String, Stop> {
+                    if opt.choices.is_empty() || opt.choices.contains(&value.as_str()) {
+                        return Ok(value);
+                    }
+                    let choices = opt
+                        .choices
+                        .iter()
+                        .map(|c| format!("'{c}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    Err(self.error(&format!(
+                        "argument {}: invalid choice: '{value}' (choose from {choices})",
+                        opt.flags.join("/")
+                    )))
+                };
+                if let Takes::Maybe(constant) = opt.takes {
+                    let value = match explicit.take() {
+                        Some(exp) => exp,
+                        None if i < argv.len()
+                            && argv[i] != "--"
+                            && matches!(self.classify(&argv[i]), Ok(Word::Positional)) =>
+                        {
+                            i += 1;
+                            argv[i - 1].clone()
+                        }
+                        None => constant.to_string(),
+                    };
+                    let value = choose(value)?;
+                    args.values.entry(opt.dest).or_default().push(value);
+                    break;
+                }
                 match explicit.take() {
                     Some(exp) if opt.takes == Takes::Nothing => {
                         if flag.starts_with("--")
@@ -499,6 +558,7 @@ impl Parser {
         match o.takes {
             Takes::Nothing => format!("[{flag}]"),
             Takes::Value => format!("[{flag} {}]", o.metavar),
+            Takes::Maybe(_) => format!("[{flag} [{}]]", o.metavar),
         }
     }
 
@@ -620,6 +680,7 @@ impl Parser {
         match o.takes {
             Takes::Nothing => o.flags.join(", "),
             Takes::Value => format!("{} {}", o.flags.join(", "), o.metavar),
+            Takes::Maybe(_) => format!("{} [{}]", o.flags.join(", "), o.metavar),
         }
     }
 

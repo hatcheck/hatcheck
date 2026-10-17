@@ -3,10 +3,9 @@ import json
 import os
 import stat
 import subprocess
-import sys
 import unittest
 
-from helpers import WINDOWS, FakeHome, command
+from helpers import WINDOWS, FakeHome, argv_of
 
 SCRIPT = "provider"
 # A Z.ai config as the claude-z repo's installer writes it, with models edited by hand.
@@ -25,7 +24,7 @@ class Provider(unittest.TestCase):
         return json.loads(out)
 
     def setup_with(self, provider, answers):
-        p = subprocess.run([sys.executable] + command(SCRIPT) + ["setup", provider], input=answers,
+        p = subprocess.run(argv_of(SCRIPT) + ["setup", provider], input=answers,
                            cwd=self.h.root, env=self.h.env(), capture_output=True, text=True, encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
 
@@ -82,9 +81,9 @@ class Provider(unittest.TestCase):
     def test_shell_lines_survive_eval(self):
         key = "it's a $key `with` \"quotes\""  # only by editing the file by hand
         self.h.provider_config("k", "CK_API_KEY=%s\n" % key)
-        script = 'eval "$("$0" "$1" "$2" env k)" && printf "%s|%s" "$ANTHROPIC_AUTH_TOKEN" "${ANTHROPIC_API_KEY-unset}"'
+        script = 'eval "$("$@" env k)" && printf "%s|%s" "$ANTHROPIC_AUTH_TOKEN" "${ANTHROPIC_API_KEY-unset}"'
         env = dict(self.h.env(), ANTHROPIC_API_KEY="sk-ant-from-the-shell")
-        p = subprocess.run(["sh", "-c", script, sys.executable] + command(SCRIPT), env=env,
+        p = subprocess.run(["sh", "-c", script, "sh"] + argv_of(SCRIPT), env=env,
                            capture_output=True, text=True)
         self.assertEqual(p.stdout, key + "|unset", p.stderr)
 

@@ -1,7 +1,8 @@
 # The Rust port
 
 Status: started 17 October 2026. `hatcheck sessions` (the plain `hatcheck` list), `usage`, `where`,
-`open`, `show`, `desktop` and `serve` are ported; the rest of the CLI is still Python, in `hatcheck/`.
+`open`, `show`, `desktop`, `best`, `bind`, `unbind`, `provider` and `serve` are ported: every
+subcommand but `move`. The launchers (`cl`, `cx`, `claude-z`, `claude-k`) are still scripts.
 The desktop app's self-test passes with the Rust binary as its engine: its first call takes 51 ms
 where the bundled Python engine takes 649 ms, from a 2.8 MB binary instead of 8.1 MB.
 
@@ -30,8 +31,9 @@ Python version can be swapped for the Rust one at any point.
   Python's on real profiles, byte for byte, read-only, with `PATH=/bin` so the Keychain is never
   asked and `--cached` so nothing goes to the network. Everything ported so far matches: a year of
   session lists (550 sessions, 295 of them Codex's), usage, and `where`, `open --print` and `show`
-  for 24 sessions of both agents; the help and errors of every ported command at five terminal
-  widths; and Claude Desktop's real icon recoloured at four settings, every pixel the same.
+  for 24 sessions of both agents; `best`, `bind` and `provider` on real accounts, bindings and
+  provider settings; the help and errors of every ported command at several terminal widths;
+  and Claude Desktop's real icon recoloured at four settings, every pixel the same.
 - **Python's behaviour, kept on purpose.** `crates/hatcheck/src/py.rs` reproduces what the output
   depends on: ints and floats kept apart (63 and 63.0 print differently), truthiness, `round`
   rounding half to even, `%d`, `%g`, a float's repr and `json.dumps(indent=2)`. `times.rs` reads
@@ -57,6 +59,7 @@ Python version can be swapped for the Rust one at any point.
 | `conv.rs` | a session as a conversation: `read_claude` and `read_codex` from `move.py` |
 | `desktop.rs` | `desktop.py`: Claude Desktop instances, their launchers and recoloured icons |
 | `serve.rs` | `hatcheck serve`, the desktop app's line-by-line JSON protocol, as in `cli.py` |
+| `best.rs`, `bind.rs`, `provider.rs` | `best.py`, `bind.py` (with `unbind` and the hook), `provider.py` |
 | `paths.rs` | profiles, Codex homes, quoting, the resume commands, folder bindings |
 | `args.rs`, `py.rs`, `times.rs`, `ospath.rs`, `widths.rs`, `out.rs` | the Python behaviour above |
 
@@ -68,6 +71,8 @@ until it links the crate.
 - **The cache file.** The Rust port keeps its session cache in `session-facts.json`, beside
   Python's `sessions.json` in the same folder, so neither reads the other's entries.
 - **`hatcheck --help`** leaves out the paragraph about the Python files.
+- **The warning hook** runs `hatcheck` from your PATH, as Python's does, or else the Rust binary
+  itself, where Python's runs its interpreter and `hatcheck.py`.
 - **A recolour that fails** says the icon couldn't be recoloured; Python's says so too now, and
   still asks for Pillow when that's what's missing, which the Rust port never needs.
 
@@ -75,10 +80,9 @@ until it links the crate.
 
 In the order that suits the desktop app, which calls them:
 
-1. `best`, `bind` and `unbind` (with the session-start hook), `provider`.
-2. `move`, the largest: copies, fast-forwards and forks between profiles, and conversion between
+1. `move`, the largest: copies, fast-forwards and forks between profiles, and conversion between
    Claude Code and Codex.
-3. The launchers `cl`, `cx`, `claude-z` and `claude-k`, now shell and PowerShell scripts, and
+2. The launchers `cl`, `cx`, `claude-z` and `claude-k`, now shell and PowerShell scripts, and
    Python for the PyPI package.
 
 Then the switch:

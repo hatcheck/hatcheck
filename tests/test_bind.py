@@ -4,10 +4,9 @@ throwaway home."""
 import json
 import os
 import subprocess
-import sys
 import unittest
 
-from helpers import REPO, WINDOWS, FakeHome, write
+from helpers import WINDOWS, FakeHome, argv_of, write
 
 S = "11111111-1111-4111-8111-111111111111"
 T = "22222222-2222-4222-8222-222222222222"
@@ -130,7 +129,7 @@ class Bind(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(other, "hooks.json")))  # it held only the hook
 
     def test_check_never_fails(self):
-        p = subprocess.run([sys.executable, os.path.join(REPO, "hatcheck.py"), "bind", "--check"], input="not json",
+        p = subprocess.run(argv_of("bind") + ["--check"], input="not json",
                            env=self.h.env(), capture_output=True, text=True, encoding="utf-8")
         self.assertEqual((p.returncode, p.stdout), (0, ""))
 
