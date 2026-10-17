@@ -65,7 +65,7 @@ fn serve_one(args: Vec<String>, env: &serde_json::Map<String, Value>) -> (i32, S
         }
     }
     let (code, out_text, mut err_text) =
-        out::captured(|| std::panic::catch_unwind(|| crate::cli::main("hatcheck", args)));
+        out::captured(|| std::panic::catch_unwind(|| crate::cli::served(args)));
     let code = match code {
         Ok(code) => code,
         Err(panic) => {

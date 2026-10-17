@@ -51,6 +51,8 @@ class Serve(unittest.TestCase):
         self.assertIn("--here", refused["err"])
         gone = self.ask({"id": 5, "args": ["show", "00000000"]})  # sys.exit with a message
         self.assertEqual((gone["code"], gone["err"]), (1, "No session starting with 00000000\n"))
+        named = self.ask({"id": 6, "args": ["--as", "cl", "work"]})  # a name only: cl never runs here
+        self.assertEqual((named["code"], named["err"]), (2, "hatcheck: there's no 'work' subcommand; see hatcheck --help\n"))
         self.p.stdin.close()
         self.assertEqual(self.p.wait(timeout=30), 0)
 

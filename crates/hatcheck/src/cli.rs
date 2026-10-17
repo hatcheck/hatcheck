@@ -57,8 +57,19 @@ fn is_hours(word: &str) -> bool {
         && (w.contains('.') <= (!frac.is_empty() && frac.bytes().all(|b| b.is_ascii_digit())))
 }
 
-/// Run hatcheck with argv (without the program's name), called as argv0.
-pub fn main(argv0: &str, mut argv: Vec<String>) -> i32 {
+/// Run hatcheck with argv (without the program's name), called as argv0: as a launcher when
+/// that's cl, cx, claude-z or claude-k.
+pub fn main(argv0: &str, argv: Vec<String>) -> i32 {
+    run(argv0, argv, true)
+}
+
+/// Run a command for hatcheck serve: never as a launcher, which would put the agent in the
+/// engine's place, so --as names it in messages only, as Python's --as does.
+pub fn served(argv: Vec<String>) -> i32 {
+    run("hatcheck", argv, false)
+}
+
+fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
     // The name it was run by, for its messages: hat, the short name, or hatcheck.
     let base = crate::ospath::basename(argv0);
     let mut name = base
@@ -75,7 +86,7 @@ pub fn main(argv0: &str, mut argv: Vec<String>) -> i32 {
         name = argv[1].clone();
         argv.drain(..2);
     }
-    if crate::launch::NAMES.contains(&name.as_str()) {
+    if launchers && crate::launch::NAMES.contains(&name.as_str()) {
         return crate::launch::main(&name, argv); // a link named cl, or --as cl
     }
     let me = if name == "hat" { "hat" } else { "hatcheck" };
