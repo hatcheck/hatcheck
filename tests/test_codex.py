@@ -5,7 +5,7 @@ import os
 import unittest
 from unittest import mock
 
-from helpers import NOW, WINDOWS, FakeHome, iso, load, rec, write
+from helpers import ENGINE, NOW, WINDOWS, FakeHome, iso, load, python_only, rec, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 X = "019f0000-aaaa-7000-8000-000000000001"  # Codex IDs are version 7 UUIDs
@@ -80,7 +80,7 @@ class CodexUsage(unittest.TestCase):
     def setUp(self):
         self.h = FakeHome()
         self.addCleanup(self.h.cleanup)
-        self.u = load("usage")
+        self.u = None if ENGINE else load("usage")
 
     def test_snapshot_rows_and_shared_accounts(self):
         h = self.h
@@ -102,6 +102,7 @@ class CodexUsage(unittest.TestCase):
         code, out = h.run("usage", "--cached", "--email")
         self.assertIn("acct-1@example.com · ChatGPT plus", out)
 
+    @python_only
     def test_live_answer(self):
         body = {"plan_type": "plus", "email": "x", "rate_limit": {"limit_reached": False,
                 "primary_window": {"used_percent": 20, "limit_window_seconds": 18000, "reset_at": NOW + 3600},
@@ -124,6 +125,7 @@ class CodexUsage(unittest.TestCase):
         with mock.patch.dict("os.environ", {"TERM": "xterm-256color"}):
             self.assertEqual(self.u.label_color(usage["limits"][2]["kind"]), "38;5;134")  # violet, like Fable
 
+    @python_only
     def test_logins(self):
         h = self.h
         home = h.codex_home("x", "acct-9", plan="pro", expires=NOW + 86400)

@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime
 from unittest import mock
 
-from helpers import NOW, FakeHome, iso, load
+from helpers import NOW, FakeHome, iso, load, python_only
 
 SCRIPT = "usage"
 FAR = (NOW + 30 * 86400) * 1000  # a token expiry well in the future, in ms
@@ -77,6 +77,7 @@ class CachedUsage(unittest.TestCase):
         self.assertEqual(order, [h.shown(names[n]) for n in expected])
 
 
+@python_only
 class Helpers(unittest.TestCase):
     def setUp(self):
         self.u = load(SCRIPT)

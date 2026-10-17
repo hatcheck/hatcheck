@@ -822,6 +822,8 @@ from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behi
 Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 
 - **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
+- **`crates/hatcheck/`** — the Rust port, which is replacing the Python code a subcommand at a time with
+  the same output; `sessions`, `usage` and `where` so far. See [docs/rust-port.md](docs/rust-port.md).
 - **`pyproject.toml`** — the Python package (`uv tool install`, `pipx`); **`packaging/`** — the Homebrew
   formula and cask, and the winget manifest.
 - **`hatcheck.py`** — the `hatcheck` command (`hat` for short) from a clone; it runs **`hatcheck/cli.py`**,
@@ -863,8 +865,11 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
   instance with its own icon, and a launcher that brings a running instance forward instead of
   opening a duplicate. It needs testing on a Windows machine first.
 - **Linux.** There's no official Claude Desktop for Linux, so only the CLI tools apply there.
-- **First releases:** the CLI on PyPI and in the Homebrew tap, and the app's installers, once
-  the release workflows have their accounts and secrets (the workflows list them).
+- **The Rust port** ([docs/rust-port.md](docs/rust-port.md)): one binary per platform with no Python
+  needed, which the desktop app links instead of a bundled engine. The app's first release waits
+  for it.
+- **Releases:** the CLI is on PyPI; next the Homebrew tap, then the app's installers, once the
+  release workflows have their accounts and secrets (the workflows list them).
 - **Signing:** a Developer ID for the macOS app, and a certificate for the Windows one.
 
 ## Credits

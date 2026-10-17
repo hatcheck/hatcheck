@@ -4,7 +4,7 @@ import re
 import unittest
 from unittest import mock
 
-from helpers import NOW, WINDOWS, FakeHome, iso, load, rec
+from helpers import NOW, WINDOWS, FakeHome, iso, load, python_only, rec
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 B = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -159,6 +159,7 @@ class UsageComments(unittest.TestCase):
         self.assertIn("# 5h 60%", third)  # another account, though the numbers match
         self.assertIn("Usage from Claude Code's last snapshot (--cached)", out)
 
+    @python_only
     def test_per_model_limits_are_named_in_violet(self):
         usage = limits(40, 10)
         usage["limits"].append({"kind": "weekly_scoped", "group": "weekly", "percent": 52, "severity": "normal",

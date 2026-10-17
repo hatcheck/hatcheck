@@ -1,6 +1,11 @@
 """Shared test helpers: a throwaway home folder with Claude Code profiles, Codex homes and
 their sessions, and a way to run the scripts against it. Nothing here reads your real
-profiles, the macOS Keychain or the network."""
+profiles, the macOS Keychain or the network.
+
+HATCHECK_ENGINE=path points the tests at another hatcheck, the Rust port's binary
+(target/debug/hatcheck): the subcommands run it instead of hatcheck.py, and tests of the
+Python code itself (python_only) are skipped. tests/conformance.py runs the tests of the
+subcommands the port has that way."""
 import atexit
 import base64
 import importlib.util
@@ -12,9 +17,12 @@ import subprocess
 import sys
 import tempfile
 import time
+import unittest
 from datetime import datetime, timezone
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENGINE = os.environ.get("HATCHECK_ENGINE")  # another hatcheck to test, such as the Rust port's
+python_only = unittest.skipIf(ENGINE, "tests the Python code itself")
 SUBCOMMANDS = ("sessions", "usage", "where", "move", "open", "show", "best", "bind", "unbind", "desktop",
                "provider")  # in hatcheck/
 NOW = time.time()
@@ -55,6 +63,14 @@ def command(script):
     if script in SUBCOMMANDS:
         return [os.path.join(REPO, "hatcheck.py"), script]
     return [os.path.join(REPO, script)]
+
+
+def argv_of(script):
+    """The whole command line that runs a repo script: command() after the interpreter, or the
+    engine under test (HATCHECK_ENGINE) for a hatcheck subcommand."""
+    if ENGINE and script in SUBCOMMANDS:
+        return [ENGINE, script]
+    return [sys.executable] + command(script)
 
 
 def load(script):
@@ -207,7 +223,7 @@ class FakeHome:
     def run(self, script, *args, cwd=None):
         """Run a hatcheck subcommand (usage) or another repo script against this home:
         (exit code, stdout + stderr)."""
-        p = subprocess.run([sys.executable] + command(script) + list(args), cwd=cwd or self.root,
+        p = subprocess.run(argv_of(script) + list(args), cwd=cwd or self.root,
                            env=self.env(), capture_output=True, text=True, encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
 

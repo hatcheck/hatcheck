@@ -18,3 +18,6 @@ build/
 
 # Wrangler's temp files, next to site/wrangler.jsonc
 .wrangler/
+
+# Rust build output (the workspace in Cargo.toml)
+/target/

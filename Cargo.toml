@@ -1,0 +1,18 @@
+# The Rust port of hatcheck (crates/hatcheck), which is replacing the Python CLI in hatcheck/
+# command by command; see docs/rust-port.md. The desktop app is its own project for now.
+[workspace]
+members = ["crates/hatcheck"]
+exclude = ["desktop/src-tauri"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.90"
+repository = "https://github.com/yilab/hatcheck"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

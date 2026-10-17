@@ -1,0 +1,119 @@
+//! hatcheck where SESSION [--json]: find a Claude Code or Codex session by its ID, or the
+//! start of it. For Claude Code, the transcript in ~/.claude or a ~/.claude-* profile plus
+//! its data folder if it has one; for Codex, the session file in ~/.codex or a ~/.codex-*
+//! home, under sessions/ by the date it started, or under archived_sessions/. Exits 1 when
+//! nothing matches. --json prints each copy as data.
+
+use crate::args::{Count, Parser};
+use crate::ospath::{self, Part};
+use crate::{out, paths, py};
+use serde_json::{json, Value};
+
+/// The files (and Claude Code's data folders) of the sessions whose ID starts with prefix.
+pub fn find(prefix: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    for profile in paths::find_profiles() {
+        let mut matches = ospath::glob(
+            &profile,
+            &[
+                Part::Name("projects"),
+                Part::Wild("", ""),
+                Part::Wild(prefix, ""),
+            ],
+        );
+        matches.sort();
+        found.extend(matches);
+    }
+    let home = paths::home();
+    let mut homes = vec![ospath::join(&home, ".codex")];
+    let mut others = ospath::glob(&home, &[Part::Wild(".codex-", "")]);
+    others.sort();
+    homes.extend(others);
+    if let Ok(dir) = std::env::var("CODEX_HOME") {
+        if !dir.is_empty() {
+            homes.push(ospath::abspath(&ospath::expanduser(&dir)));
+        }
+    }
+    let mut seen: Vec<String> = Vec::new();
+    let lower = prefix.to_lowercase();
+    for h in homes {
+        let real = ospath::realpath(&h);
+        if seen.contains(&real) {
+            continue;
+        }
+        seen.push(real);
+        let mut files = ospath::glob(
+            &h,
+            &[
+                Part::Name("sessions"),
+                Part::Wild("", ""),
+                Part::Wild("", ""),
+                Part::Wild("", ""),
+                Part::Wild("rollout-", ".jsonl"),
+            ],
+        );
+        files.extend(ospath::glob(
+            &h,
+            &[
+                Part::Name("archived_sessions"),
+                Part::Wild("rollout-", ".jsonl"),
+            ],
+        ));
+        files.sort();
+        for path in files {
+            if paths::codex_file_id(&path).is_some_and(|id| id.starts_with(&lower)) {
+                found.push(path);
+            }
+        }
+    }
+    found
+}
+
+/// The matches as --json gives them.
+pub fn as_json(found: &[String], prefix: &str) -> Value {
+    let mut copies = Vec::new();
+    let projects = format!("{}projects{}", ospath::SEP, ospath::SEP);
+    for path in found {
+        if path.ends_with(".jsonl") && path.contains(&projects) {
+            let profile = ospath::dirname(&ospath::dirname(&ospath::dirname(path)));
+            let data = &path[..path.len() - ".jsonl".len()];
+            copies.push(json!({"agent": "claude", "id": ospath::basename(data), "profile": profile, "file": path,
+                               "data_folder": if ospath::isdir(data) { Value::from(data) } else { Value::Null },
+                               "archived": false}));
+        } else if let Some(id) = paths::codex_file_id(path) {
+            let archived = ospath::basename(&ospath::dirname(path)) == "archived_sessions";
+            let mut home = ospath::dirname(&ospath::dirname(path));
+            if !archived {
+                for _ in 0..3 {
+                    home = ospath::dirname(&home);
+                }
+            }
+            copies.push(json!({"agent": "codex", "id": id, "profile": home, "file": path, "data_folder": null,
+                               "archived": archived}));
+        }
+    }
+    json!({"version": 1, "query": prefix, "sessions": copies})
+}
+
+pub fn main(argv: &[String], prog: &str) -> i32 {
+    let parser = Parser::new(
+        prog,
+        "Find a Claude Code or Codex session by its ID, or the start of it.",
+    )
+    .positional("session", Count::One, "the session ID, or the start of it")
+    .flag(&["--json"], "json", "print the matches as JSON");
+    let args = match parser.parse(argv) {
+        Ok(a) => a,
+        Err(stop) => return stop.exit_code(),
+    };
+    let prefix = args.value("session").unwrap_or("");
+    let found = find(prefix);
+    if args.flag("json") {
+        out::println(&py::dumps(&as_json(&found, prefix)));
+    } else {
+        for path in &found {
+            out::println(path);
+        }
+    }
+    i32::from(found.is_empty()) // 1: nothing matched
+}

@@ -6,7 +6,7 @@ import os
 import sys
 import unittest
 
-from helpers import NOW, WINDOWS, FakeHome, iso, load, rec, write
+from helpers import ENGINE, NOW, WINDOWS, FakeHome, iso, load, python_only, rec, write
 
 S1 = "11111111-1111-4111-8111-111111111111"
 X = "019f0000-aaaa-7000-8000-000000000001"
@@ -32,7 +32,8 @@ class SessionCache(unittest.TestCase):
             folder = os.path.join(self.h.home, "Library", "Caches", "hatcheck")
         else:
             folder = os.path.join(self.h.home, ".cache", "hatcheck")
-        return os.path.join(folder, "sessions.json")
+        # The Rust port keeps its own cache file beside the Python one.
+        return os.path.join(folder, "session-facts.json" if ENGINE else "sessions.json")
 
     def append(self, *lines):
         with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
@@ -55,6 +56,7 @@ class SessionCache(unittest.TestCase):
         s, = self.listed()
         self.assertEqual((s["title"], s["branch"], s["last_active"]), ("Retry uploads", "fix", iso(NOW - 60)[:19] + "Z"))
 
+    @python_only
     def test_only_what_was_appended_is_read(self):
         s = load("sessions")
         self.assertEqual(s.read_session(self.path)["title"], "Fix the uploader")

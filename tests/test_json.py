@@ -3,10 +3,9 @@ text shows, as data. Against a throwaway home: no real profiles, no network."""
 import json
 import os
 import subprocess
-import sys
 import unittest
 
-from helpers import NOW, FakeHome, command, iso
+from helpers import NOW, FakeHome, argv_of, iso
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 B = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -71,7 +70,7 @@ class Json(unittest.TestCase):
         self.assertTrue(all("email" in a for a in json.loads(out)["accounts"]))
 
     def test_errors_leave_stdout_empty(self):
-        p = subprocess.run([sys.executable] + command("sessions") + ["--json", "nonsense"], env=self.h.env(),
+        p = subprocess.run(argv_of("sessions") + ["--json", "nonsense"], env=self.h.env(),
                            capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(p.returncode, 2)
         self.assertEqual(p.stdout, "")
