@@ -127,6 +127,7 @@ pub fn keychain_service(profile: &str) -> String {
 /// Run a program and give its stdout, or None when it can't be run or doesn't finish in time.
 fn output_within(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
     use std::process::{Command, Stdio};
+    use std::sync::{mpsc, Arc, Mutex};
     let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
@@ -135,27 +136,29 @@ fn output_within(program: &str, args: &[&str], timeout: Duration) -> Option<Stri
         .spawn()
         .ok()?;
     let mut stdout = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut text = String::new();
-        std::io::Read::read_to_string(&mut stdout, &mut text)
-            .ok()
-            .map(|_| text)
-    });
-    let deadline = std::time::Instant::now() + timeout;
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if std::time::Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(20))
+    let child = Arc::new(Mutex::new(child));
+    let (done, finished) = mpsc::channel::<()>();
+    // A watchdog kills the program if it hangs, which ends the read below.
+    let watchdog = {
+        let child = Arc::clone(&child);
+        std::thread::spawn(move || {
+            if finished.recv_timeout(timeout) == Err(mpsc::RecvTimeoutError::Timeout) {
+                if let Ok(mut c) = child.lock() {
+                    let _ = c.kill();
+                }
+                return true;
             }
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-        }
+            false
+        })
+    };
+    let mut text = String::new();
+    let read = std::io::Read::read_to_string(&mut stdout, &mut text).is_ok();
+    let _ = done.send(());
+    let killed = watchdog.join().unwrap_or(true);
+    if let Ok(mut c) = child.lock() {
+        let _ = c.wait();
     }
-    reader.join().ok().flatten()
+    (read && !killed).then_some(text)
 }
 
 /// The claudeAiOauth entry (token, expiry, plan), or null: from the macOS Keychain, or where
@@ -964,9 +967,19 @@ fn num_or_zero(v: &Value) -> f64 {
 pub fn load_accounts(profiles: &[String]) -> Vec<Entry> {
     let mut keys: Vec<String> = Vec::new();
     let mut entries: Vec<Entry> = Vec::new();
-    for profile in profiles {
+    // The logins first, all at once: each is a Keychain lookup on macOS, a program of its own.
+    let logins: Vec<Value> = std::thread::scope(|scope| {
+        let handles: Vec<_> = profiles
+            .iter()
+            .map(|p| scope.spawn(move || read_oauth(p)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().unwrap_or(Value::Null))
+            .collect()
+    });
+    for (profile, oauth) in profiles.iter().zip(logins) {
         let (account, mut cache) = read_config(profile);
-        let oauth = read_oauth(profile);
         let uuid = get(&account, "accountUuid");
         let key = if truthy(uuid) {
             format!("account {}", py::repr(uuid))

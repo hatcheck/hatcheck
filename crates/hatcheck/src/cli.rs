@@ -74,6 +74,9 @@ pub fn main(argv0: &str, mut argv: Vec<String>) -> i32 {
     if argv.first().is_some_and(|w| w == "check") {
         argv.remove(0); // hat check: the whole name again, so the same as hat
     }
+    if argv.len() == 1 && argv[0] == "serve" {
+        return crate::serve::run();
+    }
     let (command, prog) = match argv.first().map(String::as_str) {
         Some(c) if SUBCOMMANDS.contains(&c) => {
             let c = argv.remove(0);

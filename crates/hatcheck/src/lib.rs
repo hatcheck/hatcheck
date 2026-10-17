@@ -13,6 +13,7 @@ pub mod ospath;
 pub mod out;
 pub mod paths;
 pub mod py;
+pub mod serve;
 pub mod sessions;
 pub mod show;
 pub mod times;

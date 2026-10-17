@@ -1,7 +1,9 @@
 # The Rust port
 
 Status: started 17 October 2026. `hatcheck sessions` (the plain `hatcheck` list), `usage`, `where`,
-`open`, `show` and `desktop` are ported; the rest of the CLI is still Python, in `hatcheck/`.
+`open`, `show`, `desktop` and `serve` are ported; the rest of the CLI is still Python, in `hatcheck/`.
+The desktop app's self-test passes with the Rust binary as its engine: its first call takes 51 ms
+where the bundled Python engine takes 649 ms, from a 2.8 MB binary instead of 8.1 MB.
 
 ## Why
 
@@ -54,6 +56,7 @@ Python version can be swapped for the Rust one at any point.
 | `find.rs` | finding a session's copies, the newest one in a folder, and `place` (`--from`, `--login`) |
 | `conv.rs` | a session as a conversation: `read_claude` and `read_codex` from `move.py` |
 | `desktop.rs` | `desktop.py`: Claude Desktop instances, their launchers and recoloured icons |
+| `serve.rs` | `hatcheck serve`, the desktop app's line-by-line JSON protocol, as in `cli.py` |
 | `paths.rs` | profiles, Codex homes, quoting, the resume commands, folder bindings |
 | `args.rs`, `py.rs`, `times.rs`, `ospath.rs`, `widths.rs`, `out.rs` | the Python behaviour above |
 
@@ -72,12 +75,10 @@ until it links the crate.
 
 In the order that suits the desktop app, which calls them:
 
-1. `serve`, the protocol the app speaks to its engine today, so the app can run the Rust binary
-   before it links the crate.
-2. `best`, `bind` and `unbind` (with the session-start hook), `provider`.
-3. `move`, the largest: copies, fast-forwards and forks between profiles, and conversion between
+1. `best`, `bind` and `unbind` (with the session-start hook), `provider`.
+2. `move`, the largest: copies, fast-forwards and forks between profiles, and conversion between
    Claude Code and Codex.
-4. The launchers `cl`, `cx`, `claude-z` and `claude-k`, now shell and PowerShell scripts, and
+3. The launchers `cl`, `cx`, `claude-z` and `claude-k`, now shell and PowerShell scripts, and
    Python for the PyPI package.
 
 Then the switch:

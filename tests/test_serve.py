@@ -6,10 +6,11 @@ import subprocess
 import sys
 import unittest
 
-from helpers import REPO, FakeHome
+from helpers import ENGINE, REPO, FakeHome
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
+CACHE_FILE = "session-facts.json" if ENGINE else "sessions.json"  # the Rust port keeps its own
 
 
 class Serve(unittest.TestCase):
@@ -19,7 +20,8 @@ class Serve(unittest.TestCase):
         self.work = h.profile("work", "acct-1")
         self.cwd = h.folder("code", "api")
         h.session(self.work, self.cwd, S1, "Fix the uploader")
-        self.p = subprocess.Popen([sys.executable, os.path.join(REPO, "hatcheck.py"), "serve"], cwd=self.h.root,
+        argv = [ENGINE, "serve"] if ENGINE else [sys.executable, os.path.join(REPO, "hatcheck.py"), "serve"]
+        self.p = subprocess.Popen(argv, cwd=self.h.root,
                                   env=h.env(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                   text=True, encoding="utf-8")
         self.addCleanup(self.stop)
@@ -47,7 +49,7 @@ class Serve(unittest.TestCase):
         refused = self.ask({"id": 4, "args": ["open", S1[:8], "--here"]})
         self.assertEqual(refused["code"], 2)
         self.assertIn("--here", refused["err"])
-        gone = self.ask({"id": 5, "args": ["move", "00000000", "work"]})  # sys.exit with a message
+        gone = self.ask({"id": 5, "args": ["show", "00000000"]})  # sys.exit with a message
         self.assertEqual((gone["code"], gone["err"]), (1, "No session starting with 00000000\n"))
         self.p.stdin.close()
         self.assertEqual(self.p.wait(timeout=30), 0)
@@ -69,11 +71,11 @@ class Serve(unittest.TestCase):
     def test_the_cache_is_saved_as_it_goes(self):
         self.ask({"id": 1, "args": ["--json", "--no-usage", "--all-folders"]})
         if os.name == "nt":
-            cache = os.path.join(self.h.home, "AppData", "Local", "hatcheck", "Cache", "sessions.json")
+            cache = os.path.join(self.h.home, "AppData", "Local", "hatcheck", "Cache", CACHE_FILE)
         elif sys.platform == "darwin":
-            cache = os.path.join(self.h.home, "Library", "Caches", "hatcheck", "sessions.json")
+            cache = os.path.join(self.h.home, "Library", "Caches", "hatcheck", CACHE_FILE)
         else:
-            cache = os.path.join(self.h.home, ".cache", "hatcheck", "sessions.json")
+            cache = os.path.join(self.h.home, ".cache", "hatcheck", CACHE_FILE)
         self.assertTrue(os.path.isfile(cache))  # while it's still running
 
 

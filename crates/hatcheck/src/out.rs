@@ -1,7 +1,32 @@
 //! Output as the Python code wrote it: text to stdout and stderr (a closed pipe ends the
 //! program quietly), colours only on a terminal that takes them, and the terminal's width.
 
+use std::cell::RefCell;
 use std::io::{IsTerminal, Write};
+
+thread_local! {
+    /// While hatcheck serve runs a command: what it writes to stdout and to stderr.
+    static CAPTURE: RefCell<Option<(String, String)>> = const { RefCell::new(None) };
+}
+
+/// Run f with what it prints kept, not written: (its result, its stdout, its stderr).
+pub fn captured<T>(f: impl FnOnce() -> T) -> (T, String, String) {
+    CAPTURE.with(|c| *c.borrow_mut() = Some((String::new(), String::new())));
+    let result = f();
+    let (out, err) = CAPTURE.with(|c| c.borrow_mut().take()).unwrap_or_default();
+    (result, out, err)
+}
+
+/// Keep text for the command hatcheck serve is running: true when there is one.
+fn keep(text: &str, to_err: bool) -> bool {
+    CAPTURE.with(|c| match c.borrow_mut().as_mut() {
+        Some((out, err)) => {
+            if to_err { err } else { out }.push_str(text);
+            true
+        }
+        None => false,
+    })
+}
 
 fn write_to(mut w: impl Write, text: &str) {
     if let Err(e) = w.write_all(text.as_bytes()).and_then(|()| w.flush()) {
@@ -13,7 +38,9 @@ fn write_to(mut w: impl Write, text: &str) {
 
 /// Write text to stdout as it is.
 pub fn print(text: &str) {
-    write_to(std::io::stdout().lock(), text);
+    if !keep(text, false) {
+        write_to(std::io::stdout().lock(), text);
+    }
 }
 
 /// Python's print(text): the text and a newline.
@@ -25,7 +52,9 @@ pub fn println(text: &str) {
 }
 
 pub fn eprint(text: &str) {
-    write_to(std::io::stderr().lock(), text);
+    if !keep(text, true) {
+        write_to(std::io::stderr().lock(), text);
+    }
 }
 
 /// sys.exit("message"): the message on stderr, and exit code 1.

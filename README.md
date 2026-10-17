@@ -823,7 +823,7 @@ Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
 
 - **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
 - **`crates/hatcheck/`** — the Rust port, which is replacing the Python code a subcommand at a time with
-  the same output; `sessions`, `usage`, `where`, `open`, `show` and `desktop` so far. See [docs/rust-port.md](docs/rust-port.md).
+  the same output; `sessions`, `usage`, `where`, `open`, `show`, `desktop` and `serve` so far. See [docs/rust-port.md](docs/rust-port.md).
 - **`pyproject.toml`** — the Python package (`uv tool install`, `pipx`); **`packaging/`** — the Homebrew
   formula and cask, and the winget manifest.
 - **`hatcheck.py`** — the `hatcheck` command (`hat` for short) from a clone; it runs **`hatcheck/cli.py`**,
