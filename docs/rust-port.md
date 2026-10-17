@@ -1,8 +1,9 @@
 # The Rust port
 
-Status: started 17 October 2026. Every subcommand is ported: `hatcheck sessions` (the plain
-`hatcheck` list), `usage`, `where`, `move`, `open`, `show`, `desktop`, `best`, `bind`, `unbind`,
-`provider` and `serve`. The launchers (`cl`, `cx`, `claude-z`, `claude-k`) are still scripts.
+Status: started 17 October 2026, and everything is ported: every subcommand (`hatcheck sessions`,
+the plain `hatcheck` list, `usage`, `where`, `move`, `open`, `show`, `desktop`, `best`, `bind`,
+`unbind`, `provider` and `serve`) and the launchers `cl`, `cx`, `claude-z` and `claude-k`. What's
+left is the switch below: packaging the binary, and taking the Python code out.
 The desktop app's self-test passes with the Rust binary as its engine: its first call takes 51 ms
 where the bundled Python engine takes 649 ms, from a 2.8 MB binary instead of 8.1 MB.
 
@@ -40,6 +41,10 @@ Python version can be swapped for the Rust one at any point.
 - **Moves for real, in fake homes.** Every command the `move` tests run, with `--dry-run` and
   `--dry-run --json` runs of it beside it, was run by both versions in fake homes built at the same
   paths: the same output, and the same files left, with the same bytes, permissions and times.
+- **The launchers** give what `hatcheck/launch.py` gives, byte for byte, in 31 cases: with a
+  profile, a binding or a provider, without one, without `claude` or `codex` on the PATH, and
+  `reconfig`. The `cl` and `cx` scripts' tests pass with the Rust binary answering their
+  `hatcheck bind --which` and `hatcheck provider` calls.
 - **Python's behaviour, kept on purpose.** `crates/hatcheck/src/py.rs` reproduces what the output
   depends on: ints and floats kept apart (63 and 63.0 print differently), truthiness, `round`
   rounding half to even, `%d`, `%g`, a float's repr and `json.dumps(indent=2)`. `times.rs` reads
@@ -63,6 +68,7 @@ Python version can be swapped for the Rust one at any point.
 | `open_cmd.rs`, `show.rs` | `open.py` (the session picker and the terminals) and `show.py` |
 | `find.rs` | finding a session's copies, the newest one in a folder, and `place` (`--from`, `--login`) |
 | `move_cmd.rs` | `move.py`: copies, updates, forks and conversions, and the copy chooser |
+| `launch.rs`, `src/bin/` | `launch.py`: `cl`, `cx`, `claude-z` and `claude-k`, each also a binary of its own |
 | `conv.rs` | a session as a conversation: `read_claude` and `read_codex` from `move.py` |
 | `desktop.rs` | `desktop.py`: Claude Desktop instances, their launchers and recoloured icons |
 | `serve.rs` | `hatcheck serve`, the desktop app's line-by-line JSON protocol, as in `cli.py` |
@@ -86,17 +92,16 @@ until it links the crate.
   Python takes it: no copy at "Which one?", and no to "Resume it now?".
 - **A Codex lock file that can't be opened** stops the move with the error, where Python's
   stopped with a traceback.
+- **`hatcheck --as cl`** (or `cx`, `claude-z`, `claude-k`), and the binary run through a link of
+  one of those names, is that launcher; Python's `--as` changes only the name in messages. The
+  launchers' own binaries are the same code without the rest, about 400 KB each.
 
-## Still to port
-
-The launchers `cl`, `cx`, `claude-z` and `claude-k`, now shell and PowerShell scripts, and
-Python for the PyPI package.
-
-Then the switch:
+## The switch
 
 - **PyPI.** The package is built with maturin (`bindings = "bin"`), the way ruff and uv ship, so
   `uv tool install hatcheck` and `pipx install hatcheck` install the binary.
-- **Homebrew and winget** install the binary; `install.sh` and `install.ps1` link it.
+- **Homebrew and winget** install the binaries, the launchers' included, and the `cl` and `cx`
+  scripts go; `install.sh` and `install.ps1` link the binaries.
 - **The desktop app** depends on the crate and calls it directly; `scripts/build-engine.py` and the
   sidecar go.
 - **The Python code goes**, with `tests/` kept as the conformance suite until the Rust crate's own

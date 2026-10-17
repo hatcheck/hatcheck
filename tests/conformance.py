@@ -16,7 +16,7 @@ import unittest
 TESTS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TESTS)
 
-# The tests of what the Rust port has: every subcommand, and serve.
+# The tests of what the Rust port has: every subcommand, serve and the launchers.
 PORTED = [
     "test_recent_sessions",
     "test_usage",
@@ -34,6 +34,7 @@ PORTED = [
     "test_serve",
     "test_move_session",
     "test_codex_moves",
+    "test_commands",
 ]
 
 

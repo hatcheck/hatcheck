@@ -75,6 +75,9 @@ pub fn main(argv0: &str, mut argv: Vec<String>) -> i32 {
         name = argv[1].clone();
         argv.drain(..2);
     }
+    if crate::launch::NAMES.contains(&name.as_str()) {
+        return crate::launch::main(&name, argv); // a link named cl, or --as cl
+    }
     let me = if name == "hat" { "hat" } else { "hatcheck" };
     if argv.first().is_some_and(|w| w == "check") {
         argv.remove(0); // hat check: the whole name again, so the same as hat

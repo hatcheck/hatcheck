@@ -18,6 +18,23 @@ path = "src/main.rs"
 name = "hat"
 path = "src/bin/hat.rs"
 
+# The launchers, which the hatcheck binary also runs as when it's called by their names.
+[[bin]]
+name = "cl"
+path = "src/bin/cl.rs"
+
+[[bin]]
+name = "cx"
+path = "src/bin/cx.rs"
+
+[[bin]]
+name = "claude-z"
+path = "src/bin/claude-z.rs"
+
+[[bin]]
+name = "claude-k"
+path = "src/bin/claude-k.rs"
+
 [dependencies]
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
