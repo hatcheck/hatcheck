@@ -9,6 +9,7 @@ class Hatcheck < Formula
   homepage "https://github.com/yilab/hatcheck"
   url "https://github.com/yilab/hatcheck/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  license "MIT"
   head "https://github.com/yilab/hatcheck.git", branch: "main"
 
   depends_on "python@3.13"

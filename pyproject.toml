@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]  # 77: the license fields below
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "hatcheck"
 version = "0.1.0"  # and in hatcheck/__init__.py; a test checks they match
 description = "Claude Code and Codex accounts on one computer, each kept apart: recent sessions, plan usage, resume commands and moves across all of them."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 authors = [{ name = "Yi Wang" }]
 keywords = ["claude", "claude-code", "codex", "cli", "profiles", "sessions"]

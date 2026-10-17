@@ -3,6 +3,7 @@ name = "hatcheck-desktop"
 version = "0.1.0"
 description = "Hatcheck: what's left of every Claude and ChatGPT plan, and your recent sessions, in the menu bar"
 authors = ["Yi Wang"]
+license = "MIT"
 edition = "2021"
 rust-version = "1.90"
 

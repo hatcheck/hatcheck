@@ -111,7 +111,7 @@ Phase 0 is useful without the app, for scripts and status bars, so it came first
 - **Formats change.** Claude Code's and Codex's session files and usage endpoints aren't documented
   and can change with any release. The app has to cope: show what it can and say what it can't. The
   auto-updater gets fixes to users quickly.
-- **Licensing.** The repo needs a license before any binary ships. The Desktop-instance feature was
+- **Licensing.** The repo has been MIT-licensed since 17 October 2026 (`LICENSE`). The Desktop-instance feature was
   rewritten in October 2026 (`hatcheck desktop`), so it no longer depends on Aaron Oxborrow's
   scripts ([issue #1](https://github.com/yilab/hatcheck/issues/1)); the `--user-data-dir` technique
   itself is free to use.
@@ -123,4 +123,4 @@ Phase 0 is useful without the app, for scripts and status bars, so it came first
   works too, but its tray support is weaker.
 - **Version 1 scope:** the menu bar only?
 - **Cost:** pay for the Apple developer account now, or once there's something to release.
-- **License:** which one, before any binary ships.
+- **License:** MIT, chosen on 17 October 2026.

@@ -19,6 +19,16 @@ class Packaging(unittest.TestCase):
         self.assertEqual(load("cli").version(), version)
         self.assertIn("refs/tags/v%s.tar.gz" % version, text("packaging", "homebrew", "hatcheck.rb"))
 
+    def test_one_license(self):
+        self.assertTrue(text("LICENSE").startswith("MIT License\n\nCopyright (c) "))
+        self.assertIn('license = "MIT"', text("pyproject.toml"))
+        self.assertIn('license-files = ["LICENSE"]', text("pyproject.toml"))
+        self.assertIn('license "MIT"', text("packaging", "homebrew", "hatcheck.rb"))
+        self.assertIn("License: MIT\n", text("packaging", "winget", "yilab.Hatcheck.locale.en-US.yaml"))
+        self.assertIn('license = "MIT"', text("desktop", "src-tauri", "Cargo.toml"))
+        self.assertIn('"license": "MIT"', text("desktop", "package.json"))
+        self.assertIn("## License", text("README.md"))
+
     def test_commands_point_at_functions(self):
         scripts = text("pyproject.toml").split("[project.scripts]")[1].split("\n[")[0]
         commands = dict(re.findall(r'^([\w-]+) = "hatcheck\.(\w+:\w+)"', scripts, re.M))

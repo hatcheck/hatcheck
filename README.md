@@ -855,3 +855,8 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
   windows and the config files) come from [claude-z](https://github.com/sam-fakhreddine/claude-z) by
   Kerim ([lettt325](https://github.com/lettt325)), MIT-licensed, and Yi Wang's
   [fork](https://github.com/yiwang/claude-z) of it, which added Kimi.
+
+## License
+
+MIT, see [LICENSE](LICENSE). It covers everything in this repo: the CLI, the desktop app, the site
+and the docs.
