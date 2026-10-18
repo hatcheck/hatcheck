@@ -4,7 +4,7 @@
 # cargo-dist makes (v-release.yml). For each release: the version here and in the other two,
 # and the zip's url and SHA256 there (the release's hatcheck-x86_64-pc-windows-msvc.zip.sha256).
 PackageIdentifier: hatcheck.Hatcheck.CLI
-PackageVersion: 0.2.0
+PackageVersion: 0.3.0
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: 1.6.0

@@ -935,6 +935,8 @@ from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behi
   `launch.rs` for `cl`, `cx`, `claude-z` and `claude-k`, and `src/bin/` for those binaries and `hat`.
   Its own README is the crate's page on crates.io. It was ported from a Python version with the
   same output; see [docs/rust-port.md](docs/rust-port.md).
+- **`CHANGELOG.md`**: what changed in each release of the CLI; a release's notes on GitHub are its
+  section there.
 - **`install.sh`** / **`install.ps1`**: build the commands from a clone and put them on your `PATH`
   (`~/.local/bin` by default).
 - **`pyproject.toml`**: the PyPI package, the binaries as wheels built with maturin.
@@ -961,9 +963,9 @@ from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behi
   instance with its own icon, and a launcher that brings a running instance forward instead of
   opening a duplicate. It needs testing on a Windows machine first.
 - **Linux.** There's no official Claude Desktop for Linux, so only the CLI tools apply there.
-- **Releases:** the CLI's 0.1.0 is on PyPI, as Python; the next release ships the Rust binaries to
-  PyPI, GitHub, the Homebrew tap and winget, then the app's installers, once the release workflows
-  have their accounts and secrets (the workflows list them).
+- **Releases:** the CLI is on GitHub, the Homebrew tap, PyPI and crates.io from 0.2.0
+  ([CHANGELOG.md](CHANGELOG.md)). Next are winget, then the app's installers, once its release
+  workflow has its signing and updater secrets (`desktop.yml` lists them).
 - **Signing:** a Developer ID for the macOS app, and a certificate for the Windows one.
 
 ## Credits
