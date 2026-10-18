@@ -8,7 +8,7 @@ import unittest
 from helpers import REPO
 
 COMMANDS = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"]
-CLI_WINGET = ("yilab.Hatcheck.CLI.yaml", "yilab.Hatcheck.CLI.installer.yaml", "yilab.Hatcheck.CLI.locale.en-US.yaml")
+CLI_WINGET = ("hatcheck.Hatcheck.CLI.yaml", "hatcheck.Hatcheck.CLI.installer.yaml", "hatcheck.Hatcheck.CLI.locale.en-US.yaml")
 
 
 def text(*parts):
@@ -24,15 +24,15 @@ class Packaging(unittest.TestCase):
         for name in CLI_WINGET:
             self.assertIn("PackageVersion: %s\n" % version, text("packaging", "winget", "cli", name))
         self.assertIn("/releases/download/v%s/hatcheck-x86_64-pc-windows-msvc.zip" % version,
-                      text("packaging", "winget", "cli", "yilab.Hatcheck.CLI.installer.yaml"))
+                      text("packaging", "winget", "cli", "hatcheck.Hatcheck.CLI.installer.yaml"))
 
     def test_one_license(self):
         self.assertTrue(text("LICENSE").startswith("MIT License\n\nCopyright (c) "))
         self.assertIn('license = "MIT"', text("Cargo.toml"))
         self.assertIn('license = "MIT"', text("pyproject.toml"))
         self.assertIn('license-files = ["LICENSE"]', text("pyproject.toml"))
-        self.assertIn("License: MIT\n", text("packaging", "winget", "yilab.Hatcheck.locale.en-US.yaml"))
-        self.assertIn("License: MIT\n", text("packaging", "winget", "cli", "yilab.Hatcheck.CLI.locale.en-US.yaml"))
+        self.assertIn("License: MIT\n", text("packaging", "winget", "hatcheck.Hatcheck.locale.en-US.yaml"))
+        self.assertIn("License: MIT\n", text("packaging", "winget", "cli", "hatcheck.Hatcheck.CLI.locale.en-US.yaml"))
         self.assertIn('license = "MIT"', text("desktop", "src-tauri", "Cargo.toml"))
         self.assertIn('"license": "MIT"', text("desktop", "package.json"))
         self.assertIn("## License", text("README.md"))
@@ -43,7 +43,7 @@ class Packaging(unittest.TestCase):
         self.assertIn('bindings = "bin"', text("pyproject.toml"))  # the wheels' commands: all the binaries
         self.assertIn('COMMANDS="%s"' % " ".join(COMMANDS), text("install.sh"))
         self.assertIn("foreach ($name in %s)" % ", ".join('"%s"' % c for c in COMMANDS), text("install.ps1"))
-        winget = text("packaging", "winget", "cli", "yilab.Hatcheck.CLI.installer.yaml")
+        winget = text("packaging", "winget", "cli", "hatcheck.Hatcheck.CLI.installer.yaml")
         self.assertEqual(re.findall(r"RelativeFilePath: (\S+)", winget), [c + ".exe" for c in COMMANDS])
         self.assertEqual(re.findall(r"PortableCommandAlias: (\S+)", winget), COMMANDS)
 

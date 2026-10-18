@@ -1,7 +1,7 @@
 # winget manifest for the Hatcheck app, to send to github.com/microsoft/winget-pkgs as
-# manifests/y/yilab/Hatcheck/<version>/ with the two files beside this one. For each
+# manifests/h/hatcheck/Hatcheck/<version>/ with the two files beside this one. For each
 # release: the version here and in the other two, and the installer's url and SHA256 there.
-PackageIdentifier: yilab.Hatcheck
+PackageIdentifier: hatcheck.Hatcheck
 PackageVersion: 0.1.0
 DefaultLocale: en-US
 ManifestType: version

@@ -107,9 +107,9 @@ can't do safely, and a command can end its process, which only the engine should
   `install.ps1` build the binaries from a clone with cargo and link them.
 - **The desktop app** builds its engine with `npm run engine`, which runs cargo.
 
-Before the first release from these: PyPI's trusted publisher has to name the `hatcheck` GitHub
-owner (it named `yilab`), the `hatcheck/homebrew-tap` repo and a `HOMEBREW_TAP_TOKEN` secret have
-to exist, and the version needs a bump past 0.1.0, in `Cargo.toml` and the CLI's winget manifests.
+A release needs PyPI's trusted publisher to name this repo, `release.yml` and the `pypi`
+environment, and a `HOMEBREW_TAP_TOKEN` secret that can write to `hatcheck/homebrew-tap`, for the
+formula. Its version is the one in `Cargo.toml`, which the CLI's winget manifests follow.
 
 ## Running the checks
 

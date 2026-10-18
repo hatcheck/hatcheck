@@ -1,5 +1,5 @@
-PackageIdentifier: yilab.Hatcheck.CLI
-PackageVersion: 0.1.0
+PackageIdentifier: hatcheck.Hatcheck.CLI
+PackageVersion: 0.2.0
 PackageLocale: en-US
 Publisher: Yi Wang
 PackageName: hatcheck
