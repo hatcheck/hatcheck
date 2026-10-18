@@ -8,11 +8,18 @@ name: PyPI
 #
 # PyPI's trusted publisher for the project names this file (release.yml) and the pypi
 # environment; it can't be a reusable workflow, which is why this isn't a cargo-dist job. The
-# tag must match the version in Cargo.toml.
+# tag must match the version in Cargo.toml. Run by hand with a tag, it builds and publishes
+# that release's package with this workflow as it is now, for a release whose run here failed:
+#   gh workflow run release.yml -f tag=v0.2.0
 
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag, such as v0.2.0"
+        required: true
 
 permissions:
   contents: read
@@ -22,10 +29,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: The tag matches the version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "The tag is $GITHUB_REF_NAME but the version is $version"; exit 1; }
+          test "v$version" = "$TAG" || { echo "The tag is $TAG but the version is $version"; exit 1; }
 
   wheels:
     name: wheel, ${{ matrix.platform.target }}
@@ -36,12 +47,15 @@ jobs:
       matrix:
         platform:
           - { runner: ubuntu-22.04, target: x86_64-unknown-linux-gnu, runs: true }
-          - { runner: ubuntu-22.04, target: aarch64-unknown-linux-gnu }
+          # On ARM itself: the image maturin cross-compiles in has a GCC too old for ring's assembly.
+          - { runner: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, runs: true }
           - { runner: macos-15-intel, target: x86_64-apple-darwin, runs: true }
           - { runner: macos-latest, target: aarch64-apple-darwin, runs: true }
           - { runner: windows-latest, target: x86_64-pc-windows-msvc, runs: true }
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: Build the wheel
         uses: PyO3/maturin-action@v1
         with:
@@ -71,6 +85,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: Build the sdist
         uses: PyO3/maturin-action@v1
         with:
