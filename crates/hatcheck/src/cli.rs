@@ -10,6 +10,29 @@ pub const SUBCOMMANDS: &[&str] = &[
     "desktop", "provider", "relocate",
 ];
 
+/// The letters two subcommands start with, each given to the one used more. The other takes two
+/// letters, bi or un; sessions, the default, needs no word at all.
+const SHARED_LETTERS: &[(&str, &str)] = &[("b", "best"), ("s", "show"), ("u", "usage")];
+
+/// The subcommands a word could name: its whole name, a letter in SHARED_LETTERS, or else each
+/// name the word is the start of, so hat m is hat move.
+fn subcommands_named(word: &str) -> Vec<&'static str> {
+    if let Some(&name) = SUBCOMMANDS.iter().find(|n| **n == word) {
+        return vec![name];
+    }
+    if let Some(&(_, name)) = SHARED_LETTERS.iter().find(|(letter, _)| *letter == word) {
+        return vec![name];
+    }
+    if word.is_empty() {
+        return Vec::new();
+    }
+    SUBCOMMANDS
+        .iter()
+        .copied()
+        .filter(|n| n.starts_with(word))
+        .collect()
+}
+
 const HELP: &str =
     "hatcheck: Claude Code and Codex accounts on one computer, each kept apart. Lists
 recent sessions with the command that resumes each one and what's left of each
@@ -42,7 +65,11 @@ scripts, status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
-and so on. cl and cx run Claude Code and Codex with a profile.";
+and so on. cl and cx run Claude Code and Codex with a profile.
+
+A subcommand can be cut to its first letters: hat m is hat move, hat f is hat
+fork. Where two share a letter, it goes to the one used more: b is best, s is
+show and u is usage, so bind and unbind take two letters, bi and un.";
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -97,24 +124,31 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
     if argv.len() == 1 && argv[0] == "serve" {
         return crate::serve::run();
     }
-    let (command, prog) = match argv.first().map(String::as_str) {
-        Some(c) if SUBCOMMANDS.contains(&c) => {
-            let c = argv.remove(0);
-            let prog = format!("{me} {c}");
-            (c, prog)
+    let named = argv.first().map_or(Vec::new(), |w| subcommands_named(w));
+    let (command, prog) = match (named.as_slice(), argv.first().map(String::as_str)) {
+        ([c], _) => {
+            argv.remove(0); // m, or move: the whole name from here on, in messages too
+            (c.to_string(), format!("{me} {c}"))
         }
-        Some("-h" | "--help" | "help") => {
+        (_, Some("-h" | "--help" | "help")) => {
             if me == "hat" {
                 out::println("hat is the short name for hatcheck.\n");
             }
             out::println(HELP);
             return 0;
         }
-        Some("-V" | "--version") => {
+        (_, Some("-V" | "--version")) => {
             out::println(&format!("{me} {}", version()));
             return 0;
         }
-        Some(w) if !w.starts_with('-') && !is_hours(w) => {
+        ([first @ .., last], Some(w)) => {
+            out::eprint(&format!(
+                "{me}: '{w}' could be {} or {last}; give more of it\n",
+                first.join(", ")
+            ));
+            return 2;
+        }
+        (_, Some(w)) if !w.starts_with('-') && !is_hours(w) => {
             out::eprint(&format!(
                 "{me}: there's no '{w}' subcommand; see {me} --help\n"
             ));
@@ -161,5 +195,36 @@ mod tests {
                 "{name}: {help}"
             );
         }
+    }
+
+    #[test]
+    fn a_subcommand_can_be_cut_to_its_first_letters() {
+        for name in SUBCOMMANDS {
+            // Two letters or more name one subcommand, so a new one mustn't share a start.
+            for n in 2..=name.len() {
+                assert_eq!(subcommands_named(&name[..n]), [*name], "{}", &name[..n]);
+            }
+            assert_eq!(subcommands_named(&name[..1]).len(), 1, "{name}");
+        }
+        for (letter, name) in [
+            ("b", "best"),
+            ("s", "show"),
+            ("u", "usage"),
+            ("m", "move"),
+            ("f", "fork"),
+            ("w", "where"),
+            ("o", "open"),
+            ("d", "desktop"),
+            ("p", "provider"),
+            ("r", "relocate"),
+        ] {
+            assert_eq!(subcommands_named(letter), [name], "{letter}");
+        }
+        assert!(subcommands_named("x").is_empty());
+        assert!(subcommands_named("").is_empty());
+        let argv = vec!["m".to_string(), "--help".into()];
+        let (code, help, _) = out::captured(|| run("hat", argv, false));
+        assert_eq!(code, 0);
+        assert!(help.starts_with("usage: hat move"), "{help}");
     }
 }

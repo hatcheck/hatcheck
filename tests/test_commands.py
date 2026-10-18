@@ -197,6 +197,15 @@ class Commands(unittest.TestCase):
         self.assertIn("usage: hat usage", out)
         code, out = self.run_command(hat + ["fork", "--help"])
         self.assertIn("usage: hat fork", out)
+        # Cut to its first letters: the one it starts, or of two, the one used more.
+        for short, name in (("m", "move"), ("f", "fork"), ("b", "best"), ("bi", "bind"), ("u", "usage"),
+                            ("un", "unbind"), ("s", "show"), ("rel", "relocate")):
+            code, out = self.run_command(hat + [short, "--help"])
+            self.assertEqual(code, 0, out)
+            self.assertIn("usage: hat %s " % name, out)
+        code, out = self.run_command(HATCHECK + ["w", ID[:8]])  # hatcheck where, as w
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sorted(out.split()), sorted([self.transcript, self.transcript[:-len(".jsonl")]]))
         code, out = self.run_command(hat + ["nope"])
         self.assertIn("hat: there's no 'nope' subcommand; see hat --help", out)
         code, out = self.run_command(hat + ["check", "3d", "--no-usage"])

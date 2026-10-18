@@ -337,6 +337,11 @@ which is listed too. Codex files its sessions by the date they started, archived
 `hat` is the short name: `hat`, `hat usage`, `hat move …` and so on work the same. `hat check` is the name
 in two words, so it's `hat` again: `hat check` lists sessions and `hat check usage` is `hat usage`.
 
+A subcommand can be cut to its first letters, after `hat` or `hatcheck`: `hat m …` is `hat move …`
+and `hat f …` is `hat fork …`. Where two share a letter, it goes to the one used more: `b` is
+`best`, `s` is `show` and `u` is `usage`, so `bind` and `unbind` take two letters, `bi` and `un`.
+What it prints, and the commands it suggests, use the whole name.
+
 Lists the Claude Code sessions from every `~/.claude*` profile, and the Codex sessions from every
 `~/.codex*` home, that were active in the last 24 hours or are still open, grouped by folder and
 newest first. Run from a folder that has sessions, it lists

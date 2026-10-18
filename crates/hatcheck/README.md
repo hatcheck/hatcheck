@@ -40,7 +40,9 @@ cl work --resume <id>              Claude Code with ~/.claude-work
 cx work resume <id>                Codex with ~/.codex-work
 ```
 
-`hatcheck SUBCOMMAND --help` lists a subcommand's options, and most take `--json`. The
+`hatcheck SUBCOMMAND --help` lists a subcommand's options, and most take `--json`. A subcommand
+can be cut to its first letters: `hat m` is `hatcheck move`, and `b`, `s` and `u` are `best`, `show`
+and `usage`. The
 [README](https://github.com/hatcheck/hatcheck#readme) has the details, and
 [hatcheck.dev](https://hatcheck.dev) the overview.
 
