@@ -207,39 +207,41 @@ hides those unless you pass `--all`). Codex works the same way with `CODEX_HOME`
 
 ### Install
 
-As a package, on macOS, Linux and Windows, without a clone. It installs `hatcheck`, `hat`, `cl`,
+One binary per platform, with no Python needed. Each of these installs `hatcheck`, `hat`, `cl`,
 `cx`, `claude-z` and `claude-k`:
 
 ```bash
-uv tool install hatcheck            # or: pipx install hatcheck
+curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
+uv tool install hatcheck            # or: pipx install hatcheck
 ```
 
-Those two wait for the first release, made by `.github/workflows/release.yml` from a tag such as
-`v0.1.0`. Until then, from GitHub:
+On Windows, in PowerShell:
 
-```bash
-uv tool install git+https://github.com/hatcheck/hatcheck
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.ps1 | iex"
 ```
 
-The package's `cl`, `cx`, `claude-z` and `claude-k` are Python (`hatcheck/launch.py`), doing what
-the `sh` and PowerShell ones below do, so they work on every system. Python 3.9 or later.
+The installer scripts put the commands in `~/.local/bin` and add that folder to your `PATH`; set
+`HATCHECK_NO_MODIFY_PATH=1` first to keep your shell's startup files as they are. Each release, made
+from a tag such as `v0.2.0`, has them and the binaries for each platform, and PyPI gets the same
+binaries as wheels. The release builds start after 0.1.0, which is the Python version.
 
-From a clone, on macOS and Linux:
+From a clone, on macOS and Linux, with Rust 1.90 or newer ([rustup.rs](https://rustup.rs)):
 
 ```bash
-./install.sh               # link the commands below into ~/.local/bin
+./install.sh               # build the commands and link them into ~/.local/bin
 ./install.sh --bin ~/bin   # or into another folder on your PATH
 ./install.sh --uninstall   # remove the links again
 ```
 
-The commands are symlinks to this repo, so a `git pull` updates them. The installer doesn't edit
-your shell startup files: if the folder isn't on your `PATH`, it prints the line to add. A file that
-already has one of these names is left alone unless you pass `--force`, except the copies of
-`claude-z` and `claude-k` that the [claude-z](https://github.com/yiwang/claude-z) installers made,
-which these replace. `hatcheck` needs Python 3.9 or later (on macOS, `xcode-select --install`
-provides it). `hat` is installed as its short name too, unless another command on your `PATH` already
-has that name.
+The links point at the build in `target/release`, so after a `git pull`, run `./install.sh` again
+to rebuild them. The installer doesn't edit your shell startup files: if the folder isn't on your
+`PATH`, it prints the line to add. A file that already has one of these names is left alone unless
+you pass `--force`, except the links it made before, to the Python `hatcheck` and the `sh` launchers,
+and the copies of `claude-z` and `claude-k` that the [claude-z](https://github.com/yiwang/claude-z)
+installers made, which these replace. `hat` is installed as its short name too, unless another
+command on your `PATH` already has that name.
 
 Before the rename to Hatcheck these were separate commands: `claude-recent-sessions` (now
 `hatcheck`), `claude-usage`, `claude-where`, `claude-move-session` and `claude-provider` (now
@@ -248,18 +250,17 @@ Before the rename to Hatcheck these were separate commands: `claude-recent-sessi
 On Windows, in PowerShell:
 
 ```powershell
-.\install.ps1               # add .cmd launchers for the commands below to ~\.local\bin
+.\install.ps1               # build the commands and add .cmd launchers for them to ~\.local\bin
 .\install.ps1 -Bin D:\bin   # or to another folder on your PATH
 .\install.ps1 -Uninstall    # remove them again
 ```
 
-The launchers run the scripts in this repo, so a `git pull` updates them, and they work from
-PowerShell and `cmd` alike, whatever the script execution policy. You need Python 3.9 or later
-(python.org, or `winget install Python.Python.3.13`). If PowerShell won't run `install.ps1`, start
-it with `powershell -ExecutionPolicy Bypass -File install.ps1`. On Windows, `hatcheck` prints `cd`
-and resume commands for PowerShell. Paste them into PowerShell, not `cmd`, because
-`cmd` doesn't treat the trailing `# usage` as a comment. Inside a Visual Studio developer prompt,
-the MSVC compiler is also called `cl`, and whichever comes first on `PATH` wins.
+The launchers run the build, so after a `git pull`, run it again. They work from PowerShell and
+`cmd` alike, whatever the script execution policy. If PowerShell won't run `install.ps1`, start it
+with `powershell -ExecutionPolicy Bypass -File install.ps1`. On Windows, `hatcheck` prints `cd` and
+resume commands for PowerShell. Paste them into PowerShell, not `cmd`, because `cmd` doesn't treat
+the trailing `# usage` as a comment. Inside a Visual Studio developer prompt, the MSVC compiler is
+also called `cl`, and whichever comes first on `PATH` wins.
 
 #### Or as shell functions
 

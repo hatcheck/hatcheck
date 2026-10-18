@@ -1,10 +1,14 @@
-"""The Python package and the Homebrew formula: one version everywhere, and every command
-they install points at code that's there."""
+"""The packages: one version everywhere, one licence, and the same six commands from every
+way of installing them (the Rust binaries, which PyPI's wheels, the release archives and the
+installers carry)."""
 import os
 import re
 import unittest
 
-from helpers import REPO, load
+from helpers import REPO
+
+COMMANDS = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"]
+CLI_WINGET = ("yilab.Hatcheck.CLI.yaml", "yilab.Hatcheck.CLI.installer.yaml", "yilab.Hatcheck.CLI.locale.en-US.yaml")
 
 
 def text(*parts):
@@ -14,37 +18,47 @@ def text(*parts):
 
 class Packaging(unittest.TestCase):
     def test_one_version(self):
-        version = re.search(r'^version = "([^"]+)"', text("pyproject.toml"), re.M).group(1)
-        self.assertEqual(re.search(r'__version__ = "([^"]+)"', text("hatcheck", "__init__.py")).group(1), version)
-        self.assertEqual(load("cli").version(), version)
-        self.assertIn("refs/tags/v%s.tar.gz" % version, text("packaging", "homebrew", "hatcheck.rb"))
-        # The Rust port's, which its --version prints.
-        self.assertEqual(re.search(r'^version = "([^"]+)"', text("Cargo.toml"), re.M).group(1), version)
+        version = re.search(r'^version = "([^"]+)"', text("Cargo.toml"), re.M).group(1)  # --version prints it
+        self.assertIn("version.workspace = true", text("crates", "hatcheck", "Cargo.toml"))
+        self.assertIn('dynamic = ["version"]', text("pyproject.toml"))  # maturin takes Cargo's
+        for name in CLI_WINGET:
+            self.assertIn("PackageVersion: %s\n" % version, text("packaging", "winget", "cli", name))
+        self.assertIn("/releases/download/v%s/hatcheck-x86_64-pc-windows-msvc.zip" % version,
+                      text("packaging", "winget", "cli", "yilab.Hatcheck.CLI.installer.yaml"))
 
     def test_one_license(self):
         self.assertTrue(text("LICENSE").startswith("MIT License\n\nCopyright (c) "))
+        self.assertIn('license = "MIT"', text("Cargo.toml"))
         self.assertIn('license = "MIT"', text("pyproject.toml"))
         self.assertIn('license-files = ["LICENSE"]', text("pyproject.toml"))
-        self.assertIn('license "MIT"', text("packaging", "homebrew", "hatcheck.rb"))
         self.assertIn("License: MIT\n", text("packaging", "winget", "yilab.Hatcheck.locale.en-US.yaml"))
+        self.assertIn("License: MIT\n", text("packaging", "winget", "cli", "yilab.Hatcheck.CLI.locale.en-US.yaml"))
         self.assertIn('license = "MIT"', text("desktop", "src-tauri", "Cargo.toml"))
         self.assertIn('"license": "MIT"', text("desktop", "package.json"))
         self.assertIn("## License", text("README.md"))
 
-    def test_commands_point_at_functions(self):
-        scripts = text("pyproject.toml").split("[project.scripts]")[1].split("\n[")[0]
-        commands = dict(re.findall(r'^([\w-]+) = "hatcheck\.(\w+:\w+)"', scripts, re.M))
-        self.assertEqual(sorted(commands), ["cl", "claude-k", "claude-z", "cx", "hat", "hatcheck"])
-        for command, target in commands.items():
-            module, function = target.split(":")
-            self.assertTrue(callable(getattr(load(module), function, None)), command)
+    def test_every_install_has_the_same_commands(self):
+        crate = text("crates", "hatcheck", "Cargo.toml")
+        self.assertEqual(sorted(re.findall(r'^\[\[bin\]\]\nname = "([^"]+)"', crate, re.M)), sorted(COMMANDS))
+        self.assertIn('bindings = "bin"', text("pyproject.toml"))  # the wheels' commands: all the binaries
+        self.assertIn('COMMANDS="%s"' % " ".join(COMMANDS), text("install.sh"))
+        self.assertIn("foreach ($name in %s)" % ", ".join('"%s"' % c for c in COMMANDS), text("install.ps1"))
+        winget = text("packaging", "winget", "cli", "yilab.Hatcheck.CLI.installer.yaml")
+        self.assertEqual(re.findall(r"RelativeFilePath: (\S+)", winget), [c + ".exe" for c in COMMANDS])
+        self.assertEqual(re.findall(r"PortableCommandAlias: (\S+)", winget), COMMANDS)
 
-    def test_installers_make_the_same_commands(self):
-        formula = text("packaging", "homebrew", "hatcheck.rb")
-        for command in ("hatcheck", "hat", "claude-z", "claude-k"):
-            self.assertIn('"%s"' % command, formula)
-        self.assertIn('libexec/"cl", libexec/"cx"', formula)
-        self.assertIn("hatcheck:hatcheck.py hat:hatcheck.py cl:cl cx:cx claude-z:cl claude-k:cl", text("install.sh"))
+    def test_release_workflows(self):
+        # PyPI's trusted publisher names release.yml and the pypi environment; cargo-dist writes
+        # v-release.yml, and only for tags starting with v, which leaves desktop-v tags alone.
+        pypi = text(".github", "workflows", "release.yml")
+        self.assertIn("environment: pypi", pypi)
+        self.assertIn("id-token: write", pypi)
+        self.assertIn("pypa/gh-action-pypi-publish", pypi)
+        self.assertNotIn("workflow_call", pypi)
+        dist = text("dist-workspace.toml")
+        self.assertIn('tag-namespace = "v"', dist)
+        self.assertIn('tap = "hatcheck/homebrew-tap"', dist)
+        self.assertIn("- 'v**[0-9]+.[0-9]+.[0-9]+*'", text(".github", "workflows", "v-release.yml"))
 
 
 if __name__ == "__main__":

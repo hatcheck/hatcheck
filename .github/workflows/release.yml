@@ -1,67 +1,96 @@
-name: release
+name: PyPI
 
-# A tag such as v0.1.0 releases the hatcheck CLI: it builds the Python package, publishes it
-# to PyPI through trusted publishing, and makes a GitHub release with the files attached. It
-# prints the url and sha256 lines for the Homebrew formula (packaging/homebrew/hatcheck.rb).
-# Once, before the first release: at pypi.org, add a trusted publisher for the project
-# hatcheck (this repo, workflow release.yml, environment pypi), and make the pypi environment
-# in this repo's settings. The tag must match the version in pyproject.toml.
+# A tag such as v0.2.0 releases the hatcheck CLI. This workflow builds its PyPI package with
+# maturin, a wheel per platform with the Rust binaries as its commands and the source as an
+# sdist, and publishes it through trusted publishing. v-release.yml, which cargo-dist writes
+# from dist-workspace.toml, builds the same binaries for the GitHub release, with the shell and
+# PowerShell installers and the Homebrew formula. Each can be re-run on its own.
+#
+# PyPI's trusted publisher for the project names this file (release.yml) and the pypi
+# environment; it can't be a reusable workflow, which is why this isn't a cargo-dist job. The
+# tag must match the version in Cargo.toml.
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
       - name: The tag matches the version
         run: |
-          version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' pyproject.toml)
+          version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
           test "v$version" = "$GITHUB_REF_NAME" || { echo "The tag is $GITHUB_REF_NAME but the version is $version"; exit 1; }
-      - name: Build
-        run: uv build
-      - name: Try the package
-        run: |
-          uvx --from dist/*.whl hatcheck --version
-          uvx --from dist/*.whl hatcheck --help > /dev/null
-      - uses: actions/upload-artifact@v4
+
+  wheels:
+    name: wheel, ${{ matrix.platform.target }}
+    needs: version
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { runner: ubuntu-22.04, target: x86_64-unknown-linux-gnu, runs: true }
+          - { runner: ubuntu-22.04, target: aarch64-unknown-linux-gnu }
+          - { runner: macos-15-intel, target: x86_64-apple-darwin, runs: true }
+          - { runner: macos-latest, target: aarch64-apple-darwin, runs: true }
+          - { runner: windows-latest, target: x86_64-pc-windows-msvc, runs: true }
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
         with:
-          name: dist
-          path: dist/
-      - name: Homebrew formula lines
+          target: ${{ matrix.platform.target }}
+          args: --release --locked --out dist
+          manylinux: auto
+      - name: Run its commands
+        if: matrix.platform.runs
+        shell: bash
         run: |
-          url="https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$GITHUB_REF_NAME.tar.gz"
-          curl -sSL "$url" -o source.tar.gz
-          echo "url \"$url\""
-          echo "sha256 \"$(sha256sum source.tar.gz | cut -d' ' -f1)\""
+          python3 -m venv venv || python -m venv venv
+          bin=venv/bin; [ -d venv/Scripts ] && bin=venv/Scripts
+          "$bin/python" -m pip install --quiet dist/*.whl
+          "$bin/hatcheck" --version
+          "$bin/hat" --help > /dev/null
+          set +e
+          "$bin/cl" > out.txt 2>&1; code=$?
+          set -e
+          test "$code" = 2 && grep -q "usage: cl" out.txt
+      - uses: actions/upload-artifact@v6
+        with:
+          name: package-${{ matrix.platform.target }}
+          path: dist/*.whl
+
+  sdist:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: package-sdist
+          path: dist/*.tar.gz
 
   pypi:
-    needs: build
+    needs: [wheels, sdist]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
-          name: dist
+          pattern: package-*
           path: dist/
+          merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
-
-  github-release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - name: Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

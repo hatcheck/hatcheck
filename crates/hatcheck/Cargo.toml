@@ -1,11 +1,12 @@
 [package]
 name = "hatcheck"
-description = "Claude Code and Codex accounts on one computer, each kept apart: recent sessions, plan usage, resume commands and moves across all of them."
+description = "Claude Code and Codex accounts on one computer, each kept apart"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
+homepage.workspace = true
 
 [lib]
 path = "src/lib.rs"

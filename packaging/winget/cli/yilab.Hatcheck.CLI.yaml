@@ -1,0 +1,10 @@
+# winget manifest for the hatcheck CLI (hatcheck, hat, cl, cx, claude-z and claude-k), to send
+# to github.com/microsoft/winget-pkgs as manifests/y/yilab/Hatcheck/CLI/<version>/ with the two
+# files beside this one. It installs the commands from the release's Windows zip, which
+# cargo-dist makes (v-release.yml). For each release: the version here and in the other two,
+# and the zip's url and SHA256 there (the release's hatcheck-x86_64-pc-windows-msvc.zip.sha256).
+PackageIdentifier: yilab.Hatcheck.CLI
+PackageVersion: 0.1.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

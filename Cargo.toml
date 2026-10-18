@@ -11,8 +11,13 @@ edition = "2021"
 license = "MIT"
 rust-version = "1.90"
 repository = "https://github.com/hatcheck/hatcheck"
+homepage = "https://hatcheck.dev"
 
 [profile.release]
 lto = true
 codegen-units = 1
 strip = true
+
+# The profile cargo-dist builds the release binaries with: the release one.
+[profile.dist]
+inherits = "release"

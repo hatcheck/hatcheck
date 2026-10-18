@@ -247,21 +247,26 @@ class Commands(unittest.TestCase):
         code, out = self.where("2026")  # the start time in a file name isn't the ID
         self.assertEqual(code, 1, out)
 
-    @python_only
+    @unittest.skipUnless(ENGINE, "links the Rust binaries, which tests/conformance.py builds")
     def test_installer(self):
         target = os.path.join(self.h.root, "installed")
         names = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"]
+        built = os.path.realpath(os.path.dirname(ENGINE))  # as the installers spell it
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         if WINDOWS:
             # Launchers for the commands hatcheck replaced, made before the repo was renamed from
-            # claude-multi-account: removed. One this script didn't make is left alone.
+            # claude-multi-account: removed. One this script didn't make is left alone. One it
+            # made for the Python hatcheck is brought up to date.
             old = "@echo off\r\nrem made by claude-multi-account install.ps1\r\npython old\\claude-usage.py %*\r\n"
             write(os.path.join(target, "claude-usage.cmd"), old)
             write(os.path.join(target, "claude-where.cmd"), "@echo off\r\necho mine\r\n")
-            code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target])
+            write(os.path.join(target, "hatcheck.cmd"),
+                  "@echo off\r\nrem made by hatcheck install.ps1\r\npython \"%s\\hatcheck.py\" %%*\r\n" % REPO)
+            code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target, "-From", built])
             self.assertEqual(code, 0, out)
             for name in names:
-                self.assertTrue(os.path.isfile(os.path.join(target, name + ".cmd")), out)
+                with open(os.path.join(target, name + ".cmd"), encoding="ascii") as fh:
+                    self.assertIn('"%s" %%*' % os.path.join(built, name + ".exe"), fh.read(), out)
             self.assertFalse(os.path.exists(os.path.join(target, "claude-usage.cmd")), out)
             self.assertIn("it's hatcheck usage now", out)
             self.assertTrue(os.path.isfile(os.path.join(target, "claude-where.cmd")), out)
@@ -282,20 +287,26 @@ class Commands(unittest.TestCase):
             # A copy that the claude-z repo's install-z.sh left: replaced without --force.
             write(os.path.join(target, "claude-z"), '#!/usr/bin/env bash\nCONFIG_DIR="$HOME/.config/claude-z"\n')
             # Links to the commands hatcheck replaced: removed. A file this script didn't make stays.
+            # Its own link to the Python hatcheck: replaced without --force.
             repo = os.path.realpath(REPO)  # as install.sh spells it
             os.symlink(os.path.join(repo, "claude-recent-sessions.py"), os.path.join(target, "claude-recent-sessions"))
             os.symlink(os.path.join(repo, "claude-usage.py"), os.path.join(target, "claude-usage"))
+            os.symlink(os.path.join(repo, "hatcheck.py"), os.path.join(target, "hatcheck"))
             write(os.path.join(target, "claude-where"), "#!/bin/sh\necho mine\n")
-            code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target])
+            code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target, "--from", built])
             self.assertEqual(code, 0, out)
             for name in names:
-                self.assertTrue(os.path.islink(os.path.join(target, name)), out)
-            self.assertIn("claude-z -> %s (replaced the copy from the claude-z repo" % os.path.join(REPO, "cl"), out)
+                self.assertEqual(os.readlink(os.path.join(target, name)), os.path.join(built, name), out)
+            self.assertIn("claude-z -> %s (replaced the copy from the claude-z repo" % os.path.join(built, "claude-z"), out)
+            self.assertIn("hatcheck -> %s (it linked to %s)" % (os.path.join(built, "hatcheck"),
+                                                                os.path.join(repo, "hatcheck.py")), out)
             self.assertIn("claude-recent-sessions: it's hatcheck now", out)
             self.assertIn("claude-usage: it's hatcheck usage now", out)
             self.assertFalse(os.path.lexists(os.path.join(target, "claude-usage")), out)
             self.assertTrue(os.path.isfile(os.path.join(target, "claude-where")), out)
             os.remove(os.path.join(target, "claude-where"))
+            code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target, "--from", built])
+            self.assertEqual(out.count("(already linked)"), len(names), out)
             code, out = self.run_command([os.path.join(target, "hatcheck"), "where", ID[:8]])
             self.assertIn(self.transcript, out)
             code, out = self.run_command([os.path.join(target, "hat"), "--help"])
@@ -304,18 +315,22 @@ class Commands(unittest.TestCase):
             self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
             code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target, "--uninstall"])
             self.assertEqual(os.listdir(target), [], out)
+            code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target])
+            self.assertEqual(code, 1, out)  # the runner's PATH here has no cargo to build with
+            self.assertIn("builds hatcheck with cargo, which isn't on your PATH", out)
 
-    @python_only
+    @unittest.skipUnless(ENGINE, "links the Rust binaries, which tests/conformance.py builds")
     def test_installer_leaves_hat_to_another_command(self):
         target = os.path.join(self.h.root, "installed")
+        built = os.path.dirname(ENGINE)
         if WINDOWS:
             write(os.path.join(self.bin, "hat.cmd"), "@echo off\r\necho another hat\r\n")  # on the PATH
-            install = POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target]
+            install = POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target, "-From", built]
             force, made = install + ["-Force"], os.path.join(target, "hat.cmd")
         else:
             write(os.path.join(self.bin, "hat"), "#!/bin/sh\necho another hat\n")
             os.chmod(os.path.join(self.bin, "hat"), 0o755)
-            install = ["bash", os.path.join(REPO, "install.sh"), "--bin", target]
+            install = ["bash", os.path.join(REPO, "install.sh"), "--bin", target, "--from", built]
             force, made = install + ["--force"], os.path.join(target, "hat")
         code, out = self.run_command(install)
         self.assertEqual(code, 0, out)  # only a short name: not having it isn't a failure
@@ -325,7 +340,6 @@ class Commands(unittest.TestCase):
         code, out = self.run_command(force)
         self.assertEqual(code, 0, out)
         self.assertTrue(os.path.lexists(made), out)
-
 
 
 @python_only

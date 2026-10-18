@@ -1,27 +1,31 @@
 # install.ps1
-# Windows version of install.sh: put this repo's Claude Code and Codex CLI helpers on your
-# PATH as small .cmd launchers in a bin folder (default ~\.local\bin, where Claude
-# Code's installer puts claude.exe). The launchers run the scripts in this repo, so
-# a git pull updates them, and they work from PowerShell and cmd alike. Your PATH
-# and PowerShell profile are not changed.
+# Windows version of install.sh: build hatcheck's commands from this repo with cargo and put
+# them on your PATH as small .cmd launchers in a bin folder (default ~\.local\bin, where
+# Claude Code's installer puts claude.exe). The launchers run the build, so after a git pull,
+# run this again to build and update them; they work from PowerShell and cmd alike. Your
+# PATH and PowerShell profile are not changed. Without a clone or Rust, install a release
+# instead; see the README.
 #
 # Usage:
-#   .\install.ps1 [-Bin DIR] [-Force]    add the commands
-#   .\install.ps1 [-Bin DIR] -Uninstall  remove the launchers this script made
+#   .\install.ps1 [-Bin DIR] [-Force]      build the commands and add their launchers
+#   .\install.ps1 [-Bin DIR] -From DIR     add launchers for the binaries already built in DIR
+#   .\install.ps1 [-Bin DIR] -Uninstall    remove the launchers this script made
 #
 #   hatcheck                recent sessions in every profile and home, with resume commands and
 #                           plan usage; hatcheck usage, where, move and provider do the rest
 #   hat                     the short name for hatcheck, unless another hat is on your PATH
 #   cl                      claude with a ~\.claude-<name> profile: cl work --resume <id>
 #   cx                      codex with a ~\.codex-<name> home: cx work resume <id>
-#   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic (cl.ps1 --as claude-z)
+#   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic
 #
-# Launchers this script made for the commands hatcheck replaced (claude-recent-sessions,
+# Launchers this script made before, for the Python hatcheck and the PowerShell cl and cx, are
+# replaced. Those it made for the commands hatcheck replaced (claude-recent-sessions,
 # claude-usage, claude-where, claude-move-session, claude-provider) are removed.
 #
 #   -Force  replace .cmd files that already exist under those names
 param(
     [string]$Bin = (Join-Path $(if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }) ".local\bin"),
+    [string]$From = "",
     [switch]$Force,
     [switch]$Uninstall
 )
@@ -30,15 +34,11 @@ $repo = $PSScriptRoot
 $marker = "rem made by hatcheck install.ps1"
 # Launchers made before the repo was renamed from claude-multi-account carry the old marker.
 $markers = @($marker, "rem made by claude-multi-account install.ps1")
-$python = if (Get-Command py -CommandType Application -ErrorAction SilentlyContinue) { "py -3" } else { "python" }
-$powershell = "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File"
-$commands = [ordered]@{
-    "hatcheck"               = "$python `"$repo\hatcheck.py`" %*"
-    "hat"                    = "$python `"$repo\hatcheck.py`" --as hat %*"
-    "cl"                     = "$powershell `"$repo\cl.ps1`" %*"
-    "cx"                     = "$powershell `"$repo\cx.ps1`" %*"
-    "claude-z"               = "$powershell `"$repo\cl.ps1`" --as claude-z %*"
-    "claude-k"               = "$powershell `"$repo\cl.ps1`" --as claude-k %*"
+$build = -not $From
+$From = if ($From) { (Resolve-Path -LiteralPath $From).Path } else { Join-Path $repo "target\release" }
+$commands = [ordered]@{}
+foreach ($name in "hatcheck", "hat", "cl", "cx", "claude-z", "claude-k") {
+    $commands[$name] = "`"$(Join-Path $From "$name.exe")`" %*"
 }
 # The commands hatcheck replaced, and its subcommand that does their job.
 $replaced = [ordered]@{
@@ -78,8 +78,28 @@ if ($Uninstall) {
     exit 0
 }
 
-if ($repo -match '[^\x20-\x7e]') {
-    Write-Warning "The repo path has non-ASCII characters, which .cmd files may not read correctly: $repo"
+if ($build) {
+    if (-not (Get-Command cargo -CommandType Application -ErrorAction SilentlyContinue)) {
+        [Console]::Error.WriteLine("install.ps1 builds hatcheck with cargo, which isn't on your PATH. Install Rust")
+        [Console]::Error.WriteLine("(https://rustup.rs) and run it again, or install a release instead; see the README.")
+        exit 1
+    }
+    # cargo reports its progress on stderr, which Windows PowerShell turns into errors when
+    # stderr is redirected; only its exit code says whether the build worked.
+    $ErrorActionPreference = "Continue"
+    & cargo build --release --locked -p hatcheck --manifest-path (Join-Path $repo "Cargo.toml")
+    $built = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    if ($built -ne 0) { exit $built }
+}
+foreach ($name in $commands.Keys) {
+    if (-not (Test-Path -LiteralPath (Join-Path $From "$name.exe") -PathType Leaf)) {
+        [Console]::Error.WriteLine("There's no $name.exe in $From to add")
+        exit 1
+    }
+}
+if ($From -match '[^\x20-\x7e]') {
+    Write-Warning "The build's path has non-ASCII characters, which .cmd files may not read correctly: $From"
 }
 New-Item -ItemType Directory -Force -Path $Bin | Out-Null
 Remove-Replaced
@@ -113,9 +133,6 @@ $onPath = $env:Path -split ";" | Where-Object { $_ -and ($_.TrimEnd("\") -ieq $B
 if (-not $onPath) {
     Write-Output "$Bin isn't on your PATH. To add it for your user account, run:"
     Write-Output "  [Environment]::SetEnvironmentVariable('Path', `"$Bin;`" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
-}
-if (-not (Get-Command py, python -CommandType Application -ErrorAction SilentlyContinue)) {
-    Write-Output "hatcheck needs Python 3 (python.org or: winget install Python.Python.3.13)"
 }
 if (-not (Get-Command claude -CommandType Application -ErrorAction SilentlyContinue)) {
     Write-Output "cl runs claude, which isn't on your PATH: install Claude Code first"

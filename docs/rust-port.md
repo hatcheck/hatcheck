@@ -98,10 +98,15 @@ until it links the crate.
 
 ## The switch
 
-- **PyPI.** The package is built with maturin (`bindings = "bin"`), the way ruff and uv ship, so
-  `uv tool install hatcheck` and `pipx install hatcheck` install the binary.
-- **Homebrew and winget** install the binaries, the launchers' included, and the `cl` and `cx`
-  scripts go; `install.sh` and `install.ps1` link the binaries.
+- **PyPI.** Done. The package is built with maturin (`bindings = "bin"`), the way ruff and uv
+  ship, so `uv tool install hatcheck` and `pipx install hatcheck` install the binaries.
+  `release.yml` builds a wheel for each of five platforms and the sdist, and publishes them through
+  PyPI's trusted publisher, which names that file.
+- **The release binaries.** Done, with cargo-dist (`dist-workspace.toml`). Its `v-release.yml`
+  builds the six commands for six targets into the GitHub release, with shell and PowerShell
+  installers and a Homebrew formula it publishes to `hatcheck/homebrew-tap`. The CLI's winget
+  manifests (`packaging/winget/cli/`) install from that release's Windows zip. `install.sh` and
+  `install.ps1` build the binaries from a clone with cargo and link them.
 - **The desktop app** runs the Rust binary as its engine, still a sidecar running `hatcheck serve`:
   `npm run engine` builds it with cargo. Done. It stays a separate process rather than linking the
   crate, because `serve` sets environment variables for each command, which a process with other

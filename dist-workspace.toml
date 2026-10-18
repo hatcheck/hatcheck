@@ -1,0 +1,24 @@
+[workspace]
+members = ["cargo:."]
+
+# cargo-dist (https://axodotdev.github.io/cargo-dist): a tag such as v0.2.0 builds the release
+# binaries for each target, the shell and PowerShell installers and the Homebrew formula, and
+# makes the GitHub release. It writes its workflow, .github/workflows/v-release.yml, from this
+# file: run `dist generate` after changing it, and don't edit that workflow by hand. The PyPI
+# package is built and published by release.yml, the file PyPI's trusted publisher names.
+[dist]
+# The version of dist that CI uses (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.33.0"
+ci = "github"
+# Only tags starting with v: v0.2.0 releases the CLI, and the app's desktop-v0.2.0 tags are
+# left to desktop.yml. It also names the workflow v-release.yml, leaving release.yml to PyPI.
+tag-namespace = "v"
+installers = ["shell", "powershell", "homebrew"]
+# The formula goes to this tap as Formula/hatcheck.rb, with the HOMEBREW_TAP_TOKEN secret
+tap = "hatcheck/homebrew-tap"
+publish-jobs = ["homebrew"]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
+# Where the shell and PowerShell installers put the commands: ~/.local/bin, as install.sh does
+install-path = ["$XDG_BIN_HOME/", "$XDG_DATA_HOME/../bin", "~/.local/bin"]
+hosting = "github"
+install-updater = false
