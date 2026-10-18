@@ -105,6 +105,10 @@ can't do safely, and a command can end its process, which only the engine should
   and a Homebrew formula it publishes to `hatcheck/homebrew-tap`. The CLI's winget manifests
   (`packaging/winget/cli/`) install from that release's Windows zip. `install.sh` and
   `install.ps1` build the binaries from a clone with cargo and link them.
+- **crates.io.** The crate is ready for it, with a README of its own and metadata that points
+  `cargo binstall` at the release's archives. Its first version is published by hand, with an API
+  token; after that, `crates.yml` publishes each release through crates.io's trusted publishing,
+  set up on the crate's settings page for this repo, that file and the `crates-io` environment.
 - **The desktop app** builds its engine with `npm run engine`, which runs cargo.
 
 A release needs PyPI's trusted publisher to name this repo, `release.yml` and the `pypi`

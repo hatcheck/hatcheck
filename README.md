@@ -765,7 +765,8 @@ from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behi
 - **`crates/hatcheck/`**: hatcheck in Rust, the commands and the launchers. Its `src/` has a file per
   subcommand (`sessions.rs`, `usage.rs`, `move_cmd.rs`, `open_cmd.rs`, `desktop.rs` and the rest),
   `launch.rs` for `cl`, `cx`, `claude-z` and `claude-k`, and `src/bin/` for those binaries and `hat`.
-  It was ported from a Python version with the same output; see [docs/rust-port.md](docs/rust-port.md).
+  Its own README is the crate's page on crates.io. It was ported from a Python version with the
+  same output; see [docs/rust-port.md](docs/rust-port.md).
 - **`install.sh`** / **`install.ps1`**: build the commands from a clone and put them on your `PATH`
   (`~/.local/bin` by default).
 - **`pyproject.toml`**: the PyPI package, the binaries as wheels built with maturin.

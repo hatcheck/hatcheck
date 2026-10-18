@@ -1,0 +1,45 @@
+name: crates.io
+
+# A tag such as v0.2.0 publishes the hatcheck crate to crates.io, from which cargo install
+# hatcheck builds it and cargo binstall hatcheck fetches the GitHub release's binaries. It
+# publishes through crates.io's trusted publishing, which the crate's settings on crates.io set
+# up once its first version is there (published by hand with an API token): this repo, this
+# file (crates.yml) and the crates-io environment. Run by hand with a tag, it publishes that
+# tag's crate:
+#   gh workflow run crates.yml -f tag=v0.2.0
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag, such as v0.2.0"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: The tag matches the version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
+          test "v$version" = "$TAG" || { echo "The tag is $TAG but the version is $version"; exit 1; }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - name: Publish
+        run: cargo publish -p hatcheck --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

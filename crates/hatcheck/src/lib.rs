@@ -2,6 +2,9 @@
 //! hat commands, the cl, cx, claude-z and claude-k launchers, and hatcheck serve, the engine
 //! the desktop app runs. It was ported from a Python version, with the same output, which the
 //! command tests in tests/ still hold it to (docs/rust-port.md).
+//!
+//! The library is how the binaries share code, not an interface for other crates: its modules
+//! change with the commands, and keep no compatibility from one version to the next.
 
 pub mod args;
 pub mod best;
