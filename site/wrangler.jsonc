@@ -10,7 +10,6 @@
     "directory": "./"
   },
   "routes": [
-    { "pattern": "hatcheck.dev", "custom_domain": true },
-    { "pattern": "www.hatcheck.dev", "custom_domain": true }
+    { "pattern": "hatcheck.dev", "custom_domain": true }
   ]
 }
