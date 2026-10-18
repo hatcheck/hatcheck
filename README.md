@@ -472,18 +472,19 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
 
 ### `hatcheck move`: carry on a session with another profile
 
-When one account runs low, continue a session on another profile, or in the other agent. It copies
-the session by default; `--no-keep` deletes the original once the copy is checked, which moves it.
+When one account runs low, continue a session on another profile, or in the other agent. It moves
+the session: the original is deleted once every copied file is checked against it, and an older
+copy never replaces a newer one. `--keep` keeps the original, which copies it instead.
 
 ```
 $ hatcheck move 9a8b7c6d work
-Copied session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude to ~/.claude-work:
+Moved session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude to ~/.claude-work:
   transcript                 53.0 KB
   subagents and tool output  3 files
   /rewind file snapshots     4 files
   plan                       quiet-river-plan.md
 Paths in the conversation to these files now point to the copies.
-Kept the original in ~/.claude; --no-keep deletes it once the copy is checked.
+Deleted the original from ~/.claude; the plan file stays, since sessions can share one.
 Resume it with:
   cd ~/code/api
   cl work --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
@@ -491,9 +492,9 @@ Resume it now in ~/.claude-work? [y/N]
 ```
 
 - It copies the transcript, the folder of subagent transcripts and saved tool output, the `/rewind`
-  file snapshots and the plan file, keeping their timestamps, and checks every copied file. Paths in
-  the conversation that point at those files are changed to point at the copies, except inside
-  Claude's thinking, whose signatures would stop matching.
+  file snapshots and the plan file, keeping their timestamps, and checks every copied file before it
+  deletes anything. Paths in the conversation that point at those files are changed to point at the
+  copies, except inside Claude's thinking, whose signatures would stop matching.
 - A session that's open in a terminal is refused: quit it first, so it stops changing.
   `hatcheck` marks those `● open`.
 - Resume it with the printed command, from the directory it ran in, or answer `y` when it asks and
@@ -502,28 +503,41 @@ Resume it now in ~/.claude-work? [y/N]
   permissions, MCP servers, plugins and project memory are the new profile's. If the new account
   rejects the signatures on earlier thinking, Claude Code drops those thinking blocks and carries
   on.
-- Plan files stay in the old profile even with `--no-keep`, since sessions can share one.
+- The plan file stays in the old profile, since sessions can share one.
 - If the session's last reply came from Z.ai or Kimi, it also prints the `cl -z` or `cl -k` command
   that carries on there instead of on the new profile's Claude plan.
 
 #### When the profile already has a copy
 
-A session copied to another profile and carried on there can be moved back: the copy it left
-behind is an older version of it. The two copies are compared line by line:
+A session copied to another profile with `--keep` and carried on there can be moved back: the copy
+it left behind is an older version of it. The two copies are compared line by line:
 
 - **The copy there is older**, because the session went on from it: it's brought up to date, and
   each item shows `(updated an older copy)`. Nothing is lost, since the copy being moved starts with
   all of it.
-- **The copy there is newer**, because the session went on there: nothing is copied. With
-  `--no-keep`, the older copy here is deleted.
-- **Both went on** after the copy was made: nothing is copied, since that would lose the prompts
+- **The copy there is newer**, because the session went on there: it stops and changes nothing,
+  since putting this copy there would lose what came after. It prints the command that resumes the
+  session there, and the files of the older copy here, to delete if you don't want them.
+- **Both went on** after the copy was made: nothing is moved, since that would lose the prompts
   only the copy there has. It says when they split and how many prompts each has had since.
   `--fork` brings this one in as a new session with its own ID and keeps both, as Claude Code's
   `claude --resume <id> --fork-session` and `codex fork` do. Or delete the copy there first.
 
 ```
+$ hatcheck move 9a8b7c6d work
+~/.claude-work already has session 9a8b7c6d "Add rate limiting to the login endpoint", with everything in this copy and more: the session went on there. This copy is older, so nothing was moved.
+Resume it there with:
+  cd ~/code/api
+  cl work --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+To drop the older copy in ~/.claude, delete:
+  ~/.claude/projects/-Users-me-code-api/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d.jsonl
+  ~/.claude/projects/-Users-me-code-api/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+  ~/.claude/file-history/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+```
+
+```
 $ hatcheck move 9a8b7c6d default
-Session 9a8b7c6d went on in both ~/.claude-work and ~/.claude after Oct 15 01:40: 3 new prompts in ~/.claude-work, 1 in ~/.claude. Copying this one over would lose what's only in ~/.claude, so nothing was copied.
+Session 9a8b7c6d went on in both ~/.claude-work and ~/.claude after Oct 15 01:40: 3 new prompts in ~/.claude-work, 1 in ~/.claude. Moving this one over would lose what's only in ~/.claude, so nothing was moved.
 To keep both, bring this one in as a new session with its own ID:
   hatcheck move 9a8b7c6d default --fork
 Or delete the copy in ~/.claude first, to replace it:
@@ -561,7 +575,7 @@ Converted Codex session 019a8c1e "Add retries to the uploader" from ~/.codex-wor
   tool calls                 191, as text with their output shortened
   left out                   Codex's reasoning, images, goals and subagent sessions
   new session                6f6749d7-0f59-4683-997c-a3595421b93f (241.9 KB)
-The original stays in ~/.codex-work.
+The original stays in ~/.codex-work, since a conversion leaves things out.
 Resume it with:
   cd ~/code/api
   cl work --resume 6f6749d7-0f59-4683-997c-a3595421b93f
@@ -569,9 +583,9 @@ Resume it now in ~/.claude-work? [y/N]
 ```
 
 - Between Codex homes signed in to the same ChatGPT account, the session file is copied as it is,
-  with its ID and its name, and `--no-keep` works as for Claude Code. A copy already there is
-  compared the same way, and `--fork` gives the copy a new ID in its file name, its
-  `session_meta` and its events.
+  with its ID and its name, and the original is deleted once the copy is checked, as for Claude
+  Code. A copy already there is compared the same way, and `--fork` gives the copy a new ID in its
+  file name, its `session_meta` and its events.
 - Between Claude Code and Codex (`hatcheck move 3f1c2a9e codex:work` goes the other way), and
   between Codex homes on different accounts, the session is converted into a new one with a new ID,
   and the original is always kept. Codex encrypts its reasoning and its summaries of compacted
@@ -595,9 +609,11 @@ Resume it now in ~/.claude-work? [y/N]
 | `SESSION`        | the session ID, or the start of it                                           |
 | `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, `default` for `~/.claude`, `codex` for `~/.codex`, `codex:NAME` for `~/.codex-NAME`, or a path |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
-| `--no-keep`      | delete the original once the copy is checked, which moves it (not when converting) |
-| `--fork`         | copy it in as a new session with its own ID, leaving a copy already there as it is (a converted session always gets one) |
-| `--dry-run`      | show what would be copied, converted and deleted, and change nothing         |
+| `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
+| `--fork`         | bring it in as a new session with its own ID, leaving a copy already there as it is (a converted session always gets one) |
+| `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
+
+`--no-keep`, which a move needed before it was the default, is still accepted.
 
 ### `hatcheck relocate`: a project folder that moved
 
@@ -841,9 +857,10 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
 - **Nothing runs in the background.** There's no daemon. `hatcheck serve` is the desktop app's
   engine and lives only while the app does, one command per line
   ([`serve.rs`](crates/hatcheck/src/serve.rs)).
-- **Sessions are only ever copied, moved or rewritten in ways you can undo.** `move` keeps the
-  original unless `--no-keep`, `relocate` prints the command that undoes it, and both have
-  `--dry-run`, which runs every check and writes nothing ([`move_cmd.rs`](crates/hatcheck/src/move_cmd.rs),
+- **Sessions are only ever moved, copied or rewritten in ways you can undo.** `move` deletes the
+  original only once every copied file is checked against it, never puts an older copy over a
+  newer one, and is undone by moving the session back; `relocate` prints the command that undoes
+  it; and both have `--dry-run`, which runs every check and writes nothing ([`move_cmd.rs`](crates/hatcheck/src/move_cmd.rs),
   [`relocate.rs`](crates/hatcheck/src/relocate.rs)).
 
 Function names rather than line numbers, since lines move; `git grep` finds them.

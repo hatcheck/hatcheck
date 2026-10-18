@@ -1,10 +1,12 @@
-//! hatcheck move SESSION PROFILE ...: copy a session to another profile, to carry on with it
-//! there under that profile's account and plan limits; with --no-keep, move it; with --fork,
-//! bring it in as a new session; between Claude Code and Codex, or Codex homes on different
-//! accounts, convert it. The README's `hatcheck move` section describes what's copied, how a
-//! copy already there is brought up to date, and what a conversion keeps.
+//! hatcheck move SESSION PROFILE ...: move a session to another profile, to carry on with it
+//! there under that profile's account and plan limits; with --keep, copy it; with --fork, bring
+//! it in as a new session; between Claude Code and Codex, or Codex homes on different accounts,
+//! convert it, keeping the original. The original is deleted only once every copied file is
+//! checked, and a copy there that went further is never replaced: the move stops instead. The
+//! README's `hatcheck move` section describes what's copied, how a copy already there is
+//! brought up to date, and what a conversion keeps.
 
-use crate::args::{Count, Parser};
+use crate::args::{Count, Parser, Takes};
 use crate::conv::{self, add_turn, Conversation, Turn};
 use crate::facts::{self, Summary};
 use crate::find::place;
@@ -522,7 +524,7 @@ fn choose_source(
     loop {
         let Some(answer) = read_answer("Which one? [1] ") else {
             out::println("");
-            return Err("Nothing copied.".into());
+            return Err("Nothing changed.".into());
         };
         let answer = py::strip(&answer).to_string();
         if answer.is_empty() {
@@ -1163,7 +1165,7 @@ fn name_session(home: &str, sid: &str, name: &str) -> std::io::Result<()> {
     )
 }
 
-/// An item to copy: what it is, the original, the copy, and whether --no-keep deletes it.
+/// An item to copy: what it is, the original, the copy, and whether a move deletes it.
 struct Item {
     what: &'static str,
     src: String,
@@ -1171,7 +1173,7 @@ struct Item {
     deleted: bool,
 }
 
-/// --no-keep: delete what was copied from the old profile, except plan files.
+/// A move: delete what was copied from the old profile, except plan files.
 fn delete_originals(items: &[Item]) -> std::io::Result<()> {
     for item in items.iter().filter(|i| i.deleted) {
         if ospath::isdir(&item.src) {
@@ -1199,6 +1201,7 @@ fn read_info(transcripts: &[String]) -> Option<Summary> {
 }
 
 /// Stop: the session went on in both places after one was copied from the other.
+#[allow(clippy::too_many_arguments)]
 fn went_on_in_both(
     agent: &str,
     sid: &str,
@@ -1207,6 +1210,7 @@ fn went_on_in_both(
     both: Option<(&[u8], &[u8])>,
     again: &dyn Fn(&str) -> String,
     files: &[String],
+    keep: bool,
 ) -> Stop {
     let show = paths::shell_path;
     let id8 = py::head(sid, 8);
@@ -1238,8 +1242,13 @@ fn went_on_in_both(
             show(target)
         ),
     };
+    let (doing, done) = if keep {
+        ("Copying", "copied")
+    } else {
+        ("Moving", "moved")
+    };
     format!(
-        "{first}. Copying this one over would lose what's only in {}, so nothing was copied.\nTo keep both, bring this one in as a new session with its own ID:\n  {}\nOr delete the copy in {} first, to replace it:\n{}",
+        "{first}. {doing} this one over would lose what's only in {}, so nothing was {done}.\nTo keep both, bring this one in as a new session with its own ID:\n  {}\nOr delete the copy in {} first, to replace it:\n{}",
         show(target),
         again("--fork"),
         show(target),
@@ -1252,7 +1261,7 @@ struct Ask {
     session: String,
     profile: String,
     source: Option<String>,
-    no_keep: bool,
+    keep: bool,
     fork: bool,
     dry_run: bool,
     json: bool,
@@ -1292,7 +1301,7 @@ fn state_of(states: &[(String, &'static str)], dst: &str) -> &'static str {
         .map_or("new", |(_, s)| *s)
 }
 
-/// Copy (or with --no-keep, move) a Claude Code session to another profile, or with --fork
+/// Move (or with --keep, copy) a Claude Code session to another profile, or with --fork
 /// copy it in as a new session: the session to resume and the directory to resume it from.
 fn move_claude(
     a: &Ask,
@@ -1423,7 +1432,7 @@ fn move_claude(
             _ => None,
         };
         return Err(went_on_in_both(
-            "claude", sid, source, target, both, again, &files,
+            "claude", sid, source, target, both, again, &files, a.keep,
         ));
     }
     set(
@@ -1442,50 +1451,35 @@ fn move_claude(
     );
     let id8 = py::head(sid, 8);
     if verdict == "newer" {
-        // It went on there: nothing here that the copy there lacks.
+        // It went on there: this copy has nothing the copy there lacks, and putting it there
+        // would lose what came after, so stop.
         let info = read_info(std::slice::from_ref(&transcript.1));
         let cwd = info.as_ref().and_then(|i| i.cwd.clone());
-        set(
-            report,
-            vec![
-                ("action", json!("nothing")),
-                ("reason", json!("the copy there is newer")),
-                ("deleted_original", json!(a.no_keep)),
-                ("cwd", opt(cwd.clone())),
-                (
-                    "resume",
-                    json!(paths::resume_command(target, sid, false, None)),
-                ),
-            ],
-        );
         let title = info
             .as_ref()
             .map_or("?".to_string(), |i| truncate(&i.title, 60));
-        out::println(&format!("{} already has session {id8} \"{title}\", with everything in this copy and more: the session went on there. Nothing to copy.", show(target)));
-        if a.no_keep && !a.dry_run {
-            delete_originals(&items).map_err(io)?;
-        }
-        out::println(&if a.no_keep {
-            format!(
-                "{} the older copy from {}.",
-                if a.dry_run { "Would delete" } else { "Deleted" },
-                show(source)
-            )
-        } else {
-            format!(
-                "Kept the older copy in {}; --no-keep deletes it.",
-                show(source)
-            )
-        });
-        out::println("Resume it with:");
+        let mut text = format!(
+            "{} already has session {id8} \"{title}\", with everything in this copy and more: the session went on there. This copy is older, so nothing was {}.\nResume it there with:",
+            show(target),
+            if a.keep { "copied" } else { "moved" }
+        );
         if let Some(c) = cwd.as_deref().filter(|c| !c.is_empty()) {
-            out::println(&format!("  cd {}", show(c)));
+            text += &format!("\n  cd {}", show(c));
         }
-        out::println(&format!(
-            "  {}",
-            paths::resume_command(target, sid, false, None)
-        ));
-        return Ok((sid.to_string(), cwd));
+        text += &format!("\n  {}", paths::resume_command(target, sid, false, None));
+        let older: Vec<String> = items
+            .iter()
+            .filter(|i| i.deleted && ospath::lexists(&i.src))
+            .map(|i| format!("  {}", show(&i.src)))
+            .collect();
+        if !older.is_empty() {
+            text += &format!(
+                "\nTo drop the older copy in {}, delete:\n{}",
+                show(source),
+                older.join("\n")
+            );
+        }
+        return Err(text);
     }
     let mut repointed = false;
     'files: for item in &items {
@@ -1554,7 +1548,7 @@ fn move_claude(
                     .join("\n")
             ));
         }
-        if a.no_keep {
+        if !a.keep {
             delete_originals(&items).map_err(io)?;
         }
     }
@@ -1563,31 +1557,26 @@ fn move_claude(
         "fork"
     } else if any_older {
         "update"
-    } else if a.no_keep {
-        "move"
-    } else {
+    } else if a.keep {
         "copy"
+    } else {
+        "move"
     };
     let cwd = info.as_ref().and_then(|i| i.cwd.clone());
     set(report, vec![
         ("action", json!(action)),
         ("title", info.as_ref().map_or(Value::Null, |i| json!(i.title))),
-        ("deleted_original", json!(a.no_keep)),
+        ("deleted_original", json!(!a.keep)),
         ("repointed", json!(repointed)),
         ("items", Value::Array(items.iter().zip(&details).map(|(i, d)| json!({"what": i.what, "from": i.src, "to": i.dst, "state": state_of(&states, &i.dst), "detail": d})).collect())),
         ("cwd", opt(cwd.clone())),
         ("resume", json!(paths::resume_command(target, &new_sid, false, None))),
     ]);
-    let heading = if a.no_keep {
-        if a.dry_run {
-            "Would move"
-        } else {
-            "Moved"
-        }
-    } else if a.dry_run {
-        "Would copy"
-    } else {
-        "Copied"
+    let heading = match (a.keep, a.dry_run) {
+        (false, true) => "Would move",
+        (false, false) => "Moved",
+        (true, true) => "Would copy",
+        (true, false) => "Copied",
     };
     let title = info
         .as_ref()
@@ -1652,7 +1641,7 @@ fn move_claude(
             "Both profiles are signed in to the same account, so its plan limits stay the same.",
         );
     }
-    if a.no_keep {
+    if !a.keep {
         let plan = if items.iter().any(|i| i.what == "plan") {
             "; the plan file stays, since sessions can share one"
         } else {
@@ -1664,10 +1653,7 @@ fn move_claude(
             show(source)
         ));
     } else {
-        out::println(&format!(
-            "Kept the original in {}; --no-keep deletes it once the copy is checked.",
-            show(source)
-        ));
+        out::println(&format!("The original stays in {}.", show(source)));
     }
     out::println(if a.dry_run {
         "Then resume it with:"
@@ -1736,7 +1722,7 @@ fn codex_account(home: &str) -> Option<(String, String)> {
     })
 }
 
-/// Copy (or with --no-keep, move) a Codex session to another home on the same account, or
+/// Move (or with --keep, copy) a Codex session to another home on the same account, or
 /// with --fork copy it in as a new session.
 fn copy_codex(
     a: &Ask,
@@ -1800,6 +1786,7 @@ fn copy_codex(
             Some((&o, &t)),
             again,
             std::slice::from_ref(&dst),
+            a.keep,
         ));
     }
     set(
@@ -1823,44 +1810,23 @@ fn copy_codex(
         60,
     );
     if state == "newer" {
-        set(
-            report,
-            vec![
-                ("action", json!("nothing")),
-                ("reason", json!("the copy there is newer")),
-                ("deleted_original", json!(a.no_keep)),
-                (
-                    "resume",
-                    json!(paths::codex_resume_command(target, sid, false)),
-                ),
-            ],
-        );
-        out::println(&format!("{} already has Codex session {id8} \"{title_text}\", with everything in this copy and more: the session went on there. Nothing to copy.", show(target)));
-        if a.no_keep && !a.dry_run {
-            fs::remove_file(&src).map_err(io)?;
-        }
-        out::println(&if a.no_keep {
-            format!(
-                "{} the older copy from {}.",
-                if a.dry_run { "Would delete" } else { "Deleted" },
-                show(source)
-            )
-        } else {
-            format!(
-                "Kept the older copy in {}; --no-keep deletes it.",
-                show(source)
-            )
-        });
-        out::println("Resume it with:");
-        if let Some(c) = cwd.as_deref().filter(|c| !c.is_empty()) {
-            out::println(&format!("  cd {}", show(c)));
-        }
-        out::println(&format!(
-            "  {}",
-            paths::codex_resume_command(target, sid, false)
-        ));
+        // It went on there: putting this older copy there would lose what came after, so stop.
         drop(lock);
-        return Ok((sid.to_string(), cwd));
+        let mut text = format!(
+            "{} already has Codex session {id8} \"{title_text}\", with everything in this copy and more: the session went on there. This copy is older, so nothing was {}.\nResume it there with:",
+            show(target),
+            if a.keep { "copied" } else { "moved" }
+        );
+        if let Some(c) = cwd.as_deref().filter(|c| !c.is_empty()) {
+            text += &format!("\n  cd {}", show(c));
+        }
+        text += &format!("\n  {}", paths::codex_resume_command(target, sid, false));
+        text += &format!(
+            "\nTo drop the older copy in {}, delete:\n  {}",
+            show(source),
+            show(&src)
+        );
+        return Err(text);
     }
     let older_since = if state == "older" {
         Some(last_time(&read(&dst).map_err(io)?))
@@ -1872,16 +1838,16 @@ fn copy_codex(
         "fork"
     } else if state == "older" {
         "update"
-    } else if a.no_keep {
-        "move"
-    } else {
+    } else if a.keep {
         "copy"
+    } else {
+        "move"
     };
     set(
         report,
         vec![
             ("action", json!(action)),
-            ("deleted_original", json!(a.no_keep)),
+            ("deleted_original", json!(!a.keep)),
             (
                 "items",
                 json!([{"what": "session file", "from": src, "to": dst, "state": state, "detail": size}]),
@@ -1907,21 +1873,16 @@ fn copy_codex(
                 name_session(target, &new_sid, &py::str_of(n)).map_err(io)?;
             }
         }
-        if a.no_keep {
+        if !a.keep {
             fs::remove_file(&src).map_err(io)?;
         }
     }
     drop(lock);
-    let heading = if a.no_keep {
-        if a.dry_run {
-            "Would move"
-        } else {
-            "Moved"
-        }
-    } else if a.dry_run {
-        "Would copy"
-    } else {
-        "Copied"
+    let heading = match (a.keep, a.dry_run) {
+        (false, true) => "Would move",
+        (false, false) => "Moved",
+        (true, true) => "Would copy",
+        (true, false) => "Copied",
     };
     out::println(&format!(
         "{heading} Codex session {id8} \"{title_text}\" from {} to {}{}:",
@@ -1967,17 +1928,14 @@ fn copy_codex(
     out::println(
         "Both homes are signed in to the same ChatGPT account, so its plan limits stay the same.",
     );
-    if a.no_keep {
+    if !a.keep {
         out::println(&format!(
             "{} the original from {}.",
             if a.dry_run { "Would delete" } else { "Deleted" },
             show(source)
         ));
     } else {
-        out::println(&format!(
-            "Kept the original in {}; --no-keep deletes it once the copy is checked.",
-            show(source)
-        ));
+        out::println(&format!("The original stays in {}.", show(source)));
     }
     out::println(if a.dry_run {
         "Then resume it with:"
@@ -2112,7 +2070,10 @@ fn convert(
             size_text(fs::metadata(path_new).map(|m| m.len()).unwrap_or(0))
         ));
     }
-    out::println(&format!("The original stays in {}.", show(source)));
+    out::println(&format!(
+        "The original stays in {}, since a conversion leaves things out.",
+        show(source)
+    ));
     out::println(if a.dry_run {
         "Then resume it with:"
     } else {
@@ -2135,8 +2096,8 @@ fn rerun_command(prog: &str, a: &Ask, flags: &[&str]) -> String {
         words.push("--from".into());
         words.push(paths::quote(source));
     }
-    if a.no_keep {
-        words.push("--no-keep".into());
+    if a.keep {
+        words.push("--keep".into());
     }
     if a.dry_run {
         words.push("--dry-run".into());
@@ -2307,10 +2268,8 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             why = Some(format!("{} and {} aren't signed in to the same ChatGPT account, and Codex encrypts its reasoning for the account that wrote it, so the session is converted", show(&source), show(&target)));
         }
     }
+    // A conversion leaves things out, so its original is always kept, moving or not.
     let converting = agent != target_agent || why.is_some();
-    if converting && a.no_keep {
-        return Err("--no-keep can't be used here: the session would be converted, which leaves things out, so the original is kept. Run it again without --no-keep.".into());
-    }
     let again = |flag: &str| rerun_command(prog, a, &[flag]);
     let (resume_sid, cwd) = if !converting && agent == "claude" {
         let (s_, c) = move_claude(a, &sid, &source, &files, &target, &again, report)?;
@@ -2345,13 +2304,15 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Copy a Claude Code or Codex session to another profile, to carry on with it there, or convert it for the other agent.")
+    let parser = Parser::new(prog, "Move a Claude Code or Codex session to another profile, to carry on with it there, or convert it for the other agent.")
         .positional("session", Count::One, "the session ID, or the start of it")
         .positional("profile", Count::One, "where it goes: NAME for ~/.claude-NAME, default for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, or a path")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
-        .flag(&["--no-keep"], "no_keep", "delete the original once the copy is checked, which moves it (not when converting)")
-        .flag(&["--fork"], "fork", "copy it in as a new session with its own ID, leaving a copy already in PROFILE as it is (a converted session always gets one)")
-        .flag(&["--dry-run"], "dry_run", "show what would be copied, converted and deleted, and change nothing")
+        .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
+        // What --no-keep asked for is the default now; it's still taken, so scripts that pass it run.
+        .hidden(&["--no-keep"], "no_keep", Takes::Nothing)
+        .flag(&["--fork"], "fork", "bring it in as a new session with its own ID, leaving a copy already in PROFILE as it is (a converted session always gets one)")
+        .flag(&["--dry-run"], "dry_run", "show what would be moved, copied, converted and deleted, and change nothing")
         .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
     let args = match parser.parse(argv) {
         Ok(a) => a,
@@ -2364,7 +2325,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             .value("source")
             .filter(|s| !s.is_empty())
             .map(String::from),
-        no_keep: args.flag("no_keep"),
+        keep: args.flag("keep"),
         fork: args.flag("fork"),
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
@@ -2564,7 +2525,7 @@ mod tests {
             session: "11111111".into(),
             profile: "b".into(),
             source: None,
-            no_keep: false,
+            keep: false,
             fork: false,
             dry_run: false,
             json: false,
@@ -2573,11 +2534,11 @@ mod tests {
             rerun_command("hatcheck move", &a, &["--fork"]),
             "hatcheck move 11111111 b --fork"
         );
-        (a.source, a.dry_run) = (Some("my profile".into()), true);
+        (a.source, a.keep, a.dry_run) = (Some("my profile".into()), true, true);
         // The same in PowerShell, which would quote --fork as '--fork'.
         assert_eq!(
             rerun_command("hatcheck move", &a, &["--fork"]),
-            "hatcheck move 11111111 b --from 'my profile' --dry-run --fork"
+            "hatcheck move 11111111 b --from 'my profile' --keep --dry-run --fork"
         );
     }
 

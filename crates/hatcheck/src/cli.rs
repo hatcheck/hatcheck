@@ -21,7 +21,7 @@ Usage:
     hat check ...                      the same as hat (or hatcheck): the name in two words
     hatcheck usage ...                 plan usage left for every profile and home
     hatcheck where SESSION             where a session is stored, by its ID or the start of it
-    hatcheck move SESSION PROFILE ...  copy a session to another profile or home, or convert
+    hatcheck move SESSION PROFILE ...  move a session to another profile or home, or convert
                                        it between Claude Code and Codex
     hatcheck relocate OLD NEW          bring the sessions of a project folder that was moved
                                        or renamed along to its new place

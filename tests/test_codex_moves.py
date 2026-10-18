@@ -105,6 +105,8 @@ class Moves(unittest.TestCase):
         self.assertEqual(code, 0, out)
         new = self.new_id(out)
         self.assertIn("cl work --resume " + new, out)
+        self.assertIn("The original stays in %s, since a conversion leaves things out." % self.h.shown(self.codex), out)
+        self.assertTrue(os.path.isfile(self.rollout))
         self.assertIn("1 of your messages, with the replies", out)
         self.assertIn("tool calls                 2, as text", out)
         path = os.path.join(self.work, "projects", re.sub(r"[^A-Za-z0-9]", "-", self.cwd), new + ".jsonl")
@@ -130,10 +132,11 @@ class Moves(unittest.TestCase):
         self.assertIn("cl work --resume " + new, out)
         self.assertIn("Uploader fix", out)
 
-    def test_codex_homes_on_one_account_copy(self):
-        code, out = self.h.run(MOVE, X[:13], "codex:same", "--no-keep")
+    def test_codex_homes_on_one_account_move(self):
+        code, out = self.h.run(MOVE, X[:13], "codex:same")
         self.assertEqual(code, 0, out)
         self.assertIn("Moved Codex session 019f0000", out)
+        self.assertIn("Deleted the original from %s." % self.h.shown(self.codex), out)
         self.assertIn("same ChatGPT account", out)
         self.assertIn("cx same resume " + X, out)
         copy = os.path.join(self.same, os.path.relpath(self.rollout, self.codex))
@@ -141,10 +144,13 @@ class Moves(unittest.TestCase):
         self.assertIn("SECRET-REASONING", text_of(copy))  # as it was: the same account can read it
         with open(os.path.join(self.same, "session_index.jsonl"), encoding="utf-8") as fh:
             self.assertEqual(json.loads(fh.read())["thread_name"], "Uploader fix")
-        code, out = self.h.run(MOVE, X[:13], "codex", "--no-keep")
+        code, out = self.h.run(MOVE, X[:13], "codex", "--keep")
         self.assertEqual(code, 0, out)
+        self.assertIn("Copied Codex session 019f0000", out)
+        self.assertIn("The original stays in %s." % self.h.shown(self.same), out)
         self.assertIn("codex resume " + X, out)
         self.assertTrue(os.path.isfile(self.rollout))
+        self.assertTrue(os.path.isfile(copy))
 
     def go_on(self, path, text):
         """The session carries on in the home that has this copy: a prompt, as Codex records one."""
@@ -154,23 +160,31 @@ class Moves(unittest.TestCase):
                 "type": "item_completed", "thread_id": X, "item": {"type": "AgentMessage", "text": "ok"}}) + "\n")
 
     def test_codex_round_trip_newer_and_fork(self):
-        code, out = self.h.run(MOVE, X[:13], "codex:same")  # copied: both homes have it now
+        code, out = self.h.run(MOVE, X[:13], "codex:same", "--keep")  # copied: both homes have it now
         self.assertEqual(code, 0, out)
         copy = os.path.join(self.same, os.path.relpath(self.rollout, self.codex))
         self.go_on(self.rollout, "more here")
-        code, out = self.h.run(MOVE, X[:13], "codex:same")
+        code, out = self.h.run(MOVE, X[:13], "codex:same", "--keep")
         self.assertEqual(code, 0, out)
         self.assertIn("session file", out)
         self.assertIn("(updated an older copy)", out)
         self.assertEqual(text_of(copy), text_of(self.rollout))
         self.go_on(copy, "more there")
-        code, out = self.h.run(MOVE, X[:13], "codex:same")  # it went on there: nothing to copy
-        self.assertEqual(code, 0, out)
-        self.assertIn("Nothing to copy.", out)
+        theirs, ours = text_of(copy), text_of(self.rollout)
+        code, out = self.h.run(MOVE, X[:13], "codex:same")  # it went on there: stop, changing nothing
+        self.assertEqual(code, 1, out)
+        self.assertIn('%s already has Codex session 019f0000 "' % self.h.shown(self.same), out)
+        self.assertIn('", with everything in this copy and more: the session went on there. This copy is older, so '
+                      "nothing was moved.\nResume it there with:\n", out)
+        self.assertIn("  cx same resume " + X, out)
+        self.assertIn("To drop the older copy in %s, delete:\n  %s" % (self.h.shown(self.codex), self.h.shown(self.rollout)),
+                      out)
+        self.assertEqual((text_of(copy), text_of(self.rollout)), (theirs, ours))
         self.go_on(self.rollout, "and more here")
         theirs = text_of(copy)
         code, out = self.h.run(MOVE, X[:13], "codex:same")
         self.assertEqual(code, 1, out)
+        self.assertIn("so nothing was moved", out)
         self.assertIn(": 1 new prompt in %s, 1 in %s." % (self.h.shown(self.codex), self.h.shown(self.same)), out)
         self.assertIn("hatcheck move %s codex:same --fork" % X[:13], out)
         code, out = self.h.run(MOVE, X[:13], "codex:same", "--fork")
@@ -186,18 +200,17 @@ class Moves(unittest.TestCase):
         with open(os.path.join(self.same, "session_index.jsonl"), encoding="utf-8") as fh:
             self.assertIn({"id": new, "thread_name": "Uploader fix"},
                           [{k: e[k] for k in ("id", "thread_name")} for e in map(json.loads, fh)])
+        self.assertFalse(os.path.exists(self.rollout))  # a move: deleted once the new session was checked
 
     def test_codex_homes_on_other_accounts_convert(self):
-        code, out = self.h.run(MOVE, X[:13], "codex:other", "--no-keep")
-        self.assertEqual(code, 1, out)
-        self.assertIn("--no-keep can't be used here", out)
         code, out = self.h.run(MOVE, X[:13], "codex:other", "--dry-run")
         self.assertEqual(code, 0, out)
         self.assertIn("Would convert", out)
         self.assertEqual(self.h_files(self.other), [])
-        code, out = self.h.run(MOVE, X[:13], "codex:other")
+        code, out = self.h.run(MOVE, X[:13], "codex:other", "--no-keep")  # still taken; a conversion keeps it anyway
         self.assertEqual(code, 0, out)
         self.assertIn("aren't signed in to the same ChatGPT account", out)
+        self.assertIn("The original stays in %s, since a conversion leaves things out." % self.h.shown(self.codex), out)
         new = self.new_id(out)
         path, = self.h_files(self.other)
         self.assertIn(new, path)
@@ -235,7 +248,7 @@ class ResumeInCodex(unittest.TestCase):
         codex, same = h.codex_home("default", "acct-1"), h.codex_home("same", "acct-1")
         h.codex_session(codex, cwd, X, "Fix the uploader", 30)
         env = dict(h.env(), PATH=bindir + os.pathsep + "/bin", CODEX_HOME=os.path.join(h.home, ".codex-elsewhere"))
-        # Copied to ~/.codex-same and resumed there; then back in ~/.codex, CODEX_HOME unset.
+        # Moved to ~/.codex-same and resumed there; then back to ~/.codex, CODEX_HOME unset.
         for args, shown in (([X[:13], "codex:same"], same), ([X[:13], "codex", "--from", "codex:same"], "unset")):
             code, out = in_terminal(argv_of(MOVE) + args, [(b"[y/N] ", b"y\n")], env, h.root)
             self.assertEqual(code, 0, out)

@@ -26,7 +26,7 @@ hatcheck [HOURS]                   recent sessions in every profile and home, wi
                                    commands and plan usage
 hatcheck usage                     plan usage left for every profile and home
 hatcheck best [--for SESSION]      which account to use now, or to carry a session to
-hatcheck move SESSION PROFILE      copy a session to another profile or home, or convert it
+hatcheck move SESSION PROFILE      move a session to another profile or home, or convert it
                                    between Claude Code and Codex
 hatcheck open [SESSION]            resume a session in a new terminal, in its folder
 hatcheck show SESSION              a session's conversation, read-only

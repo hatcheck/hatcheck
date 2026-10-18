@@ -66,11 +66,15 @@ class MoveSession(unittest.TestCase):
     def test_dry_run_changes_nothing(self):
         code, out = self.h.run(SCRIPT, S1[:8], "b", "--dry-run")
         self.assertEqual(code, 0, out)
-        self.assertIn("Would copy session 11111111", out)
+        self.assertIn("Would move session 11111111", out)
+        self.assertIn("Would delete the original from %s; the plan file stays" % self.h.shown(self.default), out)
         self.assertFalse(os.path.exists(self.copy_of(self.b) + ".jsonl"))
+        with open(self.transcript, "rb") as fh:
+            self.assertEqual(fh.read(), self.original)
+        self.assertTrue(os.path.isfile(os.path.join(self.default, "file-history", S1, "abc@v1")))
 
-    def test_copy(self):
-        code, out = self.h.run(SCRIPT, S1[:8], "b")
+    def test_keep_copies(self):
+        code, out = self.h.run(SCRIPT, S1[:8], "b", "--keep")
         self.assertEqual(code, 0, out)
         new = self.copy_of(self.b)
         src, dst = self.lines(self.transcript), self.lines(new + ".jsonl")
@@ -93,26 +97,35 @@ class MoveSession(unittest.TestCase):
             self.assertEqual(fh.read(), self.original)  # the original is untouched
         for text in ('Copied session 11111111 "Fix the flaky login test" from %s to %s:'
                      % (self.h.shown(self.default), self.h.shown(self.b)),
-                     "now point to the copies", "Kept the original", "cd " + self.h.shown(self.cwd),
-                     "cl b --resume " + S1):
+                     "now point to the copies", "The original stays in %s." % self.h.shown(self.default),
+                     "cd " + self.h.shown(self.cwd), "cl b --resume " + S1):
             self.assertIn(text, out)
         self.assertNotIn("Resume it now", out)  # not a terminal: no question
-        code, out = self.h.run(SCRIPT, S1, "b")
+        code, out = self.h.run(SCRIPT, S1, "b")  # all there already: a move only deletes the original
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("(already there)"), 4)
+        self.assertIn("Deleted the original from %s; the plan file stays" % self.h.shown(self.default), out)
+        self.assertFalse(os.path.exists(self.transcript))
+        self.assertTrue(os.path.isfile(new + ".jsonl"))
 
     def test_move_and_back_restores_the_transcript(self):
-        code, out = self.h.run(SCRIPT, S1, "b", "--no-keep")
+        code, out = self.h.run(SCRIPT, S1, "b")
         self.assertEqual(code, 0, out)
         self.assertIn("Moved session 11111111", out)
+        self.assertIn("Deleted the original from %s; the plan file stays" % self.h.shown(self.default), out)
         self.assertFalse(os.path.exists(self.transcript))
         self.assertFalse(os.path.exists(self.data))
+        self.assertFalse(os.path.exists(os.path.join(self.default, "file-history", S1)))
         self.assertTrue(os.path.isfile(self.plan))  # plans stay: sessions can share one
-        code, out = self.h.run(SCRIPT, S1, "default", "--no-keep")
+        code, out = self.h.run(SCRIPT, S1, "default", "--no-keep")  # what a move once needed: still taken
         self.assertEqual(code, 0, out)
         self.assertIn("claude --resume " + S1, out)
+        self.assertFalse(os.path.exists(self.copy_of(self.b) + ".jsonl"))
         with open(self.transcript, "rb") as fh:
             self.assertEqual(fh.read(), self.original)
+        code, out = self.h.run(SCRIPT, "--help")
+        self.assertIn("--keep", out)
+        self.assertNotIn("--no-keep", out)
 
     def test_refuses_an_open_session(self):
         self.h.register_open(self.default, S1)
@@ -127,10 +140,12 @@ class MoveSession(unittest.TestCase):
         code, out = self.h.run(SCRIPT, S1[:8], "b")
         self.assertEqual(code, 1)
         self.assertIn("%s has a different session with the ID 11111111" % self.h.shown(self.b), out)
-        self.assertIn("nothing was copied", out)
+        self.assertIn("nothing was moved", out)
         self.assertIn("hatcheck move 11111111 b --fork", out)
         with open(other, "rb") as fh:
             self.assertEqual(fh.read(), before)
+        with open(self.transcript, "rb") as fh:
+            self.assertEqual(fh.read(), self.original)
 
     def go_on(self, profile, text):
         """The session carries on in a profile: a prompt and a reply added to its copy there,
@@ -146,7 +161,7 @@ class MoveSession(unittest.TestCase):
                 {"type": "text", "text": "Saved to " + out_txt}]}, **base) + "\n")
 
     def test_round_trip_brings_the_older_copy_up_to_date(self):
-        code, out = self.h.run(SCRIPT, S1[:8], "b")  # copied, so ~/.claude keeps the copy it had
+        code, out = self.h.run(SCRIPT, S1[:8], "b", "--keep")  # copied, so ~/.claude keeps the copy it had
         self.assertEqual(code, 0, out)
         self.go_on(self.b, "more in b")
         code, out = self.h.run(SCRIPT, S1[:8], "default")
@@ -154,38 +169,45 @@ class MoveSession(unittest.TestCase):
         self.assertEqual(out.count("(updated an older copy)"), 3)  # transcript, its folder, the snapshots
         self.assertRegex(out, r"plan +happy-test-plan\.md  \(already there\)")
         self.assertIn("%s had an older copy of this session, as it was on " % self.h.shown(self.default), out)
+        self.assertIn("Deleted the original from %s" % self.h.shown(self.b), out)  # once the copy here matched it
+        self.assertFalse(os.path.exists(self.copy_of(self.b) + ".jsonl"))
         lines = self.lines(self.transcript)
         self.assertEqual(lines[:len(self.original.split(b"\n")) - 1], self.original.split(b"\n")[:-1])
         reply = json.loads(lines[-2])["message"]["content"][0]["text"]
         self.assertEqual(reply, "Saved to " + os.path.join(self.data, "tool-results", "more-in-b.txt"))
         self.assertTrue(os.path.isfile(os.path.join(self.data, "tool-results", "more-in-b.txt")))
         self.assertTrue(os.path.isfile(os.path.join(self.default, "file-history", S1, "abc@more-in-b")))
-        code, out = self.h.run(SCRIPT, S1[:8], "default")
-        self.assertEqual(out.count("(already there)"), 4)
 
-    def test_nothing_to_copy_when_the_copy_there_is_newer(self):
-        self.h.run(SCRIPT, S1[:8], "b")
+    def test_stops_when_the_copy_there_is_newer(self):
+        self.h.run(SCRIPT, S1[:8], "b", "--keep")
         self.go_on(self.b, "more in b")
         with open(self.copy_of(self.b) + ".jsonl", "rb") as fh:
             theirs = fh.read()
-        code, out = self.h.run(SCRIPT, S1[:8], "b", "--dry-run", "--no-keep")
-        self.assertEqual(code, 0, out)
-        self.assertIn('%s already has session 11111111 "Fix the flaky login test", with everything in this copy and '
-                      "more" % self.h.shown(self.b), out)
-        self.assertIn("Would delete the older copy from %s." % self.h.shown(self.default), out)
-        self.assertTrue(os.path.isfile(self.transcript))
-        code, out = self.h.run(SCRIPT, S1[:8], "b", "--no-keep")
-        self.assertEqual(code, 0, out)
-        self.assertIn("Nothing to copy.", out)
-        self.assertIn("cl b --resume " + S1, out)
-        self.assertFalse(os.path.exists(self.transcript))
-        self.assertFalse(os.path.exists(os.path.join(self.default, "file-history", S1)))
-        self.assertTrue(os.path.isfile(self.plan))  # plans stay
+        for args in (["--dry-run"], [], ["--no-keep"]):
+            code, out = self.h.run(SCRIPT, S1[:8], "b", *args)
+            self.assertEqual(code, 1, out)
+            self.assertIn('%s already has session 11111111 "Fix the flaky login test", with everything in this copy and '
+                          "more: the session went on there. This copy is older, so nothing was moved.\n"
+                          % self.h.shown(self.b), out)
+            self.assertIn("Resume it there with:\n  cd %s\n  cl b --resume %s\n" % (self.h.shown(self.cwd), S1), out)
+            self.assertIn("To drop the older copy in %s, delete:\n  %s\n"
+                          % (self.h.shown(self.default), self.h.shown(self.transcript)), out)
+        code, out = self.h.run(SCRIPT, S1[:8], "b", "--keep")
+        self.assertEqual(code, 1, out)
+        self.assertIn("This copy is older, so nothing was copied.", out)
+        p = subprocess.run(argv_of(SCRIPT) + [S1[:8], "b", "--json"], cwd=self.h.root, env=self.h.env(),
+                           capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual((p.returncode, p.stdout), (1, ""))
+        self.assertIn("nothing was moved", p.stderr)
+        with open(self.transcript, "rb") as fh:
+            self.assertEqual(fh.read(), self.original)  # nothing deleted here, nothing replaced there
+        self.assertTrue(os.path.isfile(os.path.join(self.data, "tool-results", "out.txt")))
+        self.assertTrue(os.path.isfile(os.path.join(self.default, "file-history", S1, "abc@v1")))
         with open(self.copy_of(self.b) + ".jsonl", "rb") as fh:
             self.assertEqual(fh.read(), theirs)
 
     def test_went_on_in_both_then_fork(self):
-        self.h.run(SCRIPT, S1[:8], "b")
+        self.h.run(SCRIPT, S1[:8], "b", "--keep")
         self.go_on(self.b, "more in b")
         self.go_on(self.default, "more here")
         with open(self.copy_of(self.b) + ".jsonl", "rb") as fh:
@@ -195,6 +217,7 @@ class MoveSession(unittest.TestCase):
         self.assertIn("Session 11111111 went on in both %s and %s after " % (self.h.shown(self.default), self.h.shown(self.b)),
                       out)
         self.assertIn(": 1 new prompt in %s, 1 in %s." % (self.h.shown(self.default), self.h.shown(self.b)), out)
+        self.assertIn("so nothing was moved", out)
         self.assertIn("hatcheck move 11111111 b --fork", out)
         self.assertIn("  " + self.h.shown(self.copy_of(self.b) + ".jsonl"), out)
         code, out = self.h.run(SCRIPT, S1[:8], "b", "--fork")
@@ -215,17 +238,19 @@ class MoveSession(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(fork, "tool-results", "out.txt")))
         self.assertTrue(os.path.isfile(os.path.join(fork, "subagents", "agent-1.jsonl")))
         self.assertTrue(os.path.isfile(os.path.join(self.b, "file-history", new, "abc@more-here")))
-        self.assertTrue(os.path.isfile(self.transcript))  # the original stays
+        self.assertIn("Deleted the original from %s" % self.h.shown(self.default), out)
+        self.assertFalse(os.path.exists(self.transcript))  # a move: deleted once the new session was checked
+        self.assertTrue(os.path.isfile(self.plan))
 
     def test_which_session_and_where(self):
         self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
         self.h.session(self.default, self.cwd, S2, "In default", minutes_ago=3)
-        code, out = self.h.run(SCRIPT, S2[:8], "a2")  # piped, so no asking: the copy used last, and a note
+        code, out = self.h.run(SCRIPT, S2[:8], "a2", "--keep")  # piped, so no asking: the copy used last, and a note
         self.assertEqual(code, 0, out)
         self.assertIn("Session %s is in %s too. Taking the copy in %s, used last; --from picks another."
                       % (S2[:8], self.h.shown(self.b), self.h.shown(self.default)), out)
         self.assertIn('"In default"', out)
-        code, out = self.h.run(SCRIPT, S2[:8], "a2", "--from", "b", "--fork")
+        code, out = self.h.run(SCRIPT, S2[:8], "a2", "--from", "b", "--fork", "--keep")
         self.assertEqual(code, 0, out)
         self.assertIn('"In b"', out)
         code, out = self.h.run(SCRIPT, S2[:8], "a2", "--json")
@@ -250,18 +275,18 @@ class MoveSession(unittest.TestCase):
                          % re.escape(self.h.shown(self.default)))
         self.assertTrue(lines[2].startswith("  2. %s " % self.h.shown(self.b)), lines[2])
         self.assertEqual(out.count("Answer with a number from 1 to 2, or the profile's name."), 1)
-        self.assertIn('Would copy session %s "In b"' % S2[:8], out)
+        self.assertIn('Would move session %s "In b"' % S2[:8], out)
         code, out = run((ask, b"\n"))  # Enter: the one used last
-        self.assertIn('Would copy session %s "In default"' % S2[:8], out)
+        self.assertIn('Would move session %s "In default"' % S2[:8], out)
         code, out = run((ask, b"2\n"))
-        self.assertIn('Would copy session %s "In b"' % S2[:8], out)
+        self.assertIn('Would move session %s "In b"' % S2[:8], out)
         for keys in (b"\x04", INTERRUPT):  # the end of input, and Ctrl+C
             code, out = run((ask, keys))
             self.assertEqual(code, 1, out)
-            self.assertTrue(out.rstrip().endswith("Nothing copied."), out)
+            self.assertTrue(out.rstrip().endswith("Nothing changed."), out)
         code, out = run((ask, b"default\n"), (b"[y/N] ", b"\n"), args=())
         self.assertEqual(code, 0, out)
-        self.assertIn('Copied session %s "In default"' % S2[:8], out)
+        self.assertIn('Moved session %s "In default"' % S2[:8], out)
         self.assertIn("Resume it now in %s? [y/N]" % self.h.shown(self.a2), out)
 
     def test_more_than_one_match_and_no_such_profile(self):
@@ -283,7 +308,7 @@ class MoveSession(unittest.TestCase):
         self.assertIn("cl -k a2 --resume " + S2, out)
 
     def test_same_account_and_fresh_target(self):
-        code, out = self.h.run(SCRIPT, S1[:8], "a2")
+        code, out = self.h.run(SCRIPT, S1[:8], "a2", "--keep")
         self.assertIn("same account", out)
         code, out = self.h.run(SCRIPT, S1[:8], "fresh", "--from", "default")
         self.assertEqual(code, 0, out)
@@ -319,14 +344,14 @@ class ResumeNow(unittest.TestCase):
     def test_asks_in_a_terminal(self):
         def run(args, keys, env=None):
             return in_terminal(argv_of(SCRIPT) + args, [(b"[y/N] ", keys)], env or self.env, self.h.root)
-        code, out = run([S1[:8], "b"], b"\n")
+        code, out = run([S1[:8], "b", "--keep"], b"\n")
         self.assertEqual(code, 0, out)
         self.assertIn("Resume it now in %s? [y/N]" % self.h.shown(self.b), out)
         self.assertNotIn("args=", out)  # Enter means no
-        code, out = run([S1[:8], "b"], b"y\n")
+        code, out = run([S1[:8], "b", "--keep"], b"y\n")
         self.assertEqual(code, 0, out)
         self.expect(out, self.b)
-        code, out = run([S1[:8], "b"], INTERRUPT)  # Ctrl+C: no, as Enter is
+        code, out = run([S1[:8], "b", "--keep"], INTERRUPT)  # Ctrl+C: no, as Enter is
         self.assertEqual(code, 0, out)
         self.assertNotIn("args=", out)
         # Back to ~/.claude, where plain claude looks: CLAUDE_CONFIG_DIR unset, even when it was set.

@@ -63,7 +63,7 @@ export type Conversation = {
 
 export type MoveReport = {
   dry_run: boolean;
-  action: "copy" | "move" | "update" | "fork" | "convert" | "nothing";
+  action: "copy" | "move" | "update" | "fork" | "convert";
   agent?: string;
   session: string;
   source: string;
@@ -71,7 +71,7 @@ export type MoveReport = {
   target_agent?: string;
   new_session: string | null;
   title?: string | null;
-  reason?: string;
+  deleted_original?: boolean;
   why?: string | null;
   items?: { what: string; from: string; to: string; state: string; detail: string }[];
   prompts?: number;
@@ -127,10 +127,10 @@ export const conversation = (s: Session, last = 300) =>
 
 export const resume = (s: Session) => engine(["open", s.id, "--from", s.profile]);
 
-export function move(s: Session, to: string, how: { dryRun: boolean; noKeep?: boolean; fork?: boolean }) {
+export function move(s: Session, to: string, how: { dryRun: boolean; keep?: boolean; fork?: boolean }) {
   const args = ["move", s.id, to, "--from", s.profile, "--json"];
   if (how.dryRun) args.push("--dry-run");
-  if (how.noKeep) args.push("--no-keep");
+  if (how.keep) args.push("--keep");
   if (how.fork) args.push("--fork");
   return json<MoveReport>(args);
 }

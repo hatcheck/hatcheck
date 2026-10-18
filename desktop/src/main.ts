@@ -148,14 +148,15 @@ function destinations(s: Session): { value: string; label: string }[] {
 
 function reportText(r: MoveReport): string {
   const verb = r.dry_run ? "Would" : "Did";
-  const what = { copy: "copy it", move: "move it", update: "bring an older copy up to date", fork: "copy it in as a new session",
-    convert: "convert it into a new session", nothing: "nothing" }[r.action];
+  const what = { copy: "copy it", move: "move it", update: "bring an older copy up to date", fork: "bring it in as a new session",
+    convert: "convert it into a new session" }[r.action];
   const items = (r.items || []).map((i) => `<tr><td>${esc(i.what)}</td><td>${esc(i.detail)}</td><td>${esc(i.state)}</td></tr>`).join("");
-  return `<p>${verb} ${esc(what)}${r.action === "nothing" && r.reason ? ": " + esc(r.reason) : ""}, to ${esc(tilde(r.target))}.</p>` +
+  return `<p>${verb} ${esc(what)}, to ${esc(tilde(r.target))}.</p>` +
     (items ? `<table class="items"><tr><th>What</th><th>Size</th><th>There</th></tr>${items}</table>` : "") +
     (r.action === "convert" ? `<p class="note">${r.prompts} of your messages and ${r.tool_calls} tool calls come across as text; left out: ${esc(r.left_out)}.${
       r.turns_dropped ? ` The oldest ${r.turns_dropped} turns are left out to fit.` : ""}</p>` : "") +
     (r.new_session ? `<p class="note">New session: <span class="mono">${esc(r.new_session)}</span></p>` : "") +
+    (r.deleted_original ? `<p class="note">${r.dry_run ? "Would delete" : "Deleted"} the original from ${esc(tilde(r.source))}.</p>` : "") +
     `<p class="note">Resume it with <code>${esc(r.resume)}</code></p>`;
 }
 
@@ -165,7 +166,7 @@ async function startMove(s: Session) {
   if (!options.length) return toast("There's no other profile or home to move it to.", "error");
   dialog(`Move "${s.title}"`,
     `<label>To <select id="move-to">${options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("")}</select></label>
-     <label class="check"><input id="move-nokeep" type="checkbox" /> Delete the original once the copy is checked</label>
+     <label class="check"><input id="move-keep" type="checkbox" /> Keep the original, which copies it instead</label>
      <label class="check"><input id="move-fork" type="checkbox" /> As a new session with its own ID, keeping any copy there</label>
      <div id="move-report" class="report"></div>`,
     [
@@ -177,7 +178,7 @@ async function startMove(s: Session) {
 
 async function runMove(s: Session, dryRun: boolean) {
   const to = $<HTMLSelectElement>("move-to").value;
-  const how = { dryRun, noKeep: $<HTMLInputElement>("move-nokeep").checked, fork: $<HTMLInputElement>("move-fork").checked };
+  const how = { dryRun, keep: $<HTMLInputElement>("move-keep").checked, fork: $<HTMLInputElement>("move-fork").checked };
   try {
     const report = await move(s, to, how);
     $("move-report").innerHTML = reportText(report);

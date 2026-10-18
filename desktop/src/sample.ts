@@ -59,8 +59,9 @@ export function sample(args: string[]): string {
   if (first === "show") return JSON.stringify({ version: 1, agent: "claude", id: args[1], title: "Fix the flaky login test",
     cwd: `${H}/code/api`, model: "claude-fable-5-1", turns_total: 4, tool_calls: 1,
     left_out: "Claude's thinking, images, plans, /rewind snapshots and subagent transcripts", turns });
-  if (first === "move") return JSON.stringify({ version: 1, dry_run: args.includes("--dry-run"), action: "copy", agent: "claude",
-    session: args[1], source: `${H}/.claude-work`, target: `${H}/.claude-${args[2]}`, new_session: null, deleted_original: false,
+  if (first === "move") return JSON.stringify({ version: 1, dry_run: args.includes("--dry-run"), action: args.includes("--keep") ? "copy" : "move",
+    agent: "claude", session: args[1], source: `${H}/.claude-work`, target: `${H}/.claude-${args[2]}`, new_session: null,
+    deleted_original: !args.includes("--keep"),
     items: [{ what: "transcript", from: "", to: "", state: "new", detail: "53.0 KB" }, { what: "/rewind file snapshots", from: "", to: "", state: "new", detail: "4 files" }],
     cwd: `${H}/code/api`, resume: `cl ${args[2]} --resume ${args[1]}` });
   if (first === "desktop" && args[1] === "--json") return JSON.stringify({ version: 1, instances: [
