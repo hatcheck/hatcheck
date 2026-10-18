@@ -1,10 +1,11 @@
 //! hatcheck move SESSION PROFILE ...: move a session to another profile, to carry on with it
-//! there under that profile's account and plan limits; with --keep, copy it; with --fork, bring
-//! it in as a new session; between Claude Code and Codex, or Codex homes on different accounts,
-//! convert it, keeping the original. The original is deleted only once every copied file is
-//! checked, and a copy there that went further is never replaced: the move stops instead. The
-//! README's `hatcheck move` section describes what's copied, how a copy already there is
-//! brought up to date, and what a conversion keeps.
+//! there under that profile's account and plan limits; with --keep, copy it; between Claude Code
+//! and Codex, or Codex homes on different accounts, convert it, keeping the original. The
+//! original is deleted only once every copied file is checked, and a copy there that went further
+//! is never replaced: the move stops instead. hatcheck fork SESSION PROFILE ...: bring it in as a
+//! new session with its own ID, beside any copy already there, keeping the original. The
+//! README's `hatcheck move` and `hatcheck fork` sections describe what's copied, how a copy
+//! already there is brought up to date, and what a conversion keeps.
 
 use crate::args::{Count, Parser, Takes};
 use crate::conv::{self, add_turn, Conversation, Turn};
@@ -1208,7 +1209,7 @@ fn went_on_in_both(
     source: &str,
     target: &str,
     both: Option<(&[u8], &[u8])>,
-    again: &dyn Fn(&str) -> String,
+    fork_cmd: &str,
     files: &[String],
     keep: bool,
 ) -> Stop {
@@ -1250,13 +1251,13 @@ fn went_on_in_both(
     format!(
         "{first}. {doing} this one over would lose what's only in {}, so nothing was {done}.\nTo keep both, bring this one in as a new session with its own ID:\n  {}\nOr delete the copy in {} first, to replace it:\n{}",
         show(target),
-        again("--fork"),
+        fork_cmd,
         show(target),
         files.iter().map(|p| format!("  {}", show(p))).collect::<Vec<_>>().join("\n")
     )
 }
 
-/// What move was asked: the command line.
+/// What move or fork was asked: the command line. A fork always keeps the original.
 struct Ask {
     session: String,
     profile: String,
@@ -1265,6 +1266,18 @@ struct Ask {
     fork: bool,
     dry_run: bool,
     json: bool,
+}
+
+/// What the first line says was done, or would be.
+fn heading_of(a: &Ask) -> &'static str {
+    match (a.fork, a.keep, a.dry_run) {
+        (true, _, false) => "Forked",
+        (true, _, true) => "Would fork",
+        (false, false, false) => "Moved",
+        (false, false, true) => "Would move",
+        (false, true, false) => "Copied",
+        (false, true, true) => "Would copy",
+    }
 }
 
 fn set(report: &mut Map<String, Value>, entries: Vec<(&str, Value)>) {
@@ -1301,15 +1314,15 @@ fn state_of(states: &[(String, &'static str)], dst: &str) -> &'static str {
         .map_or("new", |(_, s)| *s)
 }
 
-/// Move (or with --keep, copy) a Claude Code session to another profile, or with --fork
-/// copy it in as a new session: the session to resume and the directory to resume it from.
+/// Move (or with --keep, copy) a Claude Code session to another profile, or fork it in as a new
+/// session: the session to resume and the directory to resume it from.
 fn move_claude(
     a: &Ask,
     sid: &str,
     source: &str,
     transcripts: &[String],
     target: &str,
-    again: &dyn Fn(&str) -> String,
+    fork_cmd: &str,
     report: &mut Map<String, Value>,
 ) -> Result<(String, Option<String>), Stop> {
     let show = paths::shell_path;
@@ -1432,7 +1445,7 @@ fn move_claude(
             _ => None,
         };
         return Err(went_on_in_both(
-            "claude", sid, source, target, both, again, &files, a.keep,
+            "claude", sid, source, target, both, fork_cmd, &files, a.keep,
         ));
     }
     set(
@@ -1572,12 +1585,7 @@ fn move_claude(
         ("cwd", opt(cwd.clone())),
         ("resume", json!(paths::resume_command(target, &new_sid, false, None))),
     ]);
-    let heading = match (a.keep, a.dry_run) {
-        (false, true) => "Would move",
-        (false, false) => "Moved",
-        (true, true) => "Would copy",
-        (true, false) => "Copied",
-    };
+    let heading = heading_of(a);
     let title = info
         .as_ref()
         .map_or("(no conversation)".to_string(), |i| truncate(&i.title, 60));
@@ -1722,15 +1730,15 @@ fn codex_account(home: &str) -> Option<(String, String)> {
     })
 }
 
-/// Move (or with --keep, copy) a Codex session to another home on the same account, or
-/// with --fork copy it in as a new session.
+/// Move (or with --keep, copy) a Codex session to another home on the same account, or fork it
+/// in as a new session.
 fn copy_codex(
     a: &Ask,
     sid: &str,
     source: &str,
     files: &[String],
     target: &str,
-    again: &dyn Fn(&str) -> String,
+    fork_cmd: &str,
     report: &mut Map<String, Value>,
 ) -> Result<(String, Option<String>), Stop> {
     let show = paths::shell_path;
@@ -1784,7 +1792,7 @@ fn copy_codex(
             source,
             target,
             Some((&o, &t)),
-            again,
+            fork_cmd,
             std::slice::from_ref(&dst),
             a.keep,
         ));
@@ -1878,12 +1886,7 @@ fn copy_codex(
         }
     }
     drop(lock);
-    let heading = match (a.keep, a.dry_run) {
-        (false, true) => "Would move",
-        (false, false) => "Moved",
-        (true, true) => "Would copy",
-        (true, false) => "Copied",
-    };
+    let heading = heading_of(a);
     out::println(&format!(
         "{heading} Codex session {id8} \"{title_text}\" from {} to {}{}:",
         show(source),
@@ -2084,11 +2087,13 @@ fn convert(
     Ok((new_sid, Some(cwd)))
 }
 
-/// This command again, with flags added: what to run next. The session, profile and source
-/// are quoted for the shell the command is printed for; the flags stay bare.
-fn rerun_command(prog: &str, a: &Ask, flags: &[&str]) -> String {
+/// The fork command for what was asked, which a move that stops prints: hatcheck fork (or hat
+/// fork) with the same session, profile, --from and --dry-run. The values are quoted for the
+/// shell the command is printed for; the flags stay bare.
+fn fork_command(prog: &str, a: &Ask) -> String {
+    let me = prog.rsplit_once(' ').map_or(prog, |(me, _)| me);
     let mut words = vec![
-        prog.to_string(),
+        format!("{me} fork"),
         paths::quote(&a.session),
         paths::quote(&a.profile),
     ];
@@ -2096,13 +2101,9 @@ fn rerun_command(prog: &str, a: &Ask, flags: &[&str]) -> String {
         words.push("--from".into());
         words.push(paths::quote(source));
     }
-    if a.keep {
-        words.push("--keep".into());
-    }
     if a.dry_run {
         words.push("--dry-run".into());
     }
-    words.extend(flags.iter().map(|f| f.to_string()));
     words.join(" ")
 }
 
@@ -2270,12 +2271,12 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
     }
     // A conversion leaves things out, so its original is always kept, moving or not.
     let converting = agent != target_agent || why.is_some();
-    let again = |flag: &str| rerun_command(prog, a, &[flag]);
+    let fork_cmd = fork_command(prog, a);
     let (resume_sid, cwd) = if !converting && agent == "claude" {
-        let (s_, c) = move_claude(a, &sid, &source, &files, &target, &again, report)?;
+        let (s_, c) = move_claude(a, &sid, &source, &files, &target, &fork_cmd, report)?;
         (Some(s_), c)
     } else if !converting {
-        let (s_, c) = copy_codex(a, &sid, &source, &files, &target, &again, report)?;
+        let (s_, c) = copy_codex(a, &sid, &source, &files, &target, &fork_cmd, report)?;
         (Some(s_), c)
     } else {
         if agent == "claude" {
@@ -2309,10 +2310,40 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .positional("profile", Count::One, "where it goes: NAME for ~/.claude-NAME, default for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, or a path")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
-        // What --no-keep asked for is the default now; it's still taken, so scripts that pass it run.
+        // Still taken, so scripts that pass them run: what --no-keep asked for is the default
+        // now, and --fork is hatcheck fork, which keeps the original as --fork always did.
         .hidden(&["--no-keep"], "no_keep", Takes::Nothing)
-        .flag(&["--fork"], "fork", "bring it in as a new session with its own ID, leaving a copy already in PROFILE as it is (a converted session always gets one)")
+        .hidden(&["--fork"], "fork", Takes::Nothing)
         .flag(&["--dry-run"], "dry_run", "show what would be moved, copied, converted and deleted, and change nothing")
+        .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
+    let args = match parser.parse(argv) {
+        Ok(a) => a,
+        Err(stop) => return stop.exit_code(),
+    };
+    let fork = args.flag("fork");
+    let a = Ask {
+        session: args.value("session").unwrap_or("").to_string(),
+        profile: args.value("profile").unwrap_or("").to_string(),
+        source: args
+            .value("source")
+            .filter(|s| !s.is_empty())
+            .map(String::from),
+        keep: fork || args.flag("keep"),
+        fork,
+        dry_run: args.flag("dry_run"),
+        json: args.flag("json"),
+    };
+    answer(&a, prog)
+}
+
+/// hatcheck fork SESSION PROFILE ...: bring a session into another profile as a new one, with its
+/// own ID, and keep the original; for the other agent, convert it, as move does.
+pub fn fork_main(argv: &[String], prog: &str) -> i32 {
+    let parser = Parser::new(prog, "Fork a Claude Code or Codex session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For the other agent, it's converted.")
+        .positional("session", Count::One, "the session ID, or the start of it")
+        .positional("profile", Count::One, "where it goes: NAME for ~/.claude-NAME, default for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, or a path")
+        .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
+        .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")
         .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
     let args = match parser.parse(argv) {
         Ok(a) => a,
@@ -2325,17 +2356,23 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             .value("source")
             .filter(|s| !s.is_empty())
             .map(String::from),
-        keep: args.flag("keep"),
-        fork: args.flag("fork"),
+        keep: true,
+        fork: true,
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
     };
+    answer(&a, prog)
+}
+
+/// Do what move or fork was asked: the text as it goes, or with --json the report at the end; then
+/// in a terminal, the offer to resume it.
+fn answer(a: &Ask, prog: &str) -> i32 {
     let mut report = Map::new();
     report.insert("version".into(), json!(1));
     report.insert("dry_run".into(), json!(a.dry_run));
     if a.json {
         // The text goes nowhere; the report is printed at the end.
-        let (result, _, err) = out::captured(|| run(&a, prog, &mut report));
+        let (result, _, err) = out::captured(|| run(a, prog, &mut report));
         out::eprint(&err);
         return match result {
             Ok(_) => {
@@ -2345,7 +2382,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             Err(stop) => out::fail(&stop),
         };
     }
-    match run(&a, prog, &mut report) {
+    match run(a, prog, &mut report) {
         Err(stop) => out::fail(&stop),
         Ok(Done {
             session,
@@ -2520,7 +2557,7 @@ mod tests {
     }
 
     #[test]
-    fn the_command_again_quotes_values_not_flags() {
+    fn the_fork_command_quotes_values_not_flags() {
         let mut a = Ask {
             session: "11111111".into(),
             profile: "b".into(),
@@ -2531,14 +2568,15 @@ mod tests {
             json: false,
         };
         assert_eq!(
-            rerun_command("hatcheck move", &a, &["--fork"]),
-            "hatcheck move 11111111 b --fork"
+            fork_command("hatcheck move", &a),
+            "hatcheck fork 11111111 b"
         );
+        // --keep isn't the fork's: it always keeps the original. The same in PowerShell, which
+        // would quote --dry-run as '--dry-run'.
         (a.source, a.keep, a.dry_run) = (Some("my profile".into()), true, true);
-        // The same in PowerShell, which would quote --fork as '--fork'.
         assert_eq!(
-            rerun_command("hatcheck move", &a, &["--fork"]),
-            "hatcheck move 11111111 b --from 'my profile' --keep --dry-run --fork"
+            fork_command("hat move", &a),
+            "hat fork 11111111 b --from 'my profile' --dry-run"
         );
     }
 

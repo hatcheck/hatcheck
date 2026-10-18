@@ -167,13 +167,21 @@ async function startMove(s: Session) {
   dialog(`Move "${s.title}"`,
     `<label>To <select id="move-to">${options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("")}</select></label>
      <label class="check"><input id="move-keep" type="checkbox" /> Keep the original, which copies it instead</label>
-     <label class="check"><input id="move-fork" type="checkbox" /> As a new session with its own ID, keeping any copy there</label>
+     <label class="check"><input id="move-fork" type="checkbox" /> Fork it: a new session with its own ID, beside any copy there</label>
      <div id="move-report" class="report"></div>`,
     [
       { label: "Cancel", kind: "ghost", run: closeDialog },
       { label: "Preview", kind: "ghost", run: () => runMove(s, true) },
       { label: "Move it", run: () => runMove(s, false) },
     ]);
+  // A fork always keeps the original: its box shows that while Fork is ticked.
+  const keep = $<HTMLInputElement>("move-keep"), fork = $<HTMLInputElement>("move-fork");
+  let kept = keep.checked;
+  fork.addEventListener("change", () => {
+    if (fork.checked) kept = keep.checked;
+    keep.checked = fork.checked || kept;
+    keep.disabled = fork.checked;
+  });
 }
 
 async function runMove(s: Session, dryRun: boolean) {

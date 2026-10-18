@@ -63,7 +63,7 @@ didn't notice the switch.
 | `where_cmd.rs` | finding a session's files | `where.py` |
 | `open_cmd.rs`, `show.rs` | the session picker and the terminals; a session's conversation | `open.py`, `show.py` |
 | `find.rs` | a session's copies, the newest one in a folder, and `place` (`--from`, `--login`) | `sessions.py`, `move.py` |
-| `move_cmd.rs` | copies, updates, forks and conversions, and the copy chooser | `move.py` |
+| `move_cmd.rs` | moves and copies, updates, forks (`hatcheck fork`) and conversions, and the copy chooser | `move.py` |
 | `relocate.rs` | `hatcheck relocate`: a moved project folder's sessions brought along | new in the Rust version |
 | `conv.rs` | a session as a conversation, for `show` and `move` | `move.py` |
 | `launch.rs`, `src/bin/` | `cl`, `cx`, `claude-z` and `claude-k`, each also a binary of its own | `launch.py`, `cl`, `cx` |

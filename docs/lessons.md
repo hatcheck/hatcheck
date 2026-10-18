@@ -53,7 +53,7 @@ its age and the reason, never as fresh.
 
 **A printed command is quoted for the shell that will run it, and a flag is never quoted.**
 - Evidence: 4afe947 "fix: keep --fork bare in the rerun command printed for PowerShell"; the
-  `rerun_command` test in `move_cmd.rs`.
+  `fork_command` test in `move_cmd.rs`.
 
 **The exit status says whether it found what it was asked for, and `--json` keeps stdout valid.**
 Errors go to stderr with a non-zero exit, so a script can trust stdout.

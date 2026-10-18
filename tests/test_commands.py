@@ -176,7 +176,8 @@ class Commands(unittest.TestCase):
         code, out = self.run_command(HATCHECK + ["--help"])
         self.assertEqual(code, 0, out)
         for line in ("hatcheck [sessions] [HOURS]", "hatcheck usage", "hatcheck where SESSION",
-                     "hatcheck move SESSION PROFILE", "hatcheck open [SESSION]", "hatcheck best [--for SESSION]",
+                     "hatcheck move SESSION PROFILE", "hatcheck fork SESSION PROFILE", "hatcheck open [SESSION]",
+                     "hatcheck best [--for SESSION]",
                      "hatcheck bind PROFILE", "hatcheck unbind [FOLDER]", "hatcheck provider", "take --json",
                      "hatcheck show SESSION", "hatcheck desktop"):
             self.assertIn(line, out)
@@ -194,6 +195,8 @@ class Commands(unittest.TestCase):
         self.assertIn("hat is the short name for hatcheck.", out)
         code, out = self.run_command(hat + ["usage", "--help"])
         self.assertIn("usage: hat usage", out)
+        code, out = self.run_command(hat + ["fork", "--help"])
+        self.assertIn("usage: hat fork", out)
         code, out = self.run_command(hat + ["nope"])
         self.assertIn("hat: there's no 'nope' subcommand; see hat --help", out)
         code, out = self.run_command(hat + ["check", "3d", "--no-usage"])

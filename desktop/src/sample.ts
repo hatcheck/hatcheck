@@ -59,11 +59,14 @@ export function sample(args: string[]): string {
   if (first === "show") return JSON.stringify({ version: 1, agent: "claude", id: args[1], title: "Fix the flaky login test",
     cwd: `${H}/code/api`, model: "claude-fable-5-1", turns_total: 4, tool_calls: 1,
     left_out: "Claude's thinking, images, plans, /rewind snapshots and subagent transcripts", turns });
-  if (first === "move") return JSON.stringify({ version: 1, dry_run: args.includes("--dry-run"), action: args.includes("--keep") ? "copy" : "move",
-    agent: "claude", session: args[1], source: `${H}/.claude-work`, target: `${H}/.claude-${args[2]}`, new_session: null,
-    deleted_original: !args.includes("--keep"),
-    items: [{ what: "transcript", from: "", to: "", state: "new", detail: "53.0 KB" }, { what: "/rewind file snapshots", from: "", to: "", state: "new", detail: "4 files" }],
-    cwd: `${H}/code/api`, resume: `cl ${args[2]} --resume ${args[1]}` });
+  if (first === "move" || first === "fork") {
+    const fork = first === "fork", keep = args.includes("--keep"), id = fork ? "5b1e0c4a-7d2f-4e6b-9a3c-8f1d2e3c4b5a" : args[1];
+    return JSON.stringify({ version: 1, dry_run: args.includes("--dry-run"), action: fork ? "fork" : keep ? "copy" : "move",
+      agent: "claude", session: args[1], source: `${H}/.claude-work`, target: `${H}/.claude-${args[2]}`, new_session: fork ? id : null,
+      deleted_original: !fork && !keep,
+      items: [{ what: "transcript", from: "", to: "", state: "new", detail: "53.0 KB" }, { what: "/rewind file snapshots", from: "", to: "", state: "new", detail: "4 files" }],
+      cwd: `${H}/code/api`, resume: `cl ${args[2]} --resume ${id}` });
+  }
   if (first === "desktop" && args[1] === "--json") return JSON.stringify({ version: 1, instances: [
     { name: "work", display: "Work", app: "/Applications/Claude Work.app", data_dir: `${H}/.claude-instances/work`, running: true },
     { name: "personal", display: "Personal", app: "/Applications/Claude Personal.app", data_dir: `${H}/.claude-instances/personal`, running: false }] });

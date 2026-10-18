@@ -28,6 +28,8 @@ hatcheck usage                     plan usage left for every profile and home
 hatcheck best [--for SESSION]      which account to use now, or to carry a session to
 hatcheck move SESSION PROFILE      move a session to another profile or home, or convert it
                                    between Claude Code and Codex
+hatcheck fork SESSION PROFILE      fork a session into another profile or home: a new session
+                                   with its own ID, and the original stays
 hatcheck open [SESSION]            resume a session in a new terminal, in its folder
 hatcheck show SESSION              a session's conversation, read-only
 hatcheck where SESSION             where a session is stored

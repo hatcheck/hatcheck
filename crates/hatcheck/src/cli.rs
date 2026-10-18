@@ -6,8 +6,8 @@ use crate::{
 };
 
 pub const SUBCOMMANDS: &[&str] = &[
-    "sessions", "usage", "where", "move", "open", "show", "best", "bind", "unbind", "desktop",
-    "provider", "relocate",
+    "sessions", "usage", "where", "move", "fork", "open", "show", "best", "bind", "unbind",
+    "desktop", "provider", "relocate",
 ];
 
 const HELP: &str =
@@ -23,6 +23,8 @@ Usage:
     hatcheck where SESSION             where a session is stored, by its ID or the start of it
     hatcheck move SESSION PROFILE ...  move a session to another profile or home, or convert
                                        it between Claude Code and Codex
+    hatcheck fork SESSION PROFILE ...  fork a session into another profile or home: a new
+                                       session with its own ID, and the original stays
     hatcheck relocate OLD NEW          bring the sessions of a project folder that was moved
                                        or renamed along to its new place
     hatcheck open [SESSION] ...        resume a session in a new terminal, in its folder
@@ -35,8 +37,8 @@ Usage:
     hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
                                        claude-k, cl -z and cl -k
 
-hatcheck, usage, where, show, desktop, move and relocate take --json, for scripts,
-status bars and the desktop app.
+hatcheck, usage, where, show, desktop, move, fork and relocate take --json, for
+scripts, status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
@@ -125,6 +127,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "usage" => usage::main(&argv, &prog),
         "where" => where_cmd::main(&argv, &prog),
         "move" => move_cmd::main(&argv, &prog),
+        "fork" => move_cmd::fork_main(&argv, &prog),
         "relocate" => relocate::main(&argv, &prog),
         "open" => open_cmd::main(&argv, &prog),
         "show" => show::main(&argv, &prog),

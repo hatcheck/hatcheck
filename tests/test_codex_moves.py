@@ -186,9 +186,11 @@ class Moves(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("so nothing was moved", out)
         self.assertIn(": 1 new prompt in %s, 1 in %s." % (self.h.shown(self.codex), self.h.shown(self.same)), out)
-        self.assertIn("hatcheck move %s codex:same --fork" % X[:13], out)
-        code, out = self.h.run(MOVE, X[:13], "codex:same", "--fork")
+        self.assertIn("hatcheck fork %s codex:same" % X[:13], out)
+        code, out = self.h.run("fork", X[:13], "codex:same")
         self.assertEqual(code, 0, out)
+        self.assertIn("Forked Codex session 019f0000", out)
+        self.assertIn("The original stays in %s." % self.h.shown(self.codex), out)
         new = self.new_id(out)
         self.assertIn("cx same resume " + new, out)
         self.assertEqual(text_of(copy), theirs)
@@ -200,7 +202,7 @@ class Moves(unittest.TestCase):
         with open(os.path.join(self.same, "session_index.jsonl"), encoding="utf-8") as fh:
             self.assertIn({"id": new, "thread_name": "Uploader fix"},
                           [{k: e[k] for k in ("id", "thread_name")} for e in map(json.loads, fh)])
-        self.assertFalse(os.path.exists(self.rollout))  # a move: deleted once the new session was checked
+        self.assertTrue(os.path.isfile(self.rollout))  # a fork keeps the original
 
     def test_codex_homes_on_other_accounts_convert(self):
         code, out = self.h.run(MOVE, X[:13], "codex:other", "--dry-run")

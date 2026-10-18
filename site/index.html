@@ -170,7 +170,7 @@ cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</cod
       <li><strong>No automatic switching</strong> between accounts. <code>hatcheck best</code> ranks and prints commands, for choosing between accounts you may use for the work at hand, such as your own and your company's; nothing starts, moves or switches a session on its own (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/best.rs">best.rs</a>).</li>
       <li><strong>Nothing leaves your computer</strong> except those usage requests: Claude Code's to Anthropic, and one to ChatGPT per Codex account, the one address the binary itself calls (<code>CODEX_USAGE_URL</code> in <code>usage.rs</code>).</li>
       <li><strong>Nothing runs in the background.</strong> No daemon; the app's engine lives only while the app does (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/serve.rs">serve.rs</a>).</li>
-      <li><strong>Every change to a session can be undone.</strong> <code>move</code> deletes the original only once every copied file is checked, never puts an older copy over a newer one, and is undone by moving the session back; <code>relocate</code> prints the command that undoes it; and both have a <code>--dry-run</code> that runs every check and writes nothing.</li>
+      <li><strong>Every change to a session can be undone.</strong> <code>move</code> deletes the original only once every copied file is checked, never puts an older copy over a newer one, and is undone by moving the session back; <code>fork</code> keeps the original; <code>relocate</code> prints the command that undoes it; and all three have a <code>--dry-run</code> that runs every check and writes nothing.</li>
     </ul>
   </section>
 

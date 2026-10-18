@@ -127,11 +127,11 @@ export const conversation = (s: Session, last = 300) =>
 
 export const resume = (s: Session) => engine(["open", s.id, "--from", s.profile]);
 
+// A move, or with fork, hatcheck fork: a new session with its own ID, which always keeps the original.
 export function move(s: Session, to: string, how: { dryRun: boolean; keep?: boolean; fork?: boolean }) {
-  const args = ["move", s.id, to, "--from", s.profile, "--json"];
+  const args = [how.fork ? "fork" : "move", s.id, to, "--from", s.profile, "--json"];
   if (how.dryRun) args.push("--dry-run");
-  if (how.keep) args.push("--keep");
-  if (how.fork) args.push("--fork");
+  if (how.keep && !how.fork) args.push("--keep");
   return json<MoveReport>(args);
 }
 

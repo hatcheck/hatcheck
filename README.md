@@ -30,7 +30,8 @@ keeping one profile per account: `cl` and `cx` run Claude Code and Codex with a 
 `hatcheck` lists the recent sessions in all of them, with the command that resumes each one and
 what's left of each plan. `hatcheck usage` shows the plans, `hatcheck best` says which account to use
 now, `hatcheck where` finds a session, `hatcheck open` resumes one in a new terminal, and
-`hatcheck move` carries one over to another profile, or converts it between Claude Code and Codex.
+`hatcheck move` carries one over to another profile, or converts it between Claude Code and Codex,
+and `hatcheck fork` brings one in there as a new session, keeping the original.
 `hatcheck relocate` brings a moved project folder's sessions along, `hatcheck bind` ties a folder
 to a profile, so `cl` and `cx` pick it there, and `--json` gives the sessions and plans to scripts
 and status bars. `claude-z` and `claude-k` run Claude Code on Z.ai's
@@ -520,8 +521,8 @@ it left behind is an older version of it. The two copies are compared line by li
   session there, and the files of the older copy here, to delete if you don't want them.
 - **Both went on** after the copy was made: nothing is moved, since that would lose the prompts
   only the copy there has. It says when they split and how many prompts each has had since.
-  `--fork` brings this one in as a new session with its own ID and keeps both, as Claude Code's
-  `claude --resume <id> --fork-session` and `codex fork` do. Or delete the copy there first.
+  [`hatcheck fork`](#hatcheck-fork-a-session-as-a-new-one-in-another-profile) brings this one in
+  as a new session with its own ID and keeps both. Or delete the copy there first.
 
 ```
 $ hatcheck move 9a8b7c6d work
@@ -539,15 +540,15 @@ To drop the older copy in ~/.claude, delete:
 $ hatcheck move 9a8b7c6d default
 Session 9a8b7c6d went on in both ~/.claude-work and ~/.claude after Oct 15 01:40: 3 new prompts in ~/.claude-work, 1 in ~/.claude. Moving this one over would lose what's only in ~/.claude, so nothing was moved.
 To keep both, bring this one in as a new session with its own ID:
-  hatcheck move 9a8b7c6d default --fork
+  hatcheck fork 9a8b7c6d default
 Or delete the copy in ~/.claude first, to replace it:
   ~/.claude/projects/-Users-me-code-api/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d.jsonl
+  ~/.claude/projects/-Users-me-code-api/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+  ~/.claude/file-history/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
 ```
 
-A fork changes the session's ID in its records and gives it its own folders for subagents, saved
-tool output and `/rewind` snapshots. Its message IDs stay the same, as in Claude Code's own fork.
-Resuming a fork, a round trip and a copy that went on in both profiles were tested with the real
-`claude` (2.1.301).
+A round trip and a copy that went on in both profiles were tested with the real `claude`
+(2.1.301).
 
 When more than one profile has the session, you're asked which copy to take. The one used last
 comes first and is the default, and each other one says how it stands to it:
@@ -584,8 +585,7 @@ Resume it now in ~/.claude-work? [y/N]
 
 - Between Codex homes signed in to the same ChatGPT account, the session file is copied as it is,
   with its ID and its name, and the original is deleted once the copy is checked, as for Claude
-  Code. A copy already there is compared the same way, and `--fork` gives the copy a new ID in its
-  file name, its `session_meta` and its events.
+  Code. A copy already there is compared the same way.
 - Between Claude Code and Codex (`hatcheck move 3f1c2a9e codex:work` goes the other way), and
   between Codex homes on different accounts, the session is converted into a new one with a new ID,
   and the original is always kept. Codex encrypts its reasoning and its summaries of compacted
@@ -610,10 +610,50 @@ Resume it now in ~/.claude-work? [y/N]
 | `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, `default` for `~/.claude`, `codex` for `~/.codex`, `codex:NAME` for `~/.codex-NAME`, or a path |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
-| `--fork`         | bring it in as a new session with its own ID, leaving a copy already there as it is (a converted session always gets one) |
 | `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
 
-`--no-keep`, which a move needed before it was the default, is still accepted.
+`--no-keep`, which a move needed before it was the default, is still accepted, and so is `--fork`,
+which does what [`hatcheck fork`](#hatcheck-fork-a-session-as-a-new-one-in-another-profile) does.
+
+### `hatcheck fork`: a session as a new one in another profile
+
+Bring a session into another profile as a new one with its own ID, and keep the original, as
+Claude Code's `claude --resume <id> --fork-session` and `codex fork` do within one profile. It's
+how to keep both when a move stops because the session went on in both profiles.
+
+```
+$ hatcheck fork 9a8b7c6d default
+Forked session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude-work to ~/.claude as a new session:
+  transcript                 61.2 KB
+  subagents and tool output  3 files
+  /rewind file snapshots     5 files
+  plan                       quiet-river-plan.md  (already there)
+  new session                5b1e0c4a-7d2f-4e6b-9a3c-8f1d2e3c4b5a
+Paths in the conversation to these files now point to the copies.
+The copy of session 9a8b7c6d that was already in ~/.claude stays as it was.
+The original stays in ~/.claude-work.
+Resume it with:
+  cd ~/code/api
+  claude --resume 5b1e0c4a-7d2f-4e6b-9a3c-8f1d2e3c4b5a
+Resume it now in ~/.claude? [y/N]
+```
+
+- It copies what `move` copies and checks it the same way, and the copy gets the new ID in its
+  records, and its own folders for subagents, saved tool output and `/rewind` snapshots. Its
+  message IDs stay the same, as in Claude Code's own fork. A Codex session gets the new ID in its
+  file name, its `session_meta` and its events.
+- A copy already in the profile stays as it is, so a fork never stops for one, and the original
+  always stays where it was. A plan file already there stays too, since the copy there uses it.
+- To the other agent, or to a Codex home on another account, it converts the session, as `move`
+  does: a converted session is always a new one.
+- Resuming a fork was tested with the real `claude` (2.1.301).
+
+| Option           | What it does                                                                 |
+|------------------|------------------------------------------------------------------------------|
+| `SESSION`        | the session ID, or the start of it                                           |
+| `PROFILE`        | where it goes, as for [`move`](#hatcheck-move-carry-on-a-session-with-another-profile) |
+| `--from PROFILE` | the profile or home to take it from, when more than one has it, as for `move` |
+| `--dry-run`      | show what would be copied or converted, and change nothing                   |
 
 ### `hatcheck relocate`: a project folder that moved
 
@@ -859,8 +899,9 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   ([`serve.rs`](crates/hatcheck/src/serve.rs)).
 - **Sessions are only ever moved, copied or rewritten in ways you can undo.** `move` deletes the
   original only once every copied file is checked against it, never puts an older copy over a
-  newer one, and is undone by moving the session back; `relocate` prints the command that undoes
-  it; and both have `--dry-run`, which runs every check and writes nothing ([`move_cmd.rs`](crates/hatcheck/src/move_cmd.rs),
+  newer one, and is undone by moving the session back; `fork` keeps the original; `relocate`
+  prints the command that undoes it; and all three have `--dry-run`, which runs every check and
+  writes nothing ([`move_cmd.rs`](crates/hatcheck/src/move_cmd.rs),
   [`relocate.rs`](crates/hatcheck/src/relocate.rs)).
 
 Function names rather than line numbers, since lines move; `git grep` finds them.
@@ -873,9 +914,9 @@ which opens a terminal in the session's folder, and **Copy**. It also has button
 Desktop instances and notifies you when a limit runs low or resets.
 
 Its main window browses every session, with search, filters and a read-only preview of the
-conversation. From there you can resume a session, copy its command, or move it to another
-profile after a dry run. The window also lists profiles and homes, signs in to a new one in a
-terminal, and makes Desktop instances.
+conversation. From there you can resume a session, copy its command, or move or fork it to
+another profile after a dry run. The window also lists profiles and homes, signs in to a new one
+in a terminal, and makes Desktop instances.
 
 It ships the CLI inside itself, so it needs no Python. It never handles a login, and live usage is
 off until you turn it on. See [desktop/README.md](desktop/README.md) to build it; releases come

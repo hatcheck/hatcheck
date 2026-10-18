@@ -126,6 +126,11 @@ class MoveSession(unittest.TestCase):
         code, out = self.h.run(SCRIPT, "--help")
         self.assertIn("--keep", out)
         self.assertNotIn("--no-keep", out)
+        self.assertNotIn("--fork", out)  # hatcheck fork now
+        code, out = self.h.run("fork", "--help")
+        self.assertEqual(code, 0, out)
+        self.assertIn("--dry-run", out)
+        self.assertNotIn("--keep", out)  # a fork always keeps the original
 
     def test_refuses_an_open_session(self):
         self.h.register_open(self.default, S1)
@@ -141,7 +146,7 @@ class MoveSession(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("%s has a different session with the ID 11111111" % self.h.shown(self.b), out)
         self.assertIn("nothing was moved", out)
-        self.assertIn("hatcheck move 11111111 b --fork", out)
+        self.assertIn("hatcheck fork 11111111 b", out)
         with open(other, "rb") as fh:
             self.assertEqual(fh.read(), before)
         with open(self.transcript, "rb") as fh:
@@ -218,13 +223,18 @@ class MoveSession(unittest.TestCase):
                       out)
         self.assertIn(": 1 new prompt in %s, 1 in %s." % (self.h.shown(self.default), self.h.shown(self.b)), out)
         self.assertIn("so nothing was moved", out)
-        self.assertIn("hatcheck move 11111111 b --fork", out)
+        self.assertIn("hatcheck fork 11111111 b", out)
         self.assertIn("  " + self.h.shown(self.copy_of(self.b) + ".jsonl"), out)
-        code, out = self.h.run(SCRIPT, S1[:8], "b", "--fork")
+        code, out = self.h.run(SCRIPT, S1[:8], "b", "--fork", "--dry-run")  # as before: hatcheck fork
+        self.assertEqual(code, 0, out)
+        self.assertIn("Would fork session 11111111", out)
+        self.assertIn("The original stays in %s." % self.h.shown(self.default), out)
+        code, out = self.h.run("fork", S1[:8], "b")
         self.assertEqual(code, 0, out)
         new = re.search(r"new session +(\S+)", out).group(1)
         self.assertNotEqual(new, S1)
-        self.assertIn("to %s as a new session:" % self.h.shown(self.b), out)
+        self.assertIn('Forked session 11111111 "Fix the flaky login test" from %s to %s as a new session:'
+                      % (self.h.shown(self.default), self.h.shown(self.b)), out)
         self.assertIn("The copy of session 11111111 that was already in %s stays as it was." % self.h.shown(self.b), out)
         self.assertIn("cl b --resume " + new, out)
         with open(self.copy_of(self.b) + ".jsonl", "rb") as fh:
@@ -238,9 +248,9 @@ class MoveSession(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(fork, "tool-results", "out.txt")))
         self.assertTrue(os.path.isfile(os.path.join(fork, "subagents", "agent-1.jsonl")))
         self.assertTrue(os.path.isfile(os.path.join(self.b, "file-history", new, "abc@more-here")))
-        self.assertIn("Deleted the original from %s" % self.h.shown(self.default), out)
-        self.assertFalse(os.path.exists(self.transcript))  # a move: deleted once the new session was checked
-        self.assertTrue(os.path.isfile(self.plan))
+        self.assertIn("The original stays in %s." % self.h.shown(self.default), out)
+        self.assertTrue(os.path.isfile(self.transcript))  # a fork keeps the original
+        self.assertTrue(os.path.isfile(os.path.join(self.default, "file-history", S1, "abc@more-here")))
 
     def test_which_session_and_where(self):
         self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
@@ -250,7 +260,7 @@ class MoveSession(unittest.TestCase):
         self.assertIn("Session %s is in %s too. Taking the copy in %s, used last; --from picks another."
                       % (S2[:8], self.h.shown(self.b), self.h.shown(self.default)), out)
         self.assertIn('"In default"', out)
-        code, out = self.h.run(SCRIPT, S2[:8], "a2", "--from", "b", "--fork", "--keep")
+        code, out = self.h.run("fork", S2[:8], "a2", "--from", "b")
         self.assertEqual(code, 0, out)
         self.assertIn('"In b"', out)
         code, out = self.h.run(SCRIPT, S2[:8], "a2", "--json")
