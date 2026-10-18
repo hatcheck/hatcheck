@@ -1,7 +1,7 @@
 //! hatcheck bind and unbind: tie a folder to a profile, so work there happens under the right
 //! account; and the warning hook, a SessionStart hook in every Claude Code profile's
 //! settings.json and every Codex home's hooks.json, which runs hatcheck bind --check. The
-//! port of hatcheck/bind.py, whose docstring describes them.
+//! README's `hatcheck bind` section describes them.
 
 use crate::args::{Count, Parser};
 use crate::ospath;

@@ -55,7 +55,7 @@ GLM or Kimi's models instead, in any profile. See
 > always logged in**, and makes the focus-don't-duplicate logic rock-solid.
 >
 > Already logged into the default profile and don't want to re-auth? See
-> [Migrating an existing login](#migrating-an-existing-login-optional) — you can copy your current
+> [Copying an existing login into an instance](docs/desktop-instances.md#copying-an-existing-login-into-an-instance) — you can copy your current
 > profile into the new dedicated dir.
 
 ---
@@ -111,86 +111,28 @@ account. (Truly distinct *running* Dock icons would require a full standalone co
 
 ---
 
-## Quick start
+## Claude Desktop instances (macOS)
+
+`hatcheck desktop` makes them: each instance gets its own data folder, `~/.claude-instances/<name>`,
+and a launcher in `/Applications` with Claude's icon in a colour you pick. The launcher brings a
+running instance's window forward instead of starting a second one on the same folder.
 
 ```bash
-# 0. Have Claude Desktop installed at /Applications/Claude.app  (https://claude.ai/download)
-
-# 1. Clone this repo (or download the scripts), then make the helper executable
-chmod +x make-claude-instance.sh
-
-# 2. Create a WORK instance (isolated profile) with a BLUE launcher
-./make-claude-instance.sh work Work 135
-
-# 3. Create a PERSONAL instance (its own isolated profile) with a RED-ORANGE icon
-./make-claude-instance.sh personal Personal -7
-
-# 4. Launch from Launchpad / drag to Dock:  "Claude Work"  and  "Claude Personal"
-#    First launch of each is a fresh profile -> sign into the right account once.
+hatcheck desktop new work Work --hue 190          # Claude Work.app, blue
+hatcheck desktop new personal Personal --hue -10  # Claude Personal.app, red-orange
+hatcheck desktop open work                        # or open it from Launchpad or the Dock
+hatcheck desktop                                  # the instances, and which are running
+hatcheck desktop remove work                      # its launcher; --data deletes its data folder too
 ```
 
-- The **first** time a launcher focuses a running window, macOS asks
-  *"Claude … wants to control System Events"* → click **OK** (one time per launcher).
-- **Give every instance its own isolated dir** — use a real name like `personal` / `work`, **not**
-  `default`. One profile → one instance (see the ⭐ callout above for why).
-- The instance name **`default`** is still supported (it uses Claude's built-in profile with no
-  `--user-data-dir`) for folks who want one launcher onto the stock profile — but it's only safe if
-  that profile is *never* run by more than one instance at a time (i.e. don't also use the stock
-  Claude icon). A dedicated dir is the robust, recommended choice.
-
-### Color cheatsheet (hue shift, in 0–255 = 0–360° units)
-
-| Look          | hueShift | satGain (optional) |
-|---------------|---------:|-------------------:|
-| Stock orange  | `0`      | `1.0`              |
-| Red-orange    | `-7`     | `1.08`             |
-| Green         | `+80`    | `1.0`              |
-| Blue          | `+135`   | `1.0`              |
-| Purple        | `+170`   | `1.0`              |
-
-Icon recoloring is **optional** — it only runs if Python 3 + [Pillow](https://pypi.org/project/Pillow/)
-are available (`pip install Pillow`). Without them you still get a fully working launcher with the
-stock icon.
-
----
-
-## Migrating an existing login (optional)
-
-If you're already signed into Claude's **default** profile and want your new dedicated instance to
-start out logged in (with your settings, MCP servers, and sessions intact), copy the profile across
-**while Claude is fully quit** so the copy is consistent:
-
-```bash
-# 1. Quit Claude completely first (⌘Q every window; make sure nothing is running):
-ps -axo command | grep "[C]laude.app/Contents/MacOS/Claude"   # should print nothing
-
-# 2. Copy the default profile into your new dedicated dir, skipping lock files + caches:
-rsync -a \
-  --exclude 'Singleton*' \
-  --exclude 'Cache' --exclude 'Code Cache' --exclude 'GPUCache' \
-  --exclude 'DawnGraphiteCache' --exclude 'DawnWebGPUCache' --exclude 'ShaderCache' \
-  --exclude 'Crashpad' --exclude 'blob_storage' \
-  "$HOME/Library/Application Support/Claude/"  "$HOME/.claude-instances/personal/"
-```
-
-Your original default profile is left untouched (the stock Claude icon still opens it). The auth
-token lives in the copied profile (and/or the shared macOS Keychain), so the new instance should
-launch already signed in. If it doesn't, just sign in once — it sticks from then on.
-
-> Heads-up on size: the local-agent / Cowork runtime lives in a `vm_bundles/` folder that can be
-> **many GB**. The copy above includes it. To save disk, you can `rm -rf` the `vm_bundles` folder in
-> the new dir afterward — it re-downloads on demand the next time you use that feature.
-
-## Managing instances
-
-```bash
-# List running Claude instances and their profiles
-ps -axo pid,command | grep "[C]laude.app/Contents/MacOS/Claude"
-
-# Remove a wrapper + its profile
-rm -rf "/Applications/Claude Work.app"
-rm -rf "$HOME/.claude-instances/work"
-```
+Sign each one in to its account the first time it opens. The first time a launcher brings a window
+forward, macOS asks whether it may control System Events; allow it, once per launcher. `--hue`
+turns the icon's colours by that many degrees (about 110 is green, 190 blue, 240 purple) and
+`--saturation` scales them. hatcheck recolours the icon itself, with macOS's `iconutil`, and a
+launcher it can't recolour keeps Claude's own icon. The name `default` makes a launcher for
+Claude's built-in data folder, which is only safe while nothing else runs on that folder, the stock
+Claude icon included. [docs/desktop-instances.md](docs/desktop-instances.md) has the rest: what
+the launcher does, and how to copy a login you already have into an instance.
 
 ---
 
@@ -820,44 +762,25 @@ from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behi
 
 ## Files in this repo
 
-Claude Code CLI profiles and Codex homes (macOS, Linux, Windows):
-
-- **`install.sh`** / **`install.ps1`** — put the commands below on your `PATH` (`~/.local/bin` by default).
-- **`crates/hatcheck/`** — the Rust port, which is replacing the Python code a subcommand at a time with
-  the same output; every subcommand but `move` so far. See [docs/rust-port.md](docs/rust-port.md).
-- **`pyproject.toml`** — the Python package (`uv tool install`, `pipx`); **`packaging/`** — the Homebrew
-  formula and cask, and the winget manifest.
-- **`hatcheck.py`** — the `hatcheck` command (`hat` for short) from a clone; it runs **`hatcheck/cli.py`**,
-  which runs the subcommands in **`hatcheck/`**:
-  - **`sessions.py`** — recent sessions across profiles and homes, with resume commands and plan usage.
-  - **`usage.py`** — plan usage left for every profile and home.
-  - **`where.py`** — finds a Claude Code or Codex session's files by ID or ID prefix.
-  - **`move.py`** — copies a session to another profile, moves it with `--no-keep`, or converts it between
-    Claude Code and Codex.
-  - **`open.py`** — resumes a session in a new terminal, in its folder.
-  - **`best.py`** — which account to use now, and where to carry a session.
-  - **`bind.py`** and **`unbind.py`** — folder bindings, and the warning hook.
-  - **`show.py`** — a session's conversation, read-only.
-  - **`desktop.py`** — Claude Desktop instances on macOS: make, list, open and remove them
-    ([docs/desktop-instances.md](docs/desktop-instances.md)).
-  - **`launch.py`** — `cl`, `cx`, `claude-z` and `claude-k` in Python, for package installs.
-  - **`provider.py`** — the Z.ai and Kimi keys and models behind `claude-z`, `claude-k`, `cl -z` and `cl -k`.
-- **`cl`** / **`cl.ps1`** — runs `claude` with a `~/.claude-<name>` profile, on Z.ai or Kimi with `-z` or
-  `-k`; installed as `claude-z` and `claude-k` too.
-- **`cx`** / **`cx.ps1`** — runs `codex` with a `~/.codex-<name>` home.
-
-The subcommands load each other, so keep the `hatcheck/` folder whole and beside `hatcheck.py`. The
-`.ps1` files are the Windows versions of the `sh` ones.
-
-- **`desktop/`** — the desktop app: Tauri, with the CLI inside it ([its README](desktop/README.md)).
-- **`site/`** — the landing page, one self-contained file, served at [hatcheck.dev](https://hatcheck.dev)
+- **`crates/hatcheck/`**: hatcheck in Rust, the commands and the launchers. Its `src/` has a file per
+  subcommand (`sessions.rs`, `usage.rs`, `move_cmd.rs`, `open_cmd.rs`, `desktop.rs` and the rest),
+  `launch.rs` for `cl`, `cx`, `claude-z` and `claude-k`, and `src/bin/` for those binaries and `hat`.
+  It was ported from a Python version with the same output; see [docs/rust-port.md](docs/rust-port.md).
+- **`install.sh`** / **`install.ps1`**: build the commands from a clone and put them on your `PATH`
+  (`~/.local/bin` by default).
+- **`pyproject.toml`**: the PyPI package, the binaries as wheels built with maturin.
+  **`dist-workspace.toml`**: the release builds, installers and Homebrew formula, made by cargo-dist.
+  **`packaging/`**: the app's Homebrew cask, and the winget manifests for the app and the CLI.
+- **`desktop/`**: the desktop app: Tauri, with the CLI inside it ([its README](desktop/README.md)).
+- **`site/`**: the landing page, one self-contained file, served at [hatcheck.dev](https://hatcheck.dev)
   from Cloudflare as static assets; `site/deploy.sh` ships it. The logo lives there too:
   `logo.svg` and `logo-dark.svg` (the mark), `logo-wordmark.svg` and `logo-wordmark-dark.svg`, `favicon.svg`.
-- **`docs/proposals/`** — the plans these came from: [the CLI features](docs/proposals/cli-features.md)
+- **`docs/proposals/`**: the plans these came from: [the CLI features](docs/proposals/cli-features.md)
   and [the desktop app](docs/proposals/desktop-app.md).
-- **`tests/`** — tests for the CLI tools against throwaway home folders:
-  `python3 -m unittest discover -s tests`. They never read your real profiles, Keychain or the network.
-  GitHub Actions runs them on macOS, Linux and Windows (`.github/workflows/tests.yml`).
+- **`tests/`**: the command tests, which run the binary against throwaway home folders:
+  `python3 -m unittest discover -s tests`, which builds it with cargo first, and the crate's own
+  tests with `cargo test -p hatcheck`. They never read your real profiles, Keychain or the network.
+  GitHub Actions runs both on macOS, Linux and Windows (`.github/workflows/tests.yml`).
 
 ## Roadmap
 
@@ -866,11 +789,9 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
   instance with its own icon, and a launcher that brings a running instance forward instead of
   opening a duplicate. It needs testing on a Windows machine first.
 - **Linux.** There's no official Claude Desktop for Linux, so only the CLI tools apply there.
-- **The Rust port** ([docs/rust-port.md](docs/rust-port.md)): one binary per platform with no Python
-  needed, which the desktop app links instead of a bundled engine. The app's first release waits
-  for it.
-- **Releases:** the CLI is on PyPI; next the Homebrew tap, then the app's installers, once the
-  release workflows have their accounts and secrets (the workflows list them).
+- **Releases:** the CLI's 0.1.0 is on PyPI, as Python; the next release ships the Rust binaries to
+  PyPI, GitHub, the Homebrew tap and winget, then the app's installers, once the release workflows
+  have their accounts and secrets (the workflows list them).
 - **Signing:** a Developer ID for the macOS app, and a certificate for the Windows one.
 
 ## Credits
@@ -886,7 +807,7 @@ The subcommands load each other, so keep the `hatcheck/` folder whole and beside
   of [weidwonder/claude-desktop-multi-instance](https://github.com/weidwonder/claude-desktop-multi-instance).
 - **Claude Code and Codex CLI tools:** `hatcheck`, `cl`, `cx`, the installers and the tests are by
   [Yi Wang](https://github.com/yiwang).
-- **Z.ai and Kimi:** the provider settings in `hatcheck/provider.py` (endpoints, model slots, context
+- **Z.ai and Kimi:** the provider settings in `crates/hatcheck/src/provider.rs` (endpoints, model slots, context
   windows and the config files) come from [claude-z](https://github.com/sam-fakhreddine/claude-z) by
   Kerim ([lettt325](https://github.com/lettt325)), MIT-licensed, and Yi Wang's
   [fork](https://github.com/yiwang/claude-z) of it, which added Kimi.

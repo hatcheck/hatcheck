@@ -1,4 +1,4 @@
-//! Output as the Python code wrote it: text to stdout and stderr (a closed pipe ends the
+//! Output as the Python version wrote it: text to stdout and stderr (a closed pipe ends the
 //! program quietly), colours only on a terminal that takes them, and the terminal's width.
 
 use std::cell::RefCell;
@@ -122,6 +122,8 @@ pub fn setup_console() -> bool {
 #[derive(Clone, Copy)]
 pub struct Paint {
     pub on: bool,
+    /// The terminal shows 256 colours, not only the basic 16.
+    pub wide: bool,
 }
 
 impl Paint {
@@ -131,6 +133,7 @@ impl Paint {
             on: std::io::stdout().is_terminal()
                 && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
                 && ansi,
+            wide: crate::usage::has_256_colors(),
         }
     }
 

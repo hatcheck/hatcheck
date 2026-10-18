@@ -1,4 +1,4 @@
-//! Python's ways with values, where the port has to behave exactly as the Python code it
+//! Python's ways with values, where hatcheck has to behave exactly as the Python version it
 //! replaces: JSON read the way Python reads it (an int stays an int, so 63 and 63.0 print
 //! differently), truthiness and `or`, round() rounding half to even, `%d` cutting a float
 //! toward zero, `%g`, a float's repr, str.split() and str.strip() with Python's idea of

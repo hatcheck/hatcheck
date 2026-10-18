@@ -10,7 +10,7 @@ import sys
 import types
 import unittest
 
-from helpers import INTERRUPT, NOW, WINDOWS, FakeHome, argv_of, in_terminal, iso, load, python_only, rec, write
+from helpers import INTERRUPT, NOW, WINDOWS, FakeHome, argv_of, in_terminal, iso, rec, write
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
@@ -234,28 +234,6 @@ class MoveSession(unittest.TestCase):
         self.assertEqual(report["copies"], [self.default, self.b])
         self.assertEqual(report["source_choice"], "used last")
 
-    @python_only
-    def test_asks_which_copy_in_a_terminal(self):
-        m, s = load("move"), load("sessions")
-        self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
-        self.h.session(self.default, self.cwd, S2, "In default", minutes_ago=3)
-        where = {p: glob.glob(os.path.join(p, "projects", "*", S2 + ".jsonl")) for p in (self.b, self.default)}
-        args = types.SimpleNamespace(json=False, report={})
-        answers = iter(["", "2", "zzz", "b", "default"])
-        was = m.ask, m.interactive
-        m.ask, m.interactive = (lambda prompt: next(answers)), (lambda: True)
-        self.addCleanup(setattr, m, "ask", was[0])
-        self.addCleanup(setattr, m, "interactive", was[1])
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            picked = [m.choose_source(S2, where, "claude", s, s.shell_path, args) for _ in range(4)]
-        self.assertEqual(picked, [self.default, self.b, self.b, self.default])  # Enter, 2, zzz then b, default
-        text = out.getvalue()
-        self.assertIn("Session %s is in 2 profiles:" % S2[:8], text)
-        self.assertIn("used last", text.splitlines()[1])
-        self.assertIn("2. ", text.splitlines()[2])
-        self.assertEqual(text.count("Answer with a number from 1 to 2, or the profile's name."), 1)
-
     @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
     def test_picks_a_copy_in_a_terminal(self):
         self.h.session(self.b, self.cwd, S2, "In b", minutes_ago=30)
@@ -313,25 +291,6 @@ class MoveSession(unittest.TestCase):
         self.assertIn("cl fresh --resume " + S1, out)
 
 
-class Standing(unittest.TestCase):
-    """How a copy already in the profile compares with the one being copied."""
-
-    def test_older_newer_and_diverged(self):
-        m = load(SCRIPT)
-        a = b'{"a":1,"b":"x"}\n{"c":2}\n'
-        self.assertEqual(m.standing(a, a, True, (0, 0)), "same")
-        self.assertEqual(m.standing(a, a + b'{"d":3}\n', True, (0, 0)), "older")
-        self.assertEqual(m.standing(a + b'{"d":3}\n', a, True, (0, 0)), "newer")
-        self.assertEqual(m.standing(a + b'{"d":3}\n', a + b'{"e":4}\n', True, (0, 0)), "diverged")
-        self.assertEqual(m.standing(b'{"a": 1, "b": "x"}\n', a, True, (0, 0)), "older")  # the same record, spaced out
-        self.assertEqual(m.standing(b"output", b"output and more", False, (9, 1)), "older")  # added to
-        self.assertEqual(m.standing(b"# Plan\n", b"# Better plan\n", False, (1, 2)), "older")  # written over: the newer
-        self.assertEqual(m.standing(b"# Better plan\n", b"# Plan\n", False, (2, 1)), "newer")
-        self.assertEqual(m.overall(["same", "new"]), "older")
-        self.assertEqual(m.overall(["older", "same", "newer"]), "diverged")
-        self.assertEqual(m.overall(["same"]), "same")
-
-
 class ResumeNow(unittest.TestCase):
     """The y in "Resume it now in ...? [y/N]": Claude Code in the new profile, from the session's folder."""
 
@@ -355,17 +314,6 @@ class ResumeNow(unittest.TestCase):
     def expect(self, out, config_dir):
         line = "CLAUDE_CONFIG_DIR=%s cwd=%s args=--resume %s" % (config_dir, self.cwd, S1)
         self.assertIn(line.lower() if WINDOWS else line, out.lower() if WINDOWS else out)
-
-    @python_only
-    def test_runs_claude_in_the_new_profile(self):
-        snippet = ("import sys; sys.path.insert(0, %r); from helpers import load; "
-                   "load('move').resume_now(*sys.argv[1:])" % os.path.dirname(os.path.abspath(__file__)))
-        for target, config_dir in ((self.b, self.b), (self.default, "unset")):
-            env = dict(self.env, CLAUDE_CONFIG_DIR=os.path.join(self.h.home, ".claude-other"))
-            p = subprocess.run([sys.executable, "-c", snippet, target, S1, self.cwd], env=env, cwd=self.h.root,
-                               capture_output=True, text=True, encoding="utf-8")
-            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-            self.expect(p.stdout, config_dir)  # ~/.claude: CLAUDE_CONFIG_DIR unset, as plain claude has it
 
     @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
     def test_asks_in_a_terminal(self):

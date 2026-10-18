@@ -9,7 +9,7 @@ import sys
 import unittest
 from unittest import mock
 
-from helpers import NOW, WINDOWS, FakeHome, argv_of, in_terminal, iso, load, python_only, rec, write
+from helpers import NOW, WINDOWS, FakeHome, argv_of, in_terminal, iso, rec, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 X = "019f0000-aaaa-7000-8000-000000000001"  # Codex IDs are version 7 UUIDs
@@ -219,94 +219,11 @@ class Moves(unittest.TestCase):
         code, out = self.h.run(MOVE, X[:13], "work")
         self.assertEqual(code, 0, out)
 
-    @python_only
-    def test_where_it_goes(self):
-        m = load(MOVE)
-        home = m.HOME
-        self.assertEqual(m.place("work"), ("claude", os.path.join(home, ".claude-work")))
-        self.assertEqual(m.place("default"), ("claude", os.path.join(home, ".claude")))
-        self.assertEqual(m.place("codex"), ("codex", os.path.join(home, ".codex")))
-        self.assertEqual(m.place("codex:work"), ("codex", os.path.join(home, ".codex-work")))
-        self.assertEqual(m.place("claude:codex"), ("claude", os.path.join(home, ".claude-codex")))
-        self.assertEqual(m.place(os.path.join(self.h.home, ".codex-same")), ("codex", self.same))
 
-
-@python_only
-class Converting(unittest.TestCase):
-    def setUp(self):
-        self.m = load(MOVE)
-        self.s = load("sessions")
-
-    def test_follows_the_conversation_past_rewinds_and_compactions(self):
-        def msg(uuid, parent, role, text, **extra):
-            return dict({"type": role, "uuid": uuid, "parentUuid": parent, "timestamp": iso(NOW), "cwd": "/w",
-                         "message": {"role": role, "content": text if role == "user" else [{"type": "text", "text": text}]}},
-                        **extra)
-        records = [
-            msg("1", None, "user", "first"), msg("2", "1", "assistant", "one"),
-            msg("3", "2", "user", "undone by /rewind"), msg("4", "3", "assistant", "dropped"),
-            msg("5", "2", "user", "second"), msg("6", "5", "assistant", "two"),
-            {"type": "system", "subtype": "compact_boundary", "uuid": "7", "parentUuid": None, "logicalParentUuid": "6"},
-            msg("8", "7", "user", "Summary of the above", isCompactSummary=True),
-            msg("9", "8", "user", "<command-name>/model</command-name>"),
-            msg("10", "9", "user", "third"), msg("11", "10", "assistant", "three"),
-        ]
-        folder = self.tmp()
-        path = os.path.join(folder, A + ".jsonl")
-        write(path, "\n".join(json.dumps(r) for r in records) + "\n")
-        conv = self.m.read_claude(path, self.s)
-        texts = [(role, " ".join(t)) for role, t, _ in conv["turns"]]
-        self.assertEqual(texts, [("user", "first"), ("assistant", "one"), ("user", "second"), ("assistant", "two"),
-                                 ("user", "third"), ("assistant", "three")])
-        self.assertEqual(conv["cwd"], "/w")
-
-    def test_long_sessions_keep_the_first_prompt_and_the_newest_turns(self):
-        turns = [["user" if n % 2 == 0 else "assistant", ["%d " % n + "x" * 1000], iso(NOW)] for n in range(10)]
-        conv = {"agent": "codex", "id": X, "cwd": "/w", "model": None, "turns": turns, "started": iso(NOW),
-                "reasoning": "Codex's reasoning"}
-        with mock.patch.object(self.m, "BUDGET", 4500):
-            fitted, dropped = self.m.fit(conv, "claude")
-        self.assertEqual(dropped, 6)
-        self.assertEqual([role for role, _, _ in fitted], ["user", "assistant", "user", "assistant"])
-        first = "\n".join(fitted[0][1])
-        self.assertIn("[Imported from Codex session", first)
-        self.assertIn("0 x", first)
-        self.assertIn("[6 earlier turns left out here, to fit the context window.]", first)
-        self.assertIn("7 x", "".join(fitted[1][1]))
-        self.assertTrue(fitted[-1][1][-1].startswith("9 x"))
-
-    def tmp(self):
-        import shutil
-        import tempfile
-        folder = tempfile.mkdtemp(prefix="cma-")
-        self.addCleanup(shutil.rmtree, folder, True)
-        return folder
 
 
 class ResumeInCodex(unittest.TestCase):
     """The y in "Resume it now in ...? [y/N]" for a Codex home: codex resume <id>, with its CODEX_HOME."""
-
-    @python_only
-    def test_runs_codex_in_the_new_home(self):
-        h = FakeHome()
-        self.addCleanup(h.cleanup)
-        cwd, bindir = h.folder("code", "api"), os.path.join(h.root, "fakebin")
-        if WINDOWS:
-            write(os.path.join(bindir, "codex.cmd"), "@echo off\r\nif defined CODEX_HOME (echo CODEX_HOME=%CODEX_HOME%"
-                  " cwd=%CD% args=%*) else (echo CODEX_HOME=unset cwd=%CD% args=%*)\r\n")
-        else:
-            write(os.path.join(bindir, "codex"), '#!/bin/sh\necho "CODEX_HOME=${CODEX_HOME-unset} cwd=$(pwd) args=$*"\n')
-            os.chmod(os.path.join(bindir, "codex"), 0o755)
-        env = dict(h.env(), PATH=bindir + os.pathsep + (os.environ["PATH"] if WINDOWS else "/bin"),
-                   CODEX_HOME=os.path.join(h.home, ".codex-elsewhere"))
-        snippet = ("import sys; sys.path.insert(0, %r); from helpers import load; "
-                   "load(%r).resume_now(*sys.argv[1:])" % (os.path.dirname(os.path.abspath(__file__)), MOVE))
-        for home, shown in ((h.codex_home("work"), None), (h.codex_home(), "unset")):
-            p = subprocess.run([sys.executable, "-c", snippet, home, X, cwd, "codex"], env=env, cwd=h.root,
-                               capture_output=True, text=True, encoding="utf-8")
-            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-            line = "CODEX_HOME=%s cwd=%s args=resume %s" % (shown or home, cwd, X)
-            self.assertIn(line.lower() if WINDOWS else line, p.stdout.lower() if WINDOWS else p.stdout)
 
     @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
     def test_asks_in_a_terminal(self):

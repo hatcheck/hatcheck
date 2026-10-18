@@ -6,11 +6,11 @@ import subprocess
 import sys
 import unittest
 
-from helpers import ENGINE, REPO, FakeHome
+from helpers import ENGINE, FakeHome
 
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
-CACHE_FILE = "session-facts.json" if ENGINE else "sessions.json"  # the Rust port keeps its own
+CACHE_FILE = "session-facts.json"
 
 
 class Serve(unittest.TestCase):
@@ -20,8 +20,7 @@ class Serve(unittest.TestCase):
         self.work = h.profile("work", "acct-1")
         self.cwd = h.folder("code", "api")
         h.session(self.work, self.cwd, S1, "Fix the uploader")
-        argv = [ENGINE, "serve"] if ENGINE else [sys.executable, os.path.join(REPO, "hatcheck.py"), "serve"]
-        self.p = subprocess.Popen(argv, cwd=self.h.root,
+        self.p = subprocess.Popen([ENGINE, "serve"], cwd=self.h.root,
                                   env=h.env(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                   text=True, encoding="utf-8")
         self.addCleanup(self.stop)

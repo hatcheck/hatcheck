@@ -91,7 +91,7 @@ pub fn find_codex_homes() -> Vec<String> {
 }
 
 /// The ID in a Codex session file's name, rollout-<local start time>-<ID>.jsonl, at the end
-/// of a path, as the Python code's CODEX_FILE pattern finds it.
+/// of a path, as the Python version's CODEX_FILE pattern found it.
 pub fn codex_file_id(path: &str) -> Option<&str> {
     let stem = path.strip_suffix(".jsonl")?;
     if stem.len() < 36 + 1 + 19 + 8 {
@@ -180,41 +180,185 @@ pub fn sh_quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\"'\"'"))
 }
 
+/// How paths and commands are printed: with this computer's home folder, path style and shell,
+/// or, in tests, another computer's, so that Windows and PowerShell are checked on any OS.
+pub struct Shell {
+    home: String,
+    windows: bool,
+    powershell: bool,
+    /// For tests: profiles are compared with ~/.claude and ~/.codex as written, not resolved
+    /// on this computer's disk.
+    as_written: bool,
+}
+
+impl Shell {
+    pub fn here() -> Shell {
+        Shell {
+            home: home(),
+            windows: ospath::WINDOWS,
+            powershell: powershell(),
+            as_written: false,
+        }
+    }
+
+    fn sep(&self) -> &'static str {
+        if self.windows {
+            "\\"
+        } else {
+            "/"
+        }
+    }
+
+    fn is_sep(&self, c: char) -> bool {
+        c == '/' || (self.windows && c == '\\')
+    }
+
+    /// A word for the shell commands are printed for: PowerShell's quoting there, else sh's.
+    pub fn quote(&self, text: &str) -> String {
+        if self.powershell {
+            ps_quote(text)
+        } else {
+            sh_quote(text)
+        }
+    }
+
+    /// A path to print in a command, as ~/... when it's in the home folder.
+    pub fn shell_path(&self, path: &str) -> String {
+        if path == self.home {
+            return "~".into();
+        }
+        let prefix = format!("{}{}", self.home, self.sep());
+        let rest = path.strip_prefix(&prefix);
+        if self.powershell {
+            return match rest {
+                Some(r) if ps_safe(r) => format!("~\\{r}"),
+                _ => ps_quote(path),
+            };
+        }
+        if self.windows {
+            // A POSIX shell on Windows reads forward slashes.
+            let path = path.replace('\\', "/");
+            return match rest {
+                Some(r) => format!("~/{}", sh_quote(&r.replace('\\', "/"))),
+                None => sh_quote(&path),
+            };
+        }
+        match rest {
+            Some(r) => format!("~/{}", sh_quote(r)),
+            None => sh_quote(path),
+        }
+    }
+
+    /// $HOME\rest for a PowerShell command, or the path quoted, for CLAUDE_CONFIG_DIR or CODEX_HOME.
+    fn ps_dir(&self, path: &str) -> String {
+        match path.strip_prefix(&format!("{}{}", self.home, self.sep())) {
+            Some(rest) if !rest.contains(['"', '$', '`']) => format!("\"$HOME\\{rest}\""),
+            _ => format!("'{}'", path.replace('\'', "''")),
+        }
+    }
+
+    /// The folder and name of a profile path, as os.path.split(path.rstrip("/" + os.sep)) gives them.
+    fn parent_and_name(&self, path: &str) -> (String, String) {
+        let path = path.trim_end_matches(|c| self.is_sep(c));
+        if self.windows == ospath::WINDOWS {
+            return ospath::split(path);
+        }
+        // Another computer's paths, in tests: ntpath's or posixpath's split, for drive letters.
+        let b = path.as_bytes();
+        let (drive, rest) = if self.windows && b.len() >= 2 && b[1] == b':' {
+            path.split_at(2)
+        } else {
+            ("", path)
+        };
+        let i = rest.rfind(|c| self.is_sep(c)).map_or(0, |i| i + 1);
+        let (head, tail) = rest.split_at(i);
+        let trimmed = head.trim_end_matches(|c| self.is_sep(c));
+        let head = if trimmed.is_empty() { head } else { trimmed };
+        (format!("{drive}{head}"), tail.to_string())
+    }
+
+    /// Whether path is ~/<name>, the folder plain claude or codex uses.
+    fn is_default(&self, path: &str, name: &str) -> bool {
+        if self.as_written {
+            return path == format!("{}{}{name}", self.home, self.sep());
+        }
+        ospath::realpath(path) == ospath::realpath(&ospath::join(&self.home, name))
+    }
+
+    /// The command that runs Claude Code with a profile, then tail: claude for ~/.claude,
+    /// cl <name> for ~/.claude-<name>, claude-z or claude-k on Z.ai or Kimi.
+    pub fn claude_command(
+        &self,
+        profile: &str,
+        tail: &str,
+        full: bool,
+        provider: Option<&str>,
+    ) -> String {
+        let command = provider.map_or("claude".to_string(), |p| format!("claude-{p}"));
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        if self.is_default(profile, ".claude") {
+            return format!("{command}{tail}");
+        }
+        let (parent, name) = self.parent_and_name(profile);
+        if !full && parent == self.home {
+            if let Some(short) = name.strip_prefix(".claude-") {
+                let flag = provider.map_or(String::new(), |p| format!("-{p} "));
+                return format!("cl {flag}{}{tail}", self.quote(short));
+            }
+        }
+        if self.powershell {
+            // Set for this one command and cleared after, so plain claude in the same window
+            // goes back to ~\.claude.
+            return format!(
+                "$env:CLAUDE_CONFIG_DIR={}; {command}{tail}; $env:CLAUDE_CONFIG_DIR=$null",
+                self.ps_dir(profile)
+            );
+        }
+        format!(
+            "CLAUDE_CONFIG_DIR={} {command}{tail}",
+            self.shell_path(profile)
+        )
+    }
+
+    /// The command that runs Codex with a home, then tail: codex for ~/.codex, cx <name> for
+    /// ~/.codex-<name>.
+    pub fn codex_command(&self, home_dir: &str, tail: &str, full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        if self.is_default(home_dir, ".codex") {
+            return format!("codex{tail}");
+        }
+        let (parent, name) = self.parent_and_name(home_dir);
+        if !full && parent == self.home {
+            if let Some(short) = name.strip_prefix(".codex-") {
+                return format!("cx {}{tail}", self.quote(short));
+            }
+        }
+        if self.powershell {
+            return format!(
+                "$env:CODEX_HOME={}; codex{tail}; $env:CODEX_HOME=$null",
+                self.ps_dir(home_dir)
+            );
+        }
+        format!("CODEX_HOME={} codex{tail}", self.shell_path(home_dir))
+    }
+}
+
 /// A word for the shell commands are printed for: PowerShell's quoting there, else sh's.
 pub fn quote(text: &str) -> String {
-    if powershell() {
-        ps_quote(text)
-    } else {
-        sh_quote(text)
-    }
+    Shell::here().quote(text)
 }
 
 /// A path to print in a command, as ~/... when it's in the home folder.
 pub fn shell_path(path: &str) -> String {
-    let home = home();
-    if path == home {
-        return "~".into();
-    }
-    let prefix = format!("{home}{SEP}");
-    let rest = path.strip_prefix(&prefix);
-    if powershell() {
-        return match rest {
-            Some(r) if ps_safe(r) => format!("~\\{r}"),
-            _ => ps_quote(path),
-        };
-    }
-    if ospath::WINDOWS {
-        // A POSIX shell on Windows reads forward slashes.
-        let path = path.replace('\\', "/");
-        return match rest {
-            Some(r) => format!("~/{}", sh_quote(&r.replace('\\', "/"))),
-            None => sh_quote(&path),
-        };
-    }
-    match rest {
-        Some(r) => format!("~/{}", sh_quote(r)),
-        None => sh_quote(path),
-    }
+    Shell::here().shell_path(path)
 }
 
 /// z or k when the model is served by Z.ai (GLM) or Kimi, else None.
@@ -229,48 +373,8 @@ pub fn provider_of(model: Option<&str>) -> Option<&'static str> {
     }
 }
 
-/// $HOME\rest for a PowerShell command, or the path quoted, for CLAUDE_CONFIG_DIR or CODEX_HOME.
-fn ps_dir(path: &str) -> String {
-    let home = home();
-    match path.strip_prefix(&format!("{home}{SEP}")) {
-        Some(rest) if !rest.contains(['"', '$', '`']) => format!("\"$HOME\\{rest}\""),
-        _ => format!("'{}'", path.replace('\'', "''")),
-    }
-}
-
-/// The folder and name of a profile path, as os.path.split(path.rstrip("/" + os.sep)) gives them.
-fn parent_and_name(path: &str) -> (String, String) {
-    ospath::split(path.trim_end_matches(['/', SEP.chars().next().unwrap_or('/')]))
-}
-
-/// The command that runs Claude Code with a profile, then tail: claude for ~/.claude,
-/// cl <name> for ~/.claude-<name>, claude-z or claude-k on Z.ai or Kimi.
 pub fn claude_command(profile: &str, tail: &str, full: bool, provider: Option<&str>) -> String {
-    let command = provider.map_or("claude".to_string(), |p| format!("claude-{p}"));
-    let tail = if tail.is_empty() {
-        String::new()
-    } else {
-        format!(" {tail}")
-    };
-    if ospath::realpath(profile) == default_profile() {
-        return format!("{command}{tail}");
-    }
-    let (parent, name) = parent_and_name(profile);
-    if !full && parent == home() {
-        if let Some(short) = name.strip_prefix(".claude-") {
-            let flag = provider.map_or(String::new(), |p| format!("-{p} "));
-            return format!("cl {flag}{}{tail}", quote(short));
-        }
-    }
-    if powershell() {
-        // Set for this one command and cleared after, so plain claude in the same window
-        // goes back to ~\.claude.
-        return format!(
-            "$env:CLAUDE_CONFIG_DIR={}; {command}{tail}; $env:CLAUDE_CONFIG_DIR=$null",
-            ps_dir(profile)
-        );
-    }
-    format!("CLAUDE_CONFIG_DIR={} {command}{tail}", shell_path(profile))
+    Shell::here().claude_command(profile, tail, full, provider)
 }
 
 pub fn resume_command(
@@ -282,30 +386,8 @@ pub fn resume_command(
     claude_command(profile, &format!("--resume {session_id}"), full, provider)
 }
 
-/// The command that runs Codex with a home, then tail: codex for ~/.codex, cx <name> for
-/// ~/.codex-<name>.
 pub fn codex_command(home_dir: &str, tail: &str, full: bool) -> String {
-    let tail = if tail.is_empty() {
-        String::new()
-    } else {
-        format!(" {tail}")
-    };
-    if ospath::realpath(home_dir) == default_codex_home() {
-        return format!("codex{tail}");
-    }
-    let (parent, name) = parent_and_name(home_dir);
-    if !full && parent == home() {
-        if let Some(short) = name.strip_prefix(".codex-") {
-            return format!("cx {}{tail}", quote(short));
-        }
-    }
-    if powershell() {
-        return format!(
-            "$env:CODEX_HOME={}; codex{tail}; $env:CODEX_HOME=$null",
-            ps_dir(home_dir)
-        );
-    }
-    format!("CODEX_HOME={} codex{tail}", shell_path(home_dir))
+    Shell::here().codex_command(home_dir, tail, full)
 }
 
 pub fn codex_resume_command(home_dir: &str, session_id: &str, full: bool) -> String {
@@ -468,5 +550,153 @@ mod tests {
         assert_eq!(provider_of(Some("GLM-5.3")), Some("z"));
         assert_eq!(provider_of(Some("k3")), Some("k"));
         assert_eq!(provider_of(Some("claude-opus-5-5")), None);
+    }
+
+    const ID: &str = "abcdef12-0000-4000-8000-000000000001";
+    const CODEX_ID: &str = "019f0000-aaaa-7000-8000-000000000001";
+
+    /// A Windows computer's printing, PowerShell's or (powershell false) Git Bash's.
+    fn windows(powershell: bool) -> Shell {
+        Shell {
+            home: "C:\\Users\\me".into(),
+            windows: true,
+            powershell,
+            as_written: true,
+        }
+    }
+
+    #[test]
+    fn powershell_paths_and_commands() {
+        let s = windows(true);
+        assert_eq!(s.shell_path("C:\\Users\\me"), "~");
+        assert_eq!(s.shell_path("C:\\Users\\me\\code\\api"), "~\\code\\api");
+        assert_eq!(
+            s.shell_path("C:\\Users\\me\\My Code"),
+            "'C:\\Users\\me\\My Code'"
+        ); // quoted: no ~
+        assert_eq!(s.shell_path("D:\\work\\api"), "D:\\work\\api");
+        assert_eq!(s.shell_path("D:\\it's"), "'D:\\it''s'");
+        let resume = |profile: &str, full: bool, provider: Option<&str>| {
+            s.claude_command(profile, &format!("--resume {ID}"), full, provider)
+        };
+        assert_eq!(
+            resume("C:\\Users\\me\\.claude", false, None),
+            format!("claude --resume {ID}")
+        );
+        assert_eq!(
+            resume("C:\\Users\\me\\.claude-work", false, None),
+            format!("cl work --resume {ID}")
+        );
+        assert_eq!(
+            resume("C:\\Users\\me\\.claude-work", true, None),
+            format!("$env:CLAUDE_CONFIG_DIR=\"$HOME\\.claude-work\"; claude --resume {ID}; $env:CLAUDE_CONFIG_DIR=$null")
+        );
+        assert_eq!(
+            resume("D:\\p\\.claude-x", false, None),
+            format!("$env:CLAUDE_CONFIG_DIR='D:\\p\\.claude-x'; claude --resume {ID}; $env:CLAUDE_CONFIG_DIR=$null")
+        );
+        // On Z.ai or Kimi
+        assert_eq!(
+            resume("C:\\Users\\me\\.claude", false, Some("z")),
+            format!("claude-z --resume {ID}")
+        );
+        assert_eq!(
+            resume("C:\\Users\\me\\.claude-work", false, Some("k")),
+            format!("cl -k work --resume {ID}")
+        );
+        assert_eq!(
+            resume("C:\\Users\\me\\.claude-work", true, Some("k")),
+            format!("$env:CLAUDE_CONFIG_DIR=\"$HOME\\.claude-work\"; claude-k --resume {ID}; $env:CLAUDE_CONFIG_DIR=$null")
+        );
+    }
+
+    #[test]
+    fn posix_shell_on_windows() {
+        // Git Bash: forward slashes, sh's quoting
+        let s = windows(false);
+        assert_eq!(s.shell_path("C:\\Users\\me\\code\\api"), "~/code/api");
+        assert_eq!(s.shell_path("D:\\x y"), "'D:/x y'");
+        assert_eq!(
+            s.claude_command(
+                "C:\\Users\\me\\.claude-work",
+                &format!("--resume {ID}"),
+                true,
+                None
+            ),
+            format!("CLAUDE_CONFIG_DIR=~/.claude-work claude --resume {ID}")
+        );
+        assert_eq!(
+            s.claude_command(
+                "C:\\Users\\me\\.claude-work",
+                &format!("--resume {ID}"),
+                true,
+                Some("z")
+            ),
+            format!("CLAUDE_CONFIG_DIR=~/.claude-work claude-z --resume {ID}")
+        );
+        assert_eq!(
+            s.codex_command(
+                "C:\\Users\\me\\.codex-work",
+                &format!("resume {CODEX_ID}"),
+                true
+            ),
+            format!("CODEX_HOME=~/.codex-work codex resume {CODEX_ID}")
+        );
+        assert_eq!(s.quote("my profile"), "'my profile'");
+    }
+
+    #[test]
+    fn codex_commands_on_windows() {
+        let s = windows(true);
+        let resume =
+            |home: &str, full: bool| s.codex_command(home, &format!("resume {CODEX_ID}"), full);
+        assert_eq!(
+            resume("C:\\Users\\me\\.codex", false),
+            format!("codex resume {CODEX_ID}")
+        );
+        assert_eq!(
+            resume("C:\\Users\\me\\.codex-work", false),
+            format!("cx work resume {CODEX_ID}")
+        );
+        assert_eq!(
+            resume("C:\\Users\\me\\.codex-work", true),
+            format!("$env:CODEX_HOME=\"$HOME\\.codex-work\"; codex resume {CODEX_ID}; $env:CODEX_HOME=$null")
+        );
+        assert_eq!(
+            resume("D:\\p\\.codex-x", false),
+            format!(
+                "$env:CODEX_HOME='D:\\p\\.codex-x'; codex resume {CODEX_ID}; $env:CODEX_HOME=$null"
+            )
+        );
+        assert_eq!(s.quote("--fork"), "'--fork'"); // which is why move's own flags aren't quoted
+    }
+
+    #[test]
+    fn posix_paths_and_commands() {
+        let s = Shell {
+            home: "/home/me".into(),
+            windows: false,
+            powershell: false,
+            as_written: true,
+        };
+        assert_eq!(s.shell_path("/home/me/code/api"), "~/code/api");
+        assert_eq!(s.shell_path("/home/me/My Code"), "~/'My Code'");
+        assert_eq!(s.shell_path("/srv/x"), "/srv/x");
+        assert_eq!(
+            s.claude_command("/home/me/.claude", "", false, None),
+            "claude"
+        );
+        assert_eq!(
+            s.claude_command("/home/me/.claude-my work", "", false, None),
+            "cl 'my work'"
+        );
+        assert_eq!(
+            s.claude_command("/srv/p/.claude-x", "--resume 1", false, None),
+            "CLAUDE_CONFIG_DIR=/srv/p/.claude-x claude --resume 1"
+        );
+        assert_eq!(
+            s.codex_command("/home/me/.codex-work/", "", false),
+            "cx work"
+        ); // a trailing slash
     }
 }

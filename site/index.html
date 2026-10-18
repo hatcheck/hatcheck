@@ -136,10 +136,13 @@ cd ~/code/api
 
   <section class="wrap" id="install">
     <h2>Install the CLI</h2>
-    <p>macOS, Linux and Windows. It installs <code>hatcheck</code> (<code>hat</code> for short), <code>cl</code>, <code>cx</code>, <code>claude-z</code> and <code>claude-k</code>. Python 3.9 or later.</p>
-<pre><code>uv tool install hatcheck            # or: pipx install hatcheck
-brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux</code></pre>
-    <p>Or from a clone, which keeps the commands linked to the repo so <code>git pull</code> updates them:</p>
+    <p>macOS, Linux and Windows: one binary per platform, nothing else needed. It installs <code>hatcheck</code> (<code>hat</code> for short), <code>cl</code>, <code>cx</code>, <code>claude-z</code> and <code>claude-k</code>.</p>
+<pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
+brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
+uv tool install hatcheck            # or: pipx install hatcheck</code></pre>
+    <p>On Windows, in PowerShell:</p>
+<pre><code>powershell -ExecutionPolicy Bypass -c "irm https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.ps1 | iex"</code></pre>
+    <p>Or build it from a clone, with <a href="https://rustup.rs">Rust</a>; run <code>./install.sh</code> again after a <code>git pull</code>:</p>
 <pre><code>git clone https://github.com/hatcheck/hatcheck
 cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</code></pre>
   </section>

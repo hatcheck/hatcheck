@@ -1,23 +1,24 @@
-"""cl, cx, claude-z, claude-k, the hatcheck command and the installers: the sh versions on
-macOS and Linux, the PowerShell ones on Windows, the Python ones a package install has, and
-the Rust port's. A fake claude stands in for Claude Code, and a fake codex for Codex."""
+"""cl, cx, claude-z and claude-k, the hatcheck command and the installers. The launchers are
+the binaries built beside hatcheck, as every install has them; AsNames runs them through
+hatcheck itself, as a link named cl does. A fake claude stands in for Claude Code, and a fake
+codex for Codex."""
 import os
 import subprocess
-import sys
 import unittest
 
-from helpers import ENGINE, REPO, WINDOWS, FakeHome, python_only, write
+from helpers import ENGINE, REPO, WINDOWS, FakeHome, write
 
 ID = "abcdef12-0000-4000-8000-000000000001"
 CODEX_ID = "019f0000-aaaa-7000-8000-000000000001"
 POWERSHELL = ["powershell", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
 SHOWN = ("CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL")
-# The hatcheck command under test: the Rust port's binary, or hatcheck.py.
-HATCHECK = [ENGINE] if ENGINE else [sys.executable, os.path.join(REPO, "hatcheck.py")]
+HATCHECK = [ENGINE]
+EXE = ".exe" if WINDOWS else ""
 
 
-def shell_words(argv):
-    return " ".join('"%s"' % a for a in argv)
+def launcher(name):
+    """A launcher's own binary, built beside hatcheck."""
+    return os.path.join(os.path.dirname(ENGINE), name + EXE)
 
 
 class Commands(unittest.TestCase):
@@ -28,33 +29,25 @@ class Commands(unittest.TestCase):
         self.transcript = self.h.session(work, self.h.folder("code"), ID, "A session")
         os.makedirs(self.transcript[:-len(".jsonl")])  # its data folder
         self.rollout = self.h.codex_session(self.h.codex_home("work"), self.h.folder("code"), CODEX_ID, "A Codex session")
-        # A fake claude that prints the profile and provider it would use, and its arguments;
-        # and hatcheck, which cl asks for a provider's settings.
+        # A fake claude that prints the profile and provider it would use, and its arguments.
         self.bin = os.path.join(self.h.root, "fakebin")
-        self.fake_bin(self.bin, hatcheck=HATCHECK)
+        self.fake_bin(self.bin)
         self.h.provider_config("z", 'CZ_API_KEY="zai-test-key"\nCZ_MODEL_OPUS="glm-5.3[1m]"\n')
 
-    def fake_bin(self, folder, **commands):
-        """Fake claude and codex in folder, and a command for each of `commands`, name=argv,
-        that runs that command line."""
+    def fake_bin(self, folder):
+        """Fake claude and codex in folder, which print what they were given."""
         if WINDOWS:
             lines = ["@echo off", "echo args=%*"] + [
                 "if defined %s (echo %s=%%%s%%) else (echo %s=unset)" % (v, v, v, v) for v in SHOWN]
             write(os.path.join(folder, "claude.cmd"), "\r\n".join(lines) + "\r\n")
             write(os.path.join(folder, "codex.cmd"), "@echo off\r\necho args=%*\r\nif defined CODEX_HOME "
                   "(echo CODEX_HOME=%CODEX_HOME%) else (echo CODEX_HOME=unset)\r\n")
-            for name, argv in commands.items():
-                write(os.path.join(folder, name.replace("_", "-") + ".cmd"), "@%s %%*\r\n" % shell_words(argv))
             return
         lines = ["#!/bin/sh", 'echo "args=$*"'] + ['echo "%s=${%s-unset}"' % (v, v) for v in SHOWN]
         write(os.path.join(folder, "claude"), "\n".join(lines) + "\n")
         write(os.path.join(folder, "codex"), '#!/bin/sh\necho "args=$*"\necho "CODEX_HOME=${CODEX_HOME-unset}"\n')
-        for name, argv in commands.items():
-            write(os.path.join(folder, name.replace("_", "-")), '#!/bin/sh\nexec %s "$@"\n' % shell_words(argv))
         for name in os.listdir(folder):
             os.chmod(os.path.join(folder, name), 0o755)
-        for name in ("claude-z", "claude-k"):  # how install.sh installs them
-            os.symlink(os.path.join(REPO, "cl"), os.path.join(folder, name))
 
     def run_command(self, argv, extra_env=None, stdin="", fakes=True, bindir=None, cwd=None):
         env = dict(self.h.env(), **(extra_env or {}))
@@ -64,20 +57,14 @@ class Commands(unittest.TestCase):
         return p.returncode, p.stdout + p.stderr
 
     def cl(self, *args, **kw):
-        if WINDOWS:
-            return self.run_command(POWERSHELL + [os.path.join(REPO, "cl.ps1")] + list(args), **kw)
-        return self.run_command(["sh", os.path.join(REPO, "cl")] + list(args), **kw)
+        return self.run_command([launcher("cl")] + list(args), **kw)
 
     def cx(self, *args, **kw):
-        if WINDOWS:
-            return self.run_command(POWERSHELL + [os.path.join(REPO, "cx.ps1")] + list(args), **kw)
-        return self.run_command(["sh", os.path.join(REPO, "cx")] + list(args), **kw)
+        return self.run_command([launcher("cx")] + list(args), **kw)
 
     def claude_on(self, name, *args, **kw):
-        """claude-z or claude-k, run the way their installed launchers run them."""
-        if WINDOWS:
-            return self.run_command(POWERSHELL + [os.path.join(REPO, "cl.ps1"), "--as", name] + list(args), **kw)
-        return self.run_command([name] + list(args), **kw)
+        """claude-z or claude-k."""
+        return self.run_command([launcher(name)] + list(args), **kw)
 
     def where(self, *args):
         return self.run_command(HATCHECK + ["where"] + list(args))
@@ -185,14 +172,6 @@ class Commands(unittest.TestCase):
             code, out = self.claude_on("claude-k")
             self.assertIn("ANTHROPIC_AUTH_TOKEN=kimi-typed-key", out)
 
-    def test_cl_needs_hatcheck_for_a_provider(self):
-        bare = os.path.join(self.h.root, "barebin")  # claude, but no hatcheck
-        self.fake_bin(bare)
-        code, out = self.cl("-k", "work", bindir=bare)
-        self.assertEqual(code, 1, out)
-        self.assertIn("hatcheck isn't on your PATH", out)
-        self.assertNotIn("args=", out)  # claude didn't run
-
     def test_hatcheck(self):
         code, out = self.run_command(HATCHECK + ["--help"])
         self.assertEqual(code, 0, out)
@@ -247,7 +226,6 @@ class Commands(unittest.TestCase):
         code, out = self.where("2026")  # the start time in a file name isn't the ID
         self.assertEqual(code, 1, out)
 
-    @unittest.skipUnless(ENGINE, "links the Rust binaries, which tests/conformance.py builds")
     def test_installer(self):
         target = os.path.join(self.h.root, "installed")
         names = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"]
@@ -319,7 +297,6 @@ class Commands(unittest.TestCase):
             self.assertEqual(code, 1, out)  # the runner's PATH here has no cargo to build with
             self.assertIn("builds hatcheck with cargo, which isn't on your PATH", out)
 
-    @unittest.skipUnless(ENGINE, "links the Rust binaries, which tests/conformance.py builds")
     def test_installer_leaves_hat_to_another_command(self):
         target = os.path.join(self.h.root, "installed")
         built = os.path.dirname(ENGINE)
@@ -342,32 +319,9 @@ class Commands(unittest.TestCase):
         self.assertTrue(os.path.lexists(made), out)
 
 
-@python_only
-class PythonLaunchers(Commands):
-    """The same, through hatcheck/launch.py: the cl, cx, claude-z and claude-k a package
-    install (uv tool install, pipx) puts on the PATH, on every system."""
-
-    def launch(self, name, args, kw):
-        return self.run_command([sys.executable, os.path.join(REPO, "hatcheck", "launch.py"), name] + list(args), **kw)
-
-    def cl(self, *args, **kw):
-        return self.launch("cl", args, kw)
-
-    def cx(self, *args, **kw):
-        return self.launch("cx", args, kw)
-
-    def claude_on(self, name, *args, **kw):
-        return self.launch(name, args, kw)
-
-    # About the hatcheck command, the installers or the sh and PowerShell launchers only.
-    test_hatcheck = test_hat_is_the_short_name = test_installer = test_installer_leaves_hat_to_another_command = None
-    test_where_finds_a_session_by_prefix = test_where_finds_codex_sessions = test_cl_needs_hatcheck_for_a_provider = None
-
-
-@unittest.skipUnless(ENGINE, "the Rust port's launchers, which tests/conformance.py tests")
-class RustLaunchers(Commands):
-    """The same, through the Rust port: its hatcheck binary run as cl, cx, claude-z and
-    claude-k with --as, as a .cmd launcher would run it."""
+class AsNames(Commands):
+    """The same, through the hatcheck binary itself, called as cl, cx, claude-z or claude-k
+    (with --as, which is what a link of that name to it does)."""
 
     def launch(self, name, args, kw):
         return self.run_command([ENGINE, "--as", name] + list(args), **kw)
@@ -381,29 +335,25 @@ class RustLaunchers(Commands):
     def claude_on(self, name, *args, **kw):
         return self.launch(name, args, kw)
 
+    # About the hatcheck command or the installers only.
     test_hatcheck = test_hat_is_the_short_name = test_installer = test_installer_leaves_hat_to_another_command = None
-    test_where_finds_a_session_by_prefix = test_where_finds_codex_sessions = test_cl_needs_hatcheck_for_a_provider = None
+    test_where_finds_a_session_by_prefix = test_where_finds_codex_sessions = None
 
-    def test_by_their_own_names(self):
-        """The launchers' own binaries, built beside hatcheck, and on macOS and Linux a link to
-        hatcheck named cl, as an install would make."""
-        exe = ".exe" if WINDOWS else ""
+    @unittest.skipIf(WINDOWS, "a symbolic link")
+    def test_by_a_link(self):
+        """A link to hatcheck named cl, or claude-k, is that launcher."""
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
-        runs = [os.path.join(os.path.dirname(ENGINE), "cl" + exe), os.path.join(os.path.dirname(ENGINE), "claude-k" + exe)]
-        if not WINDOWS:
-            links = os.path.join(self.h.root, "links")
-            os.makedirs(links)
-            for name in ("cl", "claude-k"):
-                os.symlink(ENGINE, os.path.join(links, name))
-            runs += [os.path.join(links, "cl"), os.path.join(links, "claude-k")]
-        for program in runs:
-            code, out = self.run_command([program, "--version"] if "claude-k" in program else [program, "work", "--version"])
-            self.assertEqual(code, 0, out)
-            self.assertIn("args=--version", out)
-            if "claude-k" in program:
-                self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
-            else:
-                self.assertIn("CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"), out)
+        links = os.path.join(self.h.root, "links")
+        os.makedirs(links)
+        for name in ("cl", "claude-k"):
+            os.symlink(ENGINE, os.path.join(links, name))
+        code, out = self.run_command([os.path.join(links, "cl"), "work", "--version"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("args=--version", out)
+        self.assertIn("CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"), out)
+        code, out = self.run_command([os.path.join(links, "claude-k"), "--version"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
 
 
 if __name__ == "__main__":

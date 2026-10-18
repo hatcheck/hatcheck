@@ -11,7 +11,7 @@ __pycache__/
 # Claude Code's personal settings for this folder
 .claude/settings.local.json
 
-# Python packaging (uv build)
+# Packages built from pyproject.toml (uv build, maturin)
 dist/
 build/
 *.egg-info/

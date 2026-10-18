@@ -1,6 +1,5 @@
 //! cl, cx, claude-z and claude-k: Claude Code with a profile's folder (or on Z.ai or Kimi),
-//! and Codex with a home's, as the cl and cx scripts run them. The port of hatcheck/launch.py,
-//! whose docstring describes them:
+//! and Codex with a home's:
 //!
 //! ```text
 //! cl [-z|-k] <profile> [claude args...]    Claude Code with ~/.claude-<profile>

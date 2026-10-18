@@ -1,7 +1,7 @@
 //! hatcheck [sessions] [HOURS] ...: recent Claude Code sessions from every ~/.claude*
 //! profile and Codex sessions from every ~/.codex* home, grouped by folder, each with the
-//! command that resumes it and what's left of its account's plan. The port of
-//! hatcheck/sessions.py's main, whose docstring describes the list.
+//! command that resumes it and what's left of its account's plan. The README's `hatcheck`
+//! section describes the list.
 
 use crate::args::{Count, Parser};
 use crate::facts::{self, Summary};
@@ -205,7 +205,7 @@ pub fn usage_cells(
                                 to_go.map_or(String::new(), |f| usage::bar(f, blocks) + " ");
                             until = format!("↻{time_bar}{}", times::duration(reset - now));
                             until_code = match to_go {
-                                Some(f) => usage::urgency_color(f),
+                                Some(f) => usage::urgency_color(f, paint.wide),
                                 None => "2".into(),
                             };
                         }
@@ -215,11 +215,11 @@ pub fn usage_cells(
                 let kind = get(row, "kind");
                 rows.push((
                     usage::row_label(row, true),
-                    usage::label_color(kind, "2"),
+                    usage::label_color(kind, "2", paint.wide),
                     pct,
                     code.clone(),
                     plan,
-                    usage::label_color(kind, &code),
+                    usage::label_color(kind, &code, paint.wide),
                     until,
                     until_code,
                 ));
@@ -281,7 +281,7 @@ pub fn usage_cells(
     cells
 }
 
-/// The sessions found, keyed as the Python code keyed them, in the order first found.
+/// The sessions found, keyed as the Python version keyed them, in the order first found.
 struct Found {
     order: Vec<String>,
     by_key: HashMap<String, ((f64, bool, u64), Summary)>,
@@ -852,6 +852,30 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn per_model_limits_are_named_in_violet() {
+        let now = 1792274316.0;
+        let iso = |t: f64| times::iso_utc(t).unwrap();
+        let usage = json!({"limits": [
+            {"kind": "session", "group": "session", "percent": 40, "severity": "normal", "resets_at": iso(now + 2.0 * 3600.0)},
+            {"kind": "weekly_all", "group": "weekly", "percent": 10, "severity": "normal", "resets_at": iso(now + 3.0 * 86400.0)},
+            {"kind": "weekly_scoped", "group": "weekly", "percent": 52, "severity": "normal", "resets_at": iso(now + 4.0 * 86400.0),
+             "scope": {"model": {"display_name": "Fable"}}}]});
+        let results: Vec<(String, Usage)> = vec![("p".into(), (Some(usage), None, None))];
+        let cells = usage_cells(
+            &results,
+            now,
+            &Paint {
+                on: true,
+                wide: true,
+            },
+        );
+        let cell = &cells["p"];
+        for painted in ["\x1b[2m5h", "\x1b[2mweek", "\x1b[38;5;134mFable"] {
+            assert!(cell.contains(painted), "{painted:?} in {cell:?}");
+        }
+    }
 
     #[test]
     fn hours() {

@@ -1,6 +1,6 @@
 //! hatcheck provider ...: the settings for running Claude Code on Z.ai (GLM models) or Kimi
-//! instead of Anthropic, behind claude-z, claude-k, cl -z and cl -k. The port of
-//! hatcheck/provider.py, whose docstring describes the config files and what's sent where.
+//! instead of Anthropic, behind claude-z, claude-k, cl -z and cl -k. The README's `claude-z`,
+//! `claude-k` section describes the config files and what's sent where.
 
 use crate::args::{Count, Parser};
 use crate::ospath;
@@ -76,7 +76,7 @@ pub const PROVIDERS: [Provider; 2] = [
     },
 ];
 
-/// The providers in the order provider.py's PROVIDERS dict lists them: z, then k.
+/// The providers in the order the setup and the status list them: z, then k.
 fn in_order() -> [&'static Provider; 2] {
     [&PROVIDERS[1], &PROVIDERS[0]]
 }
@@ -573,7 +573,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             p.flag(
                 &["--json"],
                 "json",
-                "as JSON (for cl.ps1), with null for unset",
+                "as JSON, for scripts, with null for unset",
             )
         } else {
             p

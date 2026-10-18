@@ -1,4 +1,4 @@
-//! Times as the Python code handled them: ISO 8601 stamps read the way
+//! Times as the Python version handled them: ISO 8601 stamps read the way
 //! datetime.fromisoformat reads them, epoch seconds as floats, UTC stamps for --json, and
 //! local clock times and durations for the text.
 
@@ -234,6 +234,34 @@ pub fn short_local(t: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clock_times() {
+        // The time of day within a day, with the weekday within six, else the date.
+        let now = 1792274316.0;
+        for hours in [0.5, 5.0, 30.0, 100.0, 400.0] {
+            let t = now + hours * 3600.0;
+            let d = local(t).unwrap();
+            let hour = if d.hour().is_multiple_of(12) {
+                12
+            } else {
+                d.hour() % 12
+            };
+            let hm = format!(
+                "{hour}:{:02}{}",
+                d.minute(),
+                if d.hour() < 12 { "am" } else { "pm" }
+            );
+            let expected = if hours < 24.0 {
+                hm
+            } else if hours < 144.0 {
+                format!("{} {hm}", d.format("%a"))
+            } else {
+                format!("{} {}", d.format("%b"), d.day())
+            };
+            assert_eq!(clock(t, now), expected, "{hours} hours on");
+        }
+    }
 
     #[test]
     fn reads_the_stamps_python_reads() {

@@ -1,6 +1,6 @@
 //! hatcheck best [--for SESSION] [--cached]: which account to use now, and where to carry a
 //! session. Advice only: it prints commands and never starts, moves or switches anything.
-//! The port of hatcheck/best.py, whose docstring says how accounts are ranked.
+//! The README's `hatcheck best` section says how accounts are ranked.
 
 use crate::args::Parser;
 use crate::facts::Summary;

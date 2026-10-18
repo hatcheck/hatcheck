@@ -6,7 +6,7 @@ import os
 import sys
 import unittest
 
-from helpers import ENGINE, NOW, WINDOWS, FakeHome, iso, load, python_only, rec, write
+from helpers import NOW, WINDOWS, FakeHome, iso, rec, write
 
 S1 = "11111111-1111-4111-8111-111111111111"
 X = "019f0000-aaaa-7000-8000-000000000001"
@@ -32,8 +32,7 @@ class SessionCache(unittest.TestCase):
             folder = os.path.join(self.h.home, "Library", "Caches", "hatcheck")
         else:
             folder = os.path.join(self.h.home, ".cache", "hatcheck")
-        # The Rust port keeps its own cache file beside the Python one.
-        return os.path.join(folder, "session-facts.json" if ENGINE else "sessions.json")
+        return os.path.join(folder, "session-facts.json")
 
     def append(self, *lines):
         with open(self.path, "a", encoding="utf-8", newline="\n") as fh:
@@ -55,19 +54,6 @@ class SessionCache(unittest.TestCase):
         self.append(rec(type="custom-title", customTitle="Retry uploads", sessionId=S1), self.activity(1, "go on", "fix"))
         s, = self.listed()
         self.assertEqual((s["title"], s["branch"], s["last_active"]), ("Retry uploads", "fix", iso(NOW - 60)[:19] + "Z"))
-
-    @python_only
-    def test_only_what_was_appended_is_read(self):
-        s = load("sessions")
-        self.assertEqual(s.read_session(self.path)["title"], "Fix the uploader")
-        size = os.path.getsize(self.path)
-        self.append(rec(type="custom-title", customTitle="Retry uploads", sessionId=S1), self.activity(1, "go on"))
-        starts, real = [], s.last_fields
-        s.last_fields = lambda mm, stop=0: starts.append(stop) or real(mm, stop)
-        self.assertEqual(s.read_session(self.path)["title"], "Retry uploads")
-        self.assertEqual(starts, [size])
-        self.assertEqual(s.read_session(self.path)["title"], "Retry uploads")
-        self.assertEqual(starts, [size])  # unchanged since: not read at all
 
     def test_a_line_still_being_written(self):
         self.append(self.activity(2, "more"))

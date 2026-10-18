@@ -17,14 +17,6 @@ from helpers import ENGINE, FakeHome, argv_of, write
 MAC = sys.platform == "darwin"
 
 
-def pillow():
-    try:
-        import PIL  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
-
 def write_png(path, size, rgba):
     """A PNG of one colour, RGBA, written by hand so the test needs no Pillow."""
     def chunk(kind, data):
@@ -123,6 +115,11 @@ class DesktopCommand(unittest.TestCase):
         self.assertIn("DATA_DIR='%s'\nCLAUDE_APP='%s'\n" % (data, self.claude), script)
         self.assertTrue(os.access(launcher, os.X_OK))
         self.assertEqual(subprocess.run(["sh", "-n", launcher]).returncode, 0)
+        self.assertIn("open -n -a", script)
+        self.assertIn("first process whose unix id is", script)  # brought forward, not opened twice
+        if shutil.which("shellcheck"):
+            p = subprocess.run(["shellcheck", launcher], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stdout)
         with open(os.path.join(app, "Contents", "Resources", "icon.icns"), encoding="utf-8") as fh:
             self.assertEqual(fh.read(), "not really an icon\n")  # can't be taken apart: the stock one as it is
         code, out = self.desktop("--json")
@@ -164,7 +161,6 @@ class DesktopCommand(unittest.TestCase):
         self.assertIn("argument --hue: invalid float value: 'abc'", self.desktop("new", "x", "X", "--hue", "abc")[1])
 
     @unittest.skipUnless(MAC and shutil.which("iconutil"), "needs macOS's iconutil")
-    @unittest.skipUnless(ENGINE or pillow(), "Python's hatcheck needs Pillow to recolour")
     def test_recoloured_icon(self):
         with tempfile.TemporaryDirectory() as tmp:
             iconset = os.path.join(tmp, "icon.iconset")

@@ -1,6 +1,5 @@
 //! hatcheck show SESSION [--from PROFILE] [--last N] [--json]: a session's conversation,
-//! read-only: your messages and the replies, with each tool call as a block of text. The
-//! port of hatcheck/show.py.
+//! read-only: your messages and the replies, with each tool call as a block of text.
 
 use crate::args::{Count, Parser};
 use crate::conv;

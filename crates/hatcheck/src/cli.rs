@@ -1,4 +1,4 @@
-//! The hatcheck command: picks the subcommand and runs it, as hatcheck/cli.py does.
+//! The hatcheck command: picks the subcommand and runs it, or the launcher it's called as.
 
 use crate::{
     best, bind, desktop, move_cmd, open_cmd, out, provider, sessions, show, usage, where_cmd,
@@ -6,11 +6,6 @@ use crate::{
 
 pub const SUBCOMMANDS: &[&str] = &[
     "sessions", "usage", "where", "move", "open", "show", "best", "bind", "unbind", "desktop",
-    "provider",
-];
-/// The subcommands the Rust port has so far; the rest are still Python's (hatcheck/).
-pub const PORTED: &[&str] = &[
-    "sessions", "usage", "where", "move", "open", "show", "desktop", "best", "bind", "unbind",
     "provider",
 ];
 
@@ -134,10 +129,29 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "unbind" => bind::unbind_main(&argv, &prog),
         "provider" => provider::main(&argv, &prog),
         other => {
+            // Not reached: every name in SUBCOMMANDS has its arm above (a test checks).
             out::eprint(&format!(
-                "{me} {other} isn't in the Rust port yet; the Python hatcheck has it\n"
+                "{me}: there's no '{other}' subcommand; see {me} --help\n"
             ));
             2
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_subcommand_runs() {
+        for name in SUBCOMMANDS {
+            let argv = vec![name.to_string(), "--help".into()];
+            let (code, help, _) = out::captured(|| run("hatcheck", argv, false));
+            assert_eq!(code, 0, "{name}");
+            assert!(
+                help.starts_with(&format!("usage: hatcheck {name}")),
+                "{name}: {help}"
+            );
         }
     }
 }

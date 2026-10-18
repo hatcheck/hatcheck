@@ -6,29 +6,9 @@ on:
 
 jobs:
   test:
-    name: ${{ matrix.os }}, Python ${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.9", "3.13"]
-        exclude:
-          # Apple-silicon runners may have no Python 3.9 build; macOS's own python3 is 3.9.
-          - os: macos-latest
-            python: "3.9"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
-      - name: Unit tests
-        run: python -m unittest discover -s tests -v
-
-  rust:
-    # The Rust port (crates/hatcheck): its own tests, then the Python tests of the
-    # subcommands it has, run against its binary (tests/conformance.py).
-    name: rust, ${{ matrix.os }}
+    # The crate's own tests, then the command tests in tests/, which run the binary against
+    # throwaway homes (python -m unittest builds it first).
+    name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -50,8 +30,10 @@ jobs:
           cargo clippy -p hatcheck --all-targets -- -D warnings
       - name: Unit tests
         run: cargo test -p hatcheck
-      - name: The Python tests, against the Rust binary
-        run: python tests/conformance.py
+      - name: Command tests
+        run: |
+          cargo build -p hatcheck
+          python -m unittest discover -s tests -v
 
   package:
     name: package, ${{ matrix.os }}
@@ -82,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
-        run: shellcheck cl cx install.sh
+        run: shellcheck install.sh
       - name: PowerShell syntax
         shell: pwsh
         run: |

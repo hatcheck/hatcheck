@@ -3,7 +3,7 @@
 //! each with a line of JSON on stdout, {"id": 1, "code": 0, "out": "...", "err": "..."},
 //! until stdin ends. env sets environment variables for that command alone (null unsets
 //! one). The process stays up between commands, so the desktop app pays for starting it
-//! once, and the session cache stays loaded. The port of serve in hatcheck/cli.py.
+//! once, and the session cache stays loaded.
 
 use crate::out;
 use crate::py::{self, get};

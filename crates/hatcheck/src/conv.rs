@@ -1,7 +1,7 @@
 //! A session as a conversation: your messages and the replies, with each tool call as a
 //! block of text with its input and the start of its output, in the format Codex's /import
 //! gives Claude Code's tool calls. hatcheck show prints it; hatcheck move writes it into the
-//! other agent's format. The port of read_claude, read_codex and their helpers in move.py.
+//! other agent's format.
 
 use crate::facts::{self, codex_text};
 use crate::ospath;

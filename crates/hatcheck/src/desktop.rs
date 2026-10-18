@@ -1,10 +1,10 @@
 //! hatcheck desktop ...: Claude Desktop instances on macOS, one per account, each with its own
-//! data folder and login, behind a launcher app of its own colour. The port of
-//! hatcheck/desktop.py, whose docstring and docs/desktop-instances.md describe them.
+//! data folder and login, behind a launcher app of its own colour, as docs/desktop-instances.md
+//! describes them.
 //!
 //! The launcher's icon is Claude's with its hues turned and its saturation scaled, done here
-//! with Pillow's own arithmetic for RGB and HSV, so it comes out as the Python version made
-//! it, without needing Pillow.
+//! with Pillow's own arithmetic for RGB and HSV, so it comes out as the Python version, which
+//! used Pillow, made it.
 
 use crate::args::{Count, Parser};
 use crate::ospath::{self, Part};

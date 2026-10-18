@@ -77,7 +77,7 @@ class Provider(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("No Kimi API key in", out)
 
-    @unittest.skipIf(WINDOWS, "cl.ps1 reads --json instead")
+    @unittest.skipIf(WINDOWS, "needs a POSIX shell's eval")
     def test_shell_lines_survive_eval(self):
         key = "it's a $key `with` \"quotes\""  # only by editing the file by hand
         self.h.provider_config("k", "CK_API_KEY=%s\n" % key)

@@ -74,8 +74,7 @@ The launcher never starts a second process on a folder that has one.
 | Blue       |   `190` |
 | Purple     |   `240` |
 
-Recolouring needs [Pillow](https://pypi.org/project/Pillow/) (`pip install Pillow`) and macOS's
-`iconutil`; without them the launcher gets the stock icon and still works.
+Recolouring needs macOS's `iconutil`; without it the launcher gets the stock icon and still works.
 
 The colour is on the launcher only. While running, every instance shows Claude's own icon and the
 name "Claude" in the Dock, because they all run the one `/Applications/Claude.app`; the signed-in

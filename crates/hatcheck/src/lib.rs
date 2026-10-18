@@ -1,6 +1,7 @@
-//! hatcheck in Rust: Claude Code and Codex accounts on one computer, each kept apart. This
-//! crate is replacing the Python CLI in hatcheck/ one subcommand at a time, with the same
-//! output (docs/rust-port.md); the desktop app is to link it in place of its bundled engine.
+//! hatcheck: Claude Code and Codex accounts on one computer, each kept apart. The hatcheck and
+//! hat commands, the cl, cx, claude-z and claude-k launchers, and hatcheck serve, the engine
+//! the desktop app runs. It was ported from a Python version, with the same output, which the
+//! command tests in tests/ still hold it to (docs/rust-port.md).
 
 pub mod args;
 pub mod best;

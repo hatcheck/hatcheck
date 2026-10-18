@@ -5,8 +5,8 @@
 //! list needs from each, its newest activity, titles, model and first prompt, are cached by
 //! file in session-facts.json in hatcheck's cache folder, with the file's identity, size and
 //! times; a file that only grew since is read from the last whole line the previous read
-//! reached, and anything else is read again from the start. Python's hatcheck keeps its own
-//! cache (sessions.json) beside this one.
+//! reached, and anything else is read again from the start. A sessions.json beside it is the
+//! Python version's cache, and isn't read.
 
 use crate::ospath;
 use crate::paths;
@@ -100,11 +100,13 @@ pub fn save_cache() {
 
 /// A file's identity, size and modification and change times: what says it hasn't changed.
 /// The change time moves with every write, even when the size and the modification time are
-/// put back afterwards. On Windows the creation time stands in for the identity.
-fn stamp(m: &std::fs::Metadata) -> Value {
+/// put back afterwards. On Windows the creation time stands in for the identity, and the change
+/// time is read from the open file, which std doesn't do yet.
+fn stamp(file: &File, m: &std::fs::Metadata) -> Value {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
+        let _ = file;
         json!([
             m.ino(),
             m.size(),
@@ -119,8 +121,29 @@ fn stamp(m: &std::fs::Metadata) -> Value {
             m.creation_time(),
             m.file_size(),
             m.last_write_time(),
-            m.creation_time()
+            change_time(file).unwrap_or_else(|| m.creation_time())
         ])
+    }
+}
+
+/// When an open file's data or attributes last changed: FILE_BASIC_INFO's ChangeTime, which
+/// Python's st_ctime is on Windows since 3.12.
+#[cfg(windows)]
+fn change_time(file: &File) -> Option<u64> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FileBasicInfo, GetFileInformationByHandleEx, FILE_BASIC_INFO,
+    };
+    // SAFETY: the handle is the open file's, and the buffer is a FILE_BASIC_INFO of the size given.
+    unsafe {
+        let mut info: FILE_BASIC_INFO = std::mem::zeroed();
+        let ok = GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FileBasicInfo,
+            (&mut info as *mut FILE_BASIC_INFO).cast(),
+            std::mem::size_of::<FILE_BASIC_INFO>() as u32,
+        );
+        (ok != 0).then_some(info.ChangeTime as u64)
     }
 }
 
@@ -149,7 +172,7 @@ pub fn file_facts(path: &str, kind: &str, reader: Reader) -> std::io::Result<(Op
     if meta.len() == 0 {
         return Ok((None, 0));
     }
-    let stamp = stamp(&meta);
+    let stamp = stamp(&file, &meta);
     let entry = with_cache(|c| {
         c.files
             .get(&key)
@@ -792,6 +815,53 @@ pub fn summarize(agent: &str, profile: &str, path: &str) -> Option<Summary> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_what_was_appended_is_read() {
+        use std::io::Write;
+        // Where each read of the file starts, through a reader that notes it.
+        static STARTS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+        fn noting(data: &[u8], old: Option<&Value>, start: usize) -> Value {
+            STARTS.lock().unwrap().push(start);
+            claude_facts(data, old, start)
+        }
+        let sid = "11111111-1111-4111-8111-111111111111";
+        let line = |v: Value| v.to_string() + "\n";
+        let user = |text: &str, t: &str| {
+            line(
+                json!({"type": "user", "timestamp": t, "cwd": "/w", "sessionId": sid, "entrypoint": "cli",
+                        "message": {"role": "user", "content": text}}),
+            )
+        };
+        let dir = std::env::temp_dir().join(format!("hatcheck-appended-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{sid}.jsonl"));
+        let first = user("Fix the uploader", "2026-10-17T20:00:00Z")
+            + &line(json!({"type": "ai-title", "aiTitle": "Fix the uploader", "sessionId": sid}));
+        std::fs::write(&path, &first).unwrap();
+        let p = path.to_string_lossy().into_owned();
+        let read = || {
+            file_facts(&p, "claude", noting)
+                .unwrap()
+                .0
+                .unwrap()
+                .to_string()
+        };
+        assert!(read().contains("Fix the uploader"));
+        let more =
+            line(json!({"type": "custom-title", "customTitle": "Retry uploads", "sessionId": sid}))
+                + &user("go on", "2026-10-17T20:05:00Z");
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(more.as_bytes())
+            .unwrap();
+        assert!(read().contains("Retry uploads"));
+        assert!(read().contains("Retry uploads")); // unchanged since: not read at all
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(*STARTS.lock().unwrap(), [0, first.len()]);
+    }
 
     #[test]
     fn walks_lines_back_to_a_stop() {

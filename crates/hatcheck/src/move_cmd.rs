@@ -1,7 +1,8 @@
 //! hatcheck move SESSION PROFILE ...: copy a session to another profile, to carry on with it
 //! there under that profile's account and plan limits; with --no-keep, move it; with --fork,
 //! bring it in as a new session; between Claude Code and Codex, or Codex homes on different
-//! accounts, convert it. The port of hatcheck/move.py, whose docstring describes it all.
+//! accounts, convert it. The README's `hatcheck move` section describes what's copied, how a
+//! copy already there is brought up to date, and what a conversion keeps.
 
 use crate::args::{Count, Parser};
 use crate::conv::{self, add_turn, Conversation, Turn};
@@ -816,7 +817,7 @@ fn format_uuid(n: u128) -> String {
 }
 
 /// datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") with the
-/// milliseconds after it, as move.py writes converted sessions' times.
+/// milliseconds after it, as the Python version wrote converted sessions' times.
 fn iso_ms(t: f64) -> String {
     let seconds = times::utc(t)
         .map(|d| d.format("%Y-%m-%dT%H:%M:%S.").to_string())
@@ -2433,6 +2434,31 @@ mod tests {
         );
         assert_eq!(overall(["new", "same"].into_iter()), "older");
         assert_eq!(overall(["older", "newer"].into_iter()), "diverged");
+        // How a copy already in the profile compares with the one being copied.
+        let a: &[u8] = b"{\"a\":1,\"b\":\"x\"}\n{\"c\":2}\n";
+        let (more, other) = ([a, b"{\"d\":3}\n"].concat(), [a, b"{\"e\":4}\n"].concat());
+        assert_eq!(standing(a, a, true, (0.0, 0.0)), "same");
+        assert_eq!(standing(a, &more, true, (0.0, 0.0)), "older");
+        assert_eq!(standing(&more, a, true, (0.0, 0.0)), "newer");
+        assert_eq!(standing(&more, &other, true, (0.0, 0.0)), "diverged");
+        assert_eq!(
+            standing(b"{\"a\": 1, \"b\": \"x\"}\n", a, true, (0.0, 0.0)),
+            "older"
+        ); // the same record, spaced out
+        assert_eq!(
+            standing(b"output", b"output and more", false, (9.0, 1.0)),
+            "older"
+        ); // added to
+        assert_eq!(
+            standing(b"# Plan\n", b"# Better plan\n", false, (1.0, 2.0)),
+            "older"
+        ); // written over: the newer
+        assert_eq!(
+            standing(b"# Better plan\n", b"# Plan\n", false, (2.0, 1.0)),
+            "newer"
+        );
+        assert_eq!(overall(["older", "same", "newer"].into_iter()), "diverged");
+        assert_eq!(overall(["same"].into_iter()), "same");
     }
 
     #[test]
@@ -2530,6 +2556,49 @@ mod tests {
         }
         fs::remove_dir_all(&dir).unwrap();
         assert_eq!(codex_provider(&home), "openai");
+    }
+
+    #[test]
+    fn the_command_again_quotes_values_not_flags() {
+        let mut a = Ask {
+            session: "11111111".into(),
+            profile: "b".into(),
+            source: None,
+            no_keep: false,
+            fork: false,
+            dry_run: false,
+            json: false,
+        };
+        assert_eq!(
+            rerun_command("hatcheck move", &a, &["--fork"]),
+            "hatcheck move 11111111 b --fork"
+        );
+        (a.source, a.dry_run) = (Some("my profile".into()), true);
+        // The same in PowerShell, which would quote --fork as '--fork'.
+        assert_eq!(
+            rerun_command("hatcheck move", &a, &["--fork"]),
+            "hatcheck move 11111111 b --from 'my profile' --dry-run --fork"
+        );
+    }
+
+    #[test]
+    fn windows_paths_in_transcripts_are_repointed() {
+        let id = "abcdef12-0000-4000-8000-000000000001";
+        let (old, new) = (
+            format!("C:\\Users\\me\\.claude\\projects\\X\\{id}"),
+            format!("C:\\Users\\me\\.claude-b\\projects\\X\\{id}"),
+        );
+        let json_path = |p: &str| p.replace('\\', "\\\\"); // as it's written in JSON
+        let line = format!("{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"saved to {}\\\\tool-results\\\\a.txt\"}}}}", json_path(&old));
+        let dir = std::env::temp_dir().join(format!("hatcheck-repoint-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{id}.jsonl"));
+        fs::write(&path, format!("{line}\n")).unwrap();
+        let out = copy_bytes(&path.to_string_lossy(), &[(old.clone(), new.clone())], None);
+        fs::remove_dir_all(&dir).unwrap();
+        let out = String::from_utf8(out.unwrap()).unwrap();
+        assert!(out.contains(&json_path(&new)), "{out}");
+        assert!(!out.contains(&json_path(&old)), "{out}");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 //! Characters a terminal shows two columns wide: East Asian Width W and F, from Python's
-//! unicodedata (Unicode 16.0.0), so titles are cut where the Python code cut them.
+//! unicodedata (Unicode 16.0.0), so titles are cut where the Python version cut them.
 
 const WIDE: [(u32, u32); 122] = [
     (0x1100, 0x115F),

@@ -1,6 +1,6 @@
 //! hatcheck usage [--cached] [--email] [--json]: how much of each plan limit is left, for
-//! every Claude Code profile (~/.claude*) and every Codex home (~/.codex*). The port of
-//! hatcheck/usage.py, whose docstring says what it shows; the session list uses it too.
+//! every Claude Code profile (~/.claude*) and every Codex home (~/.codex*); the session list
+//! uses it too. The README's `hatcheck usage` section says what it shows.
 //!
 //! A profile's OAuth token, from the macOS Keychain or the profile's .credentials.json, is
 //! sent as is to the endpoint Claude Code's /usage asks, and never refreshed: a refresh
@@ -618,10 +618,10 @@ pub fn has_256_colors() -> bool {
 
 /// Colour for a time-until-reset bar `fraction` full: red as the reset nears, through orange
 /// and gold, to blue with most of the window to go.
-pub fn urgency_color(fraction: f64) -> String {
+pub fn urgency_color(fraction: f64, wide: bool) -> String {
     let n = URGENCY_COLORS.len();
     let step = ((fraction.max(0.0) * n as f64) as usize).min(n - 1);
-    if has_256_colors() {
+    if wide {
         return format!("38;5;{}", URGENCY_COLORS[step]);
     }
     // A 16-colour terminal: the nearest basic colour.
@@ -637,12 +637,13 @@ pub fn urgency_color(fraction: f64) -> String {
     .into()
 }
 
-/// Colour for a limit's name: violet for a per-model limit such as Fable, else default.
-pub fn label_color(kind: &Value, default: &str) -> String {
+/// Colour for a limit's name: violet for a per-model limit such as Fable, else default. wide:
+/// the terminal shows 256 colours.
+pub fn label_color(kind: &Value, default: &str, wide: bool) -> String {
     if !s(kind).unwrap_or("").ends_with("_scoped") {
         return default.into();
     }
-    if has_256_colors() {
+    if wide {
         format!("38;5;{SCOPED_COLOR}")
     } else {
         "35".into()
@@ -1432,7 +1433,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                         let to_go = (t - now) / w.f(); // fraction of the window left
                         time_bar = p(
                             &if row.labeled {
-                                urgency_color(to_go)
+                                urgency_color(to_go, paint.wide)
                             } else {
                                 "2".into()
                             },
@@ -1451,11 +1452,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             let line = format!(
                 "  {} {} {}  {} {}",
                 p(
-                    &label_color(&row.kind, if row.labeled { "" } else { "2" }),
+                    &label_color(&row.kind, if row.labeled { "" } else { "2" }, paint.wide),
                     &label
                 ),
                 p(&code, &pct),
-                p(&label_color(&row.kind, &code), &plan_bar),
+                p(&label_color(&row.kind, &code, paint.wide), &plan_bar),
                 time_bar,
                 if tail.is_empty() {
                     String::new()
@@ -1490,6 +1491,31 @@ mod tests {
         assert_eq!(bar(0.59, 10), "█████▉░░░░");
         assert_eq!(bar(0.001, 5), "▏░░░░");
         assert_eq!(bar(0.999, 5), "████▉");
+    }
+
+    #[test]
+    fn urgency_colours_have_no_green() {
+        let green = [34u8, 35, 70, 106, 2, 10, 22, 28, 40, 46];
+        for f in 0..=20 {
+            let colour = URGENCY_COLORS[((f as f64 / 20.0 * 11.0) as usize).min(10)];
+            assert!(!green.contains(&colour), "{colour}");
+        }
+        // Not a colour the time bars use, so a per-model limit's name doesn't read as one of them.
+        assert!(!URGENCY_COLORS.contains(&SCOPED_COLOR));
+        assert_eq!(urgency_color(0.0, true), "38;5;160"); // red: the reset is near
+        assert_eq!(urgency_color(1.0, true), "38;5;27");
+        assert_eq!(
+            (urgency_color(0.0, false), urgency_color(1.0, false)),
+            ("31".into(), "34".into())
+        );
+    }
+
+    #[test]
+    fn per_model_limits_are_named_in_violet() {
+        assert_eq!(label_color(&json!("weekly_scoped"), "", true), "38;5;134");
+        assert_eq!(label_color(&json!("weekly_all"), "", true), "");
+        assert_eq!(label_color(&json!("session"), "2", true), "2");
+        assert_eq!(label_color(&json!("weekly_scoped"), "", false), "35"); // magenta in 16 colours
     }
 
     #[test]
@@ -1546,6 +1572,8 @@ mod tests {
             ]
         );
         assert_eq!(extra_usage_text(&usage), "credits: 12.50");
+        let spark = &get(&usage, "limits")[2];
+        assert_eq!(label_color(get(spark, "kind"), "", true), "38;5;134"); // violet, like Fable
         let free = codex_usage_body(
             &json!({"plan_type": "free", "rate_limit": {"primary_window": {"used_percent": 0, "limit_window_seconds": 2592000, "reset_at": 2000000000}}}),
         );
@@ -1555,6 +1583,90 @@ mod tests {
             ("month (30 days)".into(), "month".into())
         );
         assert_eq!(bar_cells(&row_window(row)), 10);
+    }
+
+    /// A token shaped like the JWTs in Codex's auth.json, unsigned.
+    fn fake_jwt(claims: &Value) -> String {
+        let part =
+            |v: &Value| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(v.to_string());
+        format!("{}.{}.x", part(&json!({"alg": "none"})), part(claims))
+    }
+
+    #[test]
+    fn codex_logins_and_an_expired_token() {
+        let dir =
+            std::env::temp_dir().join(format!("hatcheck-codex-logins-{}", std::process::id()));
+        let home = |name: &str| {
+            let p = dir.join(name);
+            std::fs::create_dir_all(&p).unwrap();
+            p.to_string_lossy().into_owned()
+        };
+        let now = times::now();
+        let signed_in = |name: &str, account: &str, plan: &str, expires: f64| {
+            let h = home(name);
+            let auth = json!({"chatgpt_account_id": account, "chatgpt_user_id": format!("user-{account}"),
+                              "chatgpt_plan_type": plan});
+            let claims = json!({"https://api.openai.com/auth": auth, "exp": expires as i64});
+            let mut identity = claims.clone();
+            identity["email"] = json!(format!("{account}@example.com"));
+            let tokens = json!({"access_token": fake_jwt(&claims), "account_id": account, "refresh_token": "x",
+                                "id_token": fake_jwt(&identity)});
+            let auth_json = json!({"OPENAI_API_KEY": null, "tokens": tokens});
+            std::fs::write(ospath::join(&h, "auth.json"), auth_json.to_string()).unwrap();
+            h
+        };
+        let login = read_codex_login(&signed_in("x", "acct-9", "pro", now + 86400.0));
+        let field = |k: &str| s(get(&login, k)).map(String::from);
+        assert_eq!(
+            [
+                field("account_id"),
+                field("user_id"),
+                field("plan"),
+                field("email")
+            ],
+            [
+                Some("acct-9".into()),
+                Some("user-acct-9".into()),
+                Some("pro".into()),
+                Some("acct-9@example.com".into())
+            ]
+        );
+        let key = home("k");
+        std::fs::write(
+            ospath::join(&key, "auth.json"),
+            r#"{"OPENAI_API_KEY": "sk-test", "tokens": null}"#,
+        )
+        .unwrap();
+        assert_eq!(read_codex_login(&key), json!({"api_key": true}));
+        assert!(read_codex_login(&home("none")).is_null());
+        // An expired token isn't sent anywhere: the limits Codex last saved are used instead.
+        let old = signed_in("old", "acct-8", "plus", now - 3600.0);
+        let saved = (now - 300.0).floor();
+        let rate_limits = json!({"limit_id": "codex", "limit_name": null, "plan_type": "plus",
+            "primary": {"used_percent": 40, "window_minutes": 300, "resets_at": (now + 7200.0) as i64},
+            "secondary": {"used_percent": 10, "window_minutes": 10080, "resets_at": (now + 3.0 * 86400.0) as i64},
+            "credits": {"has_credits": false, "unlimited": false, "balance": null}});
+        let folder = ospath::join_all(&old, &["sessions", "2026", "10", "17"]);
+        std::fs::create_dir_all(&folder).unwrap();
+        let line = json!({"timestamp": times::iso_utc(saved).unwrap(), "type": "event_msg",
+                          "payload": {"type": "token_count", "info": null, "rate_limits": rate_limits}});
+        let session = ospath::join(
+            &folder,
+            "rollout-2026-10-17T00-00-00-019f0000-aaaa-7000-8000-000000000001.jsonl",
+        );
+        std::fs::write(session, format!("{line}\n")).unwrap();
+        let accounts = load_codex_accounts(&[old]);
+        let (usage, saved_at, why) = codex_account_usage(&accounts[0], false);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(
+            why.as_deref(),
+            Some("token expired; run codex in this profile to renew it")
+        );
+        assert!((saved_at.unwrap() - saved).abs() < 2.0, "{saved_at:?}");
+        assert_eq!(
+            get(&usage.unwrap(), "limits").as_array().map(Vec::len),
+            Some(2)
+        );
     }
 
     #[test]

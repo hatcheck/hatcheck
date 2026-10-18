@@ -1,7 +1,6 @@
 //! Finding sessions by ID or by folder, for hatcheck open, show and best: every copy of a
 //! session across the profiles and homes, the newest one started from a folder, and whether
-//! one is open. The port of session_copies, newest_here and their helpers in sessions.py,
-//! and of place in move.py.
+//! one is open, and the profile or home a PROFILE argument names.
 
 use crate::facts::{self, Summary};
 use crate::ospath::{self, Part};

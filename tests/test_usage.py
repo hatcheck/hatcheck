@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime
 from unittest import mock
 
-from helpers import NOW, FakeHome, iso, load, python_only
+from helpers import NOW, FakeHome, iso
 
 SCRIPT = "usage"
 FAR = (NOW + 30 * 86400) * 1000  # a token expiry well in the future, in ms
@@ -75,48 +75,6 @@ class CachedUsage(unittest.TestCase):
         order = [line.split()[0] for line in out.splitlines() if line.startswith("~")]
         expected = ["soon", "later", "stale", "spent", "blocked", "pro"]
         self.assertEqual(order, [h.shown(names[n]) for n in expected])
-
-
-@python_only
-class Helpers(unittest.TestCase):
-    def setUp(self):
-        self.u = load(SCRIPT)
-
-    def test_clock(self):
-        now = time.time()
-        for hours in (0.5, 5, 30, 100, 400):
-            t = now + hours * 3600
-            d = datetime.fromtimestamp(t)
-            hm = "%d:%02d%s" % (d.hour % 12 or 12, d.minute, "am" if d.hour < 12 else "pm")
-            expected = hm if hours < 24 else d.strftime("%a ") + hm if hours < 144 else d.strftime("%b ") + str(d.day)
-            self.assertEqual(self.u.clock(t, now), expected)
-
-    def test_bar(self):
-        self.assertEqual(self.u.bar(0), "░" * 10)
-        self.assertEqual(self.u.bar(1), "█" * 10)
-        self.assertEqual(self.u.bar(0.59), "█████▉░░░░")
-        self.assertEqual(self.u.bar(0.001, 5), "▏░░░░")  # anything left shows
-        self.assertEqual(self.u.bar(0.999, 5), "████▉")  # only exactly full looks full
-
-    def test_urgency_colours_have_no_green(self):
-        colours = {self.u.URGENCY_COLORS[min(int(f / 20.0 * 11), 10)] for f in range(21)}
-        self.assertFalse(colours & {34, 35, 70, 106, 2, 10, 22, 28, 40, 46})
-
-    def test_per_model_limits_are_named_in_violet(self):
-        with mock.patch.dict("os.environ", {"TERM": "xterm-256color"}):
-            self.assertEqual(self.u.label_color("weekly_scoped"), "38;5;134")
-            self.assertEqual(self.u.label_color("weekly_all"), "")
-            self.assertEqual(self.u.label_color("session", "2"), "2")
-        with mock.patch.dict("os.environ", {"TERM": "xterm", "COLORTERM": ""}):
-            self.assertEqual(self.u.label_color("weekly_scoped"), "35")  # magenta in 16 colours
-        # Not a colour the time bars use, so the name doesn't read as one of them.
-        self.assertNotIn(self.u.SCOPED_COLOR, self.u.URGENCY_COLORS)
-
-    def test_window_lengths(self):
-        self.assertEqual(self.u.window_seconds("session"), 5 * 3600)
-        self.assertEqual(self.u.window_seconds("weekly_scoped"), 7 * 86400)
-        self.assertEqual(self.u.window_seconds("seven_day_opus"), 7 * 86400)
-        self.assertIsNone(self.u.window_seconds("iguana_necktie"))
 
 
 if __name__ == "__main__":

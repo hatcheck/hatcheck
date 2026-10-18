@@ -1,14 +1,10 @@
 """Shared test helpers: a throwaway home folder with Claude Code profiles, Codex homes and
-their sessions, and a way to run the scripts against it. Nothing here reads your real
-profiles, the macOS Keychain or the network.
+their sessions, and a way to run hatcheck against it. Nothing here reads your real profiles,
+the macOS Keychain or the network.
 
-HATCHECK_ENGINE=path points the tests at another hatcheck, the Rust port's binary
-(target/debug/hatcheck): the subcommands run it instead of hatcheck.py, and tests of the
-Python code itself (python_only) are skipped. tests/conformance.py runs the tests of the
-subcommands the port has that way."""
-import atexit
+The tests run the hatcheck binary and the launchers built beside it: HATCHECK_ENGINE=path names
+one, and without it they build target/debug/hatcheck with cargo and run that."""
 import base64
-import importlib.util
 import json
 import os
 import re
@@ -17,21 +13,27 @@ import subprocess
 import sys
 import tempfile
 import time
-import unittest
 from datetime import datetime, timezone
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ENGINE = os.environ.get("HATCHECK_ENGINE")  # another hatcheck to test, such as the Rust port's
-python_only = unittest.skipIf(ENGINE, "tests the Python code itself")
-SUBCOMMANDS = ("sessions", "usage", "where", "move", "open", "show", "best", "bind", "unbind", "desktop",
-               "provider")  # in hatcheck/
-NOW = time.time()
 WINDOWS = os.name == "nt"
-sys.dont_write_bytecode = True  # leave no __pycache__ beside the scripts
-# Code a test runs in this process keeps its cache here, not in your cache folder; the
-# scripts a test runs keep theirs in its fake home (FakeHome.env).
-os.environ["HATCHECK_CACHE_DIR"] = tempfile.mkdtemp(prefix="cma-cache-")
-atexit.register(shutil.rmtree, os.environ["HATCHECK_CACHE_DIR"], True)
+sys.dont_write_bytecode = True  # leave no __pycache__ beside the tests
+
+
+def built_engine():
+    """target/debug/hatcheck, built now, so the tests run what's in the repo."""
+    try:
+        p = subprocess.run(["cargo", "build", "-q", "-p", "hatcheck"], cwd=REPO, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise RuntimeError("The tests build hatcheck with cargo, which isn't on your PATH: install Rust, "
+                           "or set HATCHECK_ENGINE to a hatcheck binary") from None
+    if p.returncode != 0:
+        raise RuntimeError("cargo build -p hatcheck failed:\n" + p.stdout + p.stderr)
+    return os.path.join(REPO, "target", "debug", "hatcheck" + (".exe" if WINDOWS else ""))
+
+
+ENGINE = os.environ.get("HATCHECK_ENGINE") or built_engine()  # the hatcheck under test
+NOW = time.time()  # after the build, so it doesn't count against the times the tests check
 
 
 def iso(t):
@@ -57,20 +59,9 @@ def write(path, text, mtime=None):
         os.utime(path, (mtime, mtime))
 
 
-def command(script):
-    """How to run a repo script, after the Python interpreter: a hatcheck subcommand by its
-    name (usage) through hatcheck.py, or another script by its file name."""
-    if script in SUBCOMMANDS:
-        return [os.path.join(REPO, "hatcheck.py"), script]
-    return [os.path.join(REPO, script)]
-
-
 def argv_of(script):
-    """The whole command line that runs a repo script: command() after the interpreter, or the
-    engine under test (HATCHECK_ENGINE) for a hatcheck subcommand."""
-    if ENGINE and script in SUBCOMMANDS:
-        return [ENGINE, script]
-    return [sys.executable] + command(script)
+    """The command line that runs a hatcheck subcommand (usage, move) with the binary under test."""
+    return [ENGINE, script]
 
 
 INTERRUPT = object()  # for in_terminal: Ctrl+C at that prompt, as SIGINT
@@ -113,21 +104,37 @@ def in_terminal(argv, replies, env, cwd):
     return p.returncode, out.decode("utf-8", "replace").replace("\r\n", "\n")
 
 
-def load(script):
-    """One of the repo's scripts, imported as a module: a module of the hatcheck/ folder by its
-    name (usage, cli), or another script by its file name."""
-    package = os.path.join(REPO, "hatcheck", script + ".py")
-    path = package if os.path.isfile(package) else os.path.join(REPO, script)
-    spec = importlib.util.spec_from_file_location(re.sub(r"\W", "_", script), path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def windows_start_time(pid):
+    """When a Windows process started, as the FILETIME number Claude Code records
+    (procStartFt), or None when it isn't running."""
+    import ctypes
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(wintypes.FILETIME),) * 4
+    kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return None
+    try:
+        created, exited, kernel, user = (wintypes.FILETIME() for _ in range(4))
+        code = wintypes.DWORD()
+        if not kernel32.GetProcessTimes(handle, ctypes.byref(created), ctypes.byref(exited),
+                                        ctypes.byref(kernel), ctypes.byref(user)):
+            return None
+        if kernel32.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value != 259:  # STILL_ACTIVE
+            return None
+        return created.dwHighDateTime << 32 | created.dwLowDateTime
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def start_token(pid):
     """What Claude Code records in sessions/<pid>.json for when a process started."""
     if WINDOWS:
-        return {"procStartFt": str(load("sessions").windows_start_time(pid))}
+        return {"procStartFt": str(windows_start_time(pid))}
     out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True,
                          env=dict(os.environ, TZ="UTC", LC_ALL="C")).stdout
     return {"procStart": out.strip()}

@@ -1,5 +1,5 @@
 //! Python's os.path, as far as hatcheck uses it, on strings: paths are joined, split and
-//! normalized the way the Python code did, so they print the same. POSIX follows
+//! normalized the way the Python version did, so they print the same. POSIX follows
 //! posixpath exactly; Windows follows ntpath for drives, both separators and case.
 //! Also glob.glob for the patterns hatcheck uses: a literal part or one `*` per component.
 

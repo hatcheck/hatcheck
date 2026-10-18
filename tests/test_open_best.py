@@ -8,7 +8,7 @@ import tempfile
 import time
 import unittest
 
-from helpers import ENGINE, NOW, REPO, WINDOWS, FakeHome, iso, load, python_only, write
+from helpers import ENGINE, NOW, WINDOWS, FakeHome, iso, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 B = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -16,8 +16,7 @@ X = "019f0000-aaaa-7000-8000-000000000001"
 
 
 def run(h, args, cwd=None, **env):
-    argv = [ENGINE] if ENGINE else [sys.executable, os.path.join(REPO, "hatcheck.py")]
-    p = subprocess.run(argv + list(args), cwd=cwd or h.root,
+    p = subprocess.run([ENGINE] + list(args), cwd=cwd or h.root,
                        env=dict(h.env(), **env), capture_output=True, text=True, encoding="utf-8")
     return p.returncode, p.stdout + p.stderr
 
@@ -95,40 +94,6 @@ class Open(unittest.TestCase):
         self.assertIn("Couldn't open a terminal", out)
         self.assertIn("Run these instead:", out)
 
-    @python_only
-    def test_terminal_commands(self):
-        o = load("open")
-        cwd, command, shell = "/w/my app", "cl work --resume 1", "/bin/zsh"
-        stay = "cd '/w/my app' && cl work --resume 1; exec /bin/zsh -l"
-        argv, wait = o.terminal_argv("terminal", cwd, command, shell)
-        self.assertEqual((argv[0], wait), ("osascript", True))
-        self.assertIn('do script "cd \'/w/my app\' && cl work --resume 1"', argv)
-        argv, _ = o.terminal_argv("iTerm.app", cwd, command, shell)
-        self.assertIn('tell current session of current window to write text "cd \'/w/my app\' && cl work --resume 1"',
-                      argv)
-        if sys.platform == "darwin":
-            self.assertEqual(o.terminal_argv("ghostty", cwd, command, shell)[0],
-                             ["open", "-na", "Ghostty.app", "--args", "--working-directory=/w/my app", "-e",
-                              shell, "-l", "-i", "-c", stay])
-        self.assertEqual(o.terminal_argv("wezterm", cwd, command, shell),
-                         (["wezterm", "start", "--cwd", cwd, "--", shell, "-l", "-i", "-c", stay], False))
-        self.assertEqual(o.terminal_argv("gnome-terminal", cwd, command, shell)[0][:3],
-                         ["gnome-terminal", "--working-directory=/w/my app", "--"])
-        self.assertEqual(o.terminal_argv("konsole", cwd, command, shell)[0][:4], ["konsole", "--workdir", cwd, "-e"])
-        self.assertEqual(o.terminal_argv("xterm", cwd, command, shell)[0], ["xterm", "-e", shell, "-l", "-i", "-c", stay])
-        argv, _ = o.terminal_argv("wt", "C:\\w", "$env:X=1; claude; $env:X=$null", shell)
-        self.assertEqual(argv[:3], ["wt", "-d", "C:\\w"])
-        self.assertEqual(argv[-1], "$env:X=1\\; claude\\; $env:X=$null")  # wt's own separator, escaped
-
-    @python_only
-    @unittest.skipUnless(sys.platform == "darwin" and os.path.exists("/usr/bin/osacompile"), "macOS AppleScript")
-    def test_terminal_applescript_compiles(self):
-        argv, _ = load("open").terminal_argv("terminal", '/w/a "b"', "cl work --resume 1", "/bin/zsh")
-        lines = [argv[i + 1] for i, a in enumerate(argv) if a == "-e"]
-        with tempfile.TemporaryDirectory() as tmp:
-            p = subprocess.run(["/usr/bin/osacompile", "-o", os.path.join(tmp, "x.scpt"), "-e"] + lines[:1]
-                               + sum((["-e", line] for line in lines[1:]), []), capture_output=True, text=True)
-            self.assertEqual(p.returncode, 0, p.stderr)
 
 
 def fable(used, days, weekly_used=None):

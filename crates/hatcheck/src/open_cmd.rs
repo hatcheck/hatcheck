@@ -1,7 +1,7 @@
 //! hatcheck open [SESSION] ...: resume a session in a new terminal window, already in its
 //! folder, or here (--here), or print the commands (--print); --login PROFILE signs in to a
-//! profile or Codex home in a new terminal instead. The port of hatcheck/open.py, whose
-//! docstring says which terminal opens and how.
+//! profile or Codex home in a new terminal instead. The README's `hatcheck open` section says
+//! which terminal opens and how.
 
 use crate::args::{Count, Parser};
 use crate::facts::Summary;
@@ -650,5 +650,31 @@ mod tests {
         let (argv, _) = terminal_argv("wt", "C:\\w", "$env:X=1; claude; $env:X=$null", shell);
         assert_eq!(argv[..3], ["wt", "-d", "C:\\w"]);
         assert_eq!(argv.last().unwrap(), r"$env:X=1\; claude\; $env:X=$null"); // wt's own separator, escaped
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn terminal_applescript_compiles() {
+        let compiler = "/usr/bin/osacompile";
+        if !std::path::Path::new(compiler).exists() {
+            return;
+        }
+        let (argv, _) = terminal_argv("terminal", "/w/a \"b\"", "cl work --resume 1", "/bin/zsh");
+        let dir = std::env::temp_dir().join(format!("hatcheck-osa-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut compile = Command::new(compiler);
+        compile.arg("-o").arg(dir.join("x.scpt"));
+        for (i, a) in argv.iter().enumerate() {
+            if a == "-e" {
+                compile.arg("-e").arg(&argv[i + 1]);
+            }
+        }
+        let out = compile.output().unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 }

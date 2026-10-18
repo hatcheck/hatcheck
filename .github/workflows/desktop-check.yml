@@ -3,9 +3,9 @@ name: desktop-check
 # On each change to the app: its pages type-check and build, and its Rust code compiles.
 on:
   push:
-    paths: ["desktop/**", "hatcheck/**", ".github/workflows/desktop-check.yml"]
+    paths: ["desktop/**", "crates/**", ".github/workflows/desktop-check.yml"]
   pull_request:
-    paths: ["desktop/**", "hatcheck/**"]
+    paths: ["desktop/**", "crates/**"]
 
 jobs:
   check:
