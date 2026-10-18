@@ -48,7 +48,8 @@ class Json(unittest.TestCase):
         row = next(r for r in work["limits"] if r["short"] == "Fable")
         self.assertEqual((row["used_percent"], row["left_percent"], row["per_model"], row["window_seconds"]),
                          (40, 60, True, 7 * 86400))
-        self.assertEqual(work["fable"]["left"], True)
+        self.assertAlmostEqual(row["pace"], 60 / 48, places=1)  # 60% left over two days
+        self.assertEqual((work["fable"]["left"], work["fable"]["band"]), (True, "fresh"))
         self.assertNotIn("email", work)
         week = data["accounts"][b["account"]]["limits"][0]
         self.assertIsNone(week["left_percent"])  # reset since the snapshot: not known

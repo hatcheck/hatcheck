@@ -79,11 +79,13 @@
     <section id="tab-settings" class="tab-body" hidden>
       <div class="settings">
         <label class="check"><input id="set-live" type="checkbox" />
-          Ask for live usage. Off: show what Claude Code and Codex last saved. On: ask the usage endpoints with each profile's
-          saved login, which is read and never refreshed or sent anywhere else; they rate-limit, so not too often.</label>
+          Ask for live usage. Off: show what Claude Code and Codex last saved. On: run Claude Code's /usage in each profile,
+          which asks Anthropic with that profile's own login, and ask ChatGPT's usage endpoint for each Codex home with its
+          saved login, read and never refreshed; they rate-limit, so not too often.</label>
         <label>Refresh every <input id="set-minutes" type="number" min="1" max="120" /> minutes</label>
-        <label class="check"><input id="set-notify" type="checkbox" /> Notify me when a limit runs low, and when it resets</label>
+        <label class="check"><input id="set-notify" type="checkbox" /> Notify me when a limit runs low, when it resets, and when one is about to reset with much of it unused</label>
         <label>Low means <input id="set-low" type="number" min="1" max="50" />% or less left</label>
+        <label>Much unused means <input id="set-unused" type="number" min="0" max="100" />% or more left as the reset nears (0: never)</label>
         <label>Terminal for Resume
           <select id="set-terminal">
             <option value="">Usual one</option>

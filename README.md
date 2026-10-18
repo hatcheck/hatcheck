@@ -31,10 +31,18 @@ keeping one profile per account: `cl` and `cx` run Claude Code and Codex with a 
 what's left of each plan. `hatcheck usage` shows the plans, `hatcheck best` says which account to use
 now, `hatcheck where` finds a session, `hatcheck open` resumes one in a new terminal, and
 `hatcheck move` carries one over to another profile, or converts it between Claude Code and Codex.
-`hatcheck bind` ties a folder to a profile, so `cl` and `cx` pick it there, and `--json` gives the
-sessions and plans to scripts and status bars. `claude-z` and `claude-k` run Claude Code on Z.ai's
+`hatcheck relocate` brings a moved project folder's sessions along, `hatcheck bind` ties a folder
+to a profile, so `cl` and `cx` pick it there, and `--json` gives the sessions and plans to scripts
+and status bars. `claude-z` and `claude-k` run Claude Code on Z.ai's
 GLM or Kimi's models instead, in any profile. See
 [Claude Code and Codex CLI profiles](#claude-code-and-codex-cli-profiles).
+
+**Not a gateway.** Hatcheck is never between an agent and its model. It rewrites no agent's
+config, holds no login, and runs nothing in the background. Tools such as
+[magpie](https://github.com/yetone/magpie) put a local gateway in that path so any agent can use
+any model and accounts can take over from each other when a quota runs out. If that is what you
+want, use one of those. Hatcheck is for the opposite case: keeping a work account and a personal
+account apart, and knowing which one each session ran on. See [Rules it keeps](#rules-it-keeps).
 
 |                                 | macOS | Linux | Windows |
 |---------------------------------|:-----:|:-----:|:-------:|
@@ -355,7 +363,7 @@ cd ~/notes
     9h  Write release notes · main
         cl work --resume 7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b
 Profiles: ~/.claude (1), ~/.claude-personal (1), ~/.claude-work (4)
-Usage from Claude Code's last snapshot (token expired; run claude in this profile to renew it): ~/.claude-personal 9h ago
+Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?): ~/.claude-personal 9h ago
 ```
 
 - Run the folder's `cd` line, then the session's command. Sessions still open in a terminal are
@@ -381,8 +389,11 @@ Usage from Claude Code's last snapshot (token expired; run claude in this profil
   like Desktop ones, and Codex's own approval reviews aren't listed.
 - Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
   `setopt interactivecomments`).
-- Usage is fetched live, one request per account. When that fails (expired token, rate limit), Claude
-  Code's last saved snapshot is used instead and named at the bottom with its age.
+- Usage is fetched live: Claude Code's `/usage` is run once per account, in its profile, and the
+  snapshot it saves is read (see [`hatcheck usage`](#hatcheck-usage-plan-usage-for-every-profile)
+  below); ChatGPT's usage endpoint is asked once per Codex account. When that gives nothing new
+  (offline, not signed in, rate limited), the last saved snapshot is used instead and named at the
+  bottom with its age.
 - A session that ran in a folder [bound](#hatcheck-bind-tie-a-folder-to-a-profile) to another
   profile is marked `⚠ folder bound to ~/.claude-work`, so it's easy to spot and `hatcheck move`.
 - What it reads from each session file is cached, in `sessions.json` in `~/Library/Caches/hatcheck`
@@ -414,7 +425,7 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
 ~/.claude  pro · live
   session (5h)       62% ██████▎░░░  █████▍░░░░ resets 5:01pm (in 2h41m)
   week (all models)  91% █████████▏  ████▍░░░░░ resets Sat 4:20pm (in 3d2h)
-~/.claude-personal  pro · cached 9h00m ago (token expired; run claude in this profile to renew it)
+~/.claude-personal  pro · cached 9h00m ago (Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?)
   session (5h)         ? ··········             reset 10:20am, after this snapshot
   week (all models)  97% █████████▊  ███████▎░░ resets Mon 4:20pm (in 5d2h)
 ~/.codex-work  ChatGPT plus · live
@@ -424,19 +435,26 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
 
 - Accounts are sorted by their Fable limit. First come those with some Fable left, the soonest
   Fable reset on top: what's left there goes unused once it resets, so that's the one to use first.
-  Next come those out of Fable, or out of the weekly limit for all models, which Fable counts against
-  too, the soonest back on top. Then come accounts without a Fable limit, such as Pro plans, and
-  Codex homes. A snapshot saved before its Fable limit reset counts as full until the reset after.
+  An account past 90% of its Fable limit goes behind the fresher ones, and past 98% behind those
+  too: nearly out, it's the one to use last. Next come those out of Fable, or out of the weekly
+  limit for all models, which Fable counts against too, the soonest back on top. Then come accounts
+  without a Fable limit, such as Pro plans, and Codex homes. A snapshot saved before its Fable limit
+  reset counts as full until the reset after.
 - Each limit has two bars: what's left of it, then how much of its window, 5 hours or a week, is
   left before it resets. In a terminal the second goes from blue with most of the window to go,
   through gold and orange, to red as the reset nears. When the first bar is shorter than the
   second, as for `Fable` here, the limit is being used up faster than its window runs out. A limit
   without a reset time, like an unused 5-hour session, has no time bar.
-- It reads each profile's OAuth token from the macOS Keychain, or from the profile's
-  `.credentials.json` on Linux and Windows, and asks the same endpoint as Claude Code's `/usage`. The token is only read, never refreshed: a refresh rotates it and would sign Claude Code
-  out of that profile.
-- When a token has expired or the endpoint rate-limits the account, Claude Code's last saved snapshot
-  is shown with its age. Run `claude` (or `cl <name>`) in that profile to renew the token.
+- A Claude Code account's numbers come from Claude Code itself: `claude -p /usage` is run in the
+  profile, with no tools, MCP servers, settings or transcript, which asks Anthropic with the
+  profile's own login and saves the answer in the profile's `.claude.json`; that snapshot is what's
+  shown. hatcheck never reads a login: the plan's name comes from the account details Claude Code
+  keeps beside the snapshot. The runs take about a second each, in parallel, from a folder of
+  hatcheck's own (`claude-usage` in its cache folder), so the one empty project folder Claude Code
+  makes for the folder it runs in is the same every time.
+- When that gives nothing new (`claude` not on the `PATH`, the profile not signed in, offline, or
+  Anthropic rate-limiting the account), Claude Code's last saved snapshot is shown with its age and
+  the reason.
 - Profiles signed in to the same account are shown together. Per-model limits such as
   `week (Fable)` are named in violet, with their bar drawn in it, to tell them from `week (all
   models)`; the % keeps the severity's colour. Quota fields the server
@@ -581,6 +599,42 @@ Resume it now in ~/.claude-work? [y/N]
 | `--fork`         | copy it in as a new session with its own ID, leaving a copy already there as it is (a converted session always gets one) |
 | `--dry-run`      | show what would be copied, converted and deleted, and change nothing         |
 
+### `hatcheck relocate`: a project folder that moved
+
+Claude Code files a session under `projects/<the folder's name>` and records the folder in every
+line, so once a project folder is renamed or moved, `claude --resume` from the new folder doesn't
+list its sessions, and the commands `hatcheck` prints `cd` to a folder that's gone. `hatcheck
+relocate` brings the sessions along, in every profile and home:
+
+```console
+$ mv ~/code/api ~/code/api2
+$ hatcheck relocate ~/code/api ~/code/api2
+Relocated 4 sessions from ~/code/api to ~/code/api2:
+  ~/.claude-work  2 sessions: projects/-Users-me-code-api renamed projects/-Users-me-code-api2, with its memory and index
+  ~/.claude  1 session: projects/-Users-me-code-api renamed projects/-Users-me-code-api2
+  ~/.codex  1 session: the folder in the file rewritten
+The folder binding of ~/code/api moved to ~/code/api2.
+Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
+```
+
+- Sessions that ran in the folder, or in a folder under it, come along. Each profile's project
+  folder is renamed to the new name when every session in it moves, so its `memory/` and
+  `sessions-index.json` come with it, the index's paths updated; when some stay, the sessions are
+  moved into the new project folder one by one, with their subagent and tool-output folders. In
+  each transcript the lines' top-level `cwd` is rewritten to the new folder, and nothing else:
+  what was said about the old path stays as it was. A Codex session, filed by date, stays where
+  it is, with the folder in its `session_meta` and `turn_context` lines rewritten, so `codex
+  resume` lists it from the new folder. Timestamps are kept, and a folder binding
+  ([`hatcheck bind`](#hatcheck-bind-tie-a-folder-to-a-profile)) of the old folder moves to the new.
+- A project folder whose name matches but whose sessions ran elsewhere (Claude Code names
+  `~/code/api-old` and `~/code/api/old` alike) is left alone and listed.
+- It refuses, and changes nothing, when a session is open, was written in the last minute, is a
+  link rather than a file, is already filed under the new folder, or has a line naming the folder
+  that isn't JSON; and when NEW doesn't exist, is OLD, or is inside OLD. `--dry-run` shows what
+  would move. Running it the other way round, `hatcheck relocate NEW OLD`, undoes it, byte for
+  byte.
+- `--json` prints the sessions moved and skipped, the binding and the undo command.
+
 ### `hatcheck open`: resume a session in a new terminal
 
 ```console
@@ -613,27 +667,39 @@ cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 ```console
 $ hatcheck best
 Claude Code, best first (sorted by Fable, as hatcheck usage sorts)
-   1. ~/.claude-work      Fable 31% left, resets Tue 12:00pm · 5h 80%   → cl work
-   2. ~/.claude-team      Fable 100% left, resets Thu 1:00am · 5h 100%  → cl team
-   3. ~/.claude-personal  Fable 0% left, back Sat 4:59pm · 5h 100%      → cl personal
-   4. ~/.claude           week 64% · 5h 100%                            → claude
+   1. ~/.claude-work      Fable 31% left, resets Tue 12:00pm, 0.5%/h · 5h 80%   → cl work
+   2. ~/.claude-team      Fable 100% left, resets Thu 1:00am, 0.9%/h · 5h 100%  → cl team
+   3. ~/.claude-personal  Fable 0% left, back Sat 4:59pm · 5h 100%              → cl personal
+   4. ~/.claude           week 64%, 1.3%/h · 5h 100%                            → claude
 Codex, best first
-   1. ~/.codex  month 100%  → codex
+   1. ~/.codex  month 100%, 0.2%/h  → codex
 Advice only: nothing is started, moved or switched. hatcheck best --for <session> says where to carry a session.
 $ hatcheck best --for 9a8b7c6d
 Session 9a8b7c6d "Add rate limiting to the login endpoint" is in ~/.claude-personal: Fable 0% left, back Sat 4:59pm · 5h 100%.
-Carry it to ~/.claude-work: Fable 31% left, resets Tue 12:00pm · 5h 80%.
+Carry it to ~/.claude-work: Fable 31% left, resets Tue 12:00pm, 0.5%/h · 5h 80%.
   hatcheck move 9a8b7c6d work --from personal
 It prints the command that resumes it there, and offers to run it.
+$ hatcheck best --wait work && cl work
+No room yet; waiting for ~/.claude-work until Tue 12:00pm (in 2d14h)…
 ```
 
 - Claude Code accounts come in the order `hatcheck usage` sorts them: those with Fable left first,
-  the soonest Fable reset on top; then those out of Fable, or out of the weekly limit for all models,
-  the soonest back on top; then accounts without a Fable limit, by the limit with the least left.
-  Codex homes are ranked by the limit with the least left.
+  the soonest Fable reset on top, with those past 90% used behind the fresher ones and those past
+  98% behind those; then those out of Fable, or out of the weekly limit for all models, the soonest
+  back on top; then accounts without a Fable limit, by the limit with the least left. Codex homes
+  are ranked by the limit with the least left.
+- The Fable part ends with the account's pace: what's left, divided by the hours until it resets,
+  so what the account can spend per hour without running out before the reset. `0.5%/h` with 31%
+  left means about 62 hours to go. An account without a Fable limit shows the pace of its tightest
+  limit instead.
 - `--for <session>` picks the best other account of the session's agent that has room now, and
   prints the [`hatcheck move`](#hatcheck-move-carry-on-a-session-with-another-profile) command. If
   the session's own account is the best, it says so and prints the resume command.
+- `--wait` sleeps until an account has room, then answers as above: any Claude Code account;
+  `--wait NAME` (or `default`, `codex`, `codex:NAME`) that one profile or home; with `--for`, an
+  account of the session's agent. It sleeps until the soonest reset the numbers name, says so on
+  stderr, then looks again; when nothing says when an account will have room, it stops with an
+  error instead of polling. For a script: `hatcheck best --wait work && cl work`.
 - The numbers are the ones `hatcheck usage` shows, live when it can be, with a snapshot's age
   otherwise; `--cached` skips the APIs.
 - **Advice only.** It runs when you ask, prints commands, and never starts, moves or switches
@@ -719,10 +785,11 @@ $ hatcheck --json
       "why": null,
       "limits": [
         {"name": "session (5h)", "short": "5h", "kind": "session", "used_percent": 20, "left_percent": 80,
-         "resets_at": "2026-10-16T01:30:00Z", "window_seconds": 18000, "severity": "normal", "per_model": false}
+         "resets_at": "2026-10-16T01:30:00Z", "window_seconds": 18000, "severity": "normal", "per_model": false,
+         "pace": 28.42}
       ],
       "extra": null,
-      "fable": {"left": true, "resets_at": "2026-10-20T16:00:00Z"}
+      "fable": {"left": true, "resets_at": "2026-10-20T16:00:00Z", "band": "fresh"}
     }
   ],
   "hidden": {"Desktop": 3},
@@ -737,11 +804,49 @@ $ hatcheck --json
   `--no-usage`). `hatcheck usage --json` gives every account, in its Fable order, with `sorted_by`.
 - **Stable:** absolute paths rather than `~`, times in UTC (ISO 8601), no colours. `version` goes up
   only when a field changes meaning or goes away; new fields can appear at any time.
-- `left_percent` is `null` for a snapshot's limit that has reset since it was saved. `fable` is
-  `{"left": true, "resets_at": …}`, `{"left": false, "back_at": …}`, or `null` without a Fable limit.
-  `source` is `live`, `cached` or `none`, with `why` when it isn't live.
+- `left_percent` is `null` for a snapshot's limit that has reset since it was saved. `pace` is what's
+  left per hour until the reset (`left_percent` over the hours to go, at least one), `null` without
+  a reset ahead. `fable` is `{"left": true, "resets_at": …}`, `{"left": false, "back_at": …}`, or
+  `null` without a Fable limit; its `band` is `fresh`, `low` (past 90% used), `nearly out` (past 98%)
+  or `out`, the order `hatcheck usage` sorts by. `source` is `live`, `cached` or `none`, with `why`
+  when it isn't live.
 - Errors go to stderr with a non-zero exit, so stdout is always valid JSON. Email addresses only with
   `--email`.
+
+## Rules it keeps
+
+Each rule names the code that keeps it, so it can be checked rather than taken on trust.
+
+- **Not in the path.** Nothing of Hatcheck sits between an agent and its model. `cl` and `cx`
+  set `CLAUDE_CONFIG_DIR` or `CODEX_HOME` (and, for `cl -z` and `cl -k`, the provider variables
+  you set up) and run the agent in their place; nothing stays running
+  ([`launch.rs`](crates/hatcheck/src/launch.rs), `run`).
+- **No agent's config is rewritten**, except when you ask: `hatcheck bind --hook` adds one
+  `SessionStart` hook to each profile's `settings.json` and each Codex home's `hooks.json`, and
+  `unbind --hook` removes only what it added ([`bind.rs`](crates/hatcheck/src/bind.rs),
+  `add_hooks` and `remove_hooks`).
+- **No credentials.** It never asks for, stores, refreshes or moves a login. For Claude it
+  never reads one: Claude Code's own `/usage` is run in the profile and the snapshot it saves is
+  read ([`usage.rs`](crates/hatcheck/src/usage.rs), `run_claude_usage` and `claude_live`). For
+  Codex, the home's `auth.json` token is sent only to ChatGPT's usage endpoint, as it is, and
+  never refreshed (`read_codex_login` and `fetch_codex_usage` there).
+- **Nothing leaves your computer** except those usage requests: Claude Code's to Anthropic, and
+  one to ChatGPT per Codex account. `CODEX_USAGE_URL` in `usage.rs` is the one address the
+  binary itself calls; `--cached` and `--no-usage` make none. The Z.ai and Kimi endpoints in
+  [`provider.rs`](crates/hatcheck/src/provider.rs) are handed to Claude Code, which calls them
+  only when you run `cl -z` or `cl -k`.
+- **No automatic switching** between accounts. `hatcheck best` ranks and prints commands, and
+  nothing in the binary starts, moves or switches a session on its own
+  ([`best.rs`](crates/hatcheck/src/best.rs): advice only, `--wait` sleeps and then prints).
+- **Nothing runs in the background.** There's no daemon. `hatcheck serve` is the desktop app's
+  engine and lives only while the app does, one command per line
+  ([`serve.rs`](crates/hatcheck/src/serve.rs)).
+- **Sessions are only ever copied, moved or rewritten in ways you can undo.** `move` keeps the
+  original unless `--no-keep`, `relocate` prints the command that undoes it, and both have
+  `--dry-run`, which runs every check and writes nothing ([`move_cmd.rs`](crates/hatcheck/src/move_cmd.rs),
+  [`relocate.rs`](crates/hatcheck/src/relocate.rs)).
+
+Function names rather than line numbers, since lines move; `git grep` finds them.
 
 ## The desktop app
 
@@ -778,6 +883,9 @@ from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behi
   `logo.svg` and `logo-dark.svg` (the mark), `logo-wordmark.svg` and `logo-wordmark-dark.svg`, `favicon.svg`.
 - **`docs/proposals/`**: the plans these came from: [the CLI features](docs/proposals/cli-features.md)
   and [the desktop app](docs/proposals/desktop-app.md).
+- **`AGENTS.md`** and **`docs/lessons.md`**: notes for coding agents (`CLAUDE.md` imports them): how
+  to build and check, the rules the code keeps, and what earlier work got wrong, with the rule that
+  would have caught it.
 - **`tests/`**: the command tests, which run the binary against throwaway home folders:
   `python3 -m unittest discover -s tests`, which builds it with cargo first, and the crate's own
   tests with `cargo test -p hatcheck`. They never read your real profiles, Keychain or the network.

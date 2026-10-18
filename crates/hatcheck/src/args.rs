@@ -163,6 +163,28 @@ impl Parser {
         self
     }
 
+    /// An option that may take a value (nargs="?"): the next word when there's one that isn't
+    /// an option, else constant.
+    pub fn maybe(
+        mut self,
+        flags: &[&'static str],
+        dest: &'static str,
+        metavar: &'static str,
+        constant: &'static str,
+        help: &str,
+    ) -> Parser {
+        self.opts.push(Opt {
+            flags: flags.to_vec(),
+            dest,
+            takes: Takes::Maybe(constant),
+            metavar,
+            help: help.into(),
+            hidden: false,
+            choices: Vec::new(),
+        });
+        self
+    }
+
     /// An option argparse lists nowhere (help=SUPPRESS) that takes one of choices, or const
     /// when no word follows it (nargs="?").
     pub fn hidden_choice(

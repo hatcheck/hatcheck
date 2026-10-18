@@ -21,7 +21,7 @@ fn write_json(path: &str, data: &Value) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
-fn save_bindings(bindings: &Dict) -> std::io::Result<()> {
+pub(crate) fn save_bindings(bindings: &Dict) -> std::io::Result<()> {
     let mut sorted: Vec<(&String, &Value)> = bindings.iter().collect();
     sorted.sort_by(|a, b| a.0.cmp(b.0));
     let folders: Dict = sorted

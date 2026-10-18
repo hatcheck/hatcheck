@@ -238,6 +238,7 @@ function loadSettings() {
   $<HTMLInputElement>("set-minutes").value = String(s.minutes);
   $<HTMLInputElement>("set-notify").checked = s.notify;
   $<HTMLInputElement>("set-low").value = String(s.low);
+  $<HTMLInputElement>("set-unused").value = String(s.unused);
   $<HTMLSelectElement>("set-terminal").value = s.terminal;
 }
 
@@ -301,9 +302,10 @@ function wire() {
     minutes: Math.max(1, Number($<HTMLInputElement>("set-minutes").value) || 5),
     notify: $<HTMLInputElement>("set-notify").checked,
     low: Math.min(50, Math.max(1, Number($<HTMLInputElement>("set-low").value) || 10)),
+    unused: Math.min(100, Math.max(0, Number($<HTMLInputElement>("set-unused").value) || 0)),
     terminal: $<HTMLSelectElement>("set-terminal").value,
   });
-  for (const id of ["set-live", "set-minutes", "set-notify", "set-low", "set-terminal"]) $(id).addEventListener("change", save);
+  for (const id of ["set-live", "set-minutes", "set-notify", "set-low", "set-unused", "set-terminal"]) $(id).addEventListener("change", save);
 }
 
 async function checkUpdates() {

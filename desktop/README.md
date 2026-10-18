@@ -18,7 +18,10 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
   the time left until each resets; the last day's sessions, by folder, with **Resume** (a terminal in
   the session's folder, through `hatcheck open`) and **Copy** (`cd … && <resume command>`); and a
   button per Claude Desktop instance, which opens it or brings it forward.
-- **Notifications** when a limit runs low (10% or less left, by default) and when a low one resets.
+- **Notifications** when a limit runs low (10% or less left, by default), when a low one resets,
+  and when a limit is about to reset with much of it unused (half or more left in the last fifth
+  of its window, a day at most, by default): what's left then goes to waste, so it's the account
+  to use now.
 - **Main window:**
   - *Sessions:* every session of the last day to month, searchable by title and folder, filtered
     by agent and profile, with a read-only preview of the conversation (`hatcheck show`), and
@@ -37,8 +40,9 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
 
 - **No credentials.** It never asks for, stores, refreshes or passes on a login.
 - **Live usage is opt-in.** By default it shows what Claude Code and Codex last saved
-  (`--cached`). With live usage on, the engine asks the usage endpoints with each profile's saved
-  token, read and never refreshed.
+  (`--cached`). With live usage on, the engine runs Claude Code's `/usage` in each profile, which
+  asks Anthropic with that profile's own login and saves the answer, and asks ChatGPT's usage
+  endpoint for each Codex home with its saved token, read and never refreshed.
 - **No automatic switching** between accounts.
 
 ## Build it

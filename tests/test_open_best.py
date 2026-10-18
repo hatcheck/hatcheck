@@ -125,10 +125,59 @@ class Best(unittest.TestCase):
         self.assertEqual([line.split()[1] for line in lines],
                          [self.h.shown(p) for p in (self.soon, self.later, self.spent, self.pro)])
         self.assertIn("Fable 20% left, resets", lines[0])
+        self.assertRegex(lines[0], r", 0\.8%/h")  # 20% left over a day: what it can spend an hour
         self.assertTrue(lines[0].rstrip().endswith("→ cl soon"))
         self.assertIn("Fable 0% left, back", lines[2])
-        self.assertIn("5h 10%", lines[3])  # the tightest limit first, for an account without Fable
+        self.assertNotIn("%/h", lines[2])
+        self.assertRegex(lines[3], r"5h 10%, 10\.0%/h")  # the tightest limit first, for an account without Fable
         self.assertIn("Advice only", out)
+
+    def test_nearly_out_goes_behind_fresher_accounts(self):
+        low = self.h.profile("low", "acct-6", usage=fable(95, 0.3))  # resets soonest, but 95% used
+        code, out = run(self.h, ["best", "--cached"])
+        lines = [line for line in out.splitlines() if "→" in line]
+        self.assertEqual([line.split()[1] for line in lines],
+                         [self.h.shown(p) for p in (self.soon, self.later, low, self.spent, self.pro)])
+        self.assertIn("Fable 5% left, resets", lines[2])
+
+    def test_wait_answers_at_once_with_room(self):
+        code, out = run(self.h, ["best", "--cached", "--wait"])
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("waiting", out)
+        self.assertIn("→ cl soon", out)
+        # For one profile that has room now: the same.
+        code, out = run(self.h, ["best", "--cached", "--wait", "later"])
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("waiting", out)
+
+    def test_wait_sleeps_until_the_reset(self):
+        h = FakeHome()
+        self.addCleanup(h.cleanup)
+        # Both out of Fable: one back in a second, the other in a day.
+        soon = h.profile("soon", "acct-1", usage={"limits": [
+            {"kind": "weekly_scoped", "group": "weekly", "percent": 100, "resets_at": iso(time.time() + 1),
+             "scope": {"model": {"display_name": "Fable"}}}]})
+        h.profile("later", "acct-2", usage=fable(100, 1))
+        started = time.time()
+        code, out = run(h, ["best", "--cached", "--wait"])
+        self.assertEqual(code, 0, out)
+        self.assertGreater(time.time() - started, 1)
+        self.assertIn("No room yet; waiting for a Claude Code account until", out)
+        # Its reset passed while waiting, so the snapshot's limit counts as full again.
+        self.assertIn("Fable 100% left", out)
+        self.assertEqual(out.count("waiting"), 1)
+        self.assertIn(h.shown(soon), out)
+
+    def test_wait_with_nothing_to_wait_for(self):
+        h = FakeHome()
+        self.addCleanup(h.cleanup)
+        h.profile("solo", "acct-1")  # no usage at all
+        code, out = run(h, ["best", "--cached", "--wait"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("No Claude Code account has room, and none says when it will again", out)
+        code, out = run(h, ["best", "--cached", "--wait", "nowhere"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("has no sessions or usage to go by", out)
 
     def test_where_to_carry_a_session(self):
         self.h.session(self.spent, self.api, A, "Out of Fable here", 5)

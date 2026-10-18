@@ -160,11 +160,17 @@ cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</cod
 
   <section class="wrap">
     <h2>Rules it keeps</h2>
+    <p><strong>Not a gateway.</strong> Hatcheck is never between an agent and its model. It rewrites no agent's config, holds no login, and runs nothing in the background. Tools such as <a href="https://github.com/yetone/magpie">magpie</a> put a local gateway in that path so any agent can use any model and accounts can take over from each other when a quota runs out. If that is what you want, use one of those. Hatcheck is for the opposite case: keeping a work account and a personal account apart, and knowing which one each session ran on.</p>
+    <p>Each rule links to the code that keeps it, so it can be checked rather than taken on trust.</p>
     <ul class="rules">
-      <li><strong>No credentials.</strong> It never asks for, stores, refreshes or passes on a login. Signing in happens in Claude Code and Codex, in a terminal.</li>
-      <li><strong>Live usage is opt-in.</strong> By default it shows what Claude Code and Codex last saved. With live checks on, it asks the usage endpoints with each profile's saved token, read and never refreshed.</li>
-      <li><strong>No automatic switching</strong> between accounts. It shows which account has the most left when you ask, for choosing between accounts you may use for the work at hand, such as your own and your company's.</li>
-      <li><strong>Nothing leaves your computer</strong> except those usage requests, to Anthropic and OpenAI, when you turn them on.</li>
+      <li><strong>Not in the path.</strong> <code>cl</code> and <code>cx</code> set <code>CLAUDE_CONFIG_DIR</code> or <code>CODEX_HOME</code> and run the agent in their place; nothing stays running (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/launch.rs">launch.rs</a>, <code>run</code>).</li>
+      <li><strong>No agent's config is rewritten</strong>, except when you ask: <code>hatcheck bind --hook</code> adds one hook to each profile's settings, and <code>unbind --hook</code> removes only what it added (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/bind.rs">bind.rs</a>, <code>add_hooks</code>).</li>
+      <li><strong>No credentials.</strong> It never asks for, stores, refreshes or moves a login. For Claude it never reads one: Claude Code's own <code>/usage</code> is run in the profile and the snapshot it saves is read. For Codex, the home's token is sent only to ChatGPT's usage endpoint, as it is, never refreshed (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/usage.rs">usage.rs</a>, <code>run_claude_usage</code> and <code>fetch_codex_usage</code>). Signing in happens in Claude Code and Codex, in a terminal.</li>
+      <li><strong>Live usage is opt-in</strong> in the app, and <code>--cached</code> in the CLI shows what Claude Code and Codex last saved, with its age.</li>
+      <li><strong>No automatic switching</strong> between accounts. <code>hatcheck best</code> ranks and prints commands, for choosing between accounts you may use for the work at hand, such as your own and your company's; nothing starts, moves or switches a session on its own (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/best.rs">best.rs</a>).</li>
+      <li><strong>Nothing leaves your computer</strong> except those usage requests: Claude Code's to Anthropic, and one to ChatGPT per Codex account, the one address the binary itself calls (<code>CODEX_USAGE_URL</code> in <code>usage.rs</code>).</li>
+      <li><strong>Nothing runs in the background.</strong> No daemon; the app's engine lives only while the app does (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/serve.rs">serve.rs</a>).</li>
+      <li><strong>Every change to a session can be undone.</strong> <code>move</code> keeps the original unless told otherwise, <code>relocate</code> prints the command that undoes it, and both have a <code>--dry-run</code> that runs every check and writes nothing.</li>
     </ul>
   </section>
 

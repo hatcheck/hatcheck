@@ -66,6 +66,38 @@ def argv_of(script):
 
 INTERRUPT = object()  # for in_terminal: Ctrl+C at that prompt, as SIGINT
 
+# The fake claude FakeHome.fake_claude installs (see there).
+FAKE_CLAUDE = r'''
+import json, os, sys, time
+here = os.path.dirname(os.path.abspath(__file__))
+home = os.environ.get("USERPROFILE") if os.name == "nt" else os.environ.get("HOME")
+config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+profile = config_dir or os.path.join(home, ".claude")
+config = os.path.join(config_dir, ".claude.json") if config_dir else os.path.join(home, ".claude.json")
+shown = {k: v for k, v in os.environ.items() if k.startswith(("ANTHROPIC_", "CLAUDE", "DISABLE_"))}
+with open(os.path.join(here, "claude.log"), "a", encoding="utf-8") as fh:
+    fh.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd(), "env": shown}) + "\n")
+fake = os.path.join(profile, "fake-usage.json")
+if "/usage" in sys.argv and os.path.exists(fake):
+    with open(config, encoding="utf-8") as fh:
+        data = json.load(fh)
+    with open(fake, encoding="utf-8") as fh:
+        usage = json.load(fh)
+    data["cachedUsageUtilization"] = {"fetchedAtMs": int(time.time() * 1000),
+                                      "accountUuid": (data.get("oauthAccount") or {}).get("accountUuid"),
+                                      "utilization": usage}
+    with open(config, "w", encoding="utf-8") as fh:
+        json.dump(data, fh)
+    text = "You are currently using your subscription to power your Claude Code usage\n\n" + "\n".join(
+        "Current %s: %s%% used" % ("session" if r.get("kind") == "session" else "week", r.get("percent", 0))
+        for r in usage.get("limits", []))
+elif "/usage" in sys.argv and os.path.exists(os.path.join(profile, "stale-usage")):
+    text = "Current session: 11% used · resets Oct 18 at 3:49am (UTC)"  # an old reading, nothing new
+else:
+    text = "Total cost:            $0.0000\nTotal duration (API):  0s"
+print(json.dumps({"type": "result", "is_error": False, "subtype": "success", "result": text}))
+'''
+
 
 def in_terminal(argv, replies, env, cwd):
     """Run argv on a pseudo-terminal, as someone at one would: each (prompt, keys) in replies
@@ -150,20 +182,52 @@ class FakeHome:
     def cleanup(self):
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def profile(self, name="default", account=None, projects=True, usage=None, saved_at=None, oauth=None):
+    def profile(self, name="default", account=None, projects=True, usage=None, saved_at=None, plan=None):
         """A profile folder (~/.claude or ~/.claude-NAME), signed in to `account`, with an
-        optional usage snapshot and an optional .credentials.json login."""
+        optional usage snapshot. `plan` adds fields to the oauthAccount Claude Code keeps in
+        .claude.json, such as organizationType and userRateLimitTier."""
         path = os.path.join(self.home, ".claude" if name == "default" else ".claude-" + name)
         os.makedirs(os.path.join(path, "projects") if projects else path, exist_ok=True)
-        config = {"oauthAccount": {"accountUuid": account}} if account else {}
+        config = {"oauthAccount": dict({"accountUuid": account}, **(plan or {}))} if account else {}
         if usage is not None:
             config["cachedUsageUtilization"] = {"fetchedAtMs": (saved_at or NOW) * 1000,
                                                 "accountUuid": account, "utilization": usage}
-        write(os.path.join(self.home, ".claude.json") if name == "default" else os.path.join(path, ".claude.json"),
-              json.dumps(config))
-        if oauth:
-            write(os.path.join(path, ".credentials.json"), json.dumps({"claudeAiOauth": oauth}))
+        write(self.config_path(name), json.dumps(config))
         return path
+
+    def config_path(self, name="default"):
+        """The profile's .claude.json: beside ~/.claude for the default profile, inside the
+        folder for the others, as Claude Code keeps it."""
+        if name == "default":
+            return os.path.join(self.home, ".claude.json")
+        return os.path.join(self.home, ".claude-" + name, ".claude.json")
+
+    def fake_claude(self, folder=None):
+        """A fake `claude` on a folder of its own, for the live usage path: `claude -p /usage`
+        saves the profile's fake-usage.json as the usage snapshot in its .claude.json, the way
+        Claude Code saves what Anthropic told it, and prints a result as Claude Code does; a
+        profile without that file gets a cost summary, as one that isn't signed in does. Every
+        run is logged, with its arguments, folder and environment, in claude.log beside it.
+        Returns the folder, to put first on the PATH."""
+        folder = folder or os.path.join(self.root, "fakebin")
+        script = os.path.join(folder, "claude.py")
+        write(script, FAKE_CLAUDE)
+        if WINDOWS:
+            write(os.path.join(folder, "claude.cmd"), '@"%s" "%%~dp0claude.py" %%*\r\n' % sys.executable)
+        else:
+            wrapper = os.path.join(folder, "claude")
+            # ${0%/*}, not dirname: the tests' PATH is /bin alone on macOS, which has no dirname.
+            write(wrapper, '#!/bin/sh\nexec "%s" -I "${0%%/*}/claude.py" "$@"\n' % sys.executable)
+            os.chmod(wrapper, 0o755)
+        return folder
+
+    def claude_runs(self, folder=None):
+        """What the fake claude was run with, one dict per run."""
+        log = os.path.join(folder or os.path.join(self.root, "fakebin"), "claude.log")
+        if not os.path.exists(log):
+            return []
+        with open(log, encoding="utf-8") as fh:
+            return [json.loads(line) for line in fh if line.strip()]
 
     def folder(self, *parts):
         path = os.path.join(self.home, *parts)
@@ -267,11 +331,11 @@ class FakeHome:
             env["PATH"] = "/bin"  # has ps, but not the security tool, so the real Keychain stays untouched
         return env
 
-    def run(self, script, *args, cwd=None):
+    def run(self, script, *args, cwd=None, **extra_env):
         """Run a hatcheck subcommand (usage) or another repo script against this home:
-        (exit code, stdout + stderr)."""
+        (exit code, stdout + stderr). extra_env adds to or overrides the environment."""
         p = subprocess.run(argv_of(script) + list(args), cwd=cwd or self.root,
-                           env=self.env(), capture_output=True, text=True, encoding="utf-8")
+                           env=dict(self.env(), **extra_env), capture_output=True, text=True, encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
 
     def shown(self, path):

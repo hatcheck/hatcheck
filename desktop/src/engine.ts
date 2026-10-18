@@ -84,8 +84,9 @@ export type MoveReport = {
 
 // Settings, per computer: kept in the app's local storage.
 const KEY = "hatcheck.settings";
-type Settings = { live: boolean; minutes: number; notify: boolean; low: number; terminal: string };
-const DEFAULTS: Settings = { live: false, minutes: 5, notify: true, low: 10, terminal: "" };
+type Settings = { live: boolean; minutes: number; notify: boolean; low: number; unused: number; terminal: string };
+// unused: a limit about to reset with this much or more of it left is worth a notification; 0 for never.
+const DEFAULTS: Settings = { live: false, minutes: 5, notify: true, low: 10, unused: 50, terminal: "" };
 
 export function settings(): Settings {
   try {

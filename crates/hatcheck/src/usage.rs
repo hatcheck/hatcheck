@@ -2,10 +2,11 @@
 //! every Claude Code profile (~/.claude*) and every Codex home (~/.codex*); the session list
 //! uses it too. The README's `hatcheck usage` section says what it shows.
 //!
-//! A profile's OAuth token, from the macOS Keychain or the profile's .credentials.json, is
-//! sent as is to the endpoint Claude Code's /usage asks, and never refreshed: a refresh
-//! rotates it and would sign out the copy Claude Code holds. Without a live answer the
-//! snapshot Claude Code saved in the profile's .claude.json is used. A Codex home's ChatGPT
+//! A Claude Code profile's numbers come from Claude Code itself: `claude -p /usage` is run in
+//! the profile, which asks Anthropic with the profile's own login and saves the answer in the
+//! profile's .claude.json (cachedUsageUtilization), and that snapshot is read. hatcheck never
+//! reads a Claude login. When that gives nothing new (claude not on the PATH, the profile not
+//! signed in, offline) the last snapshot saved is used, with its age. A Codex home's ChatGPT
 //! token goes to the endpoint Codex's /status asks, or else the newest limits Codex wrote in
 //! the home's session files are used.
 
@@ -17,11 +18,35 @@ use crate::py::{self, get, s, truthy, Num};
 use crate::times;
 use base64::Engine;
 use serde_json::{json, Map, Value};
-use sha2::{Digest, Sha256};
 use std::time::Duration;
 
-pub const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 pub const CODEX_USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
+/// What Claude Code's /usage is run with: no tools, no MCP servers, no settings or hooks, and
+/// no transcript, so it only asks Anthropic what's left and saves the answer in the profile.
+pub const CLAUDE_USAGE_ARGS: [&str; 10] = [
+    "-p",
+    "/usage",
+    "--output-format",
+    "json",
+    "--tools",
+    "",
+    "--strict-mcp-config",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+];
+/// Variables that run of Claude Code must not get from hatcheck's own environment: every
+/// ANTHROPIC_* one (a Z.ai or Kimi key would send /usage there), the marks of a Claude Code
+/// session hatcheck may itself be running in, and the setting that has /usage skip its request.
+const CLAUDE_USAGE_UNSET: [&str; 5] = [
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_SSE_PORT",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+];
+/// How long that run may take before it's given up on.
+const CLAUDE_USAGE_TIMEOUT: Duration = Duration::from_secs(45);
 /// Codex's limit windows: (length, group, name, short name). It reports some a minute short.
 const CODEX_WINDOWS: [(i64, &str, &str, &str); 3] = [
     (5 * 3600, "session", "session (5h)", "5h"),
@@ -114,28 +139,27 @@ fn config_path(profile: &str) -> String {
     }
 }
 
-/// Claude Code's Keychain item for a profile, suffixed with a hash of its CLAUDE_CONFIG_DIR.
-pub fn keychain_service(profile: &str) -> String {
-    if profile == default_profile() {
-        return "Claude Code-credentials".into();
-    }
-    let digest = Sha256::digest(profile.as_bytes());
-    let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
-    format!("Claude Code-credentials-{}", &hex[..8])
+/// Where Claude Code is run for /usage: a folder of hatcheck's own, so the one project folder
+/// Claude Code makes for the folder it runs in (projects/<its name>, empty) is the same every
+/// time, instead of one per run.
+pub fn usage_run_dir() -> String {
+    ospath::join(&crate::facts::cache_dir(), "claude-usage")
 }
 
-/// Run a program and give its stdout, or None when it can't be run or doesn't finish in time.
-fn output_within(program: &str, args: &[&str], timeout: Duration) -> Option<String> {
-    use std::process::{Command, Stdio};
+/// Run a prepared command and give its stdout, or the reason it gave nothing: it couldn't be
+/// started, or didn't finish within timeout and was killed.
+fn output_within(mut command: std::process::Command, timeout: Duration) -> Result<String, String> {
+    use std::process::Stdio;
     use std::sync::{mpsc, Arc, Mutex};
-    let mut child = Command::new(program)
-        .args(args)
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .ok()?;
-    let mut stdout = child.stdout.take()?;
+        .map_err(|e| format!("couldn't be run: {e}"))?;
+    let Some(mut stdout) = child.stdout.take() else {
+        return Err("gave no output".into());
+    };
     let child = Arc::new(Mutex::new(child));
     let (done, finished) = mpsc::channel::<()>();
     // A watchdog kills the program if it hangs, which ends the read below.
@@ -158,31 +182,63 @@ fn output_within(program: &str, args: &[&str], timeout: Duration) -> Option<Stri
     if let Ok(mut c) = child.lock() {
         let _ = c.wait();
     }
-    (read && !killed).then_some(text)
+    if killed {
+        return Err(format!(
+            "didn't finish within {}",
+            times::duration(timeout.as_secs_f64())
+        ));
+    }
+    if !read {
+        return Err("gave no output".into());
+    }
+    Ok(text)
 }
 
-/// The claudeAiOauth entry (token, expiry, plan), or null: from the macOS Keychain, or where
-/// there's no keychain (Linux, Windows) from the profile's .credentials.json.
-pub fn read_oauth(profile: &str) -> Value {
-    if cfg!(target_os = "macos") {
-        let service = keychain_service(profile);
-        if let Some(out) = output_within(
-            "security",
-            &["find-generic-password", "-s", &service, "-w"],
-            Duration::from_secs(15),
-        ) {
-            if let Ok(v) = serde_json::from_str::<Value>(&out) {
-                let oauth = get(&v, "claudeAiOauth");
-                if truthy(oauth) {
-                    return oauth.clone();
-                }
-            }
+/// Run Claude Code's /usage in a profile: it asks Anthropic with the profile's own login and
+/// saves the answer in the profile's .claude.json. The text it printed as its result, or why it
+/// couldn't be run.
+pub fn run_claude_usage(profile: &str) -> Result<String, String> {
+    let Some(claude) = ospath::which("claude") else {
+        return Err("claude isn't on your PATH".into());
+    };
+    let run_dir = usage_run_dir();
+    let _ = std::fs::create_dir_all(&run_dir);
+    let mut command = std::process::Command::new(claude);
+    command.args(CLAUDE_USAGE_ARGS);
+    if ospath::isdir(&run_dir) {
+        command.current_dir(&run_dir);
+    }
+    for (name, _) in std::env::vars_os() {
+        let name = name.to_string_lossy();
+        if name.starts_with("ANTHROPIC_") || CLAUDE_USAGE_UNSET.contains(&name.as_ref()) {
+            command.env_remove(name.as_ref());
         }
     }
-    std::fs::read_to_string(ospath::join(profile, ".credentials.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-        .map_or(Value::Null, |v| get(&v, "claudeAiOauth").clone())
+    command
+        .env("DISABLE_TELEMETRY", "1")
+        .env("DISABLE_ERROR_REPORTING", "1")
+        .env("DISABLE_AUTOUPDATER", "1");
+    if profile == default_profile() {
+        command.env_remove("CLAUDE_CONFIG_DIR"); // its login is filed under no CLAUDE_CONFIG_DIR
+    } else {
+        command.env("CLAUDE_CONFIG_DIR", profile);
+    }
+    let out = output_within(command, CLAUDE_USAGE_TIMEOUT).map_err(|e| format!("claude {e}"))?;
+    Ok(claude_result(&out).unwrap_or(out))
+}
+
+/// The result text in what `claude -p --output-format json` printed: one object, or, with
+/// Claude Code's verbose output on, an array of every message with the result last.
+fn claude_result(stdout: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(stdout.trim()).ok()?;
+    let result = match &v {
+        Value::Array(items) => items
+            .iter()
+            .rev()
+            .find(|m| s(get(m, "type")) == Some("result"))?,
+        other => other,
+    };
+    s(get(result, "result")).map(String::from)
 }
 
 /// The profile's signed-in account (oauthAccount), and the usage snapshot Claude Code saved.
@@ -256,18 +312,6 @@ fn fetch_json(url: &str, headers: &[(&str, String)]) -> (Option<Value>, Option<S
         Ok(v) => (Some(v), None),
         Err(_) => (None, Some("JSONDecodeError".into())),
     }
-}
-
-fn fetch_usage(token: &str) -> (Option<Value>, Option<String>) {
-    fetch_json(
-        USAGE_URL,
-        &[
-            ("Authorization", format!("Bearer {token}")),
-            ("anthropic-beta", "oauth-2025-04-20".into()),
-            ("Content-Type", "application/json".into()),
-            ("User-Agent", "hatcheck".into()),
-        ],
-    )
 }
 
 /// The claims in a JWT, decoded without checking its signature, or {}.
@@ -687,23 +731,40 @@ pub fn bar_cells(window: &Value) -> usize {
     n.clamp(0.0, 10.0) as usize
 }
 
-pub fn plan_text(oauth: &Value) -> String {
-    if !truthy(oauth) {
+/// The plan an account is on, from the oauthAccount Claude Code keeps in the profile's
+/// .claude.json: its organization's kind (claude_team, claude_pro, claude_max) and its rate
+/// limit tier (default_claude_max_5x), as "team max 5x" or "pro".
+pub fn plan_text(account: &Value) -> String {
+    if !truthy(account) {
         return "not signed in".into();
     }
-    let sub = get(oauth, "subscriptionType");
-    let mut plan = if truthy(sub) {
-        py::str_of(sub)
-    } else {
-        "?".into()
-    };
-    let tier = s(get(oauth, "rateLimitTier")).unwrap_or("");
+    let org = s(get(account, "organizationType")).unwrap_or("");
+    let mut plan = org.strip_prefix("claude_").unwrap_or(org).to_string();
+    if plan.is_empty() {
+        plan = "?".into();
+    }
+    let tier = py::or(
+        get(account, "userRateLimitTier"),
+        get(account, "organizationRateLimitTier"),
+    );
+    let tier = s(tier).unwrap_or("");
     for multiple in ["20x", "5x"] {
         if tier.ends_with(&format!("max_{multiple}")) {
             plan += &format!(" max {multiple}");
         }
     }
     plan
+}
+
+/// How much of a limit can be used per hour until it resets without running out: what's left
+/// over the hours to go (at least one), as a share of the limit. None without a reset ahead.
+pub fn pace(left: f64, reset: Option<f64>, now: f64) -> Option<f64> {
+    let reset = reset.filter(|r| *r > now)?;
+    Some(left / ((reset - now) / 3600.0).max(1.0))
+}
+
+pub fn pace_text(p: f64) -> String {
+    format!("{p:.1}%/h")
 }
 
 pub fn row_label(row: &Value, short: bool) -> String {
@@ -790,16 +851,39 @@ pub fn meter_state(row: &Value, saved_at: Option<f64>, now: f64) -> (f64, Option
     }
 }
 
-/// Where an account goes in the list: 0 with Fable left, the soonest Fable reset on top; 1 out
-/// of Fable or of the weekly limit for all models it counts against, the soonest back on top;
-/// 2 without a Fable limit, in the usual order.
+/// Where an account goes in the list, by its Fable limit: the bands with Fable left, from
+/// FABLE_FRESH (under 90% used) to FABLE_NEARLY_OUT (98% or more used), each with the soonest
+/// Fable reset on top; then FABLE_OUT, out of Fable or of the weekly limit for all models it
+/// counts against, the soonest back on top; then NO_FABLE, without a Fable limit.
+pub const FABLE_FRESH: u8 = 0;
+pub const FABLE_LOW: u8 = 1;
+pub const FABLE_NEARLY_OUT: u8 = 2;
+pub const FABLE_OUT: u8 = 3;
+pub const NO_FABLE: u8 = 4;
+/// Past this share used, an account goes behind the fresher ones; past the second, behind
+/// those too: nearly out, it's the one to use last.
+pub const LOW_USED: f64 = 90.0;
+pub const NEARLY_OUT_USED: f64 = 98.0;
+
+/// The band's name, for --json.
+pub fn band_name(band: u8) -> &'static str {
+    match band {
+        FABLE_FRESH => "fresh",
+        FABLE_LOW => "low",
+        FABLE_NEARLY_OUT => "nearly out",
+        FABLE_OUT => "out",
+        _ => "none",
+    }
+}
+
+/// (band, time): where an account goes and the time its band sorts by (see the bands above).
 pub fn fable_rank(usage: Option<&Value>, saved_at: Option<f64>, now: f64) -> (u8, f64) {
     let limits: Vec<&Value> = match usage.map(|u| get(u, "limits")) {
         Some(Value::Array(rows)) => rows.iter().filter(|r| r.is_object()).collect(),
         _ => Vec::new(),
     };
     let Some(fable) = limits.iter().find(|r| is_fable(r)) else {
-        return (2, 0.0);
+        return (NO_FABLE, 0.0);
     };
     let mut needed = vec![meter_state(fable, saved_at, now)];
     needed.extend(
@@ -809,8 +893,16 @@ pub fn fable_rank(usage: Option<&Value>, saved_at: Option<f64>, now: f64) -> (u8
             .map(|r| meter_state(r, saved_at, now)),
     );
     if needed.iter().all(|(left, _)| *left > 0.0) {
+        let used = 100.0 - needed[0].0;
+        let band = if used >= NEARLY_OUT_USED {
+            FABLE_NEARLY_OUT
+        } else if used >= LOW_USED {
+            FABLE_LOW
+        } else {
+            FABLE_FRESH
+        };
         return (
-            0,
+            band,
             needed[0].1.filter(|r| *r != 0.0).unwrap_or(f64::INFINITY),
         );
     }
@@ -819,7 +911,7 @@ pub fn fable_rank(usage: Option<&Value>, saved_at: Option<f64>, now: f64) -> (u8
         .filter(|(left, _)| *left <= 0.0)
         .map(|(_, r)| r.filter(|r| *r != 0.0).unwrap_or(f64::INFINITY))
         .fold(f64::NEG_INFINITY, f64::max);
-    (1, back)
+    (FABLE_OUT, back)
 }
 
 /// Python's == for the values JSON holds: numbers by value, 1 and 1.0 and true alike.
@@ -951,7 +1043,8 @@ pub struct Entry {
     pub codex: bool,
     pub profiles: Vec<String>,
     pub email: Value,
-    pub oauth: Value,
+    /// The oauthAccount Claude Code keeps in a profile's .claude.json: who it is, its plan.
+    pub account: Value,
     pub cache: Value,
     pub login: Value,
 }
@@ -968,18 +1061,7 @@ fn num_or_zero(v: &Value) -> f64 {
 pub fn load_accounts(profiles: &[String]) -> Vec<Entry> {
     let mut keys: Vec<String> = Vec::new();
     let mut entries: Vec<Entry> = Vec::new();
-    // The logins first, all at once: each is a Keychain lookup on macOS, a program of its own.
-    let logins: Vec<Value> = std::thread::scope(|scope| {
-        let handles: Vec<_> = profiles
-            .iter()
-            .map(|p| scope.spawn(move || read_oauth(p)))
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().unwrap_or(Value::Null))
-            .collect()
-    });
-    for (profile, oauth) in profiles.iter().zip(logins) {
+    for profile in profiles {
         let (account, mut cache) = read_config(profile);
         let uuid = get(&account, "accountUuid");
         let key = if truthy(uuid) {
@@ -995,7 +1077,7 @@ pub fn load_accounts(profiles: &[String]) -> Vec<Entry> {
                     codex: false,
                     profiles: Vec::new(),
                     email: get(&account, "emailAddress").clone(),
-                    oauth: Value::Null,
+                    account: Value::Null,
                     cache: Value::Null,
                     login: Value::Null,
                 });
@@ -1010,12 +1092,12 @@ pub fn load_accounts(profiles: &[String]) -> Vec<Entry> {
                 cache = Value::Null; // saved while the profile was signed in to another account
             }
         }
-        if truthy(&oauth)
-            && (entry.oauth.is_null()
-                || num_or_zero(get(&oauth, "expiresAt"))
-                    > num_or_zero(get(&entry.oauth, "expiresAt")))
+        if truthy(&account)
+            && (entry.account.is_null()
+                || num_or_zero(get(&account, "profileFetchedAt"))
+                    > num_or_zero(get(&entry.account, "profileFetchedAt")))
         {
-            entry.oauth = oauth;
+            entry.account = account.clone();
         }
         if truthy(&cache)
             && (entry.cache.is_null()
@@ -1028,20 +1110,41 @@ pub fn load_accounts(profiles: &[String]) -> Vec<Entry> {
     entries
 }
 
+/// An account's numbers fetched now: Claude Code's /usage run in the first of its profiles,
+/// and the snapshot it saved there read back; or why that gave nothing new.
+fn claude_live(entry: &Entry) -> Result<Value, String> {
+    let Some(profile) = entry.profiles.first() else {
+        return Err("no profile".into());
+    };
+    let started = times::now();
+    let result = run_claude_usage(profile)?;
+    let (_, cache) = read_config(profile);
+    let fetched = num_or_zero(get(&cache, "fetchedAtMs")) / 1000.0;
+    let utilization = get(&cache, "utilization");
+    if fetched >= started - 2.0 && truthy(utilization) {
+        return Ok(utilization.clone());
+    }
+    // Claude Code prints its last reading when it can't get a new one, and a cost summary
+    // instead of the limits when the profile isn't signed in.
+    Err(
+        if result.contains("Current session") || result.contains("Current week") {
+            "Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?".into()
+        } else if !truthy(&entry.account) {
+            "not signed in".into()
+        } else {
+            "Claude Code's /usage gave no numbers; is this profile still signed in?".into()
+        },
+    )
+}
+
 /// The live usage body, or else Claude Code's snapshot and when it was saved, and why it isn't live.
 pub fn account_usage(entry: &Entry, cached: bool) -> Usage {
-    let oauth = &entry.oauth;
     let why: String = if cached {
         "--cached".into()
-    } else if !truthy(oauth) || !truthy(get(oauth, "accessToken")) {
-        "not signed in".into()
-    } else if num_or_zero(get(oauth, "expiresAt")) / 1000.0 < times::now() + 60.0 {
-        "token expired; run claude in this profile to renew it".into()
     } else {
-        match fetch_usage(s(get(oauth, "accessToken")).unwrap_or("")) {
-            (Some(usage), _) if usage.is_object() => return (Some(usage), None, None),
-            (Some(_), _) => "unexpected answer".into(),
-            (None, why) => why.unwrap_or_default(),
+        match claude_live(entry) {
+            Ok(usage) => return (Some(usage), None, None),
+            Err(why) => why,
         }
     };
     if entry.cache.is_null() {
@@ -1083,7 +1186,7 @@ pub fn load_codex_accounts(homes: &[String]) -> Vec<Entry> {
                     codex: true,
                     profiles: Vec::new(),
                     email: Value::Null,
-                    oauth: Value::Null,
+                    account: Value::Null,
                     cache: Value::Null,
                     login: Value::Null,
                 });
@@ -1174,23 +1277,32 @@ fn iso(t: Option<f64>) -> Value {
 }
 
 /// An account's limits for --json: what the text shows, as numbers. left_percent is null for
-/// a snapshot's limit that has reset since it was saved.
+/// a snapshot's limit that has reset since it was saved; pace is what's left per hour until
+/// the reset (see `pace`), null without one.
 pub fn limits_json(usage: &Value, saved_at: Option<f64>, now: f64) -> Value {
     let mut out = Vec::new();
+    let pace_of = |left: Option<Num>, resets_at: &Value| -> Value {
+        left.and_then(|l| pace(l.f(), s(resets_at).and_then(times::parse_time), now))
+            .map_or(Value::Null, |p| json!((p * 100.0).round() / 100.0))
+    };
     if let Value::Array(rows) = get(usage, "limits") {
         for r in rows.iter().filter(|r| r.is_object()) {
+            let left = percent_left(get(r, "percent"), get(r, "resets_at"), saved_at, now);
             out.push(json!({"name": row_label(r, false), "short": row_label(r, true), "kind": get(r, "kind"),
                             "used_percent": get(r, "percent"),
-                            "left_percent": percent_left(get(r, "percent"), get(r, "resets_at"), saved_at, now).map_or(Value::Null, Num::value),
+                            "left_percent": left.map_or(Value::Null, Num::value),
                             "resets_at": iso(s(get(r, "resets_at")).and_then(times::parse_time)), "window_seconds": row_window(r),
-                            "severity": get(r, "severity"), "per_model": py::str_of(get(r, "kind")).ends_with("_scoped") && !get(r, "kind").is_null()}));
+                            "severity": get(r, "severity"), "per_model": py::str_of(get(r, "kind")).ends_with("_scoped") && !get(r, "kind").is_null(),
+                            "pace": pace_of(left, get(r, "resets_at"))}));
         }
     }
     for row in usage_rows(usage).into_iter().filter(|r| !r.labeled) {
+        let left = percent_left(&row.used, &row.resets_at, saved_at, now);
         out.push(json!({"name": row.label, "short": row.label, "kind": null, "used_percent": row.used,
-                        "left_percent": percent_left(&row.used, &row.resets_at, saved_at, now).map_or(Value::Null, Num::value),
+                        "left_percent": left.map_or(Value::Null, Num::value),
                         "resets_at": iso(s(&row.resets_at).and_then(times::parse_time)), "window_seconds": row.window, "severity": null,
-                        "per_model": false, "raw": true, "note": if row.note.is_empty() { Value::Null } else { json!(row.note) }}));
+                        "per_model": false, "raw": true, "note": if row.note.is_empty() { Value::Null } else { json!(row.note) },
+                        "pace": pace_of(left, &row.resets_at)}));
     }
     Value::Array(out)
 }
@@ -1217,7 +1329,7 @@ pub fn account_json(entry: &Entry, result: &Usage, now: f64, email: bool) -> Val
         json!(if entry.codex {
             codex_plan_text(entry, usage.as_ref())
         } else {
-            plan_text(&entry.oauth)
+            plan_text(&entry.account)
         }),
     );
     out.insert(
@@ -1253,7 +1365,7 @@ pub fn account_json(entry: &Entry, result: &Usage, now: f64, email: bool) -> Val
             json!(extra)
         },
     );
-    let (group, at) = fable_rank(usage.as_ref(), *saved_at, now);
+    let (band, at) = fable_rank(usage.as_ref(), *saved_at, now);
     let at = if at != 0.0 && at.is_finite() {
         iso(Some(at))
     } else {
@@ -1261,10 +1373,10 @@ pub fn account_json(entry: &Entry, result: &Usage, now: f64, email: bool) -> Val
     };
     out.insert(
         "fable".into(),
-        match group {
-            2 => Value::Null,
-            0 => json!({"left": true, "resets_at": at}),
-            _ => json!({"left": false, "back_at": at}),
+        match band {
+            NO_FABLE => Value::Null,
+            FABLE_OUT => json!({"left": false, "back_at": at, "band": band_name(band)}),
+            _ => json!({"left": true, "resets_at": at, "band": band_name(band)}),
         },
     );
     Value::Object(out)
@@ -1305,7 +1417,7 @@ pub fn sorted_by_fable(accounts: Vec<(Entry, Usage)>, now: f64) -> (Vec<(Entry, 
         .into_iter()
         .map(|a| (fable_rank(a.1 .0.as_ref(), a.1 .1, now), a))
         .collect();
-    let any = ranked.iter().any(|(r, _)| r.0 < 2);
+    let any = ranked.iter().any(|(r, _)| r.0 < NO_FABLE);
     ranked.sort_by(|a, b| {
         a.0 .0.cmp(&b.0 .0).then(
             a.0 .1
@@ -1359,7 +1471,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         let plan = if entry.codex {
             codex_plan_text(entry, usage.as_ref())
         } else {
-            plan_text(&entry.oauth)
+            plan_text(&entry.account)
         };
         let mut details = Vec::new();
         if args.flag("email") {
@@ -1393,7 +1505,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         &(p("1", "Plan usage by profile") + &p("2", " (% left, then time left until reset)")),
     );
     if any_fable {
-        out::println(&p("2", "Sorted by Fable: those with some left first, the soonest reset on top; then those out of it, the soonest back on top."));
+        out::println(&p("2", "Sorted by Fable: those with some left first, the soonest reset on top, any past 90% used behind them; then those out of it, the soonest back on top."));
     }
     for (header, rows, extra, saved_at) in &blocks {
         out::println(header);
@@ -1670,12 +1782,79 @@ mod tests {
     }
 
     #[test]
-    fn keychain_names() {
-        // The hash is of the profile's path, as Claude Code makes it.
-        assert!(keychain_service("/x/.claude-work").starts_with("Claude Code-credentials-"));
+    fn plans_from_the_account() {
+        let team = json!({"organizationType": "claude_team", "userRateLimitTier": "default_claude_max_5x",
+                          "organizationRateLimitTier": "default_raven"});
+        assert_eq!(plan_text(&team), "team max 5x");
+        let pro = json!({"organizationType": "claude_pro", "userRateLimitTier": null,
+                         "organizationRateLimitTier": "default_claude_ai"});
+        assert_eq!(plan_text(&pro), "pro");
         assert_eq!(
-            keychain_service("/x/.claude-work").len(),
-            "Claude Code-credentials-".len() + 8
+            plan_text(
+                &json!({"organizationType": "claude_max", "organizationRateLimitTier": "default_claude_max_20x"})
+            ),
+            "max max 20x"
         );
+        assert_eq!(plan_text(&json!({"accountUuid": "x"})), "?");
+        assert_eq!(plan_text(&json!({})), "not signed in");
+    }
+
+    #[test]
+    fn pace_is_what_is_left_per_hour_to_the_reset() {
+        let now = 1_800_000_000.0;
+        assert_eq!(pace(60.0, Some(now + 20.0 * 3600.0), now), Some(3.0));
+        assert_eq!(pace(50.0, Some(now + 600.0), now), Some(50.0)); // at least an hour
+        assert_eq!(pace(50.0, Some(now - 1.0), now), None); // reset already
+        assert_eq!(pace(50.0, None, now), None);
+        assert_eq!(pace_text(0.456), "0.5%/h");
+    }
+
+    #[test]
+    fn fable_bands() {
+        let now = 1_800_000_000.0;
+        let fable = |used: f64, days: f64| {
+            json!({"limits": [{"kind": "weekly_scoped", "group": "weekly", "percent": used,
+                               "resets_at": times::iso_utc(now + days * 86400.0).unwrap(),
+                               "scope": {"model": {"display_name": "Fable"}}}]})
+        };
+        let band = |used: f64| fable_rank(Some(&fable(used, 2.0)), None, now).0;
+        assert_eq!(band(0.0), FABLE_FRESH);
+        assert_eq!(band(89.0), FABLE_FRESH);
+        assert_eq!(band(90.0), FABLE_LOW);
+        assert_eq!(band(97.0), FABLE_LOW);
+        assert_eq!(band(98.0), FABLE_NEARLY_OUT);
+        assert_eq!(band(99.5), FABLE_NEARLY_OUT);
+        assert_eq!(band(100.0), FABLE_OUT);
+        assert_eq!(
+            fable_rank(Some(&json!({"limits": []})), None, now).0,
+            NO_FABLE
+        );
+        // Within a band the soonest reset comes first, as before.
+        let (a, b) = (
+            fable_rank(Some(&fable(50.0, 1.0)), None, now),
+            fable_rank(Some(&fable(10.0, 3.0)), None, now),
+        );
+        assert!(a < b);
+        assert_eq!(band_name(FABLE_NEARLY_OUT), "nearly out");
+    }
+
+    #[test]
+    fn the_claude_run_asks_for_nothing_but_usage() {
+        assert_eq!(CLAUDE_USAGE_ARGS[..2], ["-p", "/usage"]);
+        assert!(CLAUDE_USAGE_ARGS.contains(&"--no-session-persistence"));
+        assert!(CLAUDE_USAGE_ARGS.contains(&"--strict-mcp-config"));
+        // What claude -p --output-format json prints: one object, or every message when verbose.
+        assert_eq!(
+            claude_result(
+                r#"{"type":"result","is_error":false,"result":"Current session: 11% used"}"#
+            )
+            .as_deref(),
+            Some("Current session: 11% used")
+        );
+        assert_eq!(
+            claude_result(r#"[{"type":"system"},{"type":"result","result":"x"}]"#).as_deref(),
+            Some("x")
+        );
+        assert_eq!(claude_result("not json"), None);
     }
 }

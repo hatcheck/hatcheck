@@ -22,6 +22,7 @@ pub mod out;
 pub mod paths;
 pub mod provider;
 pub mod py;
+pub mod relocate;
 pub mod serve;
 pub mod sessions;
 pub mod show;

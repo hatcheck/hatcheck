@@ -559,7 +559,7 @@ fn choose_source(
 
 /// Copy a file's or folder's times and permission bits, as shutil.copystat does: the times
 /// first, so a read-only original's copy still gets them.
-fn copy_stat(src: &str, dst: &str) -> std::io::Result<()> {
+pub(crate) fn copy_stat(src: &str, dst: &str) -> std::io::Result<()> {
     let meta = fs::metadata(src)?;
     let times = fs::FileTimes::new()
         .set_accessed(meta.accessed()?)

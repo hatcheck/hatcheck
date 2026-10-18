@@ -5,7 +5,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import {
   hidePopover, inApp, instances, openInstance, openMain, quit, recent, resume, settings, usage, version,
-  type Account, type Session,
+  type Account, type Limit, type Session,
 } from "./engine";
 import { accountHead, ago, clock, errorText, esc, learnHome, limitRow, pasteCommand, profileName, tilde, toast } from "./format";
 
@@ -71,12 +71,20 @@ async function loadInstances() {
   }
 }
 
-// Notifications: once when a limit runs low, and once when a low one resets.
+// Notifications: once when a limit runs low, once when a low one resets, and once when a limit
+// is about to reset with much of it unused (the last fifth of its window, a day at most).
 const SEEN = "hatcheck.limits";
+function resetsSoonUnused(l: Limit, unused: number): boolean {
+  if (unused <= 0 || l.left_percent === null || !l.resets_at || !l.window_seconds) return false;
+  const toGo = (Date.parse(l.resets_at) - Date.now()) / 1000;
+  const horizon = Math.min(l.window_seconds / 5, 24 * 3600);
+  return toGo > 0 && toGo <= horizon && l.left_percent >= unused;
+}
+
 async function notifyChanges(accounts: Account[]) {
   const config = settings();
   if (!config.notify || !inApp) return;
-  let before: Record<string, { left: number | null; resets: string | null }> = {};
+  let before: Record<string, { left: number | null; resets: string | null; warned?: boolean }> = {};
   try {
     before = JSON.parse(localStorage.getItem(SEEN) || "{}");
   } catch {
@@ -89,8 +97,14 @@ async function notifyChanges(accounts: Account[]) {
     const who = a.profiles.map(profileName).join(", ");
     for (const l of a.limits) {
       const key = a.profiles[0] + "|" + l.name;
-      now[key] = { left: l.left_percent, resets: l.resets_at };
       const was = before[key];
+      // The unused warning goes once per reset: it stays "warned" while the reset is the same.
+      let warned = Boolean(was && was.resets === l.resets_at && was.warned);
+      if (!warned && resetsSoonUnused(l, config.unused)) {
+        messages.push(`${who}: ${l.name} resets ${clock(l.resets_at)} with ${Math.round(l.left_percent!)}% unused`);
+        warned = true;
+      }
+      now[key] = { left: l.left_percent, resets: l.resets_at, warned };
       if (!was || l.left_percent === null) continue;
       const wasLow = was.left !== null && was.left <= config.low;
       if (!wasLow && l.left_percent <= config.low) {

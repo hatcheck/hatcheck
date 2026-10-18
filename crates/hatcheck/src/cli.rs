@@ -1,12 +1,13 @@
 //! The hatcheck command: picks the subcommand and runs it, or the launcher it's called as.
 
 use crate::{
-    best, bind, desktop, move_cmd, open_cmd, out, provider, sessions, show, usage, where_cmd,
+    best, bind, desktop, move_cmd, open_cmd, out, provider, relocate, sessions, show, usage,
+    where_cmd,
 };
 
 pub const SUBCOMMANDS: &[&str] = &[
     "sessions", "usage", "where", "move", "open", "show", "best", "bind", "unbind", "desktop",
-    "provider",
+    "provider", "relocate",
 ];
 
 const HELP: &str =
@@ -22,17 +23,20 @@ Usage:
     hatcheck where SESSION             where a session is stored, by its ID or the start of it
     hatcheck move SESSION PROFILE ...  copy a session to another profile or home, or convert
                                        it between Claude Code and Codex
+    hatcheck relocate OLD NEW          bring the sessions of a project folder that was moved
+                                       or renamed along to its new place
     hatcheck open [SESSION] ...        resume a session in a new terminal, in its folder
     hatcheck show SESSION              a session's conversation, read-only
-    hatcheck best [--for SESSION]      which account to use now, or to carry a session to
+    hatcheck best [--for SESSION]      which account to use now, or to carry a session to;
+                                       --wait sleeps until one has room
     hatcheck bind PROFILE ...          tie a folder to a profile, for cl, cx and the list
     hatcheck unbind [FOLDER]           untie it again
     hatcheck desktop ...               Claude Desktop instances on macOS: list, open, make one
     hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
                                        claude-k, cl -z and cl -k
 
-hatcheck, usage, where, show, desktop and move take --json, for scripts, status bars
-and the desktop app.
+hatcheck, usage, where, show, desktop, move and relocate take --json, for scripts,
+status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
@@ -121,6 +125,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "usage" => usage::main(&argv, &prog),
         "where" => where_cmd::main(&argv, &prog),
         "move" => move_cmd::main(&argv, &prog),
+        "relocate" => relocate::main(&argv, &prog),
         "open" => open_cmd::main(&argv, &prog),
         "show" => show::main(&argv, &prog),
         "desktop" => desktop::main(&argv, &prog),
