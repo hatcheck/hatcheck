@@ -83,7 +83,7 @@ struct Plan {
 /// What of path lies under folder: "" when it's the folder, "/sub" when it's inside it, None
 /// otherwise. Compared as the system compares names (without case on Windows).
 fn rest_under(path: &str, folder: &str) -> Option<String> {
-    let folder = folder.trim_end_matches(SEP);
+    let folder = folder.trim_end_matches(ospath::is_sep); // C:/old/ on Windows too
     let (p, f) = (ospath::normcase(path), ospath::normcase(folder));
     if p == f {
         return Some(String::new());
@@ -96,7 +96,7 @@ fn rest_under(path: &str, folder: &str) -> Option<String> {
 
 /// Where a folder that was under old is under new.
 fn mapped(cwd: &str, old: &str, new: &str) -> Option<String> {
-    rest_under(cwd, old).map(|rest| format!("{}{rest}", new.trim_end_matches(SEP)))
+    rest_under(cwd, old).map(|rest| format!("{}{rest}", new.trim_end_matches(ospath::is_sep)))
 }
 
 /// The folder a Claude Code transcript ran in: as the session list works it out, or, for a
@@ -653,8 +653,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let (dry_run, json_out) = (args.flag("dry_run"), args.flag("json"));
     let old = ospath::abspath(&ospath::expanduser(args.value("old").unwrap_or("")));
     let new = ospath::abspath(&ospath::expanduser(args.value("new").unwrap_or("")));
-    let old = old.trim_end_matches(SEP).to_string();
-    let new = new.trim_end_matches(SEP).to_string();
+    let old = old.trim_end_matches(ospath::is_sep).to_string();
+    let new = new.trim_end_matches(ospath::is_sep).to_string();
     let fail = |why: &str| -> i32 { out::fail(why) };
     if !ospath::isdir(&new) {
         return fail(&format!(

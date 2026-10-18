@@ -8,7 +8,8 @@ use std::fs;
 pub const WINDOWS: bool = cfg!(windows);
 pub const SEP: &str = if WINDOWS { "\\" } else { "/" };
 
-fn is_sep(c: char) -> bool {
+/// A separator: / anywhere, and \ on Windows too.
+pub fn is_sep(c: char) -> bool {
     c == '/' || (WINDOWS && c == '\\')
 }
 
