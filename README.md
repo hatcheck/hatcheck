@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yilab/hatcheck/main/site/logo-wordmark-dark.svg">
-    <img src="https://raw.githubusercontent.com/yilab/hatcheck/main/site/logo-wordmark.svg" alt="Hatcheck" width="360">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hatcheck/hatcheck/main/site/logo-wordmark-dark.svg">
+    <img src="https://raw.githubusercontent.com/hatcheck/hatcheck/main/site/logo-wordmark.svg" alt="Hatcheck" width="360">
   </picture>
 </p>
 
@@ -211,15 +211,15 @@ As a package, on macOS, Linux and Windows, without a clone. It installs `hatchec
 `cx`, `claude-z` and `claude-k`:
 
 ```bash
-uv tool install hatcheck          # or: pipx install hatcheck
-brew install yilab/tap/hatcheck   # Homebrew, on macOS and Linux
+uv tool install hatcheck            # or: pipx install hatcheck
+brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
 ```
 
 Those two wait for the first release, made by `.github/workflows/release.yml` from a tag such as
 `v0.1.0`. Until then, from GitHub:
 
 ```bash
-uv tool install git+https://github.com/yilab/hatcheck
+uv tool install git+https://github.com/hatcheck/hatcheck
 ```
 
 The package's `cl`, `cx`, `claude-z` and `claude-k` are Python (`hatcheck/launch.py`), doing what

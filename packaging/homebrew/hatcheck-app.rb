@@ -1,7 +1,7 @@
 # Homebrew cask for the Hatcheck app (macOS, Apple silicon and Intel), from the
 # desktop-v<version> GitHub release. It goes in the tap beside the formula, as
 # Casks/hatcheck-app.rb:
-#   brew install --cask yilab/tap/hatcheck-app
+#   brew install --cask hatcheck/tap/hatcheck-app
 # For each release, set version, and the two sha256 values to `shasum -a 256` of that
 # release's Hatcheck_<version>_aarch64.dmg and Hatcheck_<version>_x64.dmg.
 cask "hatcheck-app" do
@@ -11,18 +11,18 @@ cask "hatcheck-app" do
   sha256 arm:   "0000000000000000000000000000000000000000000000000000000000000000",
          intel: "0000000000000000000000000000000000000000000000000000000000000000"
 
-  url "https://github.com/yilab/hatcheck/releases/download/desktop-v#{version}/Hatcheck_#{version}_#{arch}.dmg"
+  url "https://github.com/hatcheck/hatcheck/releases/download/desktop-v#{version}/Hatcheck_#{version}_#{arch}.dmg"
   name "Hatcheck"
   desc "Claude and ChatGPT plans and recent sessions, in the menu bar"
-  homepage "https://github.com/yilab/hatcheck"
+  homepage "https://github.com/hatcheck/hatcheck"
 
   depends_on macos: ">= :big_sur"
 
   app "Hatcheck.app"
 
   zap trash: [
-    "~/Library/Application Support/com.yilab.hatcheck",
-    "~/Library/Caches/com.yilab.hatcheck",
-    "~/Library/WebKit/com.yilab.hatcheck",
+    "~/Library/Application Support/dev.hatcheck.hatcheck",
+    "~/Library/Caches/dev.hatcheck.hatcheck",
+    "~/Library/WebKit/dev.hatcheck.hatcheck",
   ]
 end

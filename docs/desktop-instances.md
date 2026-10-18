@@ -34,7 +34,7 @@ An instance is a data folder, `~/.claude-instances/<name>`, and a small launcher
 ```
 Claude Work.app/
   Contents/
-    Info.plist          the app's name and bundle ID (com.yilab.hatcheck.claude-<name>), and the
+    Info.plist          the app's name and bundle ID (dev.hatcheck.hatcheck.claude-<name>), and the
                         instance's name and data folder, as HatcheckInstance and HatcheckDataDir
     MacOS/launch        the launcher, a shell script
     Resources/icon.icns Claude's icon, recoloured

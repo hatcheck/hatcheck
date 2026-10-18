@@ -10,7 +10,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.90"
-repository = "https://github.com/yilab/hatcheck"
+repository = "https://github.com/hatcheck/hatcheck"
 
 [profile.release]
 lto = true

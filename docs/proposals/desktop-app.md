@@ -112,7 +112,7 @@ Phase 0 is useful without the app, for scripts and status bars, so it came first
   auto-updater gets fixes to users quickly.
 - **Licensing.** The repo has been MIT-licensed since 17 October 2026 (`LICENSE`). The Desktop-instance feature was
   rewritten in October 2026 (`hatcheck desktop`), so it no longer depends on Aaron Oxborrow's
-  scripts ([issue #1](https://github.com/yilab/hatcheck/issues/1)); the `--user-data-dir` technique
+  scripts ([issue #1](https://github.com/hatcheck/hatcheck/issues/1)); the `--user-data-dir` technique
   itself is free to use.
 - **Three platforms to maintain.** Start with macOS only.
 

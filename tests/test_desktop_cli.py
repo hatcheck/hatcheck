@@ -114,7 +114,7 @@ class DesktopCommand(unittest.TestCase):
             plist = plistlib.load(fh)
         self.assertEqual({k: plist[k] for k in ("CFBundleIdentifier", "HatcheckInstance", "HatcheckDataDir", "CFBundleName",
                                                  "CFBundleExecutable", "CFBundleIconFile", "NSHighResolutionCapable")},
-                         {"CFBundleIdentifier": "com.yilab.hatcheck.claude-work", "HatcheckInstance": "work",
+                         {"CFBundleIdentifier": "dev.hatcheck.hatcheck.claude-work", "HatcheckInstance": "work",
                           "HatcheckDataDir": data, "CFBundleName": "Claude Work", "CFBundleExecutable": "launch",
                           "CFBundleIconFile": "icon", "NSHighResolutionCapable": True})
         launcher = os.path.join(app, "Contents", "MacOS", "launch")

@@ -53,7 +53,7 @@ class Desktop(unittest.TestCase):
         with open(self.plist_path(app), "rb") as fh:
             plist = plistlib.load(fh)
         self.assertEqual((plist["CFBundleExecutable"], plist["CFBundleIconFile"], plist["CFBundleIdentifier"]),
-                         ("launch", "icon", "com.yilab.hatcheck.claude-work"))
+                         ("launch", "icon", "dev.hatcheck.hatcheck.claude-work"))
         self.assertEqual((plist["HatcheckInstance"], plist["HatcheckDataDir"], plist["CFBundleName"]),
                          ("work", os.path.join(self.instances_dir, "work"), "Claude Work"))
         launcher = os.path.join(app, "Contents", "MacOS", "launch")

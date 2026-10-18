@@ -187,4 +187,4 @@ Publish the CLI on PyPI (`uv tool install hatcheck`) and Homebrew, so installing
 (`hatcheck/launch.py`) so they come with it on every system; `packaging/homebrew/hatcheck.rb` is the
 formula; `.github/workflows/release.yml` publishes to PyPI and makes the GitHub release from a `v*`
 tag. Publishing itself waits for you: PyPI's trusted publisher and the tap repo are set up once,
-then a tag releases. Until then, `uv tool install git+https://github.com/yilab/hatcheck` installs it.
+then a tag releases. Until then, `uv tool install git+https://github.com/hatcheck/hatcheck` installs it.

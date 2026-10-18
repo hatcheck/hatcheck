@@ -4,7 +4,7 @@ InstallerType: nullsoft
 Scope: user
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/yilab/hatcheck/releases/download/desktop-v0.1.0/Hatcheck_0.1.0_x64-setup.exe
+    InstallerUrl: https://github.com/hatcheck/hatcheck/releases/download/desktop-v0.1.0/Hatcheck_0.1.0_x64-setup.exe
     InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
 ManifestType: installer
 ManifestVersion: 1.6.0

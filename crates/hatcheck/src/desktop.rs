@@ -474,7 +474,7 @@ pub fn make_instance(
         ("CFBundleIconFile", "icon".into()),
         (
             "CFBundleIdentifier",
-            format!("com.yilab.hatcheck.claude-{}", name.replace('_', "-")).into(),
+            format!("dev.hatcheck.hatcheck.claude-{}", name.replace('_', "-")).into(),
         ),
         ("CFBundleInfoDictionaryVersion", "6.0".into()),
         ("CFBundleName", format!("Claude {display}").into()),

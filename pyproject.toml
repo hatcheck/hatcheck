@@ -25,8 +25,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yilab/hatcheck"
-Issues = "https://github.com/yilab/hatcheck/issues"
+Homepage = "https://github.com/hatcheck/hatcheck"
+Issues = "https://github.com/hatcheck/hatcheck/issues"
 
 [project.scripts]
 hatcheck = "hatcheck.cli:main"

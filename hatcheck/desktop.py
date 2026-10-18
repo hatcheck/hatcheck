@@ -256,7 +256,7 @@ def make_instance(name, display, hue=0.0, saturation=1.0, replace=False, apps_di
             shutil.copyfile(stock, icon)
         plist = {
             "CFBundleName": "Claude " + display, "CFBundleDisplayName": "Claude " + display,
-            "CFBundleIdentifier": "com.yilab.hatcheck.claude-" + name.replace("_", "-"),
+            "CFBundleIdentifier": "dev.hatcheck.hatcheck.claude-" + name.replace("_", "-"),
             "CFBundleExecutable": "launch", "CFBundleIconFile": "icon", "CFBundlePackageType": "APPL",
             "CFBundleInfoDictionaryVersion": "6.0", "CFBundleShortVersionString": version(), "CFBundleVersion": version(),
             "LSMinimumSystemVersion": "11.0", "NSHighResolutionCapable": True,
