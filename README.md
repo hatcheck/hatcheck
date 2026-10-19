@@ -240,6 +240,34 @@ A shell function takes precedence over an installed command with the same name, 
 same thing. `hatcheck` needs the install; without it, `find ~/.claude* ~/.codex* -name "*3f1c2a9e*"`
 finds a session's files.
 
+#### Removing it, or switching how it's installed
+
+Each way of installing puts the six commands in a folder of its own, and the copy that comes first
+on your `PATH` is the one that runs: `which -a hatcheck` (`where.exe hatcheck` on Windows) lists
+them all. A copy left in `~/.local/bin`, which is often first, hides one from Homebrew, and
+Homebrew warns about it. So remove the old install when you switch:
+
+| Installed with | Removed with |
+|---|---|
+| `install.sh` or `install.ps1`, from a clone | `./install.sh --uninstall` or `.\install.ps1 -Uninstall`, which remove only the links and launchers they made |
+| the installer scripts from a release | deleting the six commands from `~/.local/bin`: `rm ~/.local/bin/{hatcheck,hat,cl,cx,claude-z,claude-k}` (on Windows, the `.exe` files in `~\.local\bin`) |
+| Homebrew | `brew uninstall hatcheck` |
+| uv or pipx | `uv tool uninstall hatcheck` or `pipx uninstall hatcheck` |
+| cargo | `cargo uninstall hatcheck` |
+
+- The release installers also added a line to your shell's startup files that puts `~/.local/bin`
+  on your `PATH`. Other tools use that folder too, so it can stay.
+- `hatcheck bind --hook` writes the path of the `hatcheck` it finds into each profile's hook. After
+  a switch, run `hatcheck unbind --hook`, then `hatcheck bind --hook` with the new install. Before
+  removing hatcheck for good, run `hatcheck unbind --hook`, or Claude Code and Codex would try to
+  run a command that's gone each time a session starts.
+- Removing it leaves your profiles, sessions and logins as they are. What's left of hatcheck's own
+  is its folder bindings, in `~/.config/hatcheck` (`%APPDATA%\hatcheck` on Windows), its cache
+  folder (`~/Library/Caches/hatcheck` on macOS, `~/.cache/hatcheck` on Linux,
+  `%LOCALAPPDATA%\hatcheck\Cache` on Windows), and in each profile, the `projects/` folder Claude
+  Code makes for that cache's `claude-usage` folder when hatcheck reads usage. All of them can go.
+  Desktop instances stay until `hatcheck desktop remove`.
+
 ### `cl`: run Claude Code with a profile
 
 ```bash
