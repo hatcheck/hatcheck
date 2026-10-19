@@ -152,9 +152,9 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   you set up) and run the agent in their place; nothing stays running
   ([`launch.rs`](crates/hatcheck/src/launch.rs), `run`).
 - **No agent's config is rewritten**, except when you ask: `hatcheck bind --hook` adds one
-  `SessionStart` hook to each profile's `settings.json` and each Codex home's `hooks.json`, or
-  points the one it added at the `hatcheck` it finds now, and `unbind --hook` removes only what it
-  added ([`bind.rs`](crates/hatcheck/src/bind.rs),
+  session-start hook to each profile's `settings.json`, each Codex home's `hooks.json` and
+  Antigravity CLI's `~/.gemini/config/hooks.json`, or points the one it added at the `hatcheck` it
+  finds now, and `unbind --hook` removes only what it added ([`bind.rs`](crates/hatcheck/src/bind.rs),
   `add_hooks` and `remove_hooks`).
 - **No credentials.** It never asks for, stores, refreshes or moves a login. For Claude it
   never reads one: Claude Code's own `/usage` is run in the profile and the snapshot it saves is

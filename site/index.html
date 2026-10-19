@@ -7,13 +7,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <title>Hatcheck</title>
-  <meta name="description" content="Claude Code and Codex accounts on one computer, each kept apart: recent sessions, plan usage and resume commands across all of them, in the terminal and the menu bar.">
+  <meta name="description" content="Claude Code and Codex accounts on one computer, each kept apart, and Antigravity CLI beside them: recent sessions, plan usage and resume commands across all of them, in the terminal and the menu bar.">
   <link rel="canonical" href="https://hatcheck.dev/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hatcheck.dev/">
   <meta property="og:image" content="https://hatcheck.dev/og.png">
   <meta property="og:title" content="Hatcheck">
-  <meta property="og:description" content="Claude Code and Codex accounts on one computer, each kept apart: recent sessions, plan usage and resume commands across all of them.">
+  <meta property="og:description" content="Claude Code and Codex accounts on one computer, each kept apart, and Antigravity CLI beside them: recent sessions, plan usage and resume commands across all of them.">
   <style>
     :root {
       color-scheme: light dark;
@@ -45,7 +45,7 @@
     section { padding: 26px 0; border-top: 1px solid var(--line); }
     h2 { font-size: 24px; margin: 0 0 14px; letter-spacing: -0.01em; }
     h3 { font-size: 17px; margin: 22px 0 8px; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
     .card { background: var(--bg-soft); border-radius: 12px; padding: 16px 18px; }
     .card h3 { margin-top: 0; }
     .card p, .card li { color: var(--muted); font-size: 15px; margin: 6px 0; }
@@ -86,10 +86,10 @@
       </svg>
       <div>
         <h1>Hatcheck</h1>
-        <p class="tagline">Claude Code and Codex accounts on one computer, each kept apart: recent sessions, plan usage and resume commands across all of them.</p>
+        <p class="tagline">Claude Code and Codex accounts on one computer, each kept apart, and Antigravity CLI beside them: recent sessions, plan usage and resume commands across all of them, and sessions carried between the three.</p>
       </div>
     </div>
-    <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic or OpenAI. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI.</p>
+    <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI or Google. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC.</p>
     <div class="buttons">
       <a class="button" href="#install">Install the CLI</a>
       <a class="button ghost" href="#app">Get the app</a>
@@ -106,24 +106,30 @@
       </div>
       <div class="card">
         <h3>What to resume, and what's left</h3>
-        <p><code>hatcheck</code> lists recent sessions from every profile with the command that resumes each, and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> says which account to use now.</p>
+        <p><code>hatcheck</code> lists recent sessions from every profile, and Antigravity CLI's conversations beside them, with the command that resumes each and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> says which account to use now.</p>
       </div>
       <div class="card">
         <h3>Sessions that travel</h3>
-        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, or converts it between Claude Code and Codex. <code>hatcheck open</code> resumes one in a new terminal, in its folder.</p>
+        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, or converts it between Claude Code, Codex and Antigravity CLI. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal, in its folder.</p>
+      </div>
+      <div class="card">
+        <h3>Claude Desktop, one per account</h3>
+        <p>On macOS, <code>hatcheck desktop new work Work</code> makes a Claude Desktop instance with its own data folder and login, and a launcher in a colour you pick that brings a running instance forward instead of opening a second one.</p>
       </div>
     </div>
 
     <h3>In the terminal</h3>
 <pre><code>$ hatcheck
-Claude Code and Codex CLI sessions active in the last 24h or open now (by folder, newest first)
+Claude Code, Codex and Antigravity CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
     4m  Fix flaky login test · main · ● open in pid 48213 (busy)
-        cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10      # 5h 100% █████  Fable 48% ███▍░░░ ↻████▎░░ 4d6h
-   40m  Add retries to the uploader · codex · main
-        cx work resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e        # 5h  80% ████░ ↻███▏░ 3h10m  week 64% ████▌░░ ↻█▊░░░░░ 1d18h
-    3h  Add rate limiting to the login endpoint · feat/rate-limit
-        claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d       # 5h  62% ███▏░ ↻██▋░░ 2h41m  week 91% ██████▍ ↻███▏░░░ 3d2h</code></pre>
+        cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10    # 5h 100% █████ ↻████░ 3h59m  Fable 48% ███▍░░░ ↻████▎░░ 4d5h
+   40m  Add retries to the uploader · main
+        cx work resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e      # 5h  80% ████░ ↻███▏░ 3h09m  week  64% ████▌░░ ↻█▊░░░░░ 1d17h
+    1h  Profile the slow search query
+        agy --conversation c134893c-20f5-48ea-bc9b-7f7c9271bc4e  # usage ?
+    3h  Add rate limiting to the login endpoint · main
+        claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d     # 5h  62% ███▏░ ↻██▋░░ 2h40m  week  91% ██████▍ ↻███▏░░░ 3d1h</code></pre>
 
     <h3>Every plan, at a glance</h3>
     <p>Each limit has two bars: what's left of it, then how much of its window is left before it resets. Per-model limits such as Fable are violet, so they stand apart from the weekly limit for all models.</p>
@@ -136,7 +142,7 @@ cd ~/code/api
 
   <section class="wrap" id="install">
     <h2>Install the CLI</h2>
-    <p>macOS, Linux and Windows: one binary per platform, nothing else needed. It installs <code>hatcheck</code> (<code>hat</code> for short), <code>cl</code>, <code>cx</code>, <code>claude-z</code> and <code>claude-k</code>.</p>
+    <p>macOS, Linux and Windows: one binary per platform, nothing else needed. It installs <code>hatcheck</code> (<code>hat</code> for short, and each command to its first letters: <code>hat m</code> is <code>hat move</code>), <code>cl</code>, <code>cx</code>, <code>claude-z</code> and <code>claude-k</code>. Installed more than one way, <code>hatcheck doctor</code> says which copy runs and how to remove the rest.</p>
 <pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
 uv tool install hatcheck            # or: pipx install hatcheck</code></pre>
@@ -149,13 +155,14 @@ cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</cod
 
   <section class="wrap" id="app">
     <h2>The app</h2>
-    <p>A menu-bar app (system tray on Windows and Linux) built on the CLI: what's left of every plan, the last day's sessions with <strong>Resume</strong> and <strong>Copy</strong>, the Claude Desktop instances a click away, and a notification when a limit runs low or resets. Its main window browses every session with a preview, moves sessions between profiles after a dry run, and adds profiles.</p>
+    <p>A menu-bar app (system tray on Windows and Linux) built on the CLI: what's left of every plan, the last day's sessions with <strong>Resume</strong> and <strong>Copy</strong>, the Claude Desktop instances a click away, and a notification when a limit runs low or resets. Its main window browses every session with a preview, moves or forks sessions between profiles after a dry run, and adds profiles.</p>
+    <p>It isn't released yet. Its first release brings these downloads and a Homebrew cask, and it updates itself from the releases after that; until then, <a href="https://github.com/hatcheck/hatcheck/blob/main/desktop/README.md">desktop/README.md</a> says how to build it.</p>
     <div class="downloads">
-      <a href="https://github.com/hatcheck/hatcheck/releases">macOS <span>Apple silicon and Intel, .dmg</span></a>
-      <a href="https://github.com/hatcheck/hatcheck/releases">Windows <span>installer, .exe or .msi</span></a>
-      <a href="https://github.com/hatcheck/hatcheck/releases">Linux <span>AppImage or .deb</span></a>
+      <!-- Links to https://github.com/hatcheck/hatcheck/releases again once the app's first release is out. -->
+      <a>macOS <span>Apple silicon and Intel, .dmg</span></a>
+      <a>Windows <span>installer, .exe or .msi</span></a>
+      <a>Linux <span>AppImage or .deb</span></a>
     </div>
-    <p>On macOS, Homebrew works too: <code>brew install --cask hatcheck/tap/hatcheck-app</code>. The app updates itself from the releases.</p>
   </section>
 
   <section class="wrap">
@@ -164,9 +171,9 @@ cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</cod
     <p>Each rule links to the code that keeps it, so it can be checked rather than taken on trust.</p>
     <ul class="rules">
       <li><strong>Not in the path.</strong> <code>cl</code> and <code>cx</code> set <code>CLAUDE_CONFIG_DIR</code> or <code>CODEX_HOME</code> and run the agent in their place; nothing stays running (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/launch.rs">launch.rs</a>, <code>run</code>).</li>
-      <li><strong>No agent's config is rewritten</strong>, except when you ask: <code>hatcheck bind --hook</code> adds one hook to each profile's settings, and <code>unbind --hook</code> removes only what it added (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/bind.rs">bind.rs</a>, <code>add_hooks</code>).</li>
-      <li><strong>No credentials.</strong> It never asks for, stores, refreshes or moves a login. For Claude it never reads one: Claude Code's own <code>/usage</code> is run in the profile and the snapshot it saves is read. For Codex, the home's token is sent only to ChatGPT's usage endpoint, as it is, never refreshed (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/usage.rs">usage.rs</a>, <code>run_claude_usage</code> and <code>fetch_codex_usage</code>). Signing in happens in Claude Code and Codex, in a terminal.</li>
-      <li><strong>Live usage is opt-in</strong> in the app, and <code>--cached</code> in the CLI shows what Claude Code and Codex last saved, with its age.</li>
+      <li><strong>No agent's config is rewritten</strong>, except when you ask: <code>hatcheck bind --hook</code> adds one hook to each Claude Code profile's settings, each Codex home's and Antigravity CLI's, or points the one it added at the <code>hatcheck</code> it finds now, and <code>unbind --hook</code> removes only what it added (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/bind.rs">bind.rs</a>, <code>add_hooks</code>).</li>
+      <li><strong>No credentials.</strong> It never asks for, stores, refreshes or moves a login. For Claude it never reads one: Claude Code's own <code>/usage</code> is run in the profile and the snapshot it saves is read. For Codex, the home's token is sent only to ChatGPT's usage endpoint, as it is, never refreshed (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/usage.rs">usage.rs</a>, <code>run_claude_usage</code> and <code>fetch_codex_usage</code>). For Antigravity CLI it never reads one either: agy's own <code>/usage</code> is run, once <code>agy models</code> has said it's signed in, since agy asked without a sign-in would start one (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/agy.rs">agy.rs</a>, <code>run_usage</code>). Signing in happens in the agents themselves, in a terminal.</li>
+      <li><strong>Live usage is opt-in</strong> in the app, and <code>--cached</code> in the CLI shows what Claude Code and Codex last saved, and the last reading hatcheck kept of agy's, which saves none, with its age.</li>
       <li><strong>No automatic switching</strong> between accounts. <code>hatcheck best</code> ranks and prints commands, for choosing between accounts you may use for the work at hand, such as your own and your company's; nothing starts, moves or switches a session on its own (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/best.rs">best.rs</a>).</li>
       <li><strong>Nothing leaves your computer</strong> except those usage requests: Claude Code's to Anthropic, one to ChatGPT per Codex account, the one address the binary itself calls (<code>CODEX_USAGE_URL</code> in <code>usage.rs</code>), and Antigravity CLI's own <code>/usage</code> to Google, with the model list it fetches first to say it's signed in.</li>
       <li><strong>Nothing runs in the background.</strong> No daemon; the app's engine lives only while the app does (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/serve.rs">serve.rs</a>).</li>
@@ -176,7 +183,7 @@ cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</cod
 
   <footer class="wrap">
     <p>Made by <a href="https://github.com/yiwang">Yi Wang</a>. Source, issues and releases on <a href="https://github.com/hatcheck/hatcheck">GitHub</a>.</p>
-    <p>Unofficial: not made by, affiliated with or endorsed by Anthropic or OpenAI.</p>
+    <p>Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI or Google.</p>
   </footer>
 </body>
 </html>
