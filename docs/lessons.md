@@ -82,6 +82,14 @@ fake `claude` stands in for Claude Code, and Codex tokens are expired so nothing
 - Evidence: the first fake `claude` wrapper, 2026-10-18; `${0%/*}` now.
 - Seen 1× (2026-10-18).
 
+**A Windows path has backslashes, which JSON doubles, and either separator.** A test compares a
+path with parsed values, or with `json.dumps(path)[1:-1]`, never with JSON text as it is; code
+that trims or splits a path the user typed takes `/` as well as `\` (`ospath::is_sep`).
+- Evidence: fc1c21f, relocate trimmed only `\` off `C:/code/api/`; `test_sessions_come_along`
+  looked for a path in `json.dumps(records)`. Both failed only on windows-latest, the second hidden
+  until the first was fixed, since a failing unit test stops that job before the command tests.
+- Seen 2× (2026-10-18, 2026-10-19).
+
 **Another app's format is checked against the real app, and the version is written down.**
 - Evidence: README, `hatcheck move`: "tested by resuming them with the real `claude` (2.1.301)
   and `codex` (0.155.1)"; `hatcheck bind --hook`: "tested with the real `claude` (2.1.301)";

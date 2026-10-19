@@ -105,7 +105,10 @@ class Relocate(unittest.TestCase):
             records = [json.loads(line) for line in fh if line.strip()]
         meta = [r["payload"]["cwd"] for r in records if r["type"] in ("session_meta", "turn_context")]
         self.assertEqual(meta, [self.api2, self.api2])
-        self.assertIn("<cwd>%s</cwd>" % self.api, json.dumps(records))  # what was said stays as it was
+        # What was said stays as it was. Compared as text, not as JSON, which doubles a Windows path's \.
+        said = " ".join(c.get("text", "") for r in records if r["payload"].get("type") == "message"
+                        for c in r["payload"]["content"])
+        self.assertIn("<cwd>%s</cwd>" % self.api, said)
         # The binding moved with it.
         code, out = self.h.run("bind", cwd=self.api2)
         self.assertIn("work", out)
