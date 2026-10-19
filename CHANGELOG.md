@@ -4,7 +4,7 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
-## Unreleased
+## 0.4.0 - 2026-10-19
 
 Antigravity CLI (`agy`) joins Claude Code and Codex: its conversations are listed, shown and carried to the other agents, and theirs to it. `hatcheck doctor` says how hatcheck and the agents are installed, and the README is now the short tour, with each command documented as it is in `docs/`.
 
