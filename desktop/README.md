@@ -45,24 +45,48 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
   endpoint for each Codex home with its saved token, read and never refreshed.
 - **No automatic switching** between accounts.
 
-## Build it
+## Build and test it
 
-Needs Node 22 and Rust (1.90 or newer).
+Needs Node 22 and Rust (1.90 or newer), and on macOS, Xcode or its command line tools.
 
 ```bash
 cd desktop
-npm install
+npm install             # once, and again when package.json changes
 npm run engine          # the hatcheck binary, from crates/hatcheck, as src-tauri/binaries/hatcheck-<target triple>
+npm run dev             # the pages in a browser, at http://localhost:1420, with sample data
+npm run tauri dev       # the app from source, against your profiles, the pages reloading as they change
+npm run demo            # the app against a demo home, to try Move and the rest on sessions that don't matter
 npm run tauri build     # src-tauri/target/release/bundle/: Hatcheck.app and a .dmg on macOS
-npm run tauri dev       # or run it from source, with the pages reloading as they change
+npm run build           # what CI checks of the pages: the types (tsc) and the build (vite)
 ```
 
-`npm run dev` alone serves the pages in a browser with sample data, for working on them.
-`Hatcheck.app/Contents/MacOS/hatcheck-desktop --selftest` runs the bundled engine as the app does,
-each call twice with how long it took, and prints what it got, without opening a window. `npm run icons` redraws the icons
-(`scripts/make-icons.py`, with Pillow, from the logo's shapes in `site/favicon.svg`) and makes every
-size: the app icon, a black menu-bar icon that macOS tints as a template, and a coloured tray
-icon for Windows and Linux, which show tray icons as they are.
+- **The engine** is built only by `npm run engine`, not by `tauri dev` or `tauri build`: run it
+  again after changing the CLI. The app keeps its engines running, so quit it and start it again
+  to get the new one. `Hatcheck.app/Contents/MacOS/hatcheck-desktop --selftest` runs the bundled
+  engine as the app does, each call twice with how long it took, and prints what it got, without
+  opening a window.
+- **`npm run dev`** serves the main window (`index.html`) and the menu-bar popover (`tray.html`)
+  with the sample data in `src/sample.ts`, and no engine: for working on the pages.
+- **`npm run tauri dev`** runs the app in the menu bar against your own profiles. Its log is that
+  terminal, and right-click → Inspect Element opens the web inspector. Looking is safe: the lists,
+  previews and plans only read, and live usage is off until you turn it on. Doing isn't: **Move it**
+  deletes the original once the copy is checked (**Preview** first, or tick **Keep the original**),
+  making or removing a Desktop instance changes `/Applications`, and Resume and Sign in open your
+  terminal.
+- **`npm run demo`** builds the engine and the app, makes a demo home with the command tests'
+  throwaway profiles (three Claude Code profiles with saved usage, two Codex homes, sessions in two
+  folders, a bound folder), and starts the app with `HOME` there, so Move and Fork change only the
+  demo's sessions. It deletes the demo home when the app quits. `npm run demo -- --no-build` starts
+  the last build, and `-- --keep` keeps the demo home. Resume, Sign in and Add one still open a
+  terminal in your own home, and Desktop instances are real apps.
+- **`npm run tauri build`** makes the app as a release has it, unsigned, which runs on the Mac
+  that built it. The updater and macOS signing need a release ([Releases](#releases)).
+- CI (`.github/workflows/desktop-check.yml`) runs `npm ci && npm run build`, and `cargo check` in
+  `src-tauri`.
+
+`npm run icons` redraws the icons (`scripts/make-icons.py`, with Pillow, from the logo's shapes in
+`site/favicon.svg`) and makes every size: the app icon, a black menu-bar icon that macOS tints as
+a template, and a coloured tray icon for Windows and Linux, which show tray icons as they are.
 
 ## Layout
 
@@ -76,7 +100,8 @@ icon for Windows and Linux, which show tray icons as they are.
 - `src/engine.ts`: each engine call and the shape of its JSON. `src/format.ts`: bars, times and
   paths. `src/sample.ts`: the sample data for the browser.
 - `scripts/build-engine.mjs`: the engine, the hatcheck binary built with cargo from the repo's
-  `crates/hatcheck`, named for the target as Tauri wants its sidecars.
+  `crates/hatcheck`, named for the target as Tauri wants its sidecars. `scripts/demo.py`:
+  `npm run demo`, which makes its demo home with `tests/helpers.py`.
 
 ## Releases
 

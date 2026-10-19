@@ -30,6 +30,11 @@ the Keychain or the network, and they must stay that way: a fake `claude` and ex
 tokens stand in (`tests/helpers.py`). Run the whole suite, not the file you touched: a change to
 what a command prints breaks the test that pinned it elsewhere.
 
+The desktop app has its own checks, which CI runs: `npm run build` in `desktop/` (the types and
+the pages) and `cargo check` in `desktop/src-tauri`. To try the app, `npm run demo` builds it and
+runs it against a demo home made with `tests/helpers.py`, never against your profiles; the
+commands are in [desktop/README.md](desktop/README.md#build-and-test-it).
+
 ## Conventions
 
 - Output is what the Python version printed, byte for byte, where a user or a test sees it:

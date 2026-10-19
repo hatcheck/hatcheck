@@ -198,8 +198,9 @@ another profile after a dry run. The window also lists profiles and homes, signs
 in a terminal, and makes Desktop instances.
 
 It ships the CLI inside itself, so it needs no Python. It never handles a login, and live usage is
-off until you turn it on. See [desktop/README.md](desktop/README.md) to build it; releases come
-from `.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behind it is
+off until you turn it on. See [desktop/README.md](desktop/README.md) to build and test it, with
+`npm run demo` running it against a demo home rather than your profiles; releases come from
+`.github/workflows/desktop.yml` for macOS, Windows and Linux. The plan behind it is
 [the proposal](docs/proposals/desktop-app.md).
 
 ## Files in this repo
