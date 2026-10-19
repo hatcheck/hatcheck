@@ -103,6 +103,30 @@ fn has_hook(settings: &Dict) -> bool {
         })
 }
 
+/// Point the hooks of ours in settings at line, what they should run now: the command the first
+/// one that ran something else ran, or None when they all run line already.
+fn repoint_hooks(settings: &mut Dict, line: &str) -> Option<String> {
+    let entries = settings
+        .get_mut("hooks")?
+        .get_mut("SessionStart")?
+        .as_array_mut()?;
+    let mut old = None;
+    for entry in entries.iter_mut() {
+        let Some(Value::Array(list)) = entry.as_object_mut().and_then(|e| e.get_mut("hooks"))
+        else {
+            continue;
+        };
+        for hook in list.iter_mut().filter(|h| ours(h)) {
+            let was = s(get(hook, "command")).unwrap_or("").to_string();
+            if was != line {
+                old.get_or_insert(was);
+                hook["command"] = json!(line);
+            }
+        }
+    }
+    old
+}
+
 /// (agent, profile or home, the file its hooks are in) for every profile and Codex home.
 fn hook_files() -> Vec<(&'static str, String, String)> {
     let mut files: Vec<(&'static str, String, String)> = paths::find_profiles()
@@ -317,8 +341,22 @@ fn add_hooks() -> i32 {
                 continue;
             }
         };
+        let line = format!("{command}{}", if agent == "codex" { " codex" } else { "" });
         if has_hook(&settings) {
-            out::println(&format!("  {show}  already has it"));
+            // It may run a hatcheck that has gone, after a switch of install: point it at this one.
+            let Some(old) = repoint_hooks(&mut settings, &line) else {
+                out::println(&format!("  {show}  already has it"));
+                continue;
+            };
+            if let Err(e) = write_json(&path, &Value::Object(settings)) {
+                out::println(&format!("  {show}  skipped: {e}"));
+                continue;
+            }
+            out::println(&format!(
+                "  {show}  updated, in {}: it ran {old}",
+                ospath::basename(&path)
+            ));
+            codex |= agent == "codex";
             continue;
         }
         let hooks = settings.entry("hooks").or_insert_with(|| json!({}));
@@ -338,7 +376,6 @@ fn add_hooks() -> i32 {
             ));
             continue;
         };
-        let line = format!("{command}{}", if agent == "codex" { " codex" } else { "" });
         list.push(json!({"hooks": [{"type": "command", "command": line}]}));
         if let Err(e) = write_json(&path, &Value::Object(settings)) {
             out::println(&format!("  {show}  skipped: {e}"));

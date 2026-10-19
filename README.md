@@ -258,9 +258,9 @@ Homebrew warns about it. So remove the old install when you switch:
 - The release installers also added a line to your shell's startup files that puts `~/.local/bin`
   on your `PATH`. Other tools use that folder too, so it can stay.
 - `hatcheck bind --hook` writes the path of the `hatcheck` it finds into each profile's hook. After
-  a switch, run `hatcheck unbind --hook`, then `hatcheck bind --hook` with the new install. Before
-  removing hatcheck for good, run `hatcheck unbind --hook`, or Claude Code and Codex would try to
-  run a command that's gone each time a session starts.
+  a switch, run `hatcheck bind --hook` again with the new install, which points each hook at it.
+  Before removing hatcheck for good, run `hatcheck unbind --hook`, or Claude Code and Codex would
+  try to run a command that's gone each time a session starts.
 - Removing it leaves your profiles, sessions and logins as they are. What's left of hatcheck's own
   is its folder bindings, in `~/.config/hatcheck` (`%APPDATA%\hatcheck` on Windows), its cache
   folder (`~/Library/Caches/hatcheck` on macOS, `~/.cache/hatcheck` on Linux,
@@ -828,6 +828,8 @@ $ hatcheck bind --hook                  # warn in Claude Code and Codex (once; h
   profile, it shows a warning and nothing is blocked:
   `hatcheck: ~/code/api is bound to ~/.claude-work, but this session runs in ~/.claude-personal. Quit
   and run cl work here instead.` For a resumed session it gives the `hatcheck move` command instead.
+  The hook runs the `hatcheck` that `--hook` found on your `PATH`, by its path. Run `--hook` again
+  after installing hatcheck another way, and it points the hooks at the new one.
   - **Claude Code:** tested with the real `claude` (2.1.301). It shows the warning in the interactive
     UI; `claude -p` doesn't display it.
   - **Codex:** Codex runs a new hook only once you trust it with `/hooks` in `codex`, once per home.
@@ -911,8 +913,9 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   you set up) and run the agent in their place; nothing stays running
   ([`launch.rs`](crates/hatcheck/src/launch.rs), `run`).
 - **No agent's config is rewritten**, except when you ask: `hatcheck bind --hook` adds one
-  `SessionStart` hook to each profile's `settings.json` and each Codex home's `hooks.json`, and
-  `unbind --hook` removes only what it added ([`bind.rs`](crates/hatcheck/src/bind.rs),
+  `SessionStart` hook to each profile's `settings.json` and each Codex home's `hooks.json`, or
+  points the one it added at the `hatcheck` it finds now, and `unbind --hook` removes only what it
+  added ([`bind.rs`](crates/hatcheck/src/bind.rs),
   `add_hooks` and `remove_hooks`).
 - **No credentials.** It never asks for, stores, refreshes or moves a login. For Claude it
   never reads one: Claude Code's own `/usage` is run in the profile and the snapshot it saves is

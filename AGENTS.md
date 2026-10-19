@@ -41,7 +41,7 @@ what a command prints breaks the test that pinned it elsewhere.
 - `--json` output is stable: absolute paths, UTC times, no colours; fields can be added at any
   time, and `version` goes up only when one changes meaning or goes away.
 - `--dry-run` runs every check the real run does and writes nothing.
-- A change users would notice gets a line in `CHANGELOG.md`, under the next version's heading:
-  that section becomes the release's notes on GitHub.
+- A change users would notice gets a line in `CHANGELOG.md`, under `## Unreleased`, which the
+  release renames to its version: that section becomes the release's notes on GitHub.
 - Commits: conventional (`feat:`, `fix:`, `docs:`, `chore:`), no co-author lines, and the body
   says what was run.

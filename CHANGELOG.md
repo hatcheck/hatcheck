@@ -4,6 +4,12 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
+## Unreleased
+
+### Fixed
+
+- **`hatcheck bind --hook`** points a hook whose `hatcheck` has gone, as after installing hatcheck another way, at the one it finds now, where it said the profile already had the hook. A Codex hook it repoints may need trusting again with `/hooks`.
+
 ## 0.3.0
 
 `hatcheck move` now moves: it deletes the original once every copied file is checked, where 0.2.0 copied unless given `--no-keep`. `--keep` copies, as 0.2.0 did by default.

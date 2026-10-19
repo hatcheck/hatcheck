@@ -107,6 +107,26 @@ class Bind(unittest.TestCase):
         code, out = h.run("bind", "--hook")
         self.assertEqual(out.count("already has it"), 4)
 
+        # A hook whose hatcheck has gone, as after a switch of install, is pointed at this one.
+        def ours(folder, name):
+            with open(os.path.join(folder, name), encoding="utf-8") as fh:
+                return json.load(fh)
+        now = (ours(self.work, "settings.json")["hooks"]["SessionStart"][-1]["hooks"][0]["command"],
+               ours(self.codex_work, "hooks.json")["hooks"]["SessionStart"][-1]["hooks"][0]["command"])
+        for folder, name, line in ((self.personal, "settings.json", '"/gone/hatcheck" bind --check'),
+                                   (other, "hooks.json", '"/gone/hatcheck" bind --check codex')):
+            data = ours(folder, name)
+            data["hooks"]["SessionStart"][-1]["hooks"][0]["command"] = line
+            write(os.path.join(folder, name), json.dumps(data))
+        code, out = h.run("bind", "--hook")
+        self.assertEqual(code, 0, out)
+        self.assertEqual((out.count("already has it"), out.count("  updated, in ")), (2, 2), out)
+        self.assertIn('it ran "/gone/hatcheck" bind --check', out)
+        self.assertIn("open /hooks in codex", out)  # Codex: trusted again
+        self.assertEqual((ours(self.personal, "settings.json")["hooks"]["SessionStart"][-1]["hooks"][0]["command"],
+                          ours(other, "hooks.json")["hooks"]["SessionStart"][-1]["hooks"][0]["command"]), now)
+        self.assertEqual(ours(self.personal, "settings.json")["hooks"]["SessionStart"][0], mine["hooks"]["SessionStart"][0])
+
         payload = {"session_id": S, "cwd": self.src, "source": "resume", "hook_event_name": "SessionStart"}
         message = self.hook(self.personal, payload)
         self.assertIn("%s is bound to %s, but this session runs in %s"
