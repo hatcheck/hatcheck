@@ -50,6 +50,11 @@ commands are in [desktop/README.md](desktop/README.md#build-and-test-it).
 - `--json` output is stable: absolute paths, UTC times, no colours; fields can be added at any
   time, and `version` goes up only when one changes meaning or goes away.
 - `--dry-run` runs every check the real run does and writes nothing.
+- Paths work on Windows too, where they have `\`, which JSON doubles, and either separator. A
+  test compares a path with parsed values or `json.dumps(path)[1:-1]`, and expects this system's
+  separator (`os.sep`, `ospath::SEP`); code that trims or splits a path someone typed takes `/` as
+  well as `\` (`ospath::is_sep`). The tests run on windows-latest only in CI, and a failing unit
+  test there hides the command tests behind it.
 - A change users would notice gets a line in `CHANGELOG.md`, under `## Unreleased`, which the
   release renames to its version: that section becomes the release's notes on GitHub.
 - Commits: conventional (`feat:`, `fix:`, `docs:`, `chore:`), no co-author lines, and the body

@@ -75,8 +75,11 @@ config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
 profile = config_dir or os.path.join(home, ".claude")
 config = os.path.join(config_dir, ".claude.json") if config_dir else os.path.join(home, ".claude.json")
 shown = {k: v for k, v in os.environ.items() if k.startswith(("ANTHROPIC_", "CLAUDE", "DISABLE_"))}
-with open(os.path.join(here, "claude.log"), "a", encoding="utf-8") as fh:
-    fh.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd(), "env": shown}) + "\n")
+# A file per run: runs at once appending to one file can write over each other on Windows.
+runs = os.path.join(here, "claude-runs")
+os.makedirs(runs, exist_ok=True)
+with open(os.path.join(runs, "%d-%d.json" % (time.time_ns(), os.getpid())), "w", encoding="utf-8") as fh:
+    json.dump({"args": sys.argv[1:], "cwd": os.getcwd(), "env": shown}, fh)
 if sys.argv[1:] == ["--version"]:
     print("2.1.303 (Claude Code)")
     sys.exit(0)
@@ -210,7 +213,7 @@ class FakeHome:
         saves the profile's fake-usage.json as the usage snapshot in its .claude.json, the way
         Claude Code saves what Anthropic told it, and prints a result as Claude Code does; a
         profile without that file gets a cost summary, as one that isn't signed in does. Every
-        run is logged, with its arguments, folder and environment, in claude.log beside it.
+        run is logged, with its arguments, folder and environment, in claude-runs/ beside it.
         Returns the folder, to put first on the PATH."""
         folder = folder or os.path.join(self.root, "fakebin")
         script = os.path.join(folder, "claude.py")
@@ -225,12 +228,15 @@ class FakeHome:
         return folder
 
     def claude_runs(self, folder=None):
-        """What the fake claude was run with, one dict per run."""
-        log = os.path.join(folder or os.path.join(self.root, "fakebin"), "claude.log")
-        if not os.path.exists(log):
+        """What the fake claude was run with, one dict per run, in the order they started."""
+        runs = os.path.join(folder or os.path.join(self.root, "fakebin"), "claude-runs")
+        if not os.path.isdir(runs):
             return []
-        with open(log, encoding="utf-8") as fh:
-            return [json.loads(line) for line in fh if line.strip()]
+        found = []
+        for name in sorted(os.listdir(runs), key=lambda n: [int(part) for part in n[:-len(".json")].split("-")]):
+            with open(os.path.join(runs, name), encoding="utf-8") as fh:
+                found.append(json.load(fh))
+        return found
 
     def folder(self, *parts):
         path = os.path.join(self.home, *parts)

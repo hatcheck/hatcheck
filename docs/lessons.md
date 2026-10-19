@@ -101,6 +101,9 @@ Claude Code in the engine's place.
 
 ## Tests
 
+Windows paths, seen three times (fc1c21f, `test_sessions_come_along` and agy's
+`workspace_uris_are_paths`), are a standard in [AGENTS.md](../AGENTS.md) now.
+
 **Tests never touch the real machine or the network.** They run in a throwaway home with the
 `PATH` cut to `/bin` on macOS, so the `security` tool and the real `claude` are never found; a
 fake `claude` stands in for Claude Code, and Codex tokens are expired so nothing is sent.
@@ -111,13 +114,13 @@ fake `claude` stands in for Claude Code, and Codex tokens are expired so nothing
 - Evidence: the first fake `claude` wrapper, 2026-10-18; `${0%/*}` now.
 - Seen 1× (2026-10-18).
 
-**A Windows path has backslashes, which JSON doubles, and either separator.** A test compares a
-path with parsed values, or with `json.dumps(path)[1:-1]`, never with JSON text as it is; code
-that trims or splits a path the user typed takes `/` as well as `\` (`ospath::is_sep`).
-- Evidence: fc1c21f, relocate trimmed only `\` off `C:/code/api/`; `test_sessions_come_along`
-  looked for a path in `json.dumps(records)`. Both failed only on windows-latest, the second hidden
-  until the first was fixed, since a failing unit test stops that job before the command tests.
-- Seen 2× (2026-10-18, 2026-10-19).
+**Two processes appending to one file can write over each other on Windows.** Its C runtime
+appends by moving to the end and then writing, so runs at once can land on the same spot. A fake
+that several runs use at once writes a file per run.
+- Evidence: `test_default_profile_runs_without_a_config_dir` failed on windows-latest
+  (2026-10-19) on a line of the fake `claude`'s shared log that wasn't JSON, since `usage` runs
+  `/usage` in each profile at once; the fake writes `claude-runs/<time>-<pid>.json` now.
+- Seen 1× (2026-10-19).
 
 **Another app's format is checked against the real app, and the version is written down.**
 - Evidence: docs/commands.md, `hatcheck move`: "tested by resuming them with the real `claude` (2.1.301)

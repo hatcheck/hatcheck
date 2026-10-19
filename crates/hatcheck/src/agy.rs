@@ -691,14 +691,22 @@ mod tests {
 
     #[test]
     fn workspace_uris_are_paths() {
+        // As this system spells a path: with \ on Windows.
+        let native = |p: &str| p.replace('/', ospath::SEP);
         assert_eq!(
             uri_path("file:///Users/me/code/api"),
-            Some("/Users/me/code/api".into())
+            Some(native("/Users/me/code/api"))
         );
         assert_eq!(
             uri_path("file:///Users/me/my%20code"),
-            Some("/Users/me/my code".into())
+            Some(native("/Users/me/my code"))
         );
+        if ospath::WINDOWS {
+            assert_eq!(
+                uri_path("file:///C:/code/api"),
+                Some("C:\\code\\api".into())
+            );
+        }
         assert_eq!(uri_path("/Users/me"), None);
         assert_eq!(
             file_id("/r/conversations/c134893c-20f5-48ea-bc9b-7f7c9271bc4e.db"),
