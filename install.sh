@@ -13,7 +13,8 @@
 #
 #   hatcheck                recent sessions in every profile and home, with resume commands and
 #                           plan usage; hatcheck usage, where, move and provider do the rest
-#   hat                     the short name for hatcheck, unless another hat is on your PATH
+#   hat                     the short name for hatcheck, unless another program called hat is
+#                           on your PATH
 #   cl                      claude with a ~/.claude-<name> profile: cl work --resume <id>
 #   cx                      codex with a ~/.codex-<name> home: cx work resume <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic
@@ -80,6 +81,14 @@ remove_replaced() {
     done
 }
 
+# Another program called hat on the PATH, which the short name gives way to: prints its path.
+# A hat from another install of hatcheck, which says so when asked, doesn't count.
+foreign_hat() {
+    other=$(command -v hat) || return 1
+    "$other" --version 2>/dev/null | grep -qE '^(hat|hatcheck) [0-9]' && return 1
+    echo "$other"
+}
+
 # A launcher that the claude-z repo's install-z.sh or install-k.sh copied here.
 # shellcheck disable=SC2016  # the pattern matches a literal $HOME
 claude_z_copy() {
@@ -136,8 +145,8 @@ for name in $COMMANDS; do
     elif { [ -e "$link" ] || [ -L "$link" ]; } && ! $FORCE; then
         echo "⚠️  Skipped $name: $link already exists (run again with --force to replace it)"
         skipped=$((skipped + 1))
-    elif [ "$name" = hat ] && other=$(command -v hat) && ! $FORCE; then
-        # Only a short name, so it gives way to another command called hat.
+    elif [ "$name" = hat ] && other=$(foreign_hat) && ! $FORCE; then
+        # Only a short name, so it gives way to another program called hat.
         echo "ℹ️  Didn't add hat: $other has that name (--force adds it anyway); hatcheck does the same"
     else
         ln -sfn "$src" "$link"

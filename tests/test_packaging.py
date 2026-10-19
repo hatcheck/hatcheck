@@ -89,3 +89,53 @@ class Packaging(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InstallScript(unittest.TestCase):
+    """install.sh --from DIR against a throwaway home: the links it makes, and the hat it holds back
+    for another program of that name, but not for a hat that is hatcheck's own."""
+
+    def setUp(self):
+        if os.name == "nt":
+            self.skipTest("install.sh is for macOS and Linux")
+        from helpers import ENGINE, FakeHome
+        self.h = FakeHome()
+        self.addCleanup(self.h.cleanup)
+        self.engine = ENGINE
+        self.built = self.link_all(os.path.join(self.h.root, "built"))
+
+    def link_all(self, folder, names=COMMANDS):
+        os.makedirs(folder, exist_ok=True)
+        for name in names:
+            os.symlink(self.engine, os.path.join(folder, name))
+        return folder
+
+    def run_install(self, path_dirs, bin_dir):
+        import subprocess
+        env = dict(self.h.env(), PATH=os.pathsep.join(path_dirs + ["/bin", "/usr/bin"]))
+        p = subprocess.run(["/bin/bash", os.path.join(REPO, "install.sh"), "--bin", bin_dir, "--from", self.built],
+                           env=env, capture_output=True, text=True, encoding="utf-8")
+        return p.returncode, p.stdout + p.stderr
+
+    def test_hat_gives_way_to_another_program_only(self):
+        h = self.h
+        # A hat from another install of hatcheck is no reason to hold back.
+        elsewhere = self.link_all(os.path.join(h.root, "elsewhere"), ["hat"])
+        bin_dir = os.path.join(h.home, ".local", "bin")
+        code, out = self.run_install([elsewhere], bin_dir)
+        self.assertEqual(code, 0, out)
+        self.assertIn("✅ hat -> ", out)
+        for name in COMMANDS:
+            self.assertEqual(os.readlink(os.path.join(bin_dir, name)), os.path.join(self.built, name))
+        # Another program called hat: the short name gives way to it, the five others are linked.
+        foreign = os.path.join(h.root, "foreign")
+        os.makedirs(foreign)
+        with open(os.path.join(foreign, "hat"), "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/sh\necho nope\n")
+        os.chmod(os.path.join(foreign, "hat"), 0o755)
+        other_bin = os.path.join(h.home, "other-bin")
+        code, out = self.run_install([foreign], other_bin)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Didn't add hat: %s has that name" % os.path.join(foreign, "hat"), out)
+        self.assertFalse(os.path.lexists(os.path.join(other_bin, "hat")))
+        self.assertTrue(all(os.path.islink(os.path.join(other_bin, n)) for n in COMMANDS if n != "hat"))

@@ -13,7 +13,8 @@
 #
 #   hatcheck                recent sessions in every profile and home, with resume commands and
 #                           plan usage; hatcheck usage, where, move and provider do the rest
-#   hat                     the short name for hatcheck, unless another hat is on your PATH
+#   hat                     the short name for hatcheck, unless another program called hat is
+#                           on your PATH
 #   cl                      claude with a ~\.claude-<name> profile: cl work --resume <id>
 #   cx                      codex with a ~\.codex-<name> home: cx work resume <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic
@@ -47,6 +48,11 @@ $replaced = [ordered]@{
     "claude-where"           = " where"
     "claude-move-session"    = " move"
     "claude-provider"        = " provider"
+}
+
+# A hat that is hatcheck's own, from another install: it says so when asked.
+function Test-HatcheckHat($path) {
+    try { return ((& $path --version 2>$null) -match '^(hat|hatcheck) \d') } catch { return $false }
 }
 
 function Test-Ours($path) {
@@ -117,9 +123,9 @@ foreach ($name in $commands.Keys) {
         continue
     }
     if ($name -eq "hat" -and -not $Force -and -not (Test-Ours $path)) {
-        # Only a short name, so it gives way to another command called hat.
+        # Only a short name, so it gives way to another program called hat.
         $other = Get-Command hat -CommandType Application -ErrorAction SilentlyContinue |
-            Where-Object { -not (Test-Ours $_.Source) } | Select-Object -First 1
+            Where-Object { -not (Test-Ours $_.Source) -and -not (Test-HatcheckHat $_.Source) } | Select-Object -First 1
         if ($other) {
             Write-Output "Didn't add hat: $($other.Source) has that name (-Force adds it anyway); hatcheck does the same"
             continue
