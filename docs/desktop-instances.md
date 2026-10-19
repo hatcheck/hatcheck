@@ -26,6 +26,26 @@ Two things make a plain `open -n` unpleasant on its own:
   folder can damage it.
 - **Nothing tells the instances apart** in the Dock or Launchpad.
 
+## One instance per account
+
+The most reliable setup is to create a **separate, dedicated instance for each account —
+including your "personal" one — and stop using Claude's built-in default profile for day-to-day
+use.** Don't try to make one launcher target the shared default profile.
+
+Why: Claude has **no per-profile single-instance lock**, so two processes can run on one profile
+at once — and **only the *first* instance on a profile can use its login database. Every
+additional instance on that same profile shows up logged out.** If a "personal" launcher points
+at the default profile (which the stock Claude icon also uses), you end up with duplicate,
+logged-out windows. Giving each account its own dir guarantees **one profile → one instance →
+always logged in**, and makes the focus-don't-duplicate logic rock-solid.
+
+Already logged into the default profile and don't want to re-auth? See
+[Copying an existing login into an instance](#copying-an-existing-login-into-an-instance) — you can copy your current
+profile into the new dedicated dir.
+
+**Tip:** to keep the focus-don't-relaunch behavior working, **close Claude with ⌘W** (close
+window, app keeps running) when you want it to stay live, and **⌘Q** when you truly want it gone.
+
 ## What an instance is
 
 An instance is a data folder, `~/.claude-instances/<name>`, and a small launcher app,
