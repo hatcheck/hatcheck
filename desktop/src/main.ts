@@ -8,9 +8,7 @@ import {
   conversation, inApp, instances, move, newInstance, openInstance, recent, resume, saveSettings, settings, signIn,
   usage, version, type Account, type MoveReport, type Session,
 } from "./engine";
-import {
-  accountHead, ago, errorText, esc, learnHome, limitRow, pasteCommand, profileName, tilde, toast,
-} from "./format";
+import { accountHead, agentName, ago, errorText, esc, learnHome, limitRow, pasteCommand, profileName, tilde, toast } from "./format";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 let accounts: Account[] = [];
@@ -56,7 +54,7 @@ function renderSessions() {
     ? shown.map((s) => `<button class="row-session ${selected && selected.id === s.id && selected.profile === s.profile ? "selected" : ""}"
           data-session="${esc(s.id)}" data-profile="${esc(s.profile)}">
         <span class="title">${esc(s.title)}</span>
-        <span class="meta"><span class="agent ${s.agent}">${s.agent === "codex" ? "Codex" : "Claude"}</span>
+        <span class="meta"><span class="agent ${s.agent}">${agentName(s.agent)}</span>
           ${esc(profileName(s.profile))} · ${esc(tilde(s.cwd))} · ${ago(s.last_active)}${s.open ? ` · <span class="open-dot">● open</span>` : ""}${
             s.bound_to ? ` · <span class="warn">⚠ bound to ${esc(profileName(s.bound_to))}</span>` : ""}</span>
       </button>`).join("")
@@ -69,7 +67,7 @@ async function select(s: Session) {
   const detail = $("session-detail");
   detail.innerHTML = `<div class="detail-head">
       <h2>${esc(s.title)}</h2>
-      <div class="meta">${s.agent === "codex" ? "Codex" : "Claude Code"} · ${esc(tilde(s.profile))} · ${esc(tilde(s.cwd))}${
+      <div class="meta">${agentName(s.agent, true)} · ${esc(tilde(s.profile))} · ${esc(tilde(s.cwd))}${
         s.branch ? " · " + esc(s.branch) : ""}${s.model ? " · " + esc(s.model) : ""} · ${ago(s.last_active)} ago</div>
       <div class="meta mono">${esc(s.id)}</div>
       <div class="actions">
@@ -77,7 +75,7 @@ async function select(s: Session) {
         <button id="act-copy" class="ghost">Copy command</button>
         <button id="act-move" class="ghost">Move to another profile…</button>
       </div>
-      ${s.open ? `<p class="note">Open in pid ${s.open.pid}${s.open.status ? " (" + esc(s.open.status) + ")" : ""}: quit it before moving it.</p>` : ""}
+      ${s.open ? `<p class="note">Open in ${s.open.pid ? "pid " + s.open.pid : esc(s.open.in ?? "a terminal")}${s.open.status ? " (" + esc(s.open.status) + ")" : ""}: quit it before moving it.</p>` : ""}
       ${s.bound_to ? `<p class="warn">This folder is bound to ${esc(tilde(s.bound_to))}; this session ran in ${esc(tilde(s.profile))}.</p>` : ""}
     </div>
     <div id="conversation" class="conversation loading">Loading the conversation…</div>`;
@@ -87,7 +85,7 @@ async function select(s: Session) {
     $("conversation").classList.remove("loading");
     const earlier = conv.turns_total - conv.turns.length;
     $("conversation").innerHTML = (earlier > 0 ? `<p class="note">${earlier} earlier turns aren't shown.</p>` : "") +
-      conv.turns.map((t) => `<div class="turn ${t.role}"><div class="who">${t.role === "user" ? "You" : s.agent === "codex" ? "Codex" : "Claude"}${
+      conv.turns.map((t) => `<div class="turn ${t.role}"><div class="who">${t.role === "user" ? "You" : agentName(s.agent)}${
         t.time ? ` <span class="note">${ago(t.time)} ago</span>` : ""}</div><div class="text">${formatTurn(t.text)}</div></div>`).join("") +
       `<p class="note">Left out: ${esc(conv.left_out)}.</p>`;
   } catch (e) {
@@ -140,7 +138,7 @@ function destinations(s: Session): { value: string; label: string }[] {
     for (const p of a.profiles) {
       if (p === s.profile) continue;
       const name = profileName(p);
-      out.push({ value: name.startsWith("~") ? p : name, label: `${tilde(p)} (${a.agent === "codex" ? "Codex" : "Claude Code"}, ${a.plan}${left ? ", " + left : ""})` });
+      out.push({ value: name.startsWith("~") ? p : name, label: `${tilde(p)} (${agentName(a.agent, true)}, ${a.plan}${left ? ", " + left : ""})` });
     }
   }
   return out;
@@ -215,7 +213,7 @@ async function loadAccounts() {
       || `<p class="empty">No profiles or homes yet.</p>`;
     $("profiles").classList.remove("loading");
     $("profiles").innerHTML = `<table class="items"><tr><th>Profile or home</th><th>Agent</th><th>Plan</th><th>Shares an account with</th><th></th></tr>${
-      accounts.flatMap((a) => a.profiles.map((p) => `<tr><td>${esc(tilde(p))}</td><td>${a.agent === "codex" ? "Codex" : "Claude Code"}</td>
+      accounts.flatMap((a) => a.profiles.map((p) => `<tr><td>${esc(tilde(p))}</td><td>${agentName(a.agent, true)}</td>
         <td>${esc(a.plan)}</td><td>${esc(a.profiles.filter((x) => x !== p).map(tilde).join(", "))}</td>
         <td><button class="ghost" data-signin="${esc(profileName(p))}">Sign in…</button></td></tr>`)).join("")}</table>`;
   } catch (e) {

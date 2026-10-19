@@ -9,7 +9,7 @@ import sys
 import unittest
 from unittest import mock
 
-from helpers import NOW, WINDOWS, FakeHome, argv_of, in_terminal, iso, rec, write
+from helpers import argv_of, FakeHome, in_terminal, iso, NOW, rec, WINDOWS, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 X = "019f0000-aaaa-7000-8000-000000000001"  # Codex IDs are version 7 UUIDs
@@ -96,6 +96,40 @@ class Moves(unittest.TestCase):
             self.assertEqual(fh.read(), original)
         code, out = self.h.run("sessions", "--no-usage")
         self.assertIn("cx work resume " + new, out)
+
+    def test_a_bare_name_follows_the_session(self):
+        """work is ~/.codex-work for a Codex session when that home exists, ~/.claude-work otherwise,
+        and asked about when both exist."""
+        h = self.h
+        shown = h.shown
+        # Only ~/.claude-work: a conversion, as ever.
+        code, out = h.run(MOVE, X[:13], "work", "--dry-run")
+        self.assertIn("into a Claude Code session in %s" % shown(self.work), out)
+        # Both: say which.
+        codex_work = h.codex_home("work", "acct-1")
+        code, out = h.run(MOVE, X[:13], "work", "--dry-run")
+        self.assertEqual(code, 1, out)
+        self.assertIn("work is both %s and %s; say codex:work or claude:work" % (shown(codex_work), shown(self.work)), out)
+        code, out = h.run(MOVE, X[:13], "codex:work", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Would move Codex session %s" % X[:8], out)
+        code, out = h.run(MOVE, X[:13], "claude:work", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn("into a Claude Code session in %s" % shown(self.work), out)
+        if not WINDOWS:
+            # In a terminal, asked; Enter takes the session's own agent's.
+            for keys, expect in ((b"\n", "Would move Codex session"), (b"2\n", "into a Claude Code session")):
+                code, out = in_terminal(argv_of(MOVE) + [X[:13], "work", "--dry-run"], [(b"Which one? [1] ", keys)], h.env(), h.root)
+                self.assertEqual(code, 0, out)
+                self.assertIn("1. %s  (a move, as a Codex session)" % shown(codex_work), out)
+                self.assertIn(expect, out)
+        # Only ~/.codex-work: a move there.
+        import shutil
+        shutil.rmtree(self.work)
+        code, out = h.run(MOVE, X[:13], "work")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Moved Codex session %s" % X[:8], out)
+        self.assertIn("cx work resume " + X, out)
 
     def h_files(self, home):
         return [os.path.join(root, f) for root, _, files in os.walk(os.path.join(home, "sessions")) for f in files]

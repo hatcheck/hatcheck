@@ -92,6 +92,7 @@ h3 { font-size: 13px; margin: 18px 0 8px; }
 .agent { font-size: 10px; font-weight: 600; border-radius: 4px; padding: 0 5px; background: var(--bg-soft); color: var(--muted); }
 .agent.claude { color: #c2410c; background: rgba(234, 88, 12, 0.12); }
 .agent.codex { color: #0f766e; background: rgba(13, 148, 136, 0.13); }
+.agent.agy { color: #4338ca; background: rgba(79, 70, 229, 0.12); }
 .tag { font-size: 11px; color: var(--muted); }
 .tag.live { color: var(--ok); }
 .tag.none { color: var(--low); }

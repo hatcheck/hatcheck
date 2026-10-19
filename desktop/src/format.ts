@@ -1,12 +1,12 @@
 // Formatting shared by the popover and the main window: times, bars, paths, commands.
-import type { Account, Limit, Session } from "./engine";
+import type { Account, Agent, Limit, Session } from "./engine";
 
 let homeDir = "";
 
 /** The home folder, for printing paths as ~/...; guessed from the paths the engine gives. */
 export function learnHome(paths: string[]) {
   for (const p of paths) {
-    const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)[/\\]\.(claude|codex)/);
+    const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)[/\\]\.(claude|codex|gemini)/);
     if (m) {
       homeDir = m[1];
       return;
@@ -21,14 +21,22 @@ export function tilde(path: string | null | undefined): string {
   return homeDir && path.startsWith(homeDir) ? "~" + path.slice(homeDir.length) : path;
 }
 
-/** A profile's short name: default, work, codex, codex:work, or its path. */
+/** A profile's short name: default, work, codex, codex:work, agy, or its path. */
 export function profileName(path: string): string {
   const base = path.split(/[/\\]/).pop() || path;
   if (base === ".claude") return "default";
+  if (base === "antigravity-cli") return "agy";
   if (base === ".codex") return "codex";
   if (base.startsWith(".claude-")) return base.slice(".claude-".length);
   if (base.startsWith(".codex-")) return "codex:" + base.slice(".codex-".length);
   return tilde(path);
+}
+
+/** The agent's name: Claude, Codex or Antigravity; the long form says Claude Code and Antigravity CLI. */
+export function agentName(agent: Agent, long = false): string {
+  if (agent === "codex") return "Codex";
+  if (agent === "agy") return long ? "Antigravity CLI" : "Antigravity";
+  return long ? "Claude Code" : "Claude";
 }
 
 export function accountName(a: Account): string {
@@ -136,7 +144,7 @@ export function accountHead(a: Account): string {
       : `<span class="tag fable-out" title="Out of Fable until ${esc(clock(a.fable.back_at ?? null))}">Fable ✗</span>`
     : "";
   return `<div class="account-head">
-      <span class="agent ${a.agent}">${a.agent === "codex" ? "Codex" : "Claude"}</span>
+      <span class="agent ${a.agent}">${agentName(a.agent)}</span>
       <span class="account-name">${esc(accountName(a))}</span>
       <span class="plan">${esc(a.plan)}</span>${fable}${source}
     </div>`;

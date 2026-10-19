@@ -1,6 +1,6 @@
 //! hatcheck usage [--cached] [--email] [--json]: how much of each plan limit is left, for
 //! every Claude Code profile (~/.claude*) and every Codex home (~/.codex*); the session list
-//! uses it too. The README's `hatcheck usage` section says what it shows.
+//! uses it too. docs/commands.md's `hatcheck usage` section says what it shows.
 //!
 //! A Claude Code profile's numbers come from Claude Code itself: `claude -p /usage` is run in
 //! the profile, which asks Anthropic with the profile's own login and saves the answer in the
@@ -10,6 +10,7 @@
 //! token goes to the endpoint Codex's /status asks, or else the newest limits Codex wrote in
 //! the home's session files are used.
 
+use crate::agent::Agent;
 use crate::args::Parser;
 use crate::ospath::{self, Part};
 use crate::out::{self, Paint};
@@ -146,18 +147,39 @@ pub fn usage_run_dir() -> String {
     ospath::join(&crate::facts::cache_dir(), "claude-usage")
 }
 
-/// Run a prepared command and give its stdout, or the reason it gave nothing: it couldn't be
-/// started, or didn't finish within timeout and was killed.
-fn output_within(mut command: std::process::Command, timeout: Duration) -> Result<String, String> {
+/// Which stream of a run to keep.
+#[derive(Clone, Copy)]
+pub(crate) enum Keep {
+    Stdout,
+    Stderr,
+}
+
+/// Run a prepared command, with no terminal on its stdin, and give whether it exited 0 and the
+/// kept stream, or the reason it gave nothing: it couldn't be started, or didn't finish within
+/// timeout and was killed.
+pub(crate) fn run_within(
+    mut command: std::process::Command,
+    timeout: Duration,
+    keep: Keep,
+) -> Result<(bool, String), String> {
+    use std::io::Read;
     use std::process::Stdio;
     use std::sync::{mpsc, Arc, Mutex};
+    let (stdout, stderr) = match keep {
+        Keep::Stdout => (Stdio::piped(), Stdio::null()),
+        Keep::Stderr => (Stdio::null(), Stdio::piped()),
+    };
     let mut child = command
         .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stdout(stdout)
+        .stderr(stderr)
         .spawn()
         .map_err(|e| format!("couldn't be run: {e}"))?;
-    let Some(mut stdout) = child.stdout.take() else {
+    let pipe: Option<Box<dyn Read>> = match keep {
+        Keep::Stdout => child.stdout.take().map(|p| Box::new(p) as Box<dyn Read>),
+        Keep::Stderr => child.stderr.take().map(|p| Box::new(p) as Box<dyn Read>),
+    };
+    let Some(mut pipe) = pipe else {
         return Err("gave no output".into());
     };
     let child = Arc::new(Mutex::new(child));
@@ -176,12 +198,10 @@ fn output_within(mut command: std::process::Command, timeout: Duration) -> Resul
         })
     };
     let mut text = String::new();
-    let read = std::io::Read::read_to_string(&mut stdout, &mut text).is_ok();
+    let read = pipe.read_to_string(&mut text).is_ok();
     let _ = done.send(());
     let killed = watchdog.join().unwrap_or(true);
-    if let Ok(mut c) = child.lock() {
-        let _ = c.wait();
-    }
+    let status = child.lock().ok().and_then(|mut c| c.wait().ok());
     if killed {
         return Err(format!(
             "didn't finish within {}",
@@ -191,7 +211,15 @@ fn output_within(mut command: std::process::Command, timeout: Duration) -> Resul
     if !read {
         return Err("gave no output".into());
     }
-    Ok(text)
+    Ok((status.is_some_and(|s| s.success()), text))
+}
+
+/// A run's stdout, whatever its exit status: see run_within.
+pub(crate) fn output_within(
+    command: std::process::Command,
+    timeout: Duration,
+) -> Result<String, String> {
+    run_within(command, timeout, Keep::Stdout).map(|(_, text)| text)
 }
 
 /// Run Claude Code's /usage in a profile: it asks Anthropic with the profile's own login and
@@ -1040,7 +1068,7 @@ pub fn extra_usage_text(usage: &Value) -> String {
 /// A Claude Code account or a ChatGPT one, with the profiles or homes signed in to it.
 #[derive(Clone, Debug)]
 pub struct Entry {
-    pub codex: bool,
+    pub agent: Agent,
     pub profiles: Vec<String>,
     pub email: Value,
     /// The oauthAccount Claude Code keeps in a profile's .claude.json: who it is, its plan.
@@ -1074,7 +1102,7 @@ pub fn load_accounts(profiles: &[String]) -> Vec<Entry> {
             None => {
                 keys.push(key);
                 entries.push(Entry {
-                    codex: false,
+                    agent: Agent::Claude,
                     profiles: Vec::new(),
                     email: get(&account, "emailAddress").clone(),
                     account: Value::Null,
@@ -1183,7 +1211,7 @@ pub fn load_codex_accounts(homes: &[String]) -> Vec<Entry> {
             None => {
                 keys.push(key);
                 entries.push(Entry {
-                    codex: true,
+                    agent: Agent::Codex,
                     profiles: Vec::new(),
                     email: Value::Null,
                     account: Value::Null,
@@ -1312,10 +1340,7 @@ pub fn limits_json(usage: &Value, saved_at: Option<f64>, now: f64) -> Value {
 pub fn account_json(entry: &Entry, result: &Usage, now: f64, email: bool) -> Value {
     let (usage, saved_at, why) = result;
     let mut out = Map::new();
-    out.insert(
-        "agent".into(),
-        json!(if entry.codex { "codex" } else { "claude" }),
-    );
+    out.insert("agent".into(), json!(entry.agent.key()));
     out.insert(
         "profiles".into(),
         json!(entry
@@ -1324,14 +1349,7 @@ pub fn account_json(entry: &Entry, result: &Usage, now: f64, email: bool) -> Val
             .map(|p| ospath::abspath(p))
             .collect::<Vec<_>>()),
     );
-    out.insert(
-        "plan".into(),
-        json!(if entry.codex {
-            codex_plan_text(entry, usage.as_ref())
-        } else {
-            plan_text(&entry.account)
-        }),
-    );
+    out.insert("plan".into(), json!(account_plan(entry, usage.as_ref())));
     out.insert(
         "source".into(),
         json!(if usage.is_none() {
@@ -1382,26 +1400,85 @@ pub fn account_json(entry: &Entry, result: &Usage, now: f64, email: bool) -> Val
     Value::Object(out)
 }
 
-/// The accounts behind profiles and codex_homes with their usage, fetched in parallel.
+/// Antigravity CLI data folders, one account each: agy says nothing about whose it is
+/// without a login, which hatcheck never reads.
+pub fn load_agy_accounts(roots: &[String]) -> Vec<Entry> {
+    roots
+        .iter()
+        .map(|root| Entry {
+            agent: Agent::Agy,
+            profiles: vec![root.clone()],
+            email: Value::Null,
+            account: Value::Null,
+            cache: Value::Null,
+            login: Value::Null,
+        })
+        .collect()
+}
+
+/// Usage for an Antigravity CLI folder: agy's own /usage run now, or else the last reading
+/// hatcheck kept, since agy saves none.
+pub fn agy_account_usage(entry: &Entry, cached: bool) -> Usage {
+    let Some(root) = entry.profiles.first() else {
+        return (None, None, Some("no folder".into()));
+    };
+    let why: String = if cached {
+        "--cached".into()
+    } else {
+        match crate::agy::run_usage(root) {
+            Ok(data) => {
+                let body = crate::agy::usage_body(&data);
+                if get(&body, "limits")
+                    .as_array()
+                    .is_some_and(|l| !l.is_empty())
+                {
+                    crate::agy::save_snapshot(root, &body, times::now());
+                    return (Some(body), None, None);
+                }
+                "agy's /usage reported limits hatcheck couldn't read".into()
+            }
+            Err(why) => why,
+        }
+    };
+    match crate::agy::read_snapshot(root) {
+        Some((body, saved_at)) => (Some(body), Some(saved_at), Some(why)),
+        None => (None, None, Some(why)),
+    }
+}
+
+/// The plan an account is on, as the text and --json name it.
+pub fn account_plan(entry: &Entry, usage: Option<&Value>) -> String {
+    match entry.agent {
+        Agent::Codex => codex_plan_text(entry, usage),
+        Agent::Claude => plan_text(&entry.account),
+        Agent::Agy => crate::agy::plan_text(usage),
+    }
+}
+
+/// An account's usage, fetched now or from what its agent last saved.
+fn fetch_usage(entry: &Entry, cached: bool) -> Usage {
+    match entry.agent {
+        Agent::Codex => codex_account_usage(entry, cached),
+        Agent::Claude => account_usage(entry, cached),
+        Agent::Agy => agy_account_usage(entry, cached),
+    }
+}
+
+/// The accounts behind profiles, codex_homes and agy_roots with their usage, fetched in
+/// parallel.
 pub fn load_usage(
     profiles: &[String],
     cached: bool,
     codex_homes: &[String],
+    agy_roots: &[String],
 ) -> Vec<(Entry, Usage)> {
     let mut entries = load_accounts(profiles);
     entries.extend(load_codex_accounts(codex_homes));
+    entries.extend(load_agy_accounts(agy_roots));
     let results: Vec<Usage> = std::thread::scope(|scope| {
         let handles: Vec<_> = entries
             .iter()
-            .map(|e| {
-                scope.spawn(move || {
-                    if e.codex {
-                        codex_account_usage(e, cached)
-                    } else {
-                        account_usage(e, cached)
-                    }
-                })
-            })
+            .map(|e| scope.spawn(move || fetch_usage(e, cached)))
             .collect();
         handles
             .into_iter()
@@ -1429,8 +1506,8 @@ pub fn sorted_by_fable(accounts: Vec<(Entry, Usage)>, now: f64) -> (Vec<(Entry, 
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*) and Codex home (~/.codex*).")
-        .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved")
+    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*) and Antigravity CLI folder (~/.gemini/antigravity-cli).")
+        .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last reading of agy's /usage")
         .flag(&["-e", "--email"], "email", "show each account's email address (hidden by default)")
         .flag(&["--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
     let args = match parser.parse(argv) {
@@ -1441,7 +1518,12 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let p = |code: &str, text: &str| paint.p(code, text);
     let now = times::now();
     let (accounts, any_fable) = sorted_by_fable(
-        load_usage(&find_profiles(), args.flag("cached"), &find_codex_homes()),
+        load_usage(
+            &find_profiles(),
+            args.flag("cached"),
+            &find_codex_homes(),
+            &paths::find_agy_roots(),
+        ),
         now,
     );
     if args.flag("json") {
@@ -1468,11 +1550,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                     + &p("2", &format!(" ({why})"))
             }
         };
-        let plan = if entry.codex {
-            codex_plan_text(entry, usage.as_ref())
-        } else {
-            plan_text(&entry.account)
-        };
+        let plan = account_plan(entry, usage.as_ref());
         let mut details = Vec::new();
         if args.flag("email") {
             details.push(if truthy(&entry.email) {

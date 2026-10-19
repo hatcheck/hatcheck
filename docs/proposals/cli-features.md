@@ -1,6 +1,6 @@
 # Proposal: the next four CLI features
 
-**Status:** built, October 2026. The [README](../../README.md#hatcheck-open-resume-a-session-in-a-new-terminal)
+**Status:** built, October 2026. [docs/commands.md](../commands.md#hatcheck-open-resume-a-session-in-a-new-terminal)
 documents them as they are. Where the build differs from what's proposed below:
 
 - **`--json`** is in `hatcheck`, `hatcheck usage`, `hatcheck where` and `hatcheck move` (with or

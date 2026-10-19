@@ -43,8 +43,8 @@ class CodexSessions(unittest.TestCase):
         self.assertIn("claude --resume " + A, out)
         self.assertLess(out.index(X), out.index(Y))  # newest first, Claude Code's and Codex's together
         self.assertLess(out.index(Y), out.index(A))
-        self.assertIn("Fix the uploader · codex · main", out)  # your prompt, not the context Codex adds
-        self.assertIn("Retries for uploads · codex", out)  # a name from /rename wins
+        self.assertIn("Fix the uploader · main\n", out)  # your prompt, not the context Codex adds; no agent tag
+        self.assertIn("Retries for uploads · main", out)  # a name from /rename wins
         self.assertNotIn(Z, out)
         self.assertIn("Hidden: 1 Codex app (show with --all)", out)
         self.assertIn("~/.codex-work (1)".replace("/", os.sep), out)
@@ -65,6 +65,25 @@ class CodexSessions(unittest.TestCase):
         code, out = self.h.run("sessions", "--no-usage", "--all")
         self.assertNotIn("019f0000-dddd", out)
         self.assertNotIn("without messages", out)
+
+    @unittest.skipIf(WINDOWS, "Codex's lock isn't checked on Windows")
+    def test_marked_open_from_the_lock(self):
+        import fcntl
+        from helpers import write
+        lock = os.path.join(self.codex, "thread-writer-locks", X + ".lock")
+        write(lock, "")
+        fd = os.open(lock, os.O_RDWR)
+        self.addCleanup(os.close, fd)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # as a running codex holds it
+        code, out = self.h.run("sessions", "--no-usage")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Fix the uploader · main · ● open in codex", out)
+        code, out = self.h.run("sessions", "--no-usage", "--json")
+        x = next(s for s in json.loads(out)["sessions"] if s["id"] == X)
+        self.assertEqual(x["open"], {"pid": None, "status": None, "in": "codex"})
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        code, out = self.h.run("sessions", "--no-usage")
+        self.assertNotIn("● open", out)
 
     def test_usage_comment_from_codex_session_files(self):
         h = self.h

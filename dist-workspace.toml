@@ -20,5 +20,7 @@ publish-jobs = ["homebrew"]
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
 # Where the shell and PowerShell installers put the commands: ~/.local/bin, as install.sh does
 install-path = ["$XDG_BIN_HOME/", "$XDG_DATA_HOME/../bin", "~/.local/bin"]
+# What they say at the end: another install may still come first on the PATH.
+install-success-msg = "hatcheck is installed. hatcheck doctor lists every copy of it on your PATH, and hatcheck --help the commands."
 hosting = "github"
 install-updater = false

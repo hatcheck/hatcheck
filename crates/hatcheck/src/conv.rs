@@ -3,6 +3,7 @@
 //! gives Claude Code's tool calls. hatcheck show prints it; hatcheck move writes it into the
 //! other agent's format.
 
+use crate::agent::Agent;
 use crate::facts::{self, codex_text};
 use crate::ospath;
 use crate::paths;
@@ -29,7 +30,7 @@ const CLAUDE_HARNESS: [&str; 8] = [
 pub type Turn = (String, Vec<String>, Value);
 
 pub struct Conversation {
-    pub agent: &'static str,
+    pub agent: Agent,
     pub id: String,
     pub cwd: Option<String>,
     pub model: Value,
@@ -330,7 +331,7 @@ pub fn read_codex(path: &str, home: &str) -> std::io::Result<Conversation> {
         .flatten();
     let git = get(&meta, "git");
     Ok(Conversation {
-        agent: "codex",
+        agent: Agent::Codex,
         id,
         cwd: s(get(&meta, "cwd")).map(String::from),
         model,
@@ -531,7 +532,7 @@ pub fn read_claude(path: &str) -> std::io::Result<Conversation> {
             .map(|r| get(r, key).clone())
     };
     Ok(Conversation {
-        agent: "claude",
+        agent: Agent::Claude,
         id: name.strip_suffix(".jsonl").unwrap_or(&name).to_string(),
         cwd: summary
             .and_then(|s| s.cwd)

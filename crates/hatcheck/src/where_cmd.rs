@@ -4,6 +4,7 @@
 //! home, under sessions/ by the date it started, or under archived_sessions/. Exits 1 when
 //! nothing matches. --json prints each copy as data.
 
+use crate::agent::Agent;
 use crate::args::{Count, Parser};
 use crate::ospath::{self, Part};
 use crate::{out, paths, py};
@@ -66,6 +67,15 @@ pub fn find(prefix: &str) -> Vec<String> {
             }
         }
     }
+    for root in paths::find_agy_stores() {
+        for row in crate::agy::rows_starting_with(&root, prefix) {
+            found.push(crate::agy::conversation_path(&root, &row.id));
+            let brain = crate::agy::brain_path(&root, &row.id);
+            if ospath::isdir(&brain) {
+                found.push(brain);
+            }
+        }
+    }
     found
 }
 
@@ -77,7 +87,7 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
         if path.ends_with(".jsonl") && path.contains(&projects) {
             let profile = ospath::dirname(&ospath::dirname(&ospath::dirname(path)));
             let data = &path[..path.len() - ".jsonl".len()];
-            copies.push(json!({"agent": "claude", "id": ospath::basename(data), "profile": profile, "file": path,
+            copies.push(json!({"agent": Agent::Claude.key(), "id": ospath::basename(data), "profile": profile, "file": path,
                                "data_folder": if ospath::isdir(data) { Value::from(data) } else { Value::Null },
                                "archived": false}));
         } else if let Some(id) = paths::codex_file_id(path) {
@@ -88,8 +98,14 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
                     home = ospath::dirname(&home);
                 }
             }
-            copies.push(json!({"agent": "codex", "id": id, "profile": home, "file": path, "data_folder": null,
+            copies.push(json!({"agent": Agent::Codex.key(), "id": id, "profile": home, "file": path, "data_folder": null,
                                "archived": archived}));
+        } else if let Some(id) = crate::agy::file_id(path) {
+            let root = ospath::dirname(&ospath::dirname(path));
+            let brain = crate::agy::brain_path(&root, id);
+            copies.push(json!({"agent": Agent::Agy.key(), "id": id, "profile": root, "file": path,
+                               "data_folder": if ospath::isdir(&brain) { Value::from(brain) } else { Value::Null },
+                               "archived": false}));
         }
     }
     json!({"version": 1, "query": prefix, "sessions": copies})
@@ -98,7 +114,7 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Find a Claude Code or Codex session by its ID, or the start of it.",
+        "Find a Claude Code, Codex or Antigravity CLI session by its ID, or the start of it.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
     .flag(&["--json"], "json", "print the matches as JSON");

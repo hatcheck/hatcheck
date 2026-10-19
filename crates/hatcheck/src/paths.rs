@@ -3,6 +3,7 @@
 //! paths as a shell should get them, the commands that run or resume Claude Code and Codex
 //! with a profile, and the folders bound to profiles (hatcheck bind).
 
+use crate::agent::Agent;
 use crate::ospath::{self, Part, SEP};
 use crate::py;
 use serde_json::Value;
@@ -88,6 +89,25 @@ pub fn find_codex_homes() -> Vec<String> {
     let mut homes: Vec<(bool, String)> = seen.into_iter().map(|(r, a)| (r != default, a)).collect();
     homes.sort();
     homes.into_iter().map(|(_, a)| a).collect()
+}
+
+/// Every Antigravity CLI data folder with an account behind it (see agy.rs).
+pub fn find_agy_roots() -> Vec<String> {
+    crate::agy::find_roots()
+}
+
+/// Every folder with Antigravity conversations to list: agy's, and the Antigravity app's.
+pub fn find_agy_stores() -> Vec<String> {
+    crate::agy::find_stores()
+}
+
+/// The folder an agent uses when no profile is named: ~/.claude, ~/.codex, or
+/// ~/.gemini/antigravity-cli.
+pub fn default_folder(agent: Agent) -> String {
+    match agent {
+        Agent::Agy => crate::agy::default_root(),
+        other => ospath::join(&home(), other.base()),
+    }
 }
 
 /// The ID in a Codex session file's name, rollout-<local start time>-<ID>.jsonl, at the end
@@ -277,12 +297,18 @@ impl Shell {
         (format!("{drive}{head}"), tail.to_string())
     }
 
-    /// Whether path is ~/<name>, the folder plain claude or codex uses.
+    /// Whether path is ~/<name>, the folder plain claude or codex uses; or, given a path with a
+    /// separator in it, that path.
     fn is_default(&self, path: &str, name: &str) -> bool {
+        let default = if name.contains(|c| self.is_sep(c)) {
+            name.to_string()
+        } else {
+            format!("{}{}{name}", self.home, self.sep())
+        };
         if self.as_written {
-            return path == format!("{}{}{name}", self.home, self.sep());
+            return path == default;
         }
-        ospath::realpath(path) == ospath::realpath(&ospath::join(&self.home, name))
+        ospath::realpath(path) == ospath::realpath(&default)
     }
 
     /// The command that runs Claude Code with a profile, then tail: claude for ~/.claude,
@@ -349,6 +375,35 @@ impl Shell {
         }
         format!("CODEX_HOME={} codex{tail}", self.shell_path(home_dir))
     }
+
+    /// The command that runs Antigravity CLI with a data folder, then tail: agy for a folder
+    /// under this home folder, agy's own or the app's. Only HOME moves them, so a folder under
+    /// another home folder (~/.agy-NAME/.gemini/antigravity-cli) is run with that as HOME
+    /// (USERPROFILE on Windows).
+    pub fn agy_command(&self, root: &str, tail: &str, _full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        // <home>/.gemini/<app>: the home folder is two folders up.
+        let home_of = self.parent_and_name(&self.parent_and_name(root).0).0;
+        let here = if self.as_written {
+            home_of == self.home
+        } else {
+            ospath::realpath(&home_of) == ospath::realpath(&self.home)
+        };
+        if here {
+            return format!("agy{tail}");
+        }
+        if self.powershell {
+            return format!(
+                "$env:USERPROFILE={}; agy{tail}; $env:USERPROFILE=$null",
+                self.ps_dir(&home_of)
+            );
+        }
+        format!("HOME={} agy{tail}", self.shell_path(&home_of))
+    }
 }
 
 /// A word for the shell commands are printed for: PowerShell's quoting there, else sh's.
@@ -394,12 +449,40 @@ pub fn codex_resume_command(home_dir: &str, session_id: &str, full: bool) -> Str
     codex_command(home_dir, &format!("resume {session_id}"), full)
 }
 
-/// The command that starts Claude Code or Codex with a profile or home.
-pub fn start_command(agent: &str, profile: &str, full: bool) -> String {
-    if agent == "codex" {
-        codex_command(profile, "", full)
-    } else {
-        claude_command(profile, "", full, None)
+pub fn agy_command(root: &str, tail: &str, full: bool) -> String {
+    Shell::here().agy_command(root, tail, full)
+}
+
+/// agy --conversation <id> for one of agy's own; for the app's, which agy doesn't resume but
+/// imports from its /resume picker, plain agy.
+pub fn agy_resume_command(root: &str, session_id: &str, full: bool) -> String {
+    if crate::agy::is_app_root(root) {
+        return agy_command(root, "", full);
+    }
+    agy_command(root, &format!("--conversation {session_id}"), full)
+}
+
+/// The command that starts an agent with a profile, home or data folder.
+pub fn start_command(agent: Agent, profile: &str, full: bool) -> String {
+    match agent {
+        Agent::Codex => codex_command(profile, "", full),
+        Agent::Claude => claude_command(profile, "", full, None),
+        Agent::Agy => agy_command(profile, "", full),
+    }
+}
+
+/// The command that resumes a session of an agent in a profile, home or data folder.
+pub fn session_command(
+    agent: Agent,
+    profile: &str,
+    session_id: &str,
+    full: bool,
+    provider: Option<&str>,
+) -> String {
+    match agent {
+        Agent::Claude => resume_command(profile, session_id, full, provider),
+        Agent::Codex => codex_resume_command(profile, session_id, full),
+        Agent::Agy => agy_resume_command(profile, session_id, full),
     }
 }
 
@@ -471,19 +554,19 @@ pub fn load_bindings() -> py::Dict {
 
 /// The folder a bound name stands for: default for ~/.claude or ~/.codex, NAME for
 /// ~/.claude-NAME or ~/.codex-NAME, or a path as it is.
-pub fn profile_folder(agent: &str, name: &str) -> String {
-    let base = if agent == "codex" {
-        ".codex"
-    } else {
-        ".claude"
-    };
+pub fn profile_folder(agent: Agent, name: &str) -> String {
     if name == "default" {
-        return ospath::join(&home(), base);
+        return default_folder(agent);
     }
     if name.contains('/') || name.contains(SEP) {
         return name.to_string();
     }
-    ospath::join(&home(), &format!("{base}-{name}"))
+    let folder = ospath::join(&home(), &format!("{}-{name}", agent.base()));
+    match agent {
+        // A home folder of its own, with agy's data where agy keeps it under a home folder.
+        Agent::Agy => ospath::join_all(&folder, &crate::agy::ROOT),
+        _ => folder,
+    }
 }
 
 /// The deepest bound folder that holds path, path itself included.
@@ -510,9 +593,9 @@ pub fn bound_folder(path: Option<&str>, bindings: &py::Dict) -> Option<String> {
 }
 
 /// The profile (or Codex home) the folder at path is bound to.
-pub fn bound_profile(path: Option<&str>, agent: &str, bindings: &py::Dict) -> Option<String> {
+pub fn bound_profile(path: Option<&str>, agent: Agent, bindings: &py::Dict) -> Option<String> {
     let folder = bound_folder(path, bindings)?;
-    let name = py::s(py::get(bindings.get(&folder)?, agent))?;
+    let name = py::s(py::get(bindings.get(&folder)?, agent.key()))?;
     (!name.is_empty()).then(|| profile_folder(agent, name))
 }
 
@@ -669,6 +752,43 @@ mod tests {
             )
         );
         assert_eq!(s.quote("--fork"), "'--fork'"); // which is why move's own flags aren't quoted
+    }
+
+    #[test]
+    fn agy_commands() {
+        let s = Shell {
+            home: "/home/me".into(),
+            windows: false,
+            powershell: false,
+            as_written: true,
+        };
+        let root = "/home/me/.gemini/antigravity-cli";
+        assert_eq!(s.agy_command(root, "", false), "agy");
+        assert_eq!(
+            s.agy_command(root, "--conversation 1", true),
+            "agy --conversation 1"
+        );
+        assert_eq!(
+            s.agy_command("/home/me/.agy-work/.gemini/antigravity-cli", "-c", false),
+            "HOME=~/.agy-work agy -c"
+        );
+        assert_eq!(
+            s.agy_command("/home/me/.gemini/antigravity", "", false),
+            "agy"
+        ); // the app's
+        let w = windows(true);
+        assert_eq!(
+            w.agy_command("C:\\Users\\me\\.gemini\\antigravity-cli", "", false),
+            "agy"
+        );
+        assert_eq!(
+            w.agy_command(
+                "C:\\Users\\me\\.agy-work\\.gemini\\antigravity-cli",
+                "-c",
+                false
+            ),
+            "$env:USERPROFILE=\"$HOME\\.agy-work\"; agy -c; $env:USERPROFILE=$null"
+        );
     }
 
     #[test]

@@ -1,8 +1,9 @@
 //! hatcheck [sessions] [HOURS] ...: recent Claude Code sessions from every ~/.claude*
 //! profile and Codex sessions from every ~/.codex* home, grouped by folder, each with the
-//! command that resumes it and what's left of its account's plan. The README's `hatcheck`
+//! command that resumes it and what's left of its account's plan. docs/commands.md's `hatcheck`
 //! section describes the list.
 
+use crate::agent::Agent;
 use crate::args::{Count, Parser};
 use crate::facts::{self, Summary};
 use crate::ospath::{self, Part};
@@ -141,12 +142,66 @@ pub fn windows_start_time(_pid: u32) -> Option<u64> {
     None
 }
 
+/// What marks a session open when a lock says so and no process is known: Codex's or agy's.
+fn open_in(holder: &str) -> Value {
+    json!({"pid": null, "status": null, "in": holder})
+}
+
 /// The command that resumes a listed session, Claude Code's or Codex's.
 pub fn session_command(s: &Summary, full: bool) -> String {
-    if s.agent == "codex" {
-        return paths::codex_resume_command(&s.profile, &s.id, full);
+    paths::session_command(
+        s.agent,
+        &s.profile,
+        &s.id,
+        full,
+        paths::provider_of(py::s(&s.model)),
+    )
+}
+
+/// The command with its program in cyan: `cl`, `claude`, `claude-k`, `cx`, `codex` or `agy`, the
+/// word that says which agent the session belongs to, since the row carries no tag for it. In
+/// the full form it follows the variable that names the profile.
+pub fn paint_program(command: &str, agent: Agent, paint: &Paint) -> String {
+    let is_program = |word: &str| {
+        Some(word) == agent.launcher()
+            || word
+                .strip_prefix(agent.program())
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('-'))
+    };
+    let mut found = false;
+    command
+        .split(' ')
+        .map(|word| {
+            if !found && is_program(word) {
+                found = true;
+                paint.p("36", word)
+            } else {
+                word.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The agents that have a profile, home or folder here, as the heading names them before
+/// "CLI sessions": Claude Code, or Claude Code and Codex, or all three.
+fn agents_text(codex: bool, agy: bool) -> String {
+    let mut names = vec![Agent::Claude.name()];
+    if codex {
+        names.push(Agent::Codex.name());
     }
-    paths::resume_command(&s.profile, &s.id, full, paths::provider_of(py::s(&s.model)))
+    if agy {
+        names.push(Agent::Agy.speaker()); // Antigravity: the heading says CLI itself
+    }
+    match names.len() {
+        1 => names[0].to_string(),
+        2 => format!("{} and {}", names[0], names[1]),
+        _ => format!(
+            "{} and {}",
+            names[..names.len() - 1].join(", "),
+            names[names.len() - 1]
+        ),
+    }
 }
 
 /// profile -> text: each plan limit's short name (per-model ones in violet), % left and a bar
@@ -306,13 +361,13 @@ impl Found {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, and Codex CLI sessions across all ~/.codex* homes, with the command that resumes each one.")
+    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, and Antigravity CLI sessions from ~/.gemini/antigravity-cli, with the command that resumes each one.")
         .positional("hours", Count::Optional, &format!("how far back to look (default {DEFAULT_HOURS}); accepts 36, 1.5, 12h or 3d"))
         .option(&["-n", "--per-folder"], "per_folder", "N", "show only the newest N sessions per folder (default: all)")
-        .flag(&["--all"], "all", "also list sessions last used from Claude Desktop or the SDK, and Codex sessions from the Codex app, its IDE extension or codex exec")
+        .flag(&["--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, and the Antigravity app's conversations")
         .flag(&["--all-folders"], "all_folders", "list every folder, even when run from a folder that has sessions")
         .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude instead of the cl shortcut, and CODEX_HOME=... codex instead of cx")
-        .flag(&["--cached"], "cached", "take plan usage from the snapshots Claude Code and Codex last saved instead of the APIs")
+        .flag(&["--cached"], "cached", "take plan usage from the snapshots Claude Code and Codex last saved, and hatcheck's last reading of agy's /usage, instead of the APIs")
         .flag(&["--no-usage"], "no_usage", "leave plan usage out")
         .flag(&["--json"], "json", "print the sessions, and the accounts behind them, as JSON for scripts and apps")
         .flag(&["-e", "--email"], "email", "with --json, include each account's email address");
@@ -402,7 +457,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             session.open = live.get(&key).cloned();
             let rank = (session.when, session.canonical, session.size);
             found.put(
-                format!("claude\u{0}{}\u{0}{}", key.0, key.1),
+                format!("{}\u{0}{}\u{0}{}", Agent::Claude.key(), key.0, key.1),
                 rank,
                 session,
                 true,
@@ -413,8 +468,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     for home in &codex_homes {
         let mut names: Option<Map<String, Value>> = None; // read once a session in the window needs them
         for path in paths::codex_session_files(home) {
+            // Codex holds a lock on a session it has open: listed even if its last message is older.
+            let is_open = paths::codex_file_id(&path)
+                .is_some_and(|sid| crate::find::codex_session_open(home, sid));
             let session = match ospath::getmtime(&path) {
-                Ok(t) if t < cutoff => continue,
+                Ok(t) if t < cutoff && !is_open => continue,
                 Ok(_) => facts::read_codex_session(
                     &path,
                     names.get_or_insert_with(|| facts::codex_names(home)),
@@ -434,15 +492,46 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             {
                 continue; // one Codex ran itself, such as an approval review
             }
-            let Some(mut session) = session.filter(|s| s.has_messages) else {
+            let Some(mut session) = session.filter(|s| s.has_messages || is_open) else {
                 empty += 1;
                 continue;
             };
-            if session.when < cutoff {
+            if session.when < cutoff && !is_open {
                 continue;
             }
             session.profile = home.clone();
-            let key = format!("codex\u{0}{}\u{0}{}", ospath::realpath(home), session.id);
+            session.open = is_open.then(|| open_in(Agent::Codex.program()));
+            let key = format!(
+                "{}\u{0}{}\u{0}{}",
+                Agent::Codex.key(),
+                ospath::realpath(home),
+                session.id
+            );
+            found.put(key, (session.when, true, session.size), session, false);
+        }
+    }
+    let agy_roots = paths::find_agy_stores();
+    for root in &agy_roots {
+        for row in crate::agy::rows(root) {
+            let mut session = crate::agy::summary(root, &row);
+            if session.entrypoint_text() == "subagent" {
+                continue; // one agy ran itself
+            }
+            let is_open = crate::agy::session_open(root, &row.id);
+            if !session.has_messages && !is_open {
+                empty += 1;
+                continue;
+            }
+            if session.when < cutoff && !is_open {
+                continue;
+            }
+            session.open = is_open.then(|| open_in(crate::agy::holder(root)));
+            let key = format!(
+                "{}\u{0}{}\u{0}{}",
+                Agent::Agy.key(),
+                ospath::realpath(root),
+                session.id
+            );
             found.put(key, (session.when, true, session.size), session, false);
         }
     }
@@ -492,6 +581,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let mut per_profile: Vec<(String, usize)> = profiles
         .iter()
         .chain(&codex_homes)
+        .chain(&agy_roots)
         .map(|p| (p.clone(), 0))
         .collect();
     for s in &shown {
@@ -499,6 +589,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             entry.1 += 1;
         }
     }
+    // The Antigravity app's folder is named only when one of its conversations is listed.
+    per_profile.retain(|(p, n)| *n > 0 || !crate::agy::is_app_root(p));
 
     // Grouped by the exact path the transcript is filed under, not its realpath: an old
     // session filed under a symlinked path must be resumed from that path.
@@ -548,8 +640,19 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .filter(|h| used.contains(h))
         .cloned()
         .collect();
+    // The app's folder has no account of its own to ask: agy's /usage answers for both.
+    let used_roots: Vec<String> = agy_roots
+        .iter()
+        .filter(|r| used.contains(r) && !crate::agy::is_app_root(r))
+        .cloned()
+        .collect();
     let loaded: Vec<(Entry, Usage)> = if use_usage {
-        usage::load_usage(&used_profiles, args.flag("cached"), &used_homes)
+        usage::load_usage(
+            &used_profiles,
+            args.flag("cached"),
+            &used_homes,
+            &used_roots,
+        )
     } else {
         Vec::new()
     };
@@ -584,10 +687,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         for (_, listed, _) in &folders {
             for s in listed {
                 sessions.push(json!({
-                    "agent": s.agent, "id": s.id, "profile": ospath::abspath(&s.profile),
+                    "agent": s.agent.key(), "id": s.id, "profile": ospath::abspath(&s.profile),
                     "account": account.get(&s.profile).map_or(Value::Null, |n| json!(n)), "title": s.title, "cwd": s.cwd,
                     "last_active": times::iso_utc(s.when), "entrypoint": s.entrypoint, "branch": s.branch, "model": s.model,
-                    "open": s.open.as_ref().map_or(Value::Null, |live| json!({"pid": get(live, "pid"), "status": get(live, "status")})),
+                    "open": s.open.as_ref().map_or(Value::Null, |live| json!({"pid": get(live, "pid"), "status": get(live, "status"),
+                        "in": if truthy(get(live, "in")) { get(live, "in").clone() } else { json!(s.agent.program()) }})),
                     "continued_in": s.continued_in,
                     "bound_to": s.bound_to.as_ref().map_or(Value::Null, |b| json!(ospath::abspath(b))),
                     "resume": session_command(s, full)}));
@@ -639,11 +743,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             "1",
             &format!(
                 "{} CLI sessions {}active in the last {window} or open now",
-                if codex_homes.is_empty() {
-                    "Claude Code"
-                } else {
-                    "Claude Code and Codex"
-                },
+                agents_text(!codex_homes.is_empty(), !agy_roots.is_empty()),
                 if only_here { "in this folder, " } else { "" }
             ),
         ) + &p(
@@ -673,16 +773,13 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         };
         out::println(&(p("1;36", &format!("cd {}", paths::shell_path(folder))) + &missing));
         for s in listed {
-            // No profile here: the command shows it (plain `claude` means ~/.claude).
+            // No profile or agent here: the command shows both (plain `claude` means ~/.claude).
             let mut meta: Vec<(String, &str)> = Vec::new();
-            if s.agent == "codex" {
-                meta.push(("codex".into(), "36"));
-            }
             if truthy(&s.branch) {
                 meta.push((py::str_of(&s.branch), "2"));
             }
             if let Some(model) = py::s(&s.model)
-                .filter(|m| s.agent != "codex" && !m.is_empty() && !m.starts_with("claude"))
+                .filter(|m| s.agent == Agent::Claude && !m.is_empty() && !m.starts_with("claude"))
             {
                 meta.push((format!("on {model}"), "35")); // e.g. GLM or Kimi, through claude-z or claude-k
             }
@@ -692,10 +789,15 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             }
             if let Some(entry) = s.open.as_ref().filter(|e| truthy(e)) {
                 let status = get(entry, "status");
+                let pid = get(entry, "pid");
+                let holder = if truthy(pid) {
+                    format!("pid {}", py::str_of(pid))
+                } else {
+                    py::str_of(get(entry, "in"))
+                };
                 meta.push((
                     format!(
-                        "● open in pid {}{}",
-                        py::str_of(get(entry, "pid")),
+                        "● open in {holder}{}",
                         if truthy(status) {
                             format!(" ({})", py::str_of(status))
                         } else {
@@ -739,15 +841,18 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 p("1", &truncate(&s.title, room.max(20) as usize)),
                 tail
             ));
-            let mut command = session_command(s, full);
+            let plain = session_command(s, full);
+            let mut command = paint_program(&plain, s.agent, &paint);
             let usage = cells.get(&s.profile).cloned();
             let this = (account.get(&s.profile).copied(), usage.clone());
             // Left out when the session above uses the same account, even through another
             // profile, so it would only repeat.
             if let Some(text) = usage.as_ref().filter(|u| !u.is_empty()) {
                 if previous.as_ref() != Some(&this) {
-                    // A shell comment, so pasting the whole line still runs just the command.
-                    command = format!("{command:<command_width$}  {} {text}", p("2", "#"));
+                    // A shell comment, so pasting the whole line still runs just the command,
+                    // padded by the plain command's width: the colour codes take no room.
+                    let pad = " ".repeat(command_width.saturating_sub(plain.chars().count()));
+                    command = format!("{command}{pad}  {} {text}", p("2", "#"));
                 }
             }
             previous = Some(this);
@@ -780,7 +885,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     ));
     let mut snapshots: Vec<((String, String), Vec<String>)> = Vec::new();
     let mut no_data: Vec<(String, Vec<String>)> = Vec::new();
-    for pr in used_profiles.iter().chain(&used_homes) {
+    for pr in used_profiles.iter().chain(&used_homes).chain(&used_roots) {
         let Some((_, (usage, saved_at, why))) = results.iter().find(|(r, _)| r == pr) else {
             continue;
         };
@@ -793,6 +898,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         } else if let Some(t) = saved_at {
             let source = if used_homes.contains(pr) {
                 "Codex's session files"
+            } else if used_roots.contains(pr) {
+                "hatcheck's last reading of agy's /usage"
             } else {
                 "Claude Code's last snapshot"
             }
@@ -874,6 +981,62 @@ mod tests {
         let cell = &cells["p"];
         for painted in ["\x1b[2m5h", "\x1b[2mweek", "\x1b[38;5;134mFable"] {
             assert!(cell.contains(painted), "{painted:?} in {cell:?}");
+        }
+    }
+
+    #[test]
+    fn the_program_is_cyan_in_the_command() {
+        let on = Paint {
+            on: true,
+            wide: false,
+        };
+        let off = Paint {
+            on: false,
+            wide: false,
+        };
+        let cyan = |word: &str| format!("\x1b[36m{word}\x1b[0m");
+        let cases = [
+            (
+                "cl -k work --resume 3f1c",
+                Agent::Claude,
+                format!("{} -k work --resume 3f1c", cyan("cl")),
+            ),
+            (
+                "claude-k --resume 3f1c",
+                Agent::Claude,
+                format!("{} --resume 3f1c", cyan("claude-k")),
+            ),
+            (
+                "CLAUDE_CONFIG_DIR=~/.claude-work claude --resume 3f1c",
+                Agent::Claude,
+                format!(
+                    "CLAUDE_CONFIG_DIR=~/.claude-work {} --resume 3f1c",
+                    cyan("claude")
+                ),
+            ),
+            (
+                "$env:CODEX_HOME='C:\\x'; codex resume 019a; $env:CODEX_HOME=$null",
+                Agent::Codex,
+                format!(
+                    "$env:CODEX_HOME='C:\\x'; {} resume 019a; $env:CODEX_HOME=$null",
+                    cyan("codex")
+                ),
+            ),
+            (
+                "cx work resume 019a",
+                Agent::Codex,
+                format!("{} work resume 019a", cyan("cx")),
+            ),
+            (
+                "agy --conversation c134",
+                Agent::Agy,
+                format!("{} --conversation c134", cyan("agy")),
+            ),
+            ("agy", Agent::Agy, cyan("agy")),
+        ];
+        for (command, agent, painted) in cases {
+            assert_eq!(paint_program(command, agent, &on), painted);
+            assert_eq!(paint_program(command, agent, &off), command);
         }
     }
 

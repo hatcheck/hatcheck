@@ -160,6 +160,11 @@ case ":$PATH:" in
        echo "     export PATH=\"$BIN_DIR:\$PATH\"" ;;
 esac
 command -v claude >/dev/null || echo "ℹ️  cl runs claude, which isn't on your PATH: install Claude Code first"
+# Another install of hatcheck ahead of this one on the PATH: the shell runs that one.
+first=$(command -v hatcheck 2>/dev/null) || first=""
+if [ -n "$first" ] && [ "$first" != "$BIN_DIR/hatcheck" ]; then
+    echo "ℹ️  $first comes first on your PATH, so it runs, not $BIN_DIR/hatcheck; hatcheck doctor lists every copy"
+fi
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     if [ -f "$rc" ] && grep -qE '^[[:space:]]*(function[[:space:]]+)?(cl|cx)[[:space:]]*\(\)' "$rc"; then
         echo "ℹ️  $rc defines cl() or cx() itself. A shell function wins over the"

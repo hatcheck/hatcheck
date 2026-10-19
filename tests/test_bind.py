@@ -156,3 +156,73 @@ class Bind(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgyHook(unittest.TestCase):
+    """The hook in agy's hooks.json, a named hook with a flat SessionStart list beside other named
+    hooks, and what it answers in agy's form."""
+
+    def setUp(self):
+        self.h = h = FakeHome()
+        self.addCleanup(h.cleanup)
+        self.cli = h.agy_root()
+        self.app = h.agy_root(app=True)
+        self.api = h.folder("code", "api")
+        self.hooks = os.path.join(h.home, ".gemini", "config", "hooks.json")
+
+    def read(self):
+        with open(self.hooks, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def test_hook_beside_another_named_hook(self):
+        h = self.h
+        mine = {"mine": {"Stop": [{"type": "command", "command": "echo bye"}]}}
+        write(self.hooks, json.dumps(mine))
+        code, out = h.run("bind", "--hook")
+        self.assertEqual(code, 0, out)
+        self.assertIn("  %s  added, in hooks.json" % h.shown(self.cli), out)
+        self.assertIn("with codex or agy after it for Codex and agy", out)
+        data = self.read()
+        self.assertEqual(data["mine"], mine["mine"])
+        handler = data["hatcheck"]["SessionStart"][0]
+        self.assertEqual(handler["type"], "command")
+        self.assertTrue(handler["command"].endswith("bind --check agy"), handler)
+        code, out = h.run("bind", "--hook")
+        self.assertIn("  %s  already has it" % h.shown(self.cli), out)
+        # Repointed after a switch of install, wherever the handler sits.
+        data["mine"]["SessionStart"] = [{"type": "command", "command": '"/gone/hatcheck" bind --check agy'}]
+        del data["hatcheck"]
+        write(self.hooks, json.dumps(data))
+        code, out = h.run("bind", "--hook")
+        self.assertIn('  %s  updated, in hooks.json: it ran "/gone/hatcheck" bind --check agy' % h.shown(self.cli), out)
+        self.assertEqual(self.read()["mine"]["SessionStart"][0]["command"], handler["command"])
+        # The check: a folder bound to another agy folder (the app's stands in), a session in agy's own.
+        code, out = h.run("bind", "--agy", self.app, cwd=self.api)
+        self.assertIn("Antigravity CLI %s." % h.shown(self.app), out)
+        self.assertNotIn("Here,", out)  # nothing for cl or cx to pick up
+        payload = {"conversationId": "c1", "workspacePaths": [self.api], "modelName": "gemini"}
+        p = subprocess.run(handler["command"], shell=True, input=json.dumps(payload), env=h.env(), capture_output=True,
+                           text=True, encoding="utf-8")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        answer = json.loads(p.stdout)
+        message = answer["injectSteps"][0]["systemMessage"]["systemMessage"]
+        self.assertIn("%s is bound to %s, but this session runs in %s" % (h.shown(self.api), h.shown(self.app), h.shown(self.cli)), message)
+        # Not a bound folder: nothing to say, and nothing printed.
+        p = subprocess.run(handler["command"], shell=True, input=json.dumps(dict(payload, workspacePaths=[h.root])), env=h.env(),
+                           capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual((p.returncode, p.stdout.strip()), (0, ""))
+        # Removed, the other named hook stays; a hooks.json left empty goes.
+        code, out = h.run("unbind", "--hook")
+        self.assertIn("  %s  removed" % h.shown(self.cli), out)
+        self.assertEqual(list(self.read().keys()), ["mine"])
+        self.assertNotIn("SessionStart", self.read()["mine"])
+        write(self.hooks, json.dumps({"hatcheck": {"SessionStart": [{"type": "command", "command": handler["command"]}]}}))
+        h.run("unbind", "--hook")
+        self.assertFalse(os.path.exists(self.hooks))
+
+    def test_doctor_sees_it(self):
+        h = self.h
+        write(self.hooks, json.dumps({"hatcheck": {"SessionStart": [{"type": "command", "command": "'/gone/hatcheck' bind --check agy"}]}}))
+        code, out = h.run("doctor")
+        self.assertEqual(code, 1, out)
+        self.assertIn("Antigravity CLI runs /gone/hatcheck, which is gone", out)

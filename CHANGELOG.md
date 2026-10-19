@@ -6,8 +6,26 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 
 ## Unreleased
 
+Antigravity CLI (`agy`) joins Claude Code and Codex: its conversations are listed, shown and carried to the other agents, and theirs to it. `hatcheck doctor` says how hatcheck and the agents are installed, and the README is now the short tour, with each command documented as it is in `docs/`.
+
+### Added
+
+- **Antigravity CLI (`agy`)** beside Claude Code and Codex: `hatcheck` lists its conversations from `~/.gemini/antigravity-cli` with `agy --conversation <id>` to resume each, `hatcheck usage` and `hatcheck best` show what its `/usage` reports, and `where`, `show`, `open` and `bind` know its sessions. `hatcheck move` and `hatcheck fork` convert an agy conversation into a Claude Code or Codex session, and a Claude Code or Codex session into a file agy reads to carry on, since agy's own store can't be written. The Antigravity app's conversations, kept the same way in `~/.gemini/antigravity`, are listed with `--all`, shown and converted too. `--json` has `"agent": "agy"`. Checked against agy 1.4.2; agy keeps one login per home folder, so there are no agy profiles yet. `bind --hook` adds agy's hook too, in its own form in `~/.gemini/config/hooks.json`. Before reading usage, hatcheck asks agy for its model list, which agy answers only when signed in, so a run never opens agy's sign-in in the browser; signed out, the row says so.
+
+- **`hatcheck move` and `hatcheck fork` with nothing** take the newest session started from this folder to the folder's bound Claude Code profile, or `~/.claude`, after asking in the terminal; `--dry-run` just says, and a script has to say both. A session already where it would go is refused before anything is asked.
+- **Codex and agy sessions show `● open` too**, from the lock each holds on a session it has open, as `● open in codex` or `in agy`, and an open one is listed even when older than the window; `--json`'s `open` says what it's open `in`.
+- **A bare profile name follows the session:** for a Codex session, `work` is `~/.codex-work` when that home exists and `~/.claude-work` otherwise; when both exist you're asked which, or say `codex:work` or `claude:work`. `claude` names `~/.claude` as a profile, as `codex` and `agy` name theirs, in `move`, `fork`, `open --login`, `best --wait` and `bind`.
+- **The installers point at `hatcheck doctor`:** the release installers end by naming it, and `install.sh` and `install.ps1` say when another hatcheck comes first on your `PATH`, so a second install doesn't go unnoticed.
+- **`hatcheck doctor`** lists every install of hatcheck on your `PATH` (uv, pipx, Homebrew, cargo, winget, the release installer or a build from a clone), which one runs and the line that removes each of the others; every `claude`, `codex` and `agy` with its version and where it came from; and the hooks `bind --hook` added that run a hatcheck that has gone. It changes nothing; `--json` prints what it found, and the exit status says whether there's something to fix. `d` is `desktop` as a short name, so `doctor` is `do`.
+
+### Changed
+
+- **The list names each session's agent by its command, not a tag:** the `codex` and `agy` after a title are gone, and the program that resumes the session, `cl`, `claude`, `cx`, `codex` or `agy`, is in cyan instead. The branch after the title stays: it's the one the session ran on, as the agent wrote it down, so an agy row has none. `--json` has `agent` as before.
+- **The docs:** the README keeps what someone deciding to install needs, a tour with one line per command, and the rules; each command, agent and way of installing is documented as it is in `docs/commands.md`, `docs/agents.md` and `docs/install.md`, the sections moved with their headings, so links into them still land.
+
 ### Fixed
 
+- **`install.sh` and `install.ps1`** add `hat` when the `hat` already on your `PATH` is hatcheck's own, from another install; they held it back as if it were another program's.
 - **`hatcheck bind --hook`** points a hook whose `hatcheck` has gone, as after installing hatcheck another way, at the one it finds now, where it said the profile already had the hook. A Codex hook it repoints may need trusting again with `/hooks`.
 
 ## 0.3.0

@@ -18,8 +18,10 @@ export type Limit = {
   per_model: boolean;
 };
 
+export type Agent = "claude" | "codex" | "agy";
+
 export type Account = {
-  agent: "claude" | "codex";
+  agent: Agent;
   profiles: string[];
   plan: string;
   source: "live" | "cached" | "none";
@@ -31,7 +33,7 @@ export type Account = {
 };
 
 export type Session = {
-  agent: "claude" | "codex";
+  agent: Agent;
   id: string;
   profile: string;
   account: number | null;
@@ -41,7 +43,7 @@ export type Session = {
   entrypoint: string;
   branch: string | null;
   model: string | null;
-  open: null | { pid: number; status: string | null };
+  open: null | { pid: number | null; status: string | null; in?: string };
   continued_in: string | null;
   bound_to: string | null;
   resume: string;

@@ -13,6 +13,7 @@
 //! The hatcheck binary runs as one of them when it's called by its name (a link named cl)
 //! or with --as cl; the cl, cx, claude-z and claude-k binaries are only this.
 
+use crate::agent::Agent;
 use crate::{ospath, out, paths, provider, py};
 
 /// The launchers' names.
@@ -67,10 +68,10 @@ pub fn main(name: &str, args: Vec<String>) -> i32 {
 }
 
 /// The name this folder is bound to with hatcheck bind, for claude or codex.
-fn bound(agent: &str) -> Option<String> {
+fn bound(agent: Agent) -> Option<String> {
     let bindings = paths::load_bindings();
     let folder = paths::bound_folder(Some(&ospath::cwd()), &bindings)?;
-    let name = py::s(py::get(bindings.get(&folder)?, agent))?;
+    let name = py::s(py::get(bindings.get(&folder)?, agent.key()))?;
     (!name.is_empty()).then(|| name.to_string())
 }
 
@@ -142,7 +143,7 @@ fn cl(mut args: Vec<String>, me: &str, mut provider: Option<&'static str>) -> i3
             .first()
             .is_none_or(|a| a.is_empty() || a.starts_with('-'))
         {
-            let Some(name) = bound("claude") else {
+            let Some(name) = bound(Agent::Claude) else {
                 out::eprint(
                     "usage: cl [-z|-k] <profile> [claude args...]  (uses ~/.claude-<profile>)\n   \
                      or tie this folder to a profile with: hatcheck bind <profile>\n",
@@ -195,7 +196,7 @@ fn cx(mut args: Vec<String>) -> i32 {
         && !first.starts_with('-')
         && (!CODEX_COMMANDS.contains(&first.as_str())
             || ospath::isdir(&ospath::join(&home, &format!(".codex-{first}"))));
-    match if named { None } else { bound("codex") } {
+    match if named { None } else { bound(Agent::Codex) } {
         Some(name) => {
             use_bound(&mut changes, "CODEX_HOME", ".codex", &name);
             out::eprint(&format!("cx: this folder is bound to {name}\n"));

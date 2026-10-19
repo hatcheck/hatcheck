@@ -7,7 +7,7 @@ import {
   hidePopover, inApp, instances, openInstance, openMain, quit, recent, resume, settings, usage, version,
   type Account, type Limit, type Session,
 } from "./engine";
-import { accountHead, ago, clock, errorText, esc, learnHome, limitRow, pasteCommand, profileName, tilde, toast } from "./format";
+import { accountHead, agentName, ago, clock, errorText, esc, learnHome, limitRow, pasteCommand, profileName, tilde, toast } from "./format";
 
 const $ = (id: string) => document.getElementById(id)!;
 let sessionsById = new Map<string, Session>();
@@ -45,7 +45,7 @@ async function loadSessions() {
           list.map((s) => `<div class="session">
             <div class="session-main">
               <span class="title" title="${esc(s.title)}">${esc(s.title)}</span>
-              <span class="meta"><span class="agent ${s.agent}">${s.agent === "codex" ? "Codex" : "Claude"}</span>
+              <span class="meta"><span class="agent ${s.agent}">${agentName(s.agent)}</span>
                 ${esc(profileName(s.profile))} · ${ago(s.last_active)}${s.open ? ` · <span class="open-dot">● open</span>` : ""}${
                   s.bound_to ? ` · <span class="warn" title="This folder is bound to ${esc(tilde(s.bound_to))}">⚠ bound</span>` : ""}</span>
             </div>

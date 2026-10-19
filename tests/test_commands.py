@@ -176,7 +176,7 @@ class Commands(unittest.TestCase):
         code, out = self.run_command(HATCHECK + ["--help"])
         self.assertEqual(code, 0, out)
         for line in ("hatcheck [sessions] [HOURS]", "hatcheck usage", "hatcheck where SESSION",
-                     "hatcheck move SESSION PROFILE", "hatcheck fork SESSION PROFILE", "hatcheck open [SESSION]",
+                     "hatcheck move [SESSION] [PROFILE]", "hatcheck fork [SESSION] [PROFILE]", "hatcheck open [SESSION]",
                      "hatcheck best [--for SESSION]",
                      "hatcheck bind PROFILE", "hatcheck unbind [FOLDER]", "hatcheck provider", "take --json",
                      "hatcheck show SESSION", "hatcheck desktop"):

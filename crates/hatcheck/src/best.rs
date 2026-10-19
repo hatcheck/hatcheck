@@ -1,8 +1,9 @@
 //! hatcheck best [--for SESSION] [--cached] [--wait [PROFILE]]: which account to use now, and
 //! where to carry a session. Advice only: it prints commands and never starts, moves or
-//! switches anything. --wait sleeps until an account has room, then says which. The README's
+//! switches anything. --wait sleeps until an account has room, then says which. docs/commands.md's
 //! `hatcheck best` section says how accounts are ranked.
 
+use crate::agent::Agent;
 use crate::args::Parser;
 use crate::facts::Summary;
 use crate::find;
@@ -171,40 +172,32 @@ fn back_at(account: &Ranked) -> Option<f64> {
 }
 
 /// How hatcheck move names a profile or home: default, NAME, codex, codex:NAME, or a path.
-fn place_name(agent: &str, profile: &str) -> String {
+fn place_name(agent: Agent, profile: &str) -> String {
     let home_dir = paths::home();
-    let home = crate::ospath::join(
-        &home_dir,
-        if agent == "codex" {
-            ".codex"
-        } else {
-            ".claude"
-        },
-    );
+    let home = crate::ospath::join(&home_dir, agent.base());
     if paths::same_folder(profile, &home) {
-        return (if agent == "codex" { "codex" } else { "default" }).into();
+        return match agent {
+            Agent::Claude => "default",
+            other => other.key(),
+        }
+        .into();
     }
     let trimmed = profile.trim_end_matches(['/', crate::ospath::SEP.chars().next().unwrap_or('/')]);
     let (parent, base) = crate::ospath::split(trimmed);
     let prefix = format!("{}-", crate::ospath::basename(&home));
     if paths::same_folder(&parent, &home_dir) {
         if let Some(name) = base.strip_prefix(&prefix) {
-            return format!("{}{name}", if agent == "codex" { "codex:" } else { "" });
+            return match agent {
+                Agent::Claude => name.to_string(),
+                other => format!("{}:{name}", other.key()),
+            };
         }
     }
     profile.to_string()
 }
 
-fn agent_name(agent: &str) -> &'static str {
-    if agent == "codex" {
-        "Codex"
-    } else {
-        "Claude Code"
-    }
-}
-
 /// The one session whose ID starts with prefix: its agent and ID, or why there isn't one.
-fn one_session(prefix: &str) -> Result<(&'static str, String), String> {
+fn one_session(prefix: &str) -> Result<(Agent, String), String> {
     let copies = find::session_copies(prefix);
     if copies.is_empty() {
         return Err(format!("No session starting with {prefix}"));
@@ -216,11 +209,11 @@ fn one_session(prefix: &str) -> Result<(&'static str, String), String> {
         ));
     }
     let ((agent, sid), _) = &copies[0];
-    Ok((agent, sid.clone()))
+    Ok((*agent, sid.clone()))
 }
 
 /// --for: the best other account for a session of the same agent, as a hatcheck move command.
-fn carry(prefix: &str, by_agent: &[(&str, Vec<Ranked>)], now: f64, me: &str) -> i32 {
+fn carry(prefix: &str, by_agent: &[(Agent, Vec<Ranked>)], now: f64, me: &str) -> i32 {
     let copies = find::session_copies(prefix);
     if copies.is_empty() {
         return out::fail(&format!("No session starting with {prefix}"));
@@ -234,7 +227,7 @@ fn carry(prefix: &str, by_agent: &[(&str, Vec<Ranked>)], now: f64, me: &str) -> 
     let ((agent, sid), places) = &copies[0];
     let found: Vec<Summary> = places
         .iter()
-        .filter_map(|(p, f)| crate::facts::summarize(agent, p, f))
+        .filter_map(|(p, f)| crate::facts::summarize(*agent, p, f))
         .collect();
     crate::facts::save_cache();
     let Some(s) = found.iter().fold(None::<&Summary>, |best, s| match best {
@@ -250,7 +243,7 @@ fn carry(prefix: &str, by_agent: &[(&str, Vec<Ranked>)], now: f64, me: &str) -> 
     let accounts = &by_agent
         .iter()
         .find(|(a, _)| a == agent)
-        .expect("both agents are ranked")
+        .expect("every agent is ranked")
         .1;
     let mine = accounts.iter().position(|a| {
         a.2.profiles
@@ -282,10 +275,7 @@ fn carry(prefix: &str, by_agent: &[(&str, Vec<Ranked>)], now: f64, me: &str) -> 
         }
     }
     let Some(b) = best else {
-        out::println(&format!(
-            "No other {} account has room now.",
-            agent_name(agent)
-        ));
+        out::println(&format!("No other {} account has room now.", agent.name()));
         return 1;
     };
     let (_, _, entry, result) = &accounts[b];
@@ -298,8 +288,8 @@ fn carry(prefix: &str, by_agent: &[(&str, Vec<Ranked>)], now: f64, me: &str) -> 
     out::println(&format!(
         "  {me} move {} {} --from {}",
         py::head(sid, 8),
-        place_name(agent, dest),
-        place_name(agent, &s.profile)
+        place_name(*agent, dest),
+        place_name(*agent, &s.profile)
     ));
     out::println("It prints the command that resumes it there, and offers to run it.");
     0
@@ -307,17 +297,17 @@ fn carry(prefix: &str, by_agent: &[(&str, Vec<Ranked>)], now: f64, me: &str) -> 
 
 /// Whom --wait waits for: an agent's accounts, or one profile or home of it.
 struct Waiting {
-    agent: &'static str,
+    agent: Agent,
     profile: Option<String>,
 }
 
 /// Whether what --wait waits for has room now; when it hasn't, when to look again, or the
 /// reason nothing can be waited for.
-fn wait_state(w: &Waiting, by_agent: &[(&str, Vec<Ranked>)]) -> Result<Option<f64>, String> {
+fn wait_state(w: &Waiting, by_agent: &[(Agent, Vec<Ranked>)]) -> Result<Option<f64>, String> {
     let accounts = &by_agent
         .iter()
         .find(|(a, _)| *a == w.agent)
-        .expect("both agents are ranked")
+        .expect("every agent is ranked")
         .1;
     let relevant: Vec<&Ranked> = accounts
         .iter()
@@ -330,7 +320,7 @@ fn wait_state(w: &Waiting, by_agent: &[(&str, Vec<Ranked>)]) -> Result<Option<f6
     if relevant.is_empty() {
         return Err(match &w.profile {
             Some(p) => format!("{} has no sessions or usage to go by", paths::shell_path(p)),
-            None => format!("No {} profile found", agent_name(w.agent)),
+            None => format!("No {} profile found", w.agent.name()),
         });
     }
     if relevant.iter().any(|a| a.1) {
@@ -344,7 +334,7 @@ fn wait_state(w: &Waiting, by_agent: &[(&str, Vec<Ranked>)]) -> Result<Option<f6
         Some(t) => Ok(Some(t)),
         None => Err(format!(
             "No {} account has room, and none says when it will again",
-            agent_name(w.agent)
+            w.agent.name()
         )),
     }
 }
@@ -352,8 +342,8 @@ fn wait_state(w: &Waiting, by_agent: &[(&str, Vec<Ranked>)]) -> Result<Option<f6
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Which account to use now, and where to carry a session. Advice only: it never starts, moves or switches anything.")
         .option(&["--for"], "session", "SESSION", "where to carry this session: the hatcheck move command for the best other account")
-        .flag(&["--cached"], "cached", "don't call the APIs; use the snapshots Claude Code and Codex last saved")
-        .maybe(&["--wait"], "wait", "PROFILE", "", "wait until an account has room, then answer: any Claude Code account, PROFILE's (NAME, default, codex, codex:NAME), or with --for one of the session's agent");
+        .flag(&["--cached"], "cached", "don't call the APIs; use the snapshots Claude Code and Codex last saved, and hatcheck's last reading of agy's /usage")
+        .maybe(&["--wait"], "wait", "PROFILE", "", "wait until an account has room, then answer: any Claude Code account, PROFILE's (NAME, default, codex, codex:NAME, agy), or with --for one of the session's agent");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
@@ -380,7 +370,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                     Ok((agent, _)) => agent,
                     Err(why) => return out::fail(&why),
                 },
-                None => "claude",
+                None => Agent::Claude,
             };
             Some(Waiting {
                 agent,
@@ -393,16 +383,24 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &paths::find_profiles(),
             args.flag("cached"),
             &paths::find_codex_homes(),
+            &paths::find_agy_roots(),
         )
     };
     let mut now = times::now();
-    let mut by_agent;
+    let mut by_agent: Vec<(Agent, Vec<Ranked>)>;
     loop {
-        let (codex, claude): (Vec<_>, Vec<_>) = load().into_iter().partition(|a| a.0.codex);
-        by_agent = [
-            ("claude", ranked(claude, now)),
-            ("codex", ranked(codex, now)),
-        ];
+        let loaded = load();
+        by_agent = Agent::ALL
+            .iter()
+            .map(|&agent| {
+                let mine: Vec<(Entry, Usage)> = loaded
+                    .iter()
+                    .filter(|a| a.0.agent == agent)
+                    .cloned()
+                    .collect();
+                (agent, ranked(mine, now))
+            })
+            .collect();
         let Some(w) = &waiting else { break };
         match wait_state(w, &by_agent) {
             Err(why) => return out::fail(&why),
@@ -410,7 +408,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             Ok(Some(t)) => {
                 let whom = match &w.profile {
                     Some(p) => paths::shell_path(p),
-                    None => format!("a {} account", agent_name(w.agent)),
+                    None => format!("a {} account", w.agent.name()),
                 };
                 // A little past the reset; when that has gone by on this clock and the
                 // numbers still say no (the clocks differ), a minute between looks.
@@ -436,17 +434,13 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         if accounts.is_empty() {
             continue;
         }
-        let title = if *agent == "claude" {
-            "Claude Code, best first"
-        } else {
-            "Codex, best first"
-        };
-        let note = if *agent == "claude" {
+        let title = format!("{}, best first", agent.name());
+        let note = if *agent == Agent::Claude {
             p("2", " (sorted by Fable, as hatcheck usage sorts)")
         } else {
             String::new()
         };
-        out::println(&(p("1", title) + &note));
+        out::println(&(p("1", &title) + &note));
         let rows: Vec<(String, String, String, String, bool)> = accounts
             .iter()
             .enumerate()
@@ -466,7 +460,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                     number,
                     names,
                     summary(result, now, *room),
-                    paths::start_command(agent, &entry.profiles[0], false),
+                    paths::start_command(*agent, &entry.profiles[0], false),
                     *room,
                 )
             })
@@ -532,7 +526,7 @@ mod tests {
     fn when_an_account_is_back() {
         let now = 1_800_000_000.0;
         let entry = Entry {
-            codex: false,
+            agent: Agent::Claude,
             profiles: vec!["/x/.claude-a".into()],
             email: Value::Null,
             account: Value::Null,

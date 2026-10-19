@@ -5,9 +5,10 @@
 //! that's gone. This moves each profile's project folder to its new name, rewrites the cwd
 //! the lines record, and brings Claude Code's sessions-index.json along; a Codex session,
 //! filed by date, has the cwd in its session_meta and turn_context lines rewritten. Folders
-//! under OLD come along too. Running it the other way round undoes it. The README's
+//! under OLD come along too. Running it the other way round undoes it. docs/commands.md's
 //! `hatcheck relocate` section says what it refuses.
 
+use crate::agent::Agent;
 use crate::args::{Count, Parser};
 use crate::facts;
 use crate::find;
@@ -33,7 +34,7 @@ type Stop = String;
 /// One session to bring along.
 #[derive(Clone, Debug)]
 struct Move {
-    agent: &'static str,
+    agent: Agent,
     profile: String,
     id: String,
     cwd_from: String,
@@ -48,7 +49,7 @@ struct Move {
 /// A session in a project folder named like OLD's that's left alone, and why.
 #[derive(Clone, Debug)]
 struct Skip {
-    agent: &'static str,
+    agent: Agent,
     profile: String,
     id: String,
     why: String,
@@ -182,7 +183,7 @@ fn plan(old: &str, new: &str) -> Plan {
                 let cwd = claude_cwd(path);
                 let Some(cwd_to) = cwd.as_deref().and_then(|c| mapped(c, old, new)) else {
                     plan.skips.push(Skip {
-                        agent: "claude",
+                        agent: Agent::Claude,
                         profile: profile.clone(),
                         id: id.to_string(),
                         why: match &cwd {
@@ -201,7 +202,7 @@ fn plan(old: &str, new: &str) -> Plan {
                     (data_from, ospath::join(&to_dir, id))
                 });
                 plan.moves.push(Move {
-                    agent: "claude",
+                    agent: Agent::Claude,
                     profile: profile.clone(),
                     id: id.to_string(),
                     cwd_from: cwd.unwrap_or_default(),
@@ -271,7 +272,7 @@ fn plan(old: &str, new: &str) -> Plan {
                 continue;
             };
             plan.moves.push(Move {
-                agent: "codex",
+                agent: Agent::Codex,
                 profile: home.clone(),
                 id: id.to_string(),
                 cwd_from: cwd,
@@ -280,6 +281,23 @@ fn plan(old: &str, new: &str) -> Plan {
                 to: path.clone(),
                 data: None,
             });
+        }
+    }
+    // Antigravity CLI keeps the folder inside its database, so its sessions stay as they are.
+    for root in paths::find_agy_stores() {
+        for row in crate::agy::rows(&root) {
+            let ran_there = row
+                .workspaces
+                .first()
+                .is_some_and(|w| mapped(w, old, new).is_some());
+            if ran_there {
+                plan.skips.push(Skip {
+                    agent: Agent::Agy,
+                    profile: root.clone(),
+                    id: row.id.clone(),
+                    why: "keeps the folder in agy's database, which stays as it was".into(),
+                });
+            }
         }
     }
     let bindings = paths::load_bindings();
@@ -298,7 +316,7 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
     let profiles: Vec<String> = plan
         .moves
         .iter()
-        .filter(|m| m.agent == "claude")
+        .filter(|m| m.agent == Agent::Claude)
         .map(|m| m.profile.clone())
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
@@ -306,12 +324,16 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
     let live = sessions::open_sessions(&profiles);
     let is_link = |p: &str| fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink());
     for m in &plan.moves {
-        let name = format!("{} session {}", agent_name(m.agent), py::head(&m.id, 8));
-        let open = if m.agent == "claude" {
-            live.get(&(ospath::realpath(&m.profile), m.id.clone()))
-                .map(|entry| format!("pid {}", py::str_of(get(entry, "pid"))))
-        } else {
-            find::codex_session_open(&m.profile, &m.id).then(|| "codex".to_string())
+        let name = format!("{} session {}", m.agent.name(), py::head(&m.id, 8));
+        let open = match m.agent {
+            Agent::Claude => live
+                .get(&(ospath::realpath(&m.profile), m.id.clone()))
+                .map(|entry| format!("pid {}", py::str_of(get(entry, "pid")))),
+            Agent::Codex => {
+                find::codex_session_open(&m.profile, &m.id).then(|| "codex".to_string())
+            }
+            Agent::Agy => crate::agy::session_open(&m.profile, &m.id)
+                .then(|| crate::agy::holder(&m.profile).to_string()),
         };
         if let Some(whom) = open {
             why.push(format!(
@@ -331,7 +353,7 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
             why.push(format!("{name} is a link, not a file; move the real one"));
             continue;
         }
-        if m.agent == "claude" {
+        if m.agent == Agent::Claude {
             if ospath::exists(&m.to) {
                 why.push(format!(
                     "{name} is already filed under {} too; remove one copy first",
@@ -352,14 +374,6 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
         }
     }
     why
-}
-
-fn agent_name(agent: &str) -> &'static str {
-    if agent == "codex" {
-        "Codex"
-    } else {
-        "Claude Code"
-    }
 }
 
 /// Rewrite the folder a session's lines record, in place, keeping the file's timestamps: the
@@ -388,15 +402,17 @@ fn rewrite(m: &Move, check: bool) -> Result<usize, Stop> {
                 paths::shell_path(path)
             )
         })?;
-        let holder = if m.agent == "claude" {
-            Some(&mut record)
-        } else if matches!(
-            s(get(&record, "type")),
-            Some("session_meta" | "turn_context")
-        ) {
-            record.get_mut("payload")
-        } else {
-            None
+        let holder = match m.agent {
+            Agent::Claude => Some(&mut record),
+            Agent::Codex
+                if matches!(
+                    s(get(&record, "type")),
+                    Some("session_meta" | "turn_context")
+                ) =>
+            {
+                record.get_mut("payload")
+            }
+            Agent::Codex | Agent::Agy => None,
         };
         let Some(Value::Object(fields)) = holder else {
             continue;
@@ -516,7 +532,7 @@ fn carry_out(plan: &Plan) -> Result<(), Stop> {
             rewrite(m, false)?;
         }
     }
-    for m in plan.moves.iter().filter(|m| m.agent == "codex") {
+    for m in plan.moves.iter().filter(|m| m.agent == Agent::Codex) {
         rewrite(m, false)?;
     }
     if let Some(key) = &plan.binding {
@@ -535,10 +551,10 @@ fn report(plan: &Plan, dry_run: bool, undo: &str) -> Value {
     json!({
         "version": 1, "dry_run": dry_run, "from": plan.old, "to": plan.new,
         "sessions": plan.moves.iter().map(|m| json!({
-            "agent": m.agent, "id": m.id, "profile": ospath::abspath(&m.profile),
+            "agent": m.agent.key(), "id": m.id, "profile": ospath::abspath(&m.profile),
             "cwd_from": m.cwd_from, "cwd_to": m.cwd_to, "from": m.from, "to": m.to})).collect::<Vec<_>>(),
         "skipped": plan.skips.iter().map(|k| json!({
-            "agent": k.agent, "id": k.id, "profile": ospath::abspath(&k.profile), "why": k.why})).collect::<Vec<_>>(),
+            "agent": k.agent.key(), "id": k.id, "profile": ospath::abspath(&k.profile), "why": k.why})).collect::<Vec<_>>(),
         "binding": plan.binding.as_ref().map_or(Value::Null, |b| json!({"from": b, "to": plan.new})),
         "undo": undo,
     })
@@ -600,7 +616,7 @@ fn describe(plan: &Plan, dry_run: bool, undo: &str) {
         ));
     }
     let mut by_home: Vec<(String, usize)> = Vec::new();
-    for m in plan.moves.iter().filter(|m| m.agent == "codex") {
+    for m in plan.moves.iter().filter(|m| m.agent == Agent::Codex) {
         match by_home.iter_mut().find(|(h, _)| *h == m.profile) {
             Some(entry) => entry.1 += 1,
             None => by_home.push((m.profile.clone(), 1)),
@@ -616,7 +632,7 @@ fn describe(plan: &Plan, dry_run: bool, undo: &str) {
     for skip in &plan.skips {
         out::println(&format!(
             "Left alone: {} session {} in {} {}.",
-            agent_name(skip.agent),
+            skip.agent.name(),
             py::head(&skip.id, 8),
             show(&skip.profile),
             skip.why
@@ -683,20 +699,28 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             for skip in &plan.skips {
                 out::println(&format!(
                     "Left alone: {} session {} in {} {}.",
-                    agent_name(skip.agent),
+                    skip.agent.name(),
                     py::head(&skip.id, 8),
                     paths::shell_path(&skip.profile),
                     skip.why
                 ));
             }
         }
+        let alike = plan.skips.iter().any(|k| k.agent != Agent::Agy);
         return fail(&format!(
-            "No sessions ran in {}{}",
-            paths::shell_path(&old),
+            "No sessions {}ran in {}{}",
             if plan.skips.is_empty() {
                 ""
             } else {
+                "to move "
+            },
+            paths::shell_path(&old),
+            if alike {
                 " (only in folders named alike)"
+            } else if !plan.skips.is_empty() {
+                " (only Antigravity CLI's, which stay as they are)"
+            } else {
+                ""
             }
         ));
     }
@@ -748,7 +772,7 @@ mod tests {
         ];
         fs::write(&path, lines.join("\n") + "\n").unwrap();
         let m = Move {
-            agent: "claude",
+            agent: Agent::Claude,
             profile: String::new(),
             id: "s".into(),
             cwd_from: "/a/b".into(),
@@ -781,7 +805,7 @@ mod tests {
         ];
         fs::write(&path, codex.join("\n") + "\n").unwrap();
         let m = Move {
-            agent: "codex",
+            agent: Agent::Codex,
             ..m
         };
         assert_eq!(rewrite(&m, false), Ok(2));
@@ -797,7 +821,7 @@ mod tests {
     #[test]
     fn index_entries_follow_the_session() {
         let m = Move {
-            agent: "claude",
+            agent: Agent::Claude,
             profile: "/h/.claude".into(),
             id: "s".into(),
             cwd_from: "/a/b".into(),

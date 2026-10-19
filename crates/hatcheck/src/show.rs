@@ -1,6 +1,7 @@
 //! hatcheck show SESSION [--from PROFILE] [--last N] [--json]: a session's conversation,
 //! read-only: your messages and the replies, with each tool call as a block of text.
 
+use crate::agent::Agent;
 use crate::args::{Count, Parser};
 use crate::conv;
 use crate::open_cmd::{pick, Pick};
@@ -14,7 +15,7 @@ use serde_json::{json, Value};
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Show a Claude Code or Codex session's conversation, read-only.",
+        "Show a Claude Code, Codex or Antigravity CLI session's conversation, read-only.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
     .option(
@@ -49,10 +50,10 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Ok(s) => s,
         Err(message) => return out::fail(&message),
     };
-    let conv = if s.agent == "codex" {
-        conv::read_codex(&s.path, &s.profile)
-    } else {
-        conv::read_claude(&s.path)
+    let conv = match s.agent {
+        Agent::Codex => conv::read_codex(&s.path, &s.profile),
+        Agent::Claude => conv::read_claude(&s.path),
+        Agent::Agy => crate::agy::read_conversation(&s.profile, &s.id),
     };
     let conv = match conv {
         Ok(c) => c,
@@ -73,18 +74,14 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         };
         let cwd = conv.cwd.clone().or(s.cwd.clone());
         let data = json!({
-            "version": 1, "agent": s.agent, "id": s.id, "profile": ospath::abspath(&s.profile), "title": title,
+            "version": 1, "agent": s.agent.key(), "id": s.id, "profile": ospath::abspath(&s.profile), "title": title,
             "cwd": cwd, "model": conv.model, "turns_total": total, "tool_calls": conv.calls, "left_out": conv.left_out,
             "turns": turns.iter().map(|(role, texts, when)| json!({"role": role, "text": texts.join("\n\n"), "time": when})).collect::<Vec<_>>(),
         });
         out::println(&py::dumps(&data));
         return 0;
     }
-    let assistant = if s.agent == "codex" {
-        "Codex"
-    } else {
-        "Claude"
-    };
+    let assistant = s.agent.speaker();
     let title = truncate(if s.title.is_empty() { "?" } else { &s.title }, 60);
     let some = if turns.len() < total {
         format!(", the last {}", turns.len())

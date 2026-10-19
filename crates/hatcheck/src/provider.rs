@@ -1,5 +1,5 @@
 //! hatcheck provider ...: the settings for running Claude Code on Z.ai (GLM models) or Kimi
-//! instead of Anthropic, behind claude-z, claude-k, cl -z and cl -k. The README's `claude-z`,
+//! instead of Anthropic, behind claude-z, claude-k, cl -z and cl -k. docs/agents.md's `claude-z`,
 //! `claude-k` section describes the config files and what's sent where.
 
 use crate::args::{Count, Parser};

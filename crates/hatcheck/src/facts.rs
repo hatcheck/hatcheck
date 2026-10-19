@@ -8,6 +8,7 @@
 //! reached, and anything else is read again from the start. A sessions.json beside it is the
 //! Python version's cache, and isn't read.
 
+use crate::agent::Agent;
 use crate::ospath;
 use crate::paths;
 use crate::py::{self, get, s, truthy};
@@ -443,7 +444,7 @@ pub fn claude_facts(data: &[u8], old: Option<&Value>, start: usize) -> Value {
 /// A session as the list shows it.
 #[derive(Clone, Debug)]
 pub struct Summary {
-    pub agent: &'static str,
+    pub agent: Agent,
     pub id: String,
     pub when: f64,
     pub entrypoint: Value,
@@ -515,7 +516,7 @@ pub fn read_session(path: &str) -> std::io::Result<Option<Summary>> {
     candidates.push(first_prompt);
     let name = ospath::basename(path);
     Ok(Some(Summary {
-        agent: "claude",
+        agent: Agent::Claude,
         id: name.strip_suffix(".jsonl").unwrap_or(&name).to_string(),
         when: when_or_mtime(get(last, "timestamp"), path),
         entrypoint: get(last, "entrypoint").clone(),
@@ -781,7 +782,7 @@ pub fn read_codex_session(
         get(meta, "started")
     };
     Ok(Some(Summary {
-        agent: "codex",
+        agent: Agent::Codex,
         when: when_or_mtime(stamp, path),
         entrypoint: Value::String(codex_entrypoint(meta)),
         branch: get(meta, "branch").clone(),
@@ -801,11 +802,11 @@ pub fn read_codex_session(
 }
 
 /// read_session or read_codex_session of a file, with its agent, profile and file, or None.
-pub fn summarize(agent: &str, profile: &str, path: &str) -> Option<Summary> {
-    let s = if agent == "codex" {
-        read_codex_session(path, &codex_names(profile))
-    } else {
-        read_session(path)
+pub fn summarize(agent: Agent, profile: &str, path: &str) -> Option<Summary> {
+    let s = match agent {
+        Agent::Codex => read_codex_session(path, &codex_names(profile)),
+        Agent::Claude => read_session(path),
+        Agent::Agy => Ok(crate::agy::summarize(profile, path)),
     };
     let mut s = s.ok().flatten()?;
     s.profile = profile.to_string();

@@ -143,6 +143,11 @@ if (-not $onPath) {
 if (-not (Get-Command claude -CommandType Application -ErrorAction SilentlyContinue)) {
     Write-Output "cl runs claude, which isn't on your PATH: install Claude Code first"
 }
+# Another install of hatcheck ahead of this one on the PATH: the shell runs that one.
+$first = Get-Command hatcheck -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($first -and -not (Test-Ours $first.Source)) {
+    Write-Output "$($first.Source) comes first on PATH, so it runs, not the launcher in ${Bin}; hatcheck doctor lists every copy"
+}
 $compiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue
 if ($compiler) {
     Write-Output "Note: $($compiler.Source) (the MSVC compiler) is also called cl; whichever comes first on PATH wins."

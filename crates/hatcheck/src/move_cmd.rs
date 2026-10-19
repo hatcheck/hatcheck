@@ -4,9 +4,11 @@
 //! original is deleted only once every copied file is checked, and a copy there that went further
 //! is never replaced: the move stops instead. hatcheck fork SESSION PROFILE ...: bring it in as a
 //! new session with its own ID, beside any copy already there, keeping the original. The
-//! README's `hatcheck move` and `hatcheck fork` sections describe what's copied, how a copy
+//! docs/commands.md's `hatcheck move` and `hatcheck fork` sections describe what's copied, how a copy
 //! already there is brought up to date, and what a conversion keeps.
 
+use crate::agent::Agent;
+use crate::agy;
 use crate::args::{Count, Parser, Takes};
 use crate::conv::{self, add_turn, Conversation, Turn};
 use crate::facts::{self, Summary};
@@ -28,14 +30,6 @@ const TMP: &str = ".hatcheck-move-tmp"; // suffix of a copy in progress
 const BUDGET: usize = 400_000;
 /// Fields that hold a session's own ID, changed in a --fork copy.
 const ID_KEYS: [&str; 4] = ["sessionId", "session_id", "thread_id", "id"];
-
-fn agent_name(agent: &str) -> &'static str {
-    if agent == "codex" {
-        "Codex"
-    } else {
-        "Claude Code"
-    }
-}
 
 /// A stop with a message (sys.exit("...")): exit code 1.
 type Stop = String;
@@ -293,26 +287,27 @@ fn records_of<'a>(lines: &'a [&'a [u8]]) -> impl Iterator<Item = Value> + 'a {
 }
 
 /// How many prompts these lines of a session hold.
-fn count_prompts(lines: &[&[u8]], agent: &str) -> usize {
-    if agent == "codex" {
+fn count_prompts(lines: &[&[u8]], agent: Agent) -> usize {
+    match agent {
         // each prompt is in a user_message event, and again as a response item
-        return records_of(lines)
+        Agent::Codex => records_of(lines)
             .filter(|r| s(get(r, "type")) == Some("event_msg") && facts::codex_prompt(r).is_some())
-            .count();
+            .count(),
+        Agent::Claude => records_of(lines)
+            .filter(|r| {
+                s(get(r, "type")) == Some("user")
+                    && !truthy(get(r, "isMeta"))
+                    && !truthy(get(r, "isSidechain"))
+                    && facts::prompt_text(r).is_some()
+            })
+            .count(),
+        Agent::Agy => 0, // an SQLite file, never compared line by line
     }
-    records_of(lines)
-        .filter(|r| {
-            s(get(r, "type")) == Some("user")
-                && !truthy(get(r, "isMeta"))
-                && !truthy(get(r, "isSidechain"))
-                && facts::prompt_text(r).is_some()
-        })
-        .count()
 }
 
 /// For two copies that each went on: lines shared, when they were last the same, and the
 /// prompts each has had since (this one's, the other's).
-fn since_split(ours: &[u8], theirs: &[u8], agent: &str) -> (usize, Value, usize, usize) {
+fn since_split(ours: &[u8], theirs: &[u8], agent: Agent) -> (usize, Value, usize, usize) {
     let (a, b) = (lines_of(ours), lines_of(theirs));
     let n = shared_lines(&a, &b);
     let when = records_of(&a[..n])
@@ -452,7 +447,7 @@ fn newest(files: &[String]) -> String {
         .map_or_else(String::new, |(_, f)| f.clone())
 }
 
-fn copy_lines(copies: &[SessionCopy], agent: &str) -> Vec<String> {
+fn copy_lines(copies: &[SessionCopy], agent: Agent) -> Vec<String> {
     let newest = &copies[0];
     let width = copies
         .iter()
@@ -498,7 +493,7 @@ fn copy_lines(copies: &[SessionCopy], agent: &str) -> Vec<String> {
 fn choose_source(
     sid: &str,
     places: &[(String, Vec<String>)],
-    agent: &str,
+    agent: Agent,
     json_out: bool,
     report: &mut Map<String, Value>,
 ) -> Result<String, Stop> {
@@ -546,7 +541,7 @@ fn choose_source(
                 c.folder.clone(),
                 base.clone(),
                 short.clone(),
-                format!("{agent}:{short}"),
+                format!("{}:{short}", agent.key()),
             ];
             if names.contains(&answer) {
                 return Ok(c.folder.clone());
@@ -696,37 +691,30 @@ fn size_text(n: u64) -> String {
     }
 }
 
-/// Start Claude Code or Codex on the session in its new profile, from the folder it ran in.
-fn resume_now(target: &str, sid: &str, cwd: &str, agent: &str) -> i32 {
-    let name = if agent == "codex" { "codex" } else { "claude" };
+/// Start the agent on the session in its new profile, from the folder it ran in. For agy, sid
+/// is the file the conversation was written to, which agy starts a new conversation on.
+fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
+    let name = agent.program();
     let Some(program) = ospath::which(name) else {
         return out::fail(&format!(
             "{name} isn't on your PATH; once it is, resume it with the command above"
         ));
     };
-    let variable = if agent == "codex" {
-        "CODEX_HOME"
-    } else {
-        "CLAUDE_CONFIG_DIR"
-    };
     let mut cmd = std::process::Command::new(&program);
-    if agent == "codex" {
-        cmd.args(["resume", sid]);
-    } else {
-        cmd.args(["--resume", sid]);
-    }
-    let home = ospath::join(
-        &paths::home(),
-        if agent == "codex" {
-            ".codex"
-        } else {
-            ".claude"
-        },
-    );
-    if ospath::realpath(target) == ospath::realpath(&home) {
-        cmd.env_remove(variable); // where plain claude or codex looks
-    } else {
-        cmd.env(variable, target); // spelled as cl and cx spell it: Claude Code files the login under this string
+    match agent {
+        Agent::Codex => cmd.args(["resume", sid]),
+        Agent::Claude => cmd.args(["--resume", sid]),
+        Agent::Agy => cmd.args(["--add-dir", &agy::imports_dir(), "-i", &agy::prompt(sid)]),
+    };
+    let default = paths::default_folder(agent);
+    match agent.variable() {
+        Some(variable) if ospath::realpath(target) == ospath::realpath(&default) => {
+            cmd.env_remove(variable); // where plain claude or codex looks
+        }
+        Some(variable) => {
+            cmd.env(variable, target); // spelled as cl and cx spell it: Claude Code files the login under this string
+        }
+        None => {} // agy reads its own folder, the only one there is
     }
     cmd.current_dir(cwd);
     #[cfg(unix)]
@@ -915,7 +903,7 @@ fn fit_within(conv: &Conversation, budget: usize) -> (Vec<Turn>, usize) {
         .map_or(String::new(), |m| format!(" with {m}"));
     let note = format!(
         "[Imported from {} session {}, started {} in {}{model}. Its tool calls are shown as text, with their output shortened, and {} isn't included.]",
-        agent_name(conv.agent),
+        conv.agent.name(),
         conv.id,
         started.as_deref().unwrap_or("?"),
         conv.cwd.as_deref().filter(|c| !c.is_empty()).unwrap_or("?"),
@@ -933,7 +921,7 @@ fn fit_within(conv: &Conversation, budget: usize) -> (Vec<Turn>, usize) {
         add_turn(
             &mut merged,
             "assistant",
-            &format!("(The {} session ended here.)", agent_name(conv.agent)),
+            &format!("(The {} session ended here.)", conv.agent.name()),
             &when,
         );
     }
@@ -1001,7 +989,7 @@ fn write_claude(
             let model = if truthy(&conv.model) {
                 conv.model.clone()
             } else {
-                json!(agent_name(conv.agent))
+                json!(conv.agent.name())
             };
             entry.insert("message".into(), json!({"model": model, "id": format!("msg_imported_{n}"), "type": "message", "role": "assistant",
                                                   "content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "stop_sequence": null,
@@ -1023,7 +1011,7 @@ fn write_claude(
             "content",
             json!(format!(
                 "Converted from {} session {} with hatcheck move",
-                agent_name(conv.agent),
+                conv.agent.name(),
                 conv.id
             )),
         ),
@@ -1204,7 +1192,7 @@ fn read_info(transcripts: &[String]) -> Option<Summary> {
 /// Stop: the session went on in both places after one was copied from the other.
 #[allow(clippy::too_many_arguments)]
 fn went_on_in_both(
-    agent: &str,
+    agent: Agent,
     sid: &str,
     source: &str,
     target: &str,
@@ -1255,6 +1243,187 @@ fn went_on_in_both(
         show(target),
         files.iter().map(|p| format!("  {}", show(p))).collect::<Vec<_>>().join("\n")
     )
+}
+
+/// Where a move goes, as PROFILE names it: a folder and its agent, or a bare NAME, which is
+/// the session's own agent's profile of that name when it exists (~/.codex-NAME for a Codex
+/// session) and Claude Code's otherwise; claude:NAME and codex:NAME spell it out.
+enum Target {
+    Fixed(Agent, String),
+    Bare(String),
+}
+
+impl Target {
+    fn parse(spec: &str) -> Target {
+        let bare = !spec.contains(':')
+            && !spec.contains('/')
+            && !spec.contains(ospath::SEP)
+            && !spec.starts_with('~')
+            && spec != "default"
+            && Agent::from_key(spec).is_none();
+        if bare {
+            Target::Bare(spec.to_string())
+        } else {
+            let (agent, path) = place(spec);
+            Target::Fixed(agent, path)
+        }
+    }
+
+    /// The folders it may mean: Claude Code's, and Codex's for a Codex session.
+    fn candidates(&self) -> Vec<(Agent, String)> {
+        match self {
+            Target::Fixed(agent, path) => vec![(*agent, path.clone())],
+            Target::Bare(name) => vec![
+                (Agent::Claude, paths::profile_folder(Agent::Claude, name)),
+                (Agent::Codex, paths::profile_folder(Agent::Codex, name)),
+            ],
+        }
+    }
+
+    /// What it means for a session of agent, or, when both the session's own agent's folder
+    /// and Claude Code's exist, those two (own first), which has to be asked.
+    fn resolve(&self, agent: Agent) -> Result<(Agent, String), (String, String)> {
+        match self {
+            Target::Fixed(a, p) => Ok((*a, p.clone())),
+            Target::Bare(name) => {
+                let claude = paths::profile_folder(Agent::Claude, name);
+                if agent == Agent::Codex {
+                    let own = paths::profile_folder(Agent::Codex, name);
+                    match (ospath::isdir(&own), ospath::isdir(&claude)) {
+                        (true, true) => return Err((own, claude)),
+                        (true, false) => return Ok((Agent::Codex, own)),
+                        _ => {}
+                    }
+                }
+                Ok((Agent::Claude, claude))
+            }
+        }
+    }
+}
+
+/// Which of two folders a bare NAME means, asked in a terminal: the session's own agent's,
+/// a move, or Claude Code's, a conversion. Enter takes the first.
+fn choose_target(
+    name: &str,
+    own: &str,
+    claude: &str,
+    report: &mut Map<String, Value>,
+) -> Result<(Agent, String), Stop> {
+    let show = paths::shell_path;
+    out::println(&format!(
+        "{name} is both {} and {}:",
+        show(own),
+        show(claude)
+    ));
+    out::println(&format!("  1. {}  (a move, as a Codex session)", show(own)));
+    out::println(&format!(
+        "  2. {}  (a conversion, into a Claude Code session)",
+        show(claude)
+    ));
+    report.insert("target_choice".into(), json!("asked"));
+    loop {
+        let Some(answer) = read_answer("Which one? [1] ") else {
+            out::println("");
+            return Err("Nothing changed.".into());
+        };
+        match py::strip(&answer) {
+            "" | "1" => return Ok((Agent::Codex, own.to_string())),
+            "2" => return Ok((Agent::Claude, claude.to_string())),
+            other if other == own || other == show(own) || other == format!("codex:{name}") => {
+                return Ok((Agent::Codex, own.to_string()))
+            }
+            other
+                if other == claude
+                    || other == show(claude)
+                    || other == format!("claude:{name}") =>
+            {
+                return Ok((Agent::Claude, claude.to_string()))
+            }
+            _ => out::println("Answer 1 or 2."),
+        }
+    }
+}
+
+/// Fill in what move or fork was given nothing for: the newest session started from this
+/// folder, and the folder's Claude Code profile (its bound one, or ~/.claude), which a terminal
+/// is asked to confirm; a dry run just says. A script, a pipe or --json has to say both.
+fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
+    let show = paths::shell_path;
+    let cwd = ospath::cwd();
+    let mut about = String::new();
+    // Where the session is: (agent, folder) of each copy, to notice a move to where it already is.
+    let mut copies: Vec<(Agent, String)> = Vec::new();
+    if a.session.is_empty() {
+        let Some(s) = crate::find::newest_here(&cwd, false) else {
+            return Err(format!(
+                "No session was started from this folder. Give its ID: {prog} <session> <profile>"
+            ));
+        };
+        about = format!(" \"{}\" from {}", truncate(&s.title, 60), show(&s.profile));
+        copies.push((s.agent, s.profile.clone()));
+        a.session = s.id.clone();
+        a.source = Some(s.profile.clone());
+    } else {
+        for ((agent, _), places) in crate::find::session_copies(&a.session) {
+            copies.extend(places.into_iter().map(|(folder, _)| (agent, folder)));
+        }
+    }
+    let inferred_profile = a.profile.is_empty();
+    if inferred_profile {
+        let bindings = paths::load_bindings();
+        a.profile = paths::bound_profile(Some(&cwd), Agent::Claude, &bindings)
+            .unwrap_or_else(|| paths::default_folder(Agent::Claude));
+    }
+    if about.is_empty() && !inferred_profile {
+        return Ok(());
+    }
+    // Nothing to do when its only copy is already there: say so rather than ask.
+    let wanted = Target::parse(&a.profile);
+    let settled = copies
+        .first()
+        .and_then(|(agent, _)| wanted.resolve(*agent).ok());
+    let there = match &settled {
+        Some((target_agent, target)) => copies
+            .iter()
+            .all(|(agent, folder)| agent == target_agent && paths::same_folder(folder, target)),
+        None => false,
+    };
+    if there {
+        let target = settled.map(|(_, t)| t).unwrap_or_default();
+        return Err(format!(
+            "Session {}{} is already in {}. Say where it goes: {prog} {} <profile>",
+            py::head(&a.session, 8),
+            about.split(" from ").next().unwrap_or(""),
+            show(&target),
+            py::head(&a.session, 8)
+        ));
+    }
+    if a.dry_run {
+        return Ok(());
+    }
+    if a.json || !interactive() {
+        return Err(format!(
+            "Say which session and where, when there's no terminal to ask: {prog} <session> <profile>"
+        ));
+    }
+    let to = settled.map_or(a.profile.clone(), |(_, t)| show(&t));
+    let question = format!(
+        "{} session {}{about} to {to}? [y/N] ",
+        if a.fork { "Fork" } else { "Move" },
+        py::head(&a.session, 8)
+    );
+    let answer = read_answer(&question);
+    if answer.is_none() {
+        out::println("");
+    }
+    match answer
+        .as_deref()
+        .map(|x| py::strip(x).to_lowercase())
+        .as_deref()
+    {
+        Some("y" | "yes") => Ok(()),
+        _ => Err("Nothing changed.".into()),
+    }
 }
 
 /// What move or fork was asked: the command line. A fork always keeps the original.
@@ -1445,13 +1614,20 @@ fn move_claude(
             _ => None,
         };
         return Err(went_on_in_both(
-            "claude", sid, source, target, both, fork_cmd, &files, a.keep,
+            Agent::Claude,
+            sid,
+            source,
+            target,
+            both,
+            fork_cmd,
+            &files,
+            a.keep,
         ));
     }
     set(
         report,
         vec![
-            ("agent", json!("claude")),
+            ("agent", json!(Agent::Claude.key())),
             ("session", json!(sid)),
             ("source", json!(source)),
             ("target", json!(target)),
@@ -1787,7 +1963,7 @@ fn copy_codex(
     if state == "diverged" {
         let (o, t) = (read(&src).map_err(io)?, read(&dst).map_err(io)?);
         return Err(went_on_in_both(
-            "codex",
+            Agent::Codex,
             sid,
             source,
             target,
@@ -1800,7 +1976,7 @@ fn copy_codex(
     set(
         report,
         vec![
-            ("agent", json!("codex")),
+            ("agent", json!(Agent::Codex.key())),
             ("session", json!(sid)),
             ("source", json!(source)),
             ("target", json!(target)),
@@ -1960,11 +2136,11 @@ fn copy_codex(
 #[allow(clippy::too_many_arguments)]
 fn convert(
     a: &Ask,
-    agent: &str,
+    agent: Agent,
     sid: &str,
     source: &str,
     files: &[String],
-    target_agent: &str,
+    target_agent: Agent,
     target: &str,
     why: Option<&str>,
     report: &mut Map<String, Value>,
@@ -1973,18 +2149,33 @@ fn convert(
     let io = |e: std::io::Error| e.to_string();
     let path = newest(files);
     let id8 = py::head(sid, 8);
-    let conv = if agent == "codex" {
-        let lock = lock_or_stop(source, sid)?;
-        let conv = conv::read_codex(&path, source).map_err(io)?;
-        drop(lock);
-        conv
-    } else {
-        conv::read_claude(&path).map_err(io)?
+    let conv = match agent {
+        Agent::Codex => {
+            let lock = lock_or_stop(source, sid)?;
+            let conv = conv::read_codex(&path, source).map_err(io)?;
+            drop(lock);
+            conv
+        }
+        Agent::Claude => conv::read_claude(&path).map_err(io)?,
+        Agent::Agy => {
+            if agy::session_open(source, sid) {
+                return Err(format!(
+                    "Antigravity session {id8} is open in {}; quit it first, so it stops changing",
+                    agy::holder(source)
+                ));
+            }
+            agy::read_conversation(source, sid).map_err(|e| {
+                format!(
+                    "agy wrote no transcript hatcheck can read for session {id8} ({}): {e}",
+                    show(&agy::transcript_path(source, sid))
+                )
+            })?
+        }
     };
     if conv.turns.is_empty() {
         return Err(format!(
             "{} session {id8} holds no conversation to convert",
-            agent_name(agent)
+            agent.name()
         ));
     }
     let (turns, dropped) = fit(&conv);
@@ -1993,35 +2184,45 @@ fn convert(
         .clone()
         .filter(|c| !c.is_empty())
         .unwrap_or_else(paths::home);
+    // What was written: a new session's ID and file; for agy, an ID for the file the
+    // conversation was written to, which agy starts a new conversation of its own on.
     let mut written: Option<(String, String)> = None;
     if !a.dry_run {
         written = Some(
-            if target_agent == "codex" {
-                write_codex(&conv, &turns, target, &cwd)
-            } else {
-                write_claude(&conv, &turns, target, &cwd)
+            match target_agent {
+                Agent::Codex => write_codex(&conv, &turns, target, &cwd),
+                Agent::Claude => write_claude(&conv, &turns, target, &cwd),
+                Agent::Agy => {
+                    let id = uuid4();
+                    agy::write_import(&conv, &turns, &id).map(|path| (id, path))
+                }
             }
             .map_err(io)?,
         );
     }
-    let new_sid = written.as_ref().map(|w| w.0.clone());
+    let to_agy = target_agent == Agent::Agy;
+    let new_sid = written.as_ref().filter(|_| !to_agy).map(|w| w.0.clone());
     let prompts = conv.turns.iter().filter(|t| t.0 == "user").count();
     let shown_id = new_sid.clone().unwrap_or_else(|| "<new id>".into());
-    let resume = if target_agent == "codex" {
-        paths::codex_resume_command(target, &shown_id, false)
-    } else {
-        paths::resume_command(target, &shown_id, false, None)
+    let file = written
+        .as_ref()
+        .map_or_else(|| agy::import_path("<new id>"), |w| w.1.clone());
+    let resume = match target_agent {
+        Agent::Codex => paths::codex_resume_command(target, &shown_id, false),
+        Agent::Claude => paths::resume_command(target, &shown_id, false, None),
+        Agent::Agy => agy::start_command(target, &file, false),
     };
     set(
         report,
         vec![
             ("action", json!("convert")),
-            ("agent", json!(agent)),
+            ("agent", json!(agent.key())),
             ("session", json!(sid)),
             ("source", json!(source)),
             ("target", json!(target)),
-            ("target_agent", json!(target_agent)),
+            ("target_agent", json!(target_agent.key())),
             ("new_session", opt(new_sid.clone())),
+            ("file", if to_agy { json!(file) } else { Value::Null }),
             ("title", opt(conv.title.clone())),
             ("why", why.map_or(Value::Null, |w| json!(w))),
             ("cwd", json!(cwd)),
@@ -2032,14 +2233,22 @@ fn convert(
             ("resume", json!(resume)),
         ],
     );
+    let into = match target_agent {
+        Agent::Agy => format!(
+            "into a conversation for {} in {}",
+            target_agent.name(),
+            show(&agy::imports_dir())
+        ),
+        other => format!("into a {} session in {}", other.name(), show(target)),
+    };
     out::println(&format!(
-        "{} {} session {id8} \"{}\" from {} into a {} session in {}:",
+        "{} {} session {id8} \"{}\" from {} {into}:",
         if a.dry_run {
             "Would convert"
         } else {
             "Converted"
         },
-        agent_name(agent),
+        agent.name(),
         truncate(
             conv.title
                 .as_deref()
@@ -2047,9 +2256,7 @@ fn convert(
                 .unwrap_or("?"),
             60
         ),
-        show(source),
-        agent_name(target_agent),
-        show(target)
+        show(source)
     ));
     if let Some(w) = why {
         out::println(&format!("  ({w})"));
@@ -2067,24 +2274,39 @@ fn convert(
         out::println(&format!("  {:<26} the oldest {dropped} turns after the first are left out, to fit the context window", "too long"));
     }
     if let Some((sid_new, path_new)) = &written {
-        out::println(&format!(
-            "  {:<26} {sid_new} ({})",
-            "new session",
-            size_text(fs::metadata(path_new).map(|m| m.len()).unwrap_or(0))
-        ));
+        let size = size_text(fs::metadata(path_new).map(|m| m.len()).unwrap_or(0));
+        if to_agy {
+            out::println(&format!(
+                "  {:<26} {} ({size})",
+                "written to",
+                show(path_new)
+            ));
+        } else {
+            out::println(&format!("  {:<26} {sid_new} ({size})", "new session"));
+        }
+    }
+    if to_agy {
+        out::println("Antigravity CLI keeps its conversations in a form hatcheck can't write, so the session starts when agy reads the file.");
     }
     out::println(&format!(
         "The original stays in {}, since a conversion leaves things out.",
         show(source)
     ));
-    out::println(if a.dry_run {
-        "Then resume it with:"
-    } else {
-        "Resume it with:"
+    out::println(match (a.dry_run, to_agy) {
+        (true, false) => "Then resume it with:",
+        (false, false) => "Resume it with:",
+        (true, true) => "Then start it with:",
+        (false, true) => "Start it with:",
     });
     out::println(&format!("  cd {}", show(&cwd)));
     out::println(&format!("  {resume}"));
-    Ok((new_sid, Some(cwd)))
+    // What to start, when asked to: the new session, or for agy the file.
+    let handle = if to_agy {
+        written.as_ref().map(|w| w.1.clone())
+    } else {
+        new_sid
+    };
+    Ok((handle, Some(cwd)))
 }
 
 /// The fork command for what was asked, which a move that stops prints: hatcheck fork (or hat
@@ -2107,57 +2329,11 @@ fn fork_command(prog: &str, a: &Ask) -> String {
     words.join(" ")
 }
 
-/// What a move leaves to resume: the session, the directory it ran in, and where it went.
-struct Done {
-    session: Option<String>,
-    cwd: Option<String>,
-    target_agent: &'static str,
-    target: String,
-}
-
-/// The move itself, saying what it does as it goes and filling in the report.
-fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Stop> {
-    let show = paths::shell_path;
-    out::setup_console();
-    let (target_agent, target) = place(&a.profile);
-    if !ospath::isdir(&target) {
-        if target_agent == "codex" {
-            let base = ospath::basename(&target);
-            let name = base.strip_prefix(".codex-").unwrap_or("");
-            return Err(format!(
-                "{} isn't a Codex home. Sign in there first, e.g. with: {}",
-                show(&target),
-                if name.is_empty() {
-                    "codex login".to_string()
-                } else {
-                    format!("cx {name} login")
-                }
-            ));
-        }
-        return Err(format!(
-            "{} isn't a profile folder. Sign in there first, e.g. with: cl {}",
-            show(&target),
-            a.profile
-        ));
-    }
-    // Look in every profile and home but the target, or just in --from.
-    let sources: Vec<(&'static str, String)> = match &a.source {
-        Some(source) => vec![place(source)],
-        None => {
-            let real = ospath::realpath(&target);
-            let mut all: Vec<(&'static str, String)> = paths::find_profiles()
-                .into_iter()
-                .map(|p| ("claude", p))
-                .collect();
-            all.extend(paths::find_codex_homes().into_iter().map(|h| ("codex", h)));
-            all.into_iter()
-                .filter(|(_, p)| ospath::realpath(p) != real)
-                .collect()
-        }
-    };
-    // (agent, session ID) -> [(profile or home, [files])], in the order found
-    let mut found: Vec<((&'static str, String), Places)> = Vec::new();
-    let mut add = |key: (&'static str, String), folder: &str, path: String| {
+/// (agent, session ID) -> [(profile or home, [files])] for the sessions in sources whose
+/// ID starts with prefix, in the order found.
+fn find_sessions(sources: &[(Agent, String)], prefix: &str) -> Vec<((Agent, String), Places)> {
+    let mut found: Vec<((Agent, String), Places)> = Vec::new();
+    let mut add = |key: (Agent, String), folder: &str, path: String| {
         let entry = match found.iter_mut().position(|(k, _)| *k == key) {
             Some(k) => &mut found[k].1,
             None => {
@@ -2170,31 +2346,99 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             None => entry.push((folder.to_string(), vec![path])),
         }
     };
-    for (agent, folder) in &sources {
-        if *agent == "claude" {
-            let mut files = ospath::glob(
-                folder,
-                &[
-                    Part::Name("projects"),
-                    Part::Wild("", ""),
-                    Part::Wild(&a.session, ".jsonl"),
-                ],
-            );
-            files.sort();
-            for path in files {
-                let name = ospath::basename(&path);
-                add(
-                    ("claude", name[..name.len() - ".jsonl".len()].to_string()),
+    for (agent, folder) in sources {
+        match agent {
+            Agent::Claude => {
+                let mut files = ospath::glob(
                     folder,
-                    path,
+                    &[
+                        Part::Name("projects"),
+                        Part::Wild("", ""),
+                        Part::Wild(prefix, ".jsonl"),
+                    ],
                 );
+                files.sort();
+                for path in files {
+                    let name = ospath::basename(&path);
+                    add(
+                        (
+                            Agent::Claude,
+                            name[..name.len() - ".jsonl".len()].to_string(),
+                        ),
+                        folder,
+                        path,
+                    );
+                }
             }
-        } else {
-            for (sid, path) in codex_files(folder, &a.session) {
-                add(("codex", sid), folder, path);
+            Agent::Codex => {
+                for (sid, path) in codex_files(folder, prefix) {
+                    add((Agent::Codex, sid), folder, path);
+                }
+            }
+            Agent::Agy => {
+                for row in agy::rows_starting_with(folder, prefix) {
+                    let path = agy::conversation_path(folder, &row.id);
+                    add((Agent::Agy, row.id), folder, path);
+                }
             }
         }
     }
+    found
+}
+
+/// What a move leaves to resume: the session, the directory it ran in, and where it went.
+struct Done {
+    session: Option<String>,
+    cwd: Option<String>,
+    target_agent: Agent,
+    target: String,
+}
+
+/// The move itself, saying what it does as it goes and filling in the report.
+fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Stop> {
+    let show = paths::shell_path;
+    out::setup_console();
+    let wanted = Target::parse(&a.profile);
+    // Look in every profile, home and folder but where it may go, or just in --from.
+    let excluded: Vec<String> = wanted
+        .candidates()
+        .iter()
+        .map(|(_, p)| ospath::realpath(p))
+        .collect();
+    let sources: Vec<(Agent, String)> = match &a.source {
+        Some(source) => {
+            let from = Target::parse(source);
+            let mut folders: Vec<(Agent, String)> = from
+                .candidates()
+                .into_iter()
+                .filter(|(_, p)| ospath::isdir(p))
+                .collect();
+            if folders.is_empty() {
+                folders = from.candidates().into_iter().take(1).collect();
+            }
+            folders
+        }
+        None => {
+            let mut all: Vec<(Agent, String)> = paths::find_profiles()
+                .into_iter()
+                .map(|p| (Agent::Claude, p))
+                .collect();
+            all.extend(
+                paths::find_codex_homes()
+                    .into_iter()
+                    .map(|h| (Agent::Codex, h)),
+            );
+            all.extend(
+                paths::find_agy_stores()
+                    .into_iter()
+                    .map(|r| (Agent::Agy, r)),
+            );
+            all.into_iter()
+                .filter(|(_, p)| !excluded.contains(&ospath::realpath(p)))
+                .collect()
+        }
+    };
+    let found = find_sessions(&sources, &a.session);
     if found.is_empty() {
         if a.source.is_some() {
             return Err(format!(
@@ -2203,25 +2447,20 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
                 show(&sources[0].1)
             ));
         }
-        let here = !ospath::glob(
-            &target,
-            &[
-                Part::Name("projects"),
-                Part::Wild("", ""),
-                Part::Wild(&a.session, ".jsonl"),
-            ],
-        )
-        .is_empty()
-            || !codex_files(&target, &a.session).is_empty();
-        if here {
-            return Err(format!(
-                "Session {} is already in {}, and in no other profile",
-                a.session,
-                show(&target)
-            ));
+        for (agent, folder) in wanted.candidates() {
+            if ospath::isdir(&folder)
+                && !find_sessions(&[(agent, folder.clone())], &a.session).is_empty()
+            {
+                return Err(format!(
+                    "Session {} is already in {}, and in no other profile",
+                    a.session,
+                    show(&folder)
+                ));
+            }
         }
         return Err(format!("No session starting with {}", a.session));
     }
+    let mut found = found;
     if found.len() > 1 {
         found.sort_by(|x, y| x.0.cmp(&y.0));
         let lines: Vec<String> = found
@@ -2249,6 +2488,55 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
         ));
     }
     let ((agent, sid), places) = found.remove(0);
+    let (target_agent, target) = match wanted.resolve(agent) {
+        Ok(t) => t,
+        Err((own, claude)) => {
+            if a.json || !interactive() {
+                return Err(format!(
+                    "{} is both {} and {}; say codex:{} or claude:{}",
+                    a.profile,
+                    show(&own),
+                    show(&claude),
+                    a.profile,
+                    a.profile
+                ));
+            }
+            choose_target(&a.profile, &own, &claude, report)?
+        }
+    };
+    if target_agent == Agent::Agy && agy::is_app_root(&target) {
+        return Err(format!(
+            "{} is the Antigravity app's folder, which only the app writes; convert the session for agy instead: {prog} {} agy",
+            show(&target),
+            a.session
+        ));
+    }
+    if !ospath::isdir(&target) {
+        if target_agent == Agent::Codex {
+            let base = ospath::basename(&target);
+            let name = base.strip_prefix(".codex-").unwrap_or("");
+            return Err(format!(
+                "{} isn't a Codex home. Sign in there first, e.g. with: {}",
+                show(&target),
+                if name.is_empty() {
+                    "codex login".to_string()
+                } else {
+                    format!("cx {name} login")
+                }
+            ));
+        }
+        if target_agent == Agent::Agy {
+            return Err(format!(
+                "{} isn't an Antigravity CLI folder. Run agy once to sign in",
+                show(&target)
+            ));
+        }
+        return Err(format!(
+            "{} isn't a profile folder. Sign in there first, e.g. with: cl {}",
+            show(&target),
+            a.profile
+        ));
+    }
     let source = if places.len() > 1 {
         choose_source(&sid, &places, agent, a.json, report)?
     } else {
@@ -2263,7 +2551,7 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
         return Err(format!("Session {sid} is already in {}", show(&target)));
     }
     let mut why: Option<String> = None;
-    if agent == "codex" && target_agent == "codex" {
+    if agent == Agent::Codex && target_agent == Agent::Codex {
         let accounts = (codex_account(&source), codex_account(&target));
         if accounts.0.is_none() || accounts.1.is_none() || accounts.0 != accounts.1 {
             why = Some(format!("{} and {} aren't signed in to the same ChatGPT account, and Codex encrypts its reasoning for the account that wrote it, so the session is converted", show(&source), show(&target)));
@@ -2272,29 +2560,39 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
     // A conversion leaves things out, so its original is always kept, moving or not.
     let converting = agent != target_agent || why.is_some();
     let fork_cmd = fork_command(prog, a);
-    let (resume_sid, cwd) = if !converting && agent == "claude" {
-        let (s_, c) = move_claude(a, &sid, &source, &files, &target, &fork_cmd, report)?;
-        (Some(s_), c)
-    } else if !converting {
-        let (s_, c) = copy_codex(a, &sid, &source, &files, &target, &fork_cmd, report)?;
-        (Some(s_), c)
-    } else {
-        if agent == "claude" {
-            if let Some(stop) = open_refusal(&source, &sid) {
-                return Err(stop);
+    let (resume_sid, cwd) = match agent {
+        _ if converting => {
+            if agent == Agent::Claude {
+                if let Some(stop) = open_refusal(&source, &sid) {
+                    return Err(stop);
+                }
             }
+            convert(
+                a,
+                agent,
+                &sid,
+                &source,
+                &files,
+                target_agent,
+                &target,
+                why.as_deref(),
+                report,
+            )?
         }
-        convert(
-            a,
-            agent,
-            &sid,
-            &source,
-            &files,
-            target_agent,
-            &target,
-            why.as_deref(),
-            report,
-        )?
+        Agent::Claude => {
+            let (s_, c) = move_claude(a, &sid, &source, &files, &target, &fork_cmd, report)?;
+            (Some(s_), c)
+        }
+        Agent::Codex => {
+            let (s_, c) = copy_codex(a, &sid, &source, &files, &target, &fork_cmd, report)?;
+            (Some(s_), c)
+        }
+        Agent::Agy => {
+            return Err(format!(
+                "Antigravity CLI keeps its conversations in a form hatcheck can't copy; convert session {} for Claude Code or Codex instead",
+                py::head(&sid, 8)
+            ))
+        }
     };
     Ok(Done {
         session: resume_sid,
@@ -2305,9 +2603,9 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Move a Claude Code or Codex session to another profile, to carry on with it there, or convert it for the other agent.")
-        .positional("session", Count::One, "the session ID, or the start of it")
-        .positional("profile", Count::One, "where it goes: NAME for ~/.claude-NAME, default for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, or a path")
+    let parser = Parser::new(prog, "Move a Claude Code, Codex or Antigravity CLI session to another profile, to carry on with it there, or convert it for another agent. With nothing, the newest session started from this folder, to the folder's Claude Code profile, after asking.")
+        .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, or a path (default: this folder's bound Claude Code profile, or ~/.claude)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
         // Still taken, so scripts that pass them run: what --no-keep asked for is the default
@@ -2321,7 +2619,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Err(stop) => return stop.exit_code(),
     };
     let fork = args.flag("fork");
-    let a = Ask {
+    let mut a = Ask {
         session: args.value("session").unwrap_or("").to_string(),
         profile: args.value("profile").unwrap_or("").to_string(),
         source: args
@@ -2333,15 +2631,18 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
     };
+    if let Err(stop) = fill_in(&mut a, prog) {
+        return out::fail(&stop);
+    }
     answer(&a, prog)
 }
 
 /// hatcheck fork SESSION PROFILE ...: bring a session into another profile as a new one, with its
 /// own ID, and keep the original; for the other agent, convert it, as move does.
 pub fn fork_main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Fork a Claude Code or Codex session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For the other agent, it's converted.")
-        .positional("session", Count::One, "the session ID, or the start of it")
-        .positional("profile", Count::One, "where it goes: NAME for ~/.claude-NAME, default for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, or a path")
+    let parser = Parser::new(prog, "Fork a Claude Code, Codex or Antigravity CLI session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With nothing, the newest session started from this folder, into the folder's Claude Code profile, after asking.")
+        .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, or a path (default: this folder's bound Claude Code profile, or ~/.claude)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")
         .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
@@ -2349,7 +2650,7 @@ pub fn fork_main(argv: &[String], prog: &str) -> i32 {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
-    let a = Ask {
+    let mut a = Ask {
         session: args.value("session").unwrap_or("").to_string(),
         profile: args.value("profile").unwrap_or("").to_string(),
         source: args
@@ -2361,6 +2662,9 @@ pub fn fork_main(argv: &[String], prog: &str) -> i32 {
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
     };
+    if let Err(stop) = fill_in(&mut a, prog) {
+        return out::fail(&stop);
+    }
     answer(&a, prog)
 }
 
@@ -2393,10 +2697,13 @@ fn answer(a: &Ask, prog: &str) -> i32 {
             // In a terminal, offer to run that now. Never when piped, so scripts don't stop to ask.
             if let (Some(sid), Some(cwd)) = (session, cwd) {
                 if !a.dry_run && ospath::isdir(&cwd) && interactive() {
-                    let answer = read_answer(&format!(
-                        "Resume it now in {}? [y/N] ",
-                        paths::shell_path(&target)
-                    ));
+                    let answer = read_answer(&match target_agent {
+                        Agent::Agy => format!(
+                            "Start it now with agy, in {}? [y/N] ",
+                            paths::shell_path(&cwd)
+                        ),
+                        _ => format!("Resume it now in {}? [y/N] ", paths::shell_path(&target)),
+                    });
                     if answer.is_none() {
                         out::println("");
                     }
@@ -2505,7 +2812,7 @@ mod tests {
             })
             .collect();
         let conv = Conversation {
-            agent: "codex",
+            agent: Agent::Codex,
             id: "019f0000-aaaa-7000-8000-000000000001".into(),
             cwd: Some("/w".into()),
             model: Value::Null,

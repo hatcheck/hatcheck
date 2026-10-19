@@ -1,18 +1,23 @@
 //! The hatcheck command: picks the subcommand and runs it, or the launcher it's called as.
 
 use crate::{
-    best, bind, desktop, move_cmd, open_cmd, out, provider, relocate, sessions, show, usage,
-    where_cmd,
+    best, bind, desktop, doctor, move_cmd, open_cmd, out, provider, relocate, sessions, show,
+    usage, where_cmd,
 };
 
 pub const SUBCOMMANDS: &[&str] = &[
     "sessions", "usage", "where", "move", "fork", "open", "show", "best", "bind", "unbind",
-    "desktop", "provider", "relocate",
+    "desktop", "provider", "relocate", "doctor",
 ];
 
 /// The letters two subcommands start with, each given to the one used more. The other takes two
-/// letters, bi or un; sessions, the default, needs no word at all.
-const SHARED_LETTERS: &[(&str, &str)] = &[("b", "best"), ("s", "show"), ("u", "usage")];
+/// letters, bi, un or do; sessions, the default, needs no word at all.
+const SHARED_LETTERS: &[(&str, &str)] = &[
+    ("b", "best"),
+    ("s", "show"),
+    ("u", "usage"),
+    ("d", "desktop"),
+];
 
 /// The subcommands a word could name: its whole name, a letter in SHARED_LETTERS, or else each
 /// name the word is the start of, so hat m is hat move.
@@ -33,10 +38,9 @@ fn subcommands_named(word: &str) -> Vec<&'static str> {
         .collect()
 }
 
-const HELP: &str =
-    "hatcheck: Claude Code and Codex accounts on one computer, each kept apart. Lists
-recent sessions with the command that resumes each one and what's left of each
-plan, and carries sessions between accounts and agents.
+const HELP: &str = "hatcheck: Claude Code, Codex and Antigravity CLI accounts on one computer, each
+kept apart. Lists recent sessions with the command that resumes each one and
+what's left of each plan, and carries sessions between accounts and agents.
 
 Usage:
     hatcheck [sessions] [HOURS] ...    recent sessions in every profile and home, with
@@ -44,9 +48,11 @@ Usage:
     hat check ...                      the same as hat (or hatcheck): the name in two words
     hatcheck usage ...                 plan usage left for every profile and home
     hatcheck where SESSION             where a session is stored, by its ID or the start of it
-    hatcheck move SESSION PROFILE ...  move a session to another profile or home, or convert
-                                       it between Claude Code and Codex
-    hatcheck fork SESSION PROFILE ...  fork a session into another profile or home: a new
+    hatcheck move [SESSION] [PROFILE]  move a session to another profile or home, or convert
+                                       it between Claude Code, Codex and Antigravity CLI;
+                                       with nothing, the newest session started here, to
+                                       this folder's Claude Code profile, after asking
+    hatcheck fork [SESSION] [PROFILE]  fork a session into another profile or home: a new
                                        session with its own ID, and the original stays
     hatcheck relocate OLD NEW          bring the sessions of a project folder that was moved
                                        or renamed along to its new place
@@ -59,9 +65,11 @@ Usage:
     hatcheck desktop ...               Claude Desktop instances on macOS: list, open, make one
     hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
                                        claude-k, cl -z and cl -k
+    hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
+                                       which runs, and how to remove the rest
 
-hatcheck, usage, where, show, desktop, move, fork and relocate take --json, for
-scripts, status bars and the desktop app.
+hatcheck, usage, where, show, desktop, move, fork, relocate and doctor take --json,
+for scripts, status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
@@ -69,7 +77,8 @@ and so on. cl and cx run Claude Code and Codex with a profile.
 
 A subcommand can be cut to its first letters: hat m is hat move, hat f is hat
 fork. Where two share a letter, it goes to the one used more: b is best, s is
-show and u is usage, so bind and unbind take two letters, bi and un.";
+show, u is usage and d is desktop, so bind, unbind and doctor take two letters,
+bi, un and do.";
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -170,6 +179,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "bind" => bind::main(&argv, &prog),
         "unbind" => bind::unbind_main(&argv, &prog),
         "provider" => provider::main(&argv, &prog),
+        "doctor" => doctor::main(&argv, &prog),
         other => {
             // Not reached: every name in SUBCOMMANDS has its arm above (a test checks).
             out::eprint(&format!(

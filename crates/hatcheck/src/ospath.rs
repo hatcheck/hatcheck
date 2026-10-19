@@ -262,39 +262,45 @@ pub fn getmtime(p: &str) -> std::io::Result<f64> {
     })
 }
 
+/// Whether a path is a program that can be run: a file, executable on Unix.
+fn runnable(p: &std::path::Path) -> bool {
+    let Ok(m) = fs::metadata(p) else { return false };
+    if m.is_dir() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        m.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+/// The endings a program's name is tried with: none, and on Windows PATHEXT's.
+fn extensions(name: &str) -> Vec<String> {
+    if !WINDOWS {
+        return vec![String::new()];
+    }
+    let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+    let lower = name.to_lowercase();
+    let mut exts: Vec<String> = pathext
+        .split(';')
+        .filter(|e| !e.is_empty())
+        .map(str::to_string)
+        .collect();
+    if exts.iter().any(|e| lower.ends_with(&e.to_lowercase())) {
+        exts.insert(0, String::new());
+    }
+    exts
+}
+
 /// shutil.which(name): the program's path on the PATH, or None. A name with a separator in
 /// it is checked as it is; on Windows the PATHEXT extensions are tried too.
 pub fn which(name: &str) -> Option<String> {
-    let runnable = |p: &std::path::Path| {
-        let Ok(m) = fs::metadata(p) else { return false };
-        if m.is_dir() {
-            return false;
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            m.permissions().mode() & 0o111 != 0
-        }
-        #[cfg(not(unix))]
-        {
-            true
-        }
-    };
-    let extensions: Vec<String> = if WINDOWS {
-        let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-        let lower = name.to_lowercase();
-        let mut exts: Vec<String> = pathext
-            .split(';')
-            .filter(|e| !e.is_empty())
-            .map(str::to_string)
-            .collect();
-        if exts.iter().any(|e| lower.ends_with(&e.to_lowercase())) {
-            exts.insert(0, String::new());
-        }
-        exts
-    } else {
-        vec![String::new()]
-    };
+    let extensions = extensions(name);
     if name.contains('/') || (WINDOWS && name.contains('\\')) {
         return extensions
             .iter()
@@ -311,6 +317,35 @@ pub fn which(name: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Every program of the name on the PATH, in the PATH's order, and whether each can be run:
+/// a link to a file that's gone is listed too, since a shell finds it and fails. A folder the
+/// PATH names twice counts once.
+pub fn which_all(name: &str) -> Vec<(String, bool)> {
+    let extensions = extensions(name);
+    let Some(path) = std::env::var_os("PATH") else {
+        return Vec::new();
+    };
+    let mut found: Vec<(String, bool)> = Vec::new();
+    for dir in std::env::split_paths(&path) {
+        if dir.as_os_str().is_empty() {
+            continue;
+        }
+        for e in &extensions {
+            let candidate = dir.join(format!("{name}{e}"));
+            let text = candidate.to_string_lossy().into_owned();
+            if found.iter().any(|(p, _)| *p == text) {
+                continue;
+            }
+            if runnable(&candidate) {
+                found.push((text, true));
+            } else if fs::symlink_metadata(&candidate).is_ok() {
+                found.push((text, false));
+            }
+        }
+    }
+    found
 }
 
 /// One component of a glob pattern: a name, or `prefix*suffix`.

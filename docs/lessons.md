@@ -37,12 +37,41 @@ Claude Code out. Reading usage through Claude Code's own `/usage` needs none of 
 **A path given to another app is spelled one way.** Claude Code names each profile's Keychain
 entry after the exact `CLAUDE_CONFIG_DIR` string, so `~/.claude-work` and `/Users/me/.claude-work`
 are two logins. `cl` always spells it `~/.claude-<name>` expanded the same way.
-- Evidence: README, "`cl`: run Claude Code with a profile"; `cl` in `launch.rs`.
+- Evidence: docs/agents.md, "`cl`: run Claude Code with a profile"; `cl` in `launch.rs`.
 
 **Signed content is never rewritten.** Claude's thinking blocks carry a signature over their
 text; a path repointed inside one makes the next account reject the session.
 - Evidence: `repoint` in `move_cmd.rs` leaves `thinking` and `redacted_thinking` blocks alone;
   `hatcheck relocate` rewrites a line's top-level `cwd` only, nothing in messages.
+
+**Which variable moves an agent's folder is found by probing, with a command that needs its
+login and starts nothing.** Antigravity CLI's folder, `~/.gemini/antigravity-cli`, moves with
+`HOME` and with nothing else; `agy models` lists models only when signed in and starts no
+conversation, so run with each candidate variable pointed at an empty folder it says at once
+whether the agent looked there.
+- Evidence: probed on 2026-10-19 with agy 1.4.2: `ANTIGRAVITY_EXECUTABLE_DATA_DIR`,
+  `XDG_CONFIG_HOME` and `GEMINI_CLI_HOME` were ignored, and `HOME=<empty folder>` made
+  `<folder>/.gemini/antigravity-cli` and asked to sign in. `agy.rs` reads the one folder.
+- Seen 1× (2026-10-19).
+
+**An agent asked for a reading without a sign-in starts its sign-in.** agy's print mode, asked
+anything while signed out, opens the browser on Google's sign-in page and waits a minute for it,
+with stdin closed and `NO_BROWSER` set alike; the same `hat` that read usage in the morning opened
+the browser in the afternoon, once agy's sign-in had lapsed. A reading is asked for only after a
+command that refuses without a sign-in and starts nothing has said there is one: `agy models`
+exits 1 at once with "Please sign in" and opens nothing.
+- Evidence: 2026-10-19, agy 1.4.2, probed with empty home folders and a logging stand-in for
+  `open` first on the PATH, so nothing opened: print mode called it with the sign-in URL, with and
+  without `NO_BROWSER`; `agy models` didn't. `signed_in` in `agy.rs` runs before `run_usage`.
+- Seen 1× (2026-10-19).
+
+**A probe that runs another agent stops at the first step that fails.** A check that converts a
+session and then has the real agent read the file must not reach the agent when the conversion
+was refused; run as one script without that check, it ran the agent on an empty path, which
+cost a model turn and left a conversation in the agent's store.
+- Evidence: 2026-10-19, `agy -p "Read , …"` after `hatcheck move` refused an open session:
+  conversation `cd859a98` in the maintainer's agy folder, left for them to delete.
+- Seen 1× (2026-10-19).
 
 **A failed read means unknown, never empty.** A snapshot's limit that has reset since it was
 saved is shown as `?`, not as 100% or 0%; usage that couldn't be fetched is shown as cached with
@@ -91,7 +120,7 @@ that trims or splits a path the user typed takes `/` as well as `\` (`ospath::is
 - Seen 2× (2026-10-18, 2026-10-19).
 
 **Another app's format is checked against the real app, and the version is written down.**
-- Evidence: README, `hatcheck move`: "tested by resuming them with the real `claude` (2.1.301)
+- Evidence: docs/commands.md, `hatcheck move`: "tested by resuming them with the real `claude` (2.1.301)
   and `codex` (0.155.1)"; `hatcheck bind --hook`: "tested with the real `claude` (2.1.301)";
   `docs/rust-port.md`: every ported command compared with the Python one byte for byte on real
   profiles before it counted as ported.

@@ -372,3 +372,70 @@ class ResumeNow(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MoveWithoutArguments(unittest.TestCase):
+    """hat move with nothing: the newest session started from this folder, to the folder's Claude
+    Code profile, after asking; and claude as the name of ~/.claude."""
+
+    def setUp(self):
+        self.h = h = FakeHome()
+        self.addCleanup(h.cleanup)
+        self.default = h.profile("default", "acct-1")
+        self.work = h.profile("work", "acct-2")
+        self.api = h.folder("code", "api")
+        h.session(self.work, self.api, S1, "Newest here", 1)
+        h.session(self.work, self.api, S2, "Older here", 9)
+
+    def test_dry_run_says_what_it_would_do(self):
+        h = self.h
+        code, out = h.run(SCRIPT, "--dry-run", cwd=self.api)
+        self.assertEqual(code, 0, out)
+        self.assertIn('Would move session 11111111 "Newest here" from %s to %s:' % (h.shown(self.work), h.shown(self.default)), out)
+        self.assertNotIn("[y/N]", out)
+        # Bound to a profile, the folder's sessions go there.
+        h.run("bind", "work", cwd=self.api)
+        h.session(self.default, self.api, "33333333-3333-4333-8333-333333333333", "In the default profile", 0)
+        code, out = h.run(SCRIPT, "--dry-run", cwd=self.api)
+        self.assertIn('Would move session 33333333 "In the default profile" from %s to %s:' % (h.shown(self.default), h.shown(self.work)), out)
+        # claude names ~/.claude, as codex and agy name theirs.
+        code, out = h.run(SCRIPT, S1[:8], "claude", "--dry-run", cwd=self.api)
+        self.assertIn("from %s to %s:" % (h.shown(self.work), h.shown(self.default)), out)
+
+    def test_never_to_where_it_already_is(self):
+        h = self.h
+        quiet = h.folder("code", "quiet")
+        h.session(self.default, quiet, "33333333-3333-4333-8333-333333333333", "Already home", 1)
+        for args in ((), ("--dry-run",), ("33333333",)):
+            code, out = h.run(SCRIPT, *args, cwd=quiet)
+            self.assertEqual(code, 1, out)
+            self.assertIn('Session 33333333%s is already in %s. Say where it goes: hatcheck move 33333333 <profile>'
+                          % ('' if args == ("33333333",) else ' "Already home"', h.shown(self.default)), out)
+        # Given both, the same answer as before.
+        code, out = h.run(SCRIPT, "33333333", "default", cwd=quiet)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Session 33333333 is already in %s, and in no other profile" % h.shown(self.default), out)
+
+    def test_a_script_has_to_say_both(self):
+        h = self.h
+        for args in ((), (S1[:8],), ("--json",)):
+            code, out = h.run(SCRIPT, *args, cwd=self.api)
+            self.assertEqual(code, 1, out)
+            self.assertIn("Say which session and where, when there's no terminal to ask: hatcheck move <session> <profile>", out)
+        self.assertTrue(os.path.exists(os.path.join(self.work, "projects", re.sub(r"[^A-Za-z0-9]", "-", self.api), S1 + ".jsonl")))
+        code, out = h.run(SCRIPT, cwd=h.folder("code", "quiet"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("No session was started from this folder. Give its ID: hatcheck move <session> <profile>", out)
+
+    @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
+    def test_asks_in_a_terminal(self):
+        h = self.h
+        code, out = in_terminal(argv_of("fork"), [(b"? [y/N] ", b"n\n")], h.env(), self.api)
+        self.assertEqual(code, 1, out)
+        self.assertIn('Fork session 11111111 "Newest here" from %s to %s? [y/N]' % (h.shown(self.work), h.shown(self.default)), out)
+        self.assertIn("Nothing changed.", out)
+        code, out = in_terminal(argv_of(SCRIPT), [(b"? [y/N] ", b"y\n"), (b"Resume it now", b"n\n")], h.env(), self.api)
+        self.assertEqual(code, 0, out)
+        self.assertIn('Move session 11111111 "Newest here" from %s to %s? [y/N]' % (h.shown(self.work), h.shown(self.default)), out)
+        self.assertIn("Moved session 11111111", out)
+        self.assertTrue(os.path.exists(os.path.join(self.default, "projects", re.sub(r"[^A-Za-z0-9]", "-", self.api), S1 + ".jsonl")))

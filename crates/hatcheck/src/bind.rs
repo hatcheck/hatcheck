@@ -1,8 +1,9 @@
 //! hatcheck bind and unbind: tie a folder to a profile, so work there happens under the right
 //! account; and the warning hook, a SessionStart hook in every Claude Code profile's
 //! settings.json and every Codex home's hooks.json, which runs hatcheck bind --check. The
-//! README's `hatcheck bind` section describes them.
+//! docs/commands.md's `hatcheck bind` section describes them.
 
+use crate::agent::Agent;
 use crate::args::{Count, Parser};
 use crate::ospath;
 use crate::out;
@@ -11,6 +12,9 @@ use crate::py::{self, get, s, Dict};
 use serde_json::{json, Value};
 
 const HOOK: &str = "bind --check"; // in the hook's command, to find it again
+/// agy's hooks.json holds named hooks, each with a flat SessionStart list of handlers; the one
+/// hatcheck adds is named after it, and one of ours is found by its command wherever it sits.
+const AGY_HOOK: &str = "hatcheck";
 
 /// Write JSON whole, under a temporary name until it's complete, as Python's json.dump with
 /// indent=2 writes it, and a newline.
@@ -35,7 +39,8 @@ pub(crate) fn save_bindings(bindings: &Dict) -> std::io::Result<()> {
 }
 
 /// (name to keep, folder) for a PROFILE or --codex argument: default, a NAME or a path.
-fn name_of(agent: &str, spec: &str) -> (String, String) {
+fn name_of(agent: Agent, spec: &str) -> (String, String) {
+    let spec = if spec == agent.key() { "default" } else { spec }; // claude, codex, agy: the agent's own
     if spec == "default"
         || (!spec.contains('/') && !spec.contains(ospath::SEP) && !spec.starts_with('~'))
     {
@@ -46,13 +51,14 @@ fn name_of(agent: &str, spec: &str) -> (String, String) {
 }
 
 fn describe(binding: &Value) -> String {
-    let parts: Vec<String> = [("claude", "Claude Code"), ("codex", "Codex")]
+    let parts: Vec<String> = Agent::ALL
         .iter()
-        .filter_map(|(agent, label)| {
-            let name = s(get(binding, agent)).filter(|n| !n.is_empty())?;
+        .filter_map(|agent| {
+            let name = s(get(binding, agent.key())).filter(|n| !n.is_empty())?;
             Some(format!(
-                "{label} {}",
-                paths::shell_path(&paths::profile_folder(agent, name))
+                "{} {}",
+                agent.name(),
+                paths::shell_path(&paths::profile_folder(*agent, name))
             ))
         })
         .collect();
@@ -86,6 +92,56 @@ fn ours(hook: &Value) -> bool {
     s(get(hook, "command")).is_some_and(|c| c.contains(HOOK) && c.contains("hatcheck"))
 }
 
+/// The program a hook's command line runs: its first word, unquoted as it was quoted for the
+/// shell ('…' by sh_quote, "…" on Windows), or the word as it is.
+pub fn hook_program(command: &str) -> String {
+    let command = command.trim_start();
+    for quote in ['\'', '"'] {
+        if let Some(rest) = command.strip_prefix(quote) {
+            if let Some(end) = rest.find(quote) {
+                return rest[..end].to_string();
+            }
+        }
+    }
+    command.split_whitespace().next().unwrap_or("").to_string()
+}
+
+/// (agent, profile, home or folder, the program its hook of ours runs) for every hook hatcheck
+/// bind --hook added.
+pub fn hook_runs() -> Vec<(Agent, String, String)> {
+    let mut runs = Vec::new();
+    for (agent, folder, path) in hook_files() {
+        let Ok(settings) = read_settings(&path) else {
+            continue;
+        };
+        let handlers: Vec<Value> = match agent {
+            Agent::Agy => agy_handlers(&settings),
+            _ => {
+                let hooks = settings
+                    .get("hooks")
+                    .filter(|h| py::truthy(h))
+                    .map_or(py::null(), |h| get(h, "SessionStart"));
+                match hooks {
+                    Value::Array(entries) => entries
+                        .iter()
+                        .filter(|e| e.is_object())
+                        .filter_map(|e| get(e, "hooks").as_array())
+                        .flatten()
+                        .filter(|h| ours(h))
+                        .cloned()
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            }
+        };
+        for hook in handlers {
+            let program = hook_program(s(get(&hook, "command")).unwrap_or(""));
+            runs.push((agent, folder.clone(), program));
+        }
+    }
+    runs
+}
+
 fn has_hook(settings: &Dict) -> bool {
     let hooks = settings
         .get("hooks")
@@ -101,6 +157,128 @@ fn has_hook(settings: &Dict) -> bool {
             Value::Array(list) => list.iter().any(ours),
             _ => false,
         })
+}
+
+/// Add the hook to Claude Code's or Codex's settings: false when their hooks aren't in the usual form.
+fn add_hook(settings: &mut Dict, line: &str) -> bool {
+    let hooks = settings.entry("hooks").or_insert_with(|| json!({}));
+    let Some(hooks) = hooks.as_object_mut() else {
+        return false;
+    };
+    let Some(list) = hooks
+        .entry("SessionStart")
+        .or_insert_with(|| json!([]))
+        .as_array_mut()
+    else {
+        return false;
+    };
+    list.push(json!({"hooks": [{"type": "command", "command": line}]}));
+    true
+}
+
+/// Take the hooks of ours out of Claude Code's or Codex's settings.
+fn remove_hook(settings: &mut Dict) {
+    let Some(Value::Object(hooks)) = settings.get_mut("hooks") else {
+        return;
+    };
+    let entries = hooks
+        .get("SessionStart")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut kept = Vec::new();
+    for mut entry in entries {
+        if let Some(Value::Array(list)) = entry.as_object_mut().and_then(|e| e.get_mut("hooks")) {
+            list.retain(|h| !ours(h));
+            if list.is_empty() {
+                continue;
+            }
+        }
+        kept.push(entry);
+    }
+    if kept.is_empty() {
+        hooks.remove("SessionStart");
+    } else {
+        hooks.insert("SessionStart".into(), Value::Array(kept));
+    }
+    if hooks.is_empty() {
+        settings.remove("hooks");
+    }
+}
+
+/// The handlers of ours in agy's hooks.json, in any named hook.
+fn agy_handlers(settings: &Dict) -> Vec<Value> {
+    settings
+        .values()
+        .filter(|v| v.is_object())
+        .flat_map(|named| match get(named, "SessionStart") {
+            Value::Array(list) => list.clone(),
+            _ => Vec::new(),
+        })
+        .filter(ours)
+        .collect()
+}
+
+fn agy_has_hook(settings: &Dict) -> bool {
+    !agy_handlers(settings).is_empty()
+}
+
+/// agy's repoint_hooks: the command the first handler of ours that ran something else ran.
+fn agy_repoint(settings: &mut Dict, line: &str) -> Option<String> {
+    let mut old = None;
+    for named in settings.values_mut() {
+        let Some(Value::Array(list)) = named
+            .as_object_mut()
+            .and_then(|n| n.get_mut("SessionStart"))
+        else {
+            continue;
+        };
+        for hook in list.iter_mut().filter(|h| ours(h)) {
+            let was = s(get(hook, "command")).unwrap_or("").to_string();
+            if was != line {
+                old.get_or_insert(was);
+                hook["command"] = json!(line);
+            }
+        }
+    }
+    old
+}
+
+/// Add the hook to agy's hooks.json, under the hatcheck name: false when what's there under
+/// that name isn't a hook.
+fn agy_add(settings: &mut Dict, line: &str) -> bool {
+    let named = settings.entry(AGY_HOOK).or_insert_with(|| json!({}));
+    let Some(named) = named.as_object_mut() else {
+        return false;
+    };
+    let Some(list) = named
+        .entry("SessionStart")
+        .or_insert_with(|| json!([]))
+        .as_array_mut()
+    else {
+        return false;
+    };
+    list.push(json!({"type": "command", "command": line}));
+    true
+}
+
+/// Take the handlers of ours out of agy's hooks.json, and a named hook left with nothing.
+fn agy_remove(settings: &mut Dict) {
+    let names: Vec<String> = settings.keys().cloned().collect();
+    for name in names {
+        let Some(named) = settings.get_mut(&name).and_then(Value::as_object_mut) else {
+            continue;
+        };
+        if let Some(Value::Array(list)) = named.get_mut("SessionStart") {
+            list.retain(|h| !ours(h));
+            if list.is_empty() {
+                named.remove("SessionStart");
+            }
+        }
+        if named.keys().all(|k| k == "enabled") {
+            settings.shift_remove(&name);
+        }
+    }
 }
 
 /// Point the hooks of ours in settings at line, what they should run now: the command the first
@@ -127,17 +305,26 @@ fn repoint_hooks(settings: &mut Dict, line: &str) -> Option<String> {
     old
 }
 
-/// (agent, profile or home, the file its hooks are in) for every profile and Codex home.
-fn hook_files() -> Vec<(&'static str, String, String)> {
-    let mut files: Vec<(&'static str, String, String)> = paths::find_profiles()
+/// (agent, profile, home or folder, the file its hooks are in) for every profile, Codex home
+/// and agy folder: agy's hooks are in ~/.gemini/config/hooks.json, beside its folder.
+fn hook_files() -> Vec<(Agent, String, String)> {
+    let mut files: Vec<(Agent, String, String)> = paths::find_profiles()
         .into_iter()
-        .map(|p| ("claude", p.clone(), ospath::join(&p, "settings.json")))
+        .map(|p| (Agent::Claude, p.clone(), ospath::join(&p, "settings.json")))
         .collect();
     files.extend(
         paths::find_codex_homes()
             .into_iter()
-            .map(|h| ("codex", h.clone(), ospath::join(&h, "hooks.json"))),
+            .map(|h| (Agent::Codex, h.clone(), ospath::join(&h, "hooks.json"))),
     );
+    files.extend(paths::find_agy_roots().into_iter().map(|r| {
+        let beside = ospath::dirname(r.trim_end_matches(ospath::is_sep));
+        (
+            Agent::Agy,
+            r.clone(),
+            ospath::join_all(&beside, &["config", "hooks.json"]),
+        )
+    }));
     files
 }
 
@@ -161,7 +348,12 @@ fn hook_command() -> String {
     )
 }
 
-fn bind(profile: Option<&str>, folder: Option<&str>, codex: Option<&str>) -> i32 {
+fn bind(
+    profile: Option<&str>,
+    folder: Option<&str>,
+    codex: Option<&str>,
+    agy: Option<&str>,
+) -> i32 {
     let show = paths::shell_path;
     let folder = ospath::realpath(&ospath::expanduser(
         &folder.map(String::from).unwrap_or_else(ospath::cwd),
@@ -173,13 +365,13 @@ fn bind(profile: Option<&str>, folder: Option<&str>, codex: Option<&str>) -> i32
     let old = bindings.get(&folder).cloned().unwrap_or(json!({}));
     let mut binding = Dict::new();
     if profile.is_none() {
-        if let Some(claude) = old.get("claude") {
-            binding.insert("claude".into(), claude.clone());
+        if let Some(claude) = old.get(Agent::Claude.key()) {
+            binding.insert(Agent::Claude.key().into(), claude.clone());
         }
     }
     let mut notes = Vec::new();
     if let Some(spec) = profile {
-        let (name, path) = name_of("claude", spec);
+        let (name, path) = name_of(Agent::Claude, spec);
         if !ospath::isdir(&path) {
             let how = if name == "default" {
                 "claude".to_string()
@@ -191,10 +383,10 @@ fn bind(profile: Option<&str>, folder: Option<&str>, codex: Option<&str>) -> i32
                 show(&path)
             ));
         }
-        binding.insert("claude".into(), json!(name));
+        binding.insert(Agent::Claude.key().into(), json!(name));
     }
     if let Some(spec) = codex {
-        let (name, path) = name_of("codex", spec);
+        let (name, path) = name_of(Agent::Codex, spec);
         if !ospath::isdir(&path) {
             let how = if name == "default" {
                 "codex login".to_string()
@@ -206,21 +398,39 @@ fn bind(profile: Option<&str>, folder: Option<&str>, codex: Option<&str>) -> i32
                 show(&path)
             ));
         }
-        binding.insert("codex".into(), json!(name));
+        binding.insert(Agent::Codex.key().into(), json!(name));
     } else if let Some(spec) = profile.filter(|p| {
-        s(binding.get("claude").unwrap_or(py::null())) == Some(*p)
+        s(binding.get(Agent::Claude.key()).unwrap_or(py::null())) == Some(*p)
             && !p.contains('/')
             && !p.contains(ospath::SEP)
     }) {
-        let path = paths::profile_folder("codex", spec); // the home named like the profile
+        let path = paths::profile_folder(Agent::Codex, spec); // the home named like the profile
         if ospath::isdir(&path) {
-            binding.insert("codex".into(), json!(spec));
+            binding.insert(Agent::Codex.key().into(), json!(spec));
         } else {
             notes.push(format!(
                 "Codex isn't bound: there's no {} (add --codex NAME for another home).",
                 show(&path)
             ));
         }
+    }
+    if let Some(spec) = agy {
+        let (name, path) = name_of(Agent::Agy, spec);
+        if !crate::agy::is_root(&path) {
+            return out::fail(&format!(
+                "{} isn't an Antigravity CLI folder. Run agy once to sign in",
+                show(&path)
+            ));
+        }
+        binding.insert(Agent::Agy.key().into(), json!(name));
+    } else if profile.is_none() {
+        if let Some(name) = old.get(Agent::Agy.key()) {
+            binding.insert(Agent::Agy.key().into(), name.clone());
+        }
+    } else if profile == Some("default") && crate::agy::is_root(&paths::default_folder(Agent::Agy))
+    {
+        // default binds every agent's own folder; agy has no other.
+        binding.insert(Agent::Agy.key().into(), json!("default"));
     }
     let binding = Value::Object(binding);
     bindings.insert(folder.clone(), binding.clone());
@@ -235,30 +445,40 @@ fn bind(profile: Option<&str>, folder: Option<&str>, codex: Option<&str>) -> i32
     for note in notes {
         out::println(&note);
     }
-    let bound = |agent: &str| {
-        s(get(&binding, agent))
+    let bound = |agent: Agent| {
+        s(get(&binding, agent.key()))
             .filter(|n| !n.is_empty())
             .map(String::from)
     };
     let mut here = Vec::new();
-    if let Some(name) = bound("claude") {
+    if let Some(name) = bound(Agent::Claude) {
         here.push(format!(
             "cl --resume <id> means {} --resume <id>",
-            paths::start_command("claude", &paths::profile_folder("claude", &name), false)
+            paths::start_command(
+                Agent::Claude,
+                &paths::profile_folder(Agent::Claude, &name),
+                false
+            )
         ));
     }
-    if let Some(name) = bound("codex") {
+    if let Some(name) = bound(Agent::Codex) {
         here.push(format!(
             "cx resume <id> means {} resume <id>",
-            paths::start_command("codex", &paths::profile_folder("codex", &name), false)
+            paths::start_command(
+                Agent::Codex,
+                &paths::profile_folder(Agent::Codex, &name),
+                false
+            )
         ));
     }
-    out::println(&format!("Here, {}.", here.join(" and ")));
+    if !here.is_empty() {
+        out::println(&format!("Here, {}.", here.join(" and ")));
+    }
     if !hook_files()
         .iter()
         .any(|(_, _, path)| read_settings(path).is_ok_and(|s| has_hook(&s)))
     {
-        out::println("hatcheck bind --hook adds a warning to Claude Code when a session starts here under another profile.");
+        out::println("hatcheck bind --hook adds a warning to Claude Code, Codex and agy when a session starts here under another profile.");
     }
     0
 }
@@ -315,11 +535,11 @@ fn list_bindings() -> i32 {
 }
 
 /// For cl and cx: the name the folder (this one by default) is bound to, or exit 1.
-fn which(agent: &str, folder: Option<&str>) -> i32 {
+fn which(agent: Agent, folder: Option<&str>) -> i32 {
     let bindings = paths::load_bindings();
     let path = ospath::expanduser(&folder.map(String::from).unwrap_or_else(ospath::cwd));
     let name = paths::bound_folder(Some(&path), &bindings)
-        .and_then(|f| s(get(&bindings[&f], agent)).map(String::from));
+        .and_then(|f| s(get(&bindings[&f], agent.key())).map(String::from));
     match name.filter(|n| !n.is_empty()) {
         Some(n) => {
             out::println(&n);
@@ -328,7 +548,6 @@ fn which(agent: &str, folder: Option<&str>) -> i32 {
         None => 1,
     }
 }
-
 fn add_hooks() -> i32 {
     let command = hook_command();
     let mut codex = false;
@@ -341,10 +560,22 @@ fn add_hooks() -> i32 {
                 continue;
             }
         };
-        let line = format!("{command}{}", if agent == "codex" { " codex" } else { "" });
-        if has_hook(&settings) {
+        // Claude Code's hook runs the plain check; another agent's names the agent.
+        let line = match agent {
+            Agent::Claude => command.clone(),
+            other => format!("{command} {}", other.key()),
+        };
+        let has = match agent {
+            Agent::Agy => agy_has_hook(&settings),
+            _ => has_hook(&settings),
+        };
+        if has {
             // It may run a hatcheck that has gone, after a switch of install: point it at this one.
-            let Some(old) = repoint_hooks(&mut settings, &line) else {
+            let old = match agent {
+                Agent::Agy => agy_repoint(&mut settings, &line),
+                _ => repoint_hooks(&mut settings, &line),
+            };
+            let Some(old) = old else {
                 out::println(&format!("  {show}  already has it"));
                 continue;
             };
@@ -356,80 +587,52 @@ fn add_hooks() -> i32 {
                 "  {show}  updated, in {}: it ran {old}",
                 ospath::basename(&path)
             ));
-            codex |= agent == "codex";
+            codex |= agent == Agent::Codex;
             continue;
         }
-        let hooks = settings.entry("hooks").or_insert_with(|| json!({}));
-        let Some(hooks) = hooks.as_object_mut() else {
+        let added = match agent {
+            Agent::Agy => agy_add(&mut settings, &line),
+            _ => add_hook(&mut settings, &line),
+        };
+        if !added {
             out::println(&format!(
                 "  {show}  skipped: its hooks aren't in the usual form"
             ));
             continue;
-        };
-        let Some(list) = hooks
-            .entry("SessionStart")
-            .or_insert_with(|| json!([]))
-            .as_array_mut()
-        else {
-            out::println(&format!(
-                "  {show}  skipped: its hooks aren't in the usual form"
-            ));
-            continue;
-        };
-        list.push(json!({"hooks": [{"type": "command", "command": line}]}));
+        }
         if let Err(e) = write_json(&path, &Value::Object(settings)) {
             out::println(&format!("  {show}  skipped: {e}"));
             continue;
         }
         out::println(&format!("  {show}  added, in {}", ospath::basename(&path)));
-        codex |= agent == "codex";
+        codex |= agent == Agent::Codex;
     }
     out::println(&format!(
-        "They run: {command} (with codex after it for Codex)"
+        "They run: {command} (with codex or agy after it for Codex and agy)"
     ));
-    out::println("Claude Code and Codex warn when a session starts in a bound folder under another profile. hatcheck unbind --hook removes them.");
+    out::println("Claude Code, Codex and agy warn when a session starts in a bound folder under another profile. hatcheck unbind --hook removes them.");
     if codex {
         out::println("Codex runs a new hook only once you trust it: in each Codex home, open /hooks in codex (or cx <name>) and trust it.");
     }
     0
 }
-
 fn remove_hooks() -> i32 {
     for (agent, folder, path) in hook_files() {
         let Ok(mut settings) = read_settings(&path) else {
             continue;
         };
-        if !has_hook(&settings) {
-            continue;
-        }
-        let Some(Value::Object(hooks)) = settings.get_mut("hooks") else {
-            continue;
+        let has = match agent {
+            Agent::Agy => agy_has_hook(&settings),
+            _ => has_hook(&settings),
         };
-        let entries = hooks
-            .get("SessionStart")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let mut kept = Vec::new();
-        for mut entry in entries {
-            if let Some(Value::Array(list)) = entry.as_object_mut().and_then(|e| e.get_mut("hooks"))
-            {
-                list.retain(|h| !ours(h));
-                if list.is_empty() {
-                    continue;
-                }
-            }
-            kept.push(entry);
+        if !has {
+            continue;
         }
-        if kept.is_empty() {
-            hooks.remove("SessionStart");
-        } else {
-            hooks.insert("SessionStart".into(), Value::Array(kept));
+        match agent {
+            Agent::Agy => agy_remove(&mut settings),
+            _ => remove_hook(&mut settings),
         }
-        if hooks.is_empty() {
-            settings.remove("hooks");
-        }
-        let written = if agent == "codex" && settings.is_empty() {
+        let written = if agent != Agent::Claude && settings.is_empty() {
             std::fs::remove_file(&path) // hooks.json held nothing else
         } else {
             write_json(&path, &Value::Object(settings))
@@ -438,14 +641,14 @@ fn remove_hooks() -> i32 {
             out::println(&format!("  {}  removed", paths::shell_path(&folder)));
         }
     }
-    out::println("No profile or home runs the hook now.");
+    out::println("No profile, home or folder runs the hook now.");
     0
 }
 
 /// Run by the SessionStart hook in Claude Code, or in Codex (agent codex): when the session's
 /// folder is bound to another profile or home, have it show a warning. Never blocks, and stays
 /// quiet on any error.
-fn check(agent: &str) -> i32 {
+fn check(agent: Agent) -> i32 {
     let mut text = String::new();
     let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut text);
     let Ok(data) = serde_json::from_str::<Value>(if text.is_empty() { "{}" } else { &text }) else {
@@ -454,26 +657,28 @@ fn check(agent: &str) -> i32 {
     if !data.is_object() {
         return 0;
     }
+    // Claude Code and Codex say cwd and session_id; agy workspacePaths and conversationId.
+    let workspace = get(&data, "workspacePaths")
+        .as_array()
+        .and_then(|w| w.first())
+        .map(py::str_of);
     let cwd = s(get(&data, "cwd"))
-        .filter(|c| !c.is_empty())
         .map(String::from)
+        .or(workspace)
+        .filter(|c| !c.is_empty())
         .unwrap_or_else(ospath::cwd);
-    let (variable, default) = if agent == "codex" {
-        ("CODEX_HOME", ".codex")
-    } else {
-        ("CLAUDE_CONFIG_DIR", ".claude")
-    };
     let current = ospath::expanduser(
-        &std::env::var(variable)
-            .ok()
+        &agent
+            .variable()
+            .and_then(|v| std::env::var(v).ok())
             .filter(|v| !v.is_empty())
-            .unwrap_or_else(|| ospath::join(&paths::home(), default)),
+            .unwrap_or_else(|| paths::default_folder(agent)),
     );
     let bindings = paths::load_bindings();
     let Some(folder) = paths::bound_folder(Some(&cwd), &bindings) else {
         return 0;
     };
-    let Some(name) = s(get(&bindings[&folder], agent))
+    let Some(name) = s(get(&bindings[&folder], agent.key()))
         .filter(|n| !n.is_empty())
         .map(String::from)
     else {
@@ -484,26 +689,21 @@ fn check(agent: &str) -> i32 {
         return 0;
     }
     let start = paths::start_command(agent, &want, false);
-    let sid = s(get(&data, "session_id")).unwrap_or("").to_string();
+    let sid = s(get(&data, "session_id"))
+        .or_else(|| s(get(&data, "conversationId")))
+        .unwrap_or("")
+        .to_string();
     let todo = if s(get(&data, "source")) == Some("resume") && !sid.is_empty() {
-        let (to, resume) = if agent == "codex" {
-            let to = if name.contains('/') || name.contains(ospath::SEP) {
-                name.clone()
-            } else if name == "default" {
-                "codex".into()
-            } else {
-                format!("codex:{name}")
-            };
-            (
-                to,
-                paths::codex_command(&want, &format!("resume {sid}"), false),
-            )
+        // How hatcheck move names the bound profile: a path or NAME as given, default for
+        // Claude Code's, codex or agy for theirs, and codex:NAME for another home.
+        let to = if name.contains('/') || name.contains(ospath::SEP) || agent == Agent::Claude {
+            name.clone()
+        } else if name == "default" {
+            agent.key().into()
         } else {
-            (
-                name.clone(),
-                paths::claude_command(&want, &format!("--resume {sid}"), false, None),
-            )
+            format!("{}:{name}", agent.key())
         };
+        let resume = paths::session_command(agent, &want, &sid, false, None);
         format!("Quit, then carry this session there with: hatcheck move {} {to}, and resume it with {resume}", py::head(&sid, 8))
     } else {
         format!("Quit and run {start} here instead")
@@ -514,7 +714,12 @@ fn check(agent: &str) -> i32 {
         paths::shell_path(&want),
         paths::shell_path(&current)
     );
-    out::println(&py::dumps_ascii(&json!({"systemMessage": message})));
+    // Each agent reads its hook's answer in its own form.
+    let answer = match agent {
+        Agent::Agy => json!({"injectSteps": [{"systemMessage": {"systemMessage": message}}]}),
+        _ => json!({"systemMessage": message}),
+    };
+    out::println(&py::dumps_ascii(&answer));
     0
 }
 
@@ -523,19 +728,20 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .positional("profile", Count::Optional, "NAME for ~/.claude-NAME, default for ~/.claude, or a path")
         .positional("folder", Count::Optional, "the folder to bind (default: this one)")
         .option(&["--codex"], "codex", "HOME", "the Codex home to bind: NAME for ~/.codex-NAME, default for ~/.codex, or a path (default: the one named like PROFILE)")
+        .option(&["--agy"], "agy", "FOLDER", "the Antigravity CLI folder to bind: default for ~/.gemini/antigravity-cli, or a path (default: that one, when PROFILE is default)")
         .flag(&["--list"], "list", "list every bound folder")
-        .flag(&["--hook"], "hook", "warn in Claude Code and Codex when a session starts in a bound folder under another profile")
-        .hidden_choice(&["--which"], "which", "claude", &["claude", "codex"])
-        .hidden_choice(&["--check"], "check", "claude", &["claude", "codex"]);
+        .flag(&["--hook"], "hook", "warn in Claude Code, Codex and agy when a session starts in a bound folder under another profile")
+        .hidden_choice(&["--which"], "which", "claude", &Agent::KEYS)
+        .hidden_choice(&["--check"], "check", "claude", &Agent::KEYS);
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
     let profile = args.value("profile").filter(|p| !p.is_empty());
-    if let Some(agent) = args.value("check").filter(|a| !a.is_empty()) {
+    if let Some(agent) = args.value("check").and_then(Agent::from_key) {
         return check(agent);
     }
-    if let Some(agent) = args.value("which").filter(|a| !a.is_empty()) {
+    if let Some(agent) = args.value("which").and_then(Agent::from_key) {
         return which(agent, profile);
     }
     out::setup_console();
@@ -546,11 +752,13 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         return add_hooks();
     }
     let codex = args.value("codex").filter(|c| !c.is_empty());
-    if profile.is_some() || codex.is_some() {
+    let agy = args.value("agy").filter(|a| !a.is_empty());
+    if profile.is_some() || codex.is_some() || agy.is_some() {
         return bind(
             profile,
             args.value("folder").filter(|f| !f.is_empty()),
             codex,
+            agy,
         );
     }
     show_here()

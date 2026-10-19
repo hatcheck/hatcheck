@@ -2,55 +2,61 @@
 //! session across the profiles and homes, the newest one started from a folder, and whether
 //! one is open, and the profile or home a PROFILE argument names.
 
+use crate::agent::Agent;
 use crate::facts::{self, Summary};
 use crate::ospath::{self, Part};
 use crate::paths;
 use crate::py::{get, s};
 use serde_json::Value;
 
-/// (agent, folder) for a PROFILE argument: NAME for ~/.claude-NAME, default for ~/.claude,
-/// codex for ~/.codex, codex:NAME for ~/.codex-NAME (claude:NAME spells out a Claude Code
-/// one), or a path, which is a Codex home when it's named .codex* or has Codex's sessions/.
-pub fn place(spec: &str) -> (&'static str, String) {
-    let home = paths::home();
-    if spec == "default" || spec == "claude:default" {
-        return ("claude", ospath::join(&home, ".claude"));
+/// (agent, folder) for a PROFILE argument: NAME for ~/.claude-NAME, default or claude for
+/// ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME (claude:NAME spells out a Claude
+/// Code one), agy for ~/.gemini/antigravity-cli, or a path, which is a Codex home when it's
+/// named .codex* or has Codex's sessions/, and agy's when it has its conversations.
+pub fn place(spec: &str) -> (Agent, String) {
+    if spec == "default" {
+        return (Agent::Claude, paths::default_folder(Agent::Claude));
     }
-    if spec == "codex" || spec == "codex:default" {
-        return ("codex", ospath::join(&home, ".codex"));
-    }
-    for agent in ["claude", "codex"] {
+    for agent in Agent::ALL {
+        if spec == agent.key() || spec == format!("{}:default", agent.key()) {
+            return (agent, paths::default_folder(agent));
+        }
         if let Some(name) = spec
-            .strip_prefix(agent)
+            .strip_prefix(agent.key())
             .and_then(|r| r.strip_prefix(':'))
             .filter(|n| !n.is_empty())
         {
-            return (
-                if agent == "codex" { "codex" } else { "claude" },
-                ospath::join(&home, &format!(".{agent}-{name}")),
-            );
+            return (agent, paths::profile_folder(agent, name));
         }
     }
     let b = spec.as_bytes();
     let drive = b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':';
     if spec.contains('/') || spec.contains(ospath::SEP) || spec.starts_with('~') || drive {
         let path = ospath::abspath(&ospath::expanduser(spec));
+        let agy = ospath::basename(&path) == "antigravity-cli" || crate::agy::is_root(&path);
         let codex = ospath::basename(&path).starts_with(".codex")
             || (ospath::isdir(&ospath::join(&path, "sessions"))
                 && !ospath::isdir(&ospath::join(&path, "projects")));
-        return (if codex { "codex" } else { "claude" }, path);
+        let agent = if agy {
+            Agent::Agy
+        } else if codex {
+            Agent::Codex
+        } else {
+            Agent::Claude
+        };
+        return (agent, path);
     }
-    ("claude", ospath::join(&home, &format!(".claude-{spec}")))
+    (Agent::Claude, paths::profile_folder(Agent::Claude, spec))
 }
 
 /// A session's copies: its (agent, ID), and each (profile or home, file) that has one.
-pub type Copies = ((&'static str, String), Vec<(String, String)>);
+pub type Copies = ((Agent, String), Vec<(String, String)>);
 
 /// Every copy of the sessions whose ID starts with prefix, in every Claude Code profile and
 /// Codex home, archived Codex ones too, by ID.
 pub fn session_copies(prefix: &str) -> Vec<Copies> {
     let mut found: Vec<Copies> = Vec::new();
-    let mut add = |key: (&'static str, String), place: (String, String)| match found
+    let mut add = |key: (Agent, String), place: (String, String)| match found
         .iter_mut()
         .find(|(k, _)| *k == key)
     {
@@ -70,7 +76,10 @@ pub fn session_copies(prefix: &str) -> Vec<Copies> {
         for path in files {
             let name = ospath::basename(&path);
             add(
-                ("claude", name[..name.len() - ".jsonl".len()].to_string()),
+                (
+                    Agent::Claude,
+                    name[..name.len() - ".jsonl".len()].to_string(),
+                ),
                 (profile.clone(), path),
             );
         }
@@ -88,8 +97,14 @@ pub fn session_copies(prefix: &str) -> Vec<Copies> {
         files.sort();
         for path in files {
             if let Some(id) = paths::codex_file_id(&path).filter(|id| id.starts_with(&lower)) {
-                add(("codex", id.to_string()), (home.clone(), path.clone()));
+                add((Agent::Codex, id.to_string()), (home.clone(), path.clone()));
             }
+        }
+    }
+    for root in paths::find_agy_stores() {
+        for row in crate::agy::rows_starting_with(&root, prefix) {
+            let path = crate::agy::conversation_path(&root, &row.id);
+            add((Agent::Agy, row.id), (root.clone(), path));
         }
     }
     found
@@ -135,7 +150,7 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
                 &profile,
                 &[Part::Name("projects"), dir, Part::Wild("", ".jsonl")],
             ) {
-                if let Some(s) = facts::summarize("claude", &profile, &path) {
+                if let Some(s) = facts::summarize(Agent::Claude, &profile, &path) {
                     if better(&s, &best) {
                         best = Some(s);
                     }
@@ -154,11 +169,25 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
                 break; // a file's mtime is never older than its last message
             }
             if codex_cwd(&path).is_some_and(|c| paths::same_folder(&c, &here)) {
-                if let Some(s) = facts::summarize("codex", &home, &path) {
+                if let Some(s) = facts::summarize(Agent::Codex, &home, &path) {
                     if better(&s, &best) {
                         best = Some(s);
                         break;
                     }
+                }
+            }
+        }
+    }
+    for root in paths::find_agy_stores() {
+        for row in crate::agy::rows(&root) {
+            let there = row
+                .workspaces
+                .first()
+                .is_some_and(|w| paths::same_folder(w, &here));
+            if there {
+                let s = crate::agy::summary(&root, &row);
+                if better(&s, &best) {
+                    best = Some(s);
                 }
             }
         }
@@ -170,14 +199,23 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
 /// Whether Codex has a session open: it holds a lock on thread-writer-locks/<id>.lock while
 /// it's writing the session. Not checked on Windows.
 pub fn codex_session_open(home: &str, sid: &str) -> bool {
-    let path = ospath::join_all(home, &["thread-writer-locks", &format!("{sid}.lock")]);
-    if ospath::WINDOWS || !ospath::isfile(&path) {
+    lock_held(&ospath::join_all(
+        home,
+        &["thread-writer-locks", &format!("{sid}.lock")],
+    ))
+}
+
+/// Whether another process holds the lock on a lock file, as Codex and agy hold one on a
+/// session they have open. A file that isn't there, or that nobody holds, isn't held. Not
+/// checked on Windows.
+pub fn lock_held(path: &str) -> bool {
+    if ospath::WINDOWS || !ospath::isfile(path) {
         return false;
     }
     let Ok(file) = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
-        .open(&path)
+        .open(path)
     else {
         return false;
     };
@@ -199,14 +237,27 @@ mod tests {
     #[cfg(not(windows))]
     fn places() {
         let home = paths::home();
-        assert_eq!(place("work"), ("claude", format!("{home}/.claude-work")));
-        assert_eq!(place("default"), ("claude", format!("{home}/.claude")));
-        assert_eq!(place("codex"), ("codex", format!("{home}/.codex")));
+        assert_eq!(
+            place("work"),
+            (Agent::Claude, format!("{home}/.claude-work"))
+        );
+        assert_eq!(place("default"), (Agent::Claude, format!("{home}/.claude")));
+        assert_eq!(place("codex"), (Agent::Codex, format!("{home}/.codex")));
         assert_eq!(
             place("codex:work"),
-            ("codex", format!("{home}/.codex-work"))
+            (Agent::Codex, format!("{home}/.codex-work"))
         );
-        assert_eq!(place("claude:x"), ("claude", format!("{home}/.claude-x")));
-        assert_eq!(place("/srv/.codex-a").0, "codex");
+        assert_eq!(
+            place("claude:x"),
+            (Agent::Claude, format!("{home}/.claude-x"))
+        );
+        assert_eq!(place("/srv/.codex-a").0, Agent::Codex);
+        assert_eq!(
+            place("agy"),
+            (Agent::Agy, format!("{home}/.gemini/antigravity-cli"))
+        );
+        assert_eq!(place("agy:default"), place("agy"));
+        assert_eq!(place("/x/.gemini/antigravity-cli").0, Agent::Agy);
+        assert_eq!(place("claude"), place("default")); // as codex and agy name theirs
     }
 }

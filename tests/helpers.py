@@ -77,6 +77,9 @@ config = os.path.join(config_dir, ".claude.json") if config_dir else os.path.joi
 shown = {k: v for k, v in os.environ.items() if k.startswith(("ANTHROPIC_", "CLAUDE", "DISABLE_"))}
 with open(os.path.join(here, "claude.log"), "a", encoding="utf-8") as fh:
     fh.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd(), "env": shown}) + "\n")
+if sys.argv[1:] == ["--version"]:
+    print("2.1.303 (Claude Code)")
+    sys.exit(0)
 fake = os.path.join(profile, "fake-usage.json")
 if "/usage" in sys.argv and os.path.exists(fake):
     with open(config, encoding="utf-8") as fh:
@@ -341,3 +344,160 @@ class FakeHome:
     def shown(self, path):
         """How the scripts print a path in the home folder: ~/... (~\\... in PowerShell)."""
         return "~" + os.sep + os.path.relpath(path, self.home)
+
+
+# Antigravity CLI (agy): a data folder as agy 1.4.2 keeps it, and a fake agy for its /usage.
+
+# The index agy keeps of its conversations, as agy 1.4.2 creates it.
+AGY_SCHEMA = ('CREATE TABLE `conversation_summaries` (`conversation_id` text,`title` text NOT NULL DEFAULT "",'
+              '`preview` text NOT NULL DEFAULT "",`step_count` integer NOT NULL DEFAULT 0,'
+              '`last_modified_time` datetime NOT NULL,`workspace_uris` text NOT NULL,`status` text NOT NULL DEFAULT "",'
+              '`source` text NOT NULL DEFAULT "",`project_id` text NOT NULL DEFAULT "",`agent_name` text NOT NULL DEFAULT "",'
+              '`parent_conversation_id` text NOT NULL DEFAULT "",`nesting_depth` integer NOT NULL DEFAULT 0,'
+              '`battle_id` text NOT NULL DEFAULT "",`winning_conversation_id` text NOT NULL DEFAULT "",'
+              '`not_fully_idle` numeric NOT NULL DEFAULT false,`killed` numeric NOT NULL DEFAULT false,'
+              '`last_user_input_time` datetime NOT NULL,`last_user_input_step_index` integer NOT NULL DEFAULT -1,'
+              '`app_data_dir` text NOT NULL DEFAULT "", raw_summary BLOB, group_id TEXT NOT NULL DEFAULT \'\','
+              'PRIMARY KEY (`conversation_id`))')
+
+# The fake agy FakeHome.fake_agy installs: `agy -p /usage --output-format json` answers with the
+# root's fake-usage.json as the data, or no groups without it, as agy answers in print mode.
+FAKE_AGY = r'''
+import json, os, sys
+here = os.path.dirname(os.path.abspath(__file__))
+home = os.environ.get("USERPROFILE") if os.name == "nt" else os.environ.get("HOME")
+root = os.path.join(home, ".gemini", "antigravity-cli")
+with open(os.path.join(here, "agy.log"), "a", encoding="utf-8") as fh:
+    fh.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd()}) + "\n")
+zero = {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0, "cache_read_tokens": 0, "total_tokens": 0}
+signed_out = os.path.exists(os.path.join(root, "fake-signed-out"))
+if sys.argv[1:] == ["models"]:  # what hatcheck asks first: agy answers it only when signed in
+    print("Fetching available models...", file=sys.stderr)
+    if signed_out:
+        print("Error: Please sign in to view available models. Launch the CLI without arguments to sign in.", file=sys.stderr)
+        sys.exit(1)
+    print("gemini-4-argon")
+    sys.exit(0)
+if "/usage" in sys.argv:
+    if signed_out:  # the real agy opens the browser on Google's sign-in page here; hatcheck must never get this far
+        print("Authentication required. Please visit the URL to log in:", file=sys.stderr)
+        sys.exit(1)
+    fake = os.path.join(root, "fake-usage.json")
+    data = {"groups": []}
+    if os.path.exists(fake):
+        with open(fake, encoding="utf-8") as fh:
+            data = json.load(fh)
+    print(json.dumps({"conversation_id": "", "status": "SUCCESS", "response": "", "duration_seconds": 0, "num_turns": 0,
+                      "usage": zero, "command": {"name": "usage", "data": data}}))
+else:
+    print(json.dumps({"conversation_id": "", "status": "ERROR", "response": "", "error": "the fake agy only answers /usage",
+                      "duration_seconds": 0, "num_turns": 0, "usage": zero}))
+    sys.exit(1)
+'''
+
+
+def agy_stamp(t):
+    """A time as agy's index records it: 2026-10-19 13:31:31.244007+00:00."""
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f+00:00")
+
+
+def _agy_root(self, app=False):
+    """Antigravity CLI's data folder, ~/.gemini/antigravity-cli, with an empty index; or, with
+    app, the Antigravity app's beside it, ~/.gemini/antigravity, laid out the same way."""
+    import sqlite3
+    root = os.path.join(self.home, ".gemini", "antigravity" if app else "antigravity-cli")
+    for sub in ("conversations", "brain", "presence"):
+        os.makedirs(os.path.join(root, sub), exist_ok=True)
+    db = sqlite3.connect(os.path.join(root, "conversation_summaries.db"))
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute(AGY_SCHEMA)
+    db.commit()
+    db.close()
+    return root
+
+
+def _agy_session(self, root, cwd, cid, title, minutes_ago=5, app=None, parent="", steps=5, transcript=True):
+    """A conversation as agy keeps one: its row in the index, its conversation file (which
+    hatcheck never reads), and the transcript agy writes beside it: your prompt, a reply with a
+    tool call, the tool's output, a checkpoint of agy's own, and the final reply. `app` is the
+    app_data_dir the row names: the folder's own by default, antigravity-cli or antigravity."""
+    import sqlite3
+    app = app or os.path.basename(root)
+    when = NOW - minutes_ago * 60
+    start = when - 60
+    uri = "file://" + ("/" + cwd.replace("\\", "/") if WINDOWS else cwd)
+    db = sqlite3.connect(os.path.join(root, "conversation_summaries.db"))
+    db.execute("INSERT INTO conversation_summaries (conversation_id, title, preview, step_count, last_modified_time, "
+               "last_user_input_time, workspace_uris, app_data_dir, parent_conversation_id, nesting_depth) "
+               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+               (cid, title, title + "...", steps, agy_stamp(when), agy_stamp(start), json.dumps([uri]), app, parent,
+                1 if parent else 0))
+    db.commit()
+    db.close()
+    write(os.path.join(root, "conversations", cid + ".db"), "SQLite format 3\0" + "x" * 100, mtime=when)
+    if not transcript:
+        return cid
+
+    def step(n, source, kind, t, **fields):
+        return json.dumps(dict({"step_index": n, "source": source, "type": kind, "status": "DONE",
+                                "created_at": iso(t)}, **fields))
+    lines = [
+        step(0, "USER_EXPLICIT", "USER_INPUT", start, content=title),
+        step(1, "MODEL", "PLANNER_RESPONSE", start + 1, thinking="kept to itself",
+             tool_calls=[{"name": "run_command", "args": {"CommandLine": "ls src", "Cwd": cwd}}]),
+        step(2, "MODEL", "GENERIC", start + 2, content="Created At: %s\nOutput:\nmain.py\nutil.py\n" % iso(start + 2)),
+        step(3, "SYSTEM", "CHECKPOINT", start + 3, content="a checkpoint of agy's own"),
+        step(4, "MODEL", "PLANNER_RESPONSE", when, content="Done: " + title),
+    ]
+    write(os.path.join(root, "brain", cid, ".system_generated", "logs", "transcript_full.jsonl"),
+          "\n".join(lines) + "\n", mtime=when)
+    return cid
+
+
+def _fake_agy(self, folder=None):
+    """A fake `agy` on a folder of its own (the fake claude's by default), for the usage path:
+    see FAKE_AGY. Returns the folder, to put first on the PATH."""
+    folder = folder or os.path.join(self.root, "fakebin")
+    script = os.path.join(folder, "agy.py")
+    write(script, FAKE_AGY)
+    if WINDOWS:
+        write(os.path.join(folder, "agy.cmd"), '@"%s" "%%~dp0agy.py" %%*\r\n' % sys.executable)
+    else:
+        wrapper = os.path.join(folder, "agy")
+        write(wrapper, '#!/bin/sh\nexec "%s" -I "${0%%/*}/agy.py" "$@"\n' % sys.executable)
+        os.chmod(wrapper, 0o755)
+    return folder
+
+
+def _agy_runs(self, folder=None):
+    """What the fake agy was run with, one dict per run."""
+    log = os.path.join(folder or os.path.join(self.root, "fakebin"), "agy.log")
+    if not os.path.exists(log):
+        return []
+    with open(log, encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh if line.strip()]
+
+
+class AgyOpen:
+    """Hold the lock agy holds on presence/<id>.lock while a conversation is open. Not on
+    Windows, where hatcheck doesn't check it."""
+
+    def __init__(self, root, cid):
+        self.path = os.path.join(root, "presence", cid + ".lock")
+
+    def __enter__(self):
+        write(self.path, "")
+        self.fh = open(self.path, "r+")
+        if not WINDOWS:
+            import fcntl
+            fcntl.flock(self.fh, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *_):
+        self.fh.close()
+
+
+FakeHome.agy_root = _agy_root
+FakeHome.agy_session = _agy_session
+FakeHome.fake_agy = _fake_agy
+FakeHome.agy_runs = _agy_runs

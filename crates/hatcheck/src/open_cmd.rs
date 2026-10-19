@@ -1,8 +1,9 @@
 //! hatcheck open [SESSION] ...: resume a session in a new terminal window, already in its
 //! folder, or here (--here), or print the commands (--print); --login PROFILE signs in to a
-//! profile or Codex home in a new terminal instead. The README's `hatcheck open` section says
+//! profile or Codex home in a new terminal instead. docs/commands.md's `hatcheck open` section says
 //! which terminal opens and how.
 
+use crate::agent::Agent;
 use crate::args::{Count, Parser};
 use crate::facts::Summary;
 use crate::find;
@@ -100,13 +101,27 @@ pub fn pick(args: &Pick) -> Result<Summary, String> {
 /// Refuse a session that's open in a terminal, so it isn't resumed twice.
 fn refuse_if_open(s: &Summary) -> Result<(), String> {
     let id8 = py::head(&s.id, 8);
-    if s.agent == "codex" {
-        if find::codex_session_open(&s.profile, &s.id) {
-            return Err(format!(
-                "Codex session {id8} is open in codex; switch to that terminal, or quit it first"
-            ));
+    match s.agent {
+        Agent::Codex => {
+            return if find::codex_session_open(&s.profile, &s.id) {
+                Err(format!(
+                    "Codex session {id8} is open in codex; switch to that terminal, or quit it first"
+                ))
+            } else {
+                Ok(())
+            };
         }
-        return Ok(());
+        Agent::Agy => {
+            return if crate::agy::session_open(&s.profile, &s.id) {
+                Err(format!(
+                    "Antigravity session {id8} is open in {}; switch to it, or quit it first",
+                    crate::agy::holder(&s.profile)
+                ))
+            } else {
+                Ok(())
+            };
+        }
+        Agent::Claude => {}
     }
     let live = sessions::open_sessions(std::slice::from_ref(&s.profile));
     if let Some(entry) = live.get(&(ospath::realpath(&s.profile), s.id.clone())) {
@@ -127,8 +142,14 @@ fn refuse_if_open(s: &Summary) -> Result<(), String> {
 /// The command that resumes it, as the session list prints it: the full form when cl or cx
 /// isn't on the PATH, so a new terminal can run it either way.
 pub fn resume_line(s: &Summary, full: bool) -> String {
-    let shortcut = if s.agent == "codex" { "cx" } else { "cl" };
-    sessions::session_command(s, full || ospath::which(shortcut).is_none())
+    sessions::session_command(s, full || !launcher_on_path(s.agent))
+}
+
+/// Whether the agent's launcher (cl, cx) is on the PATH, so a printed command may use it.
+fn launcher_on_path(agent: Agent) -> bool {
+    agent
+        .launcher()
+        .is_some_and(|name| ospath::which(name).is_some())
 }
 
 fn applescript(text: &str) -> String {
@@ -457,10 +478,8 @@ fn run_here(cwd: &str, command: &str) -> i32 {
 /// codex login), so signing in stays with Claude Code and Codex.
 fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&str>) -> i32 {
     let (agent, folder) = find::place(profile);
-    let shortcut = if agent == "codex" { "cx" } else { "cl" };
-    let mut command =
-        paths::start_command(agent, &folder, full || ospath::which(shortcut).is_none());
-    if agent == "codex" {
+    let mut command = paths::start_command(agent, &folder, full || !launcher_on_path(agent));
+    if agent == Agent::Codex {
         command += " login";
     }
     let cwd = paths::home();
@@ -469,7 +488,7 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
         out::println(&command);
         return 0;
     }
-    if agent == "codex" {
+    if agent == Agent::Codex {
         let _ = std::fs::create_dir_all(&folder); // Codex won't start with a CODEX_HOME that doesn't exist
     }
     if here {
@@ -498,7 +517,7 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Resume a Claude Code or Codex session in a new terminal window, already in its folder.")
+    let parser = Parser::new(prog, "Resume a Claude Code, Codex or Antigravity CLI session in a new terminal window, already in its folder.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has a copy")
         .flag(&["--here"], "here", "resume it in this terminal instead")
@@ -507,7 +526,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .option(&["--terminal"], "terminal", "NAME", "the terminal to open (default: HATCHECK_TERMINAL, or this system's usual one)")
         .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, and CODEX_HOME=... codex rather than cx")
         .flag(&["--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec")
-        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex or codex:NAME) in a new terminal, instead of resuming a session");
+        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME or agy) in a new terminal, instead of resuming a session");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
