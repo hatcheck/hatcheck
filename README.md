@@ -16,16 +16,14 @@ beside them, and sessions can be carried between the three.
 Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI;
 Antigravity and Gemini are trademarks of Google LLC.*
 
-Run **two (or more) fully isolated Claude Desktop instances** side by side on macOS — e.g. one
-signed into your **personal** account and one into your **work** account — each with its own
-**color-coded Dock launcher** that **focuses the existing window instead of spawning duplicates**.
+On macOS, `hatcheck desktop` runs **one Claude Desktop per account, side by side**, a personal one
+and a work one, say: each with its own data folder and login, and a launcher in a colour you pick,
+which brings the running one forward rather than opening it twice.
 
-This builds on Philipp Stracker's excellent
-[`--user-data-dir` approach](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
-([write-up](https://philippstracker.com/multiple-claude-instances/)) and adds two things:
-
-1. **Recolored icons** so you can tell the launchers apart at a glance (blue work / red personal / etc.).
-2. A **smart, self-contained launcher** that fixes the "every click opens another window" problem.
+Running Claude Desktop with its own `--user-data-dir` is
+[Philipp Stracker's approach](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
+([write-up](https://philippstracker.com/multiple-claude-instances/)); hatcheck adds the colours and
+the launchers.
 
 It also has **command-line tools for Claude Code, [Codex](https://github.com/openai/codex) and
 [Antigravity CLI](https://antigravity.google/docs/cli/)**, for keeping one profile per account:
