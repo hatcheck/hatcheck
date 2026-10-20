@@ -2,9 +2,11 @@
 # to github.com/microsoft/winget-pkgs as manifests/h/hatcheck/Hatcheck/CLI/<version>/ with the two
 # files beside this one. It installs the commands from the release's Windows zip, which
 # cargo-dist makes (v-release.yml). For each release: the version here and in the other two,
-# and the zip's url and SHA256 there (the release's hatcheck-x86_64-pc-windows-msvc.zip.sha256).
+# the zip's url and SHA256 in the installer manifest (the release's
+# hatcheck-x86_64-pc-windows-msvc.zip.sha256), and the release notes link in the locale one.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
 PackageIdentifier: hatcheck.Hatcheck.CLI
 PackageVersion: 0.4.0
 DefaultLocale: en-US
 ManifestType: version
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0

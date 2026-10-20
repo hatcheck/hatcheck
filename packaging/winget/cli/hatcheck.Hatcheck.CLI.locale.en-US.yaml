@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 PackageIdentifier: hatcheck.Hatcheck.CLI
 PackageVersion: 0.4.0
 PackageLocale: en-US
@@ -8,6 +9,7 @@ Description: Recent Claude Code and Codex sessions in every profile with the com
 PackageUrl: https://github.com/hatcheck/hatcheck
 License: MIT
 LicenseUrl: https://github.com/hatcheck/hatcheck/blob/main/LICENSE
+ReleaseNotesUrl: https://github.com/hatcheck/hatcheck/releases/tag/v0.4.0
 Copyright: Copyright (c) 2026 Yi Wang
 Tags:
   - claude
@@ -16,4 +18,4 @@ Tags:
   - cli
   - developer-tools
 ManifestType: defaultLocale
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0
