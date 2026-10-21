@@ -373,6 +373,7 @@ import json, os, sys
 here = os.path.dirname(os.path.abspath(__file__))
 home = os.environ.get("USERPROFILE") if os.name == "nt" else os.environ.get("HOME")
 root = os.path.join(home, ".gemini", "antigravity-cli")
+sys.stdin.read()  # agy's print mode reads its stdin to the end first: hatcheck must hand it none
 with open(os.path.join(here, "agy.log"), "a", encoding="utf-8") as fh:
     fh.write(json.dumps({"args": sys.argv[1:], "cwd": os.getcwd()}) + "\n")
 zero = {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0, "cache_read_tokens": 0, "total_tokens": 0}
@@ -388,6 +389,9 @@ if "/usage" in sys.argv:
     if signed_out:  # the real agy opens the browser on Google's sign-in page here; hatcheck must never get this far
         print("Authentication required. Please visit the URL to log in:", file=sys.stderr)
         sys.exit(1)
+    if os.path.exists(os.path.join(root, "fake-slow")):
+        import time
+        time.sleep(2)
     fake = os.path.join(root, "fake-usage.json")
     data = {"groups": []}
     if os.path.exists(fake):

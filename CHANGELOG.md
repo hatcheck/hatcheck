@@ -20,6 +20,11 @@ Kimi Code CLI (`kimi`) and ZCode (`zcode`) join Claude Code, Codex and Antigravi
 
 - **The session list's heading** names each agent that has a profile, home or folder here: `Claude Code, Codex and Kimi Code CLI sessions`, and so on.
 
+### Fixed
+
+- **agy 1.4.3's `/usage`** puts each group's limits in `buckets`, each with a window; hatcheck showed no data for it, and now shows one row per bucket, with the window's length behind the time bar.
+- **Two hatchecks asking agy at once**, as the desktop app's engine and the CLI can, made the second wait on Google's quota service for a minute and then show no data: now one hatcheck asks agy at a time, and the second takes the reading the first saved when it's under a minute old.
+
 ## 0.4.0 - 2026-10-19
 
 Antigravity CLI (`agy`) joins Claude Code and Codex: its conversations are listed, shown and carried to the other agents, and theirs to it. `hatcheck doctor` says how hatcheck and the agents are installed, and the README is now the short tour, with each command documented as it is in `docs/`.

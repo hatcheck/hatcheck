@@ -1492,7 +1492,24 @@ pub fn agy_account_usage(entry: &Entry, cached: bool) -> Usage {
     let why: String = if cached {
         "--cached".into()
     } else {
-        match crate::agy::run_usage(root) {
+        // One agy run at a time across hatchecks; the reading another took while this one
+        // waited for it is as good as one now.
+        let started = times::now();
+        let (lock, waited) = crate::agy::take_run_lock();
+        if waited {
+            if let Some((body, saved_at)) = crate::agy::read_snapshot(root) {
+                if saved_at >= started - crate::agy::FRESH {
+                    return (
+                        Some(body),
+                        Some(saved_at),
+                        Some("a reading from a moment ago".into()),
+                    );
+                }
+            }
+        }
+        let outcome = crate::agy::run_usage(root);
+        drop(lock);
+        match outcome {
             Ok(data) => {
                 let body = crate::agy::usage_body(&data);
                 if get(&body, "limits")

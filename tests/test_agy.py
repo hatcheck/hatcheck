@@ -169,6 +169,71 @@ class AgyUsage(unittest.TestCase):
         self.assertEqual((account["limits"][0]["name"], account["limits"][0]["left_percent"], account["limits"][0]["per_model"]),
                          ("Gemini 4 Argon", 62, True))
 
+    def test_the_buckets_agy_1_4_3_answers_with(self):
+        # agy 1.4.3 puts each group's limits in buckets, each with a window and a remaining fraction.
+        write(os.path.join(self.root, "fake-usage.json"), json.dumps({"groups": [
+            {"name": "Gemini Models", "buckets": [
+                {"id": "gemini-weekly", "name": "Weekly Limit Remaining", "window": "weekly", "remaining_fraction": 0.62,
+                 "reset_time": iso(NOW + 6 * 86400)},
+                {"id": "gemini-5h", "name": "Five Hour Limit Remaining", "window": "5h", "remaining_fraction": 1,
+                 "reset_time": iso(NOW + 3600)}]},
+            {"name": "Claude and GPT models", "buckets": [
+                {"id": "3p-weekly", "name": "Weekly Limit Remaining", "window": "weekly", "remaining_fraction": 0.05,
+                 "reset_time": iso(NOW + 5 * 86400)}]}]}))
+        code, out = self.run_usage()
+        self.assertEqual(code, 0, out)
+        self.assertIn("Antigravity · live", out)
+        self.assertRegex(out, r"Gemini Models weekly +62% █+[▏▎▍▌▋▊▉]?░+  █+[▏▎▍▌▋▊▉]?░+ resets \S+ \S+ \(in 5d23h\)")
+        self.assertRegex(out, r"Gemini Models 5h +100% █{10}  █+[▏▎▍▌▋▊▉]?░+ resets \S+ \(in 59m\)")
+        self.assertRegex(out, r"Claude and GPT models weekly +5% [█▏▎▍▌▋▊▉]░+")
+        code, out = self.run_usage("--json")
+        account = json.loads(out)["accounts"][0]
+        self.assertEqual([(l["name"], l["left_percent"], l["window_seconds"]) for l in account["limits"]],
+                         [("Gemini Models weekly", 62, 7 * 86400), ("Gemini Models 5h", 100, 5 * 3600),
+                          ("Claude and GPT models weekly", 5, 7 * 86400)])
+
+    def test_two_hatchecks_ask_agy_once(self):
+        """The app's engine and the CLI can ask at once; a second /usage at the same time gets
+        a 503 from Google after a minute, so the second hatcheck waits for the first and takes
+        the reading it saved."""
+        import subprocess
+        from helpers import argv_of
+        write(os.path.join(self.root, "fake-usage.json"), json.dumps({
+            "groups": [{"group_name": "Gemini 4 Argon", "quota_info": {"remaining_fraction": 0.5, "reset_time": iso(NOW + 3600)}}]}))
+        write(os.path.join(self.root, "fake-slow"), "")
+        env = dict(self.h.env(), PATH=self.bin + os.pathsep + self.h.env()["PATH"])
+        runs = [subprocess.Popen(argv_of("usage") + ["--json"], cwd=self.h.root, env=env, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True, encoding="utf-8") for _ in range(2)]
+        outs = [p.communicate(timeout=60) for p in runs]
+        for p, (out, err) in zip(runs, outs):
+            self.assertEqual(p.returncode, 0, out + err)
+            account = json.loads(out)["accounts"][0]
+            self.assertEqual(account["limits"][0]["left_percent"], 50, out)
+            self.assertIn(account["source"], ("live", "cached"))
+        self.assertEqual([r["args"] for r in self.h.agy_runs()], [["models"], USAGE_ARGS])  # asked once
+        self.assertEqual(sorted(a["source"] for a in [json.loads(o)["accounts"][0] for o, _ in outs]), ["cached", "live"])
+        cached = next(json.loads(o)["accounts"][0] for o, _ in outs if json.loads(o)["accounts"][0]["source"] == "cached")
+        self.assertEqual(cached["why"], "a reading from a moment ago")
+
+    def test_hatchecks_stdin_never_reaches_agy(self):
+        """A status bar or the app's engine runs hatcheck with a pipe on stdin that stays open;
+        agy's print mode waits on such a pipe to its end, so hatcheck gives it none (a guard of
+        what run_within always did)."""
+        import subprocess
+        from helpers import argv_of
+        write(os.path.join(self.root, "fake-usage.json"), json.dumps({
+            "groups": [{"group_name": "Gemini 4 Argon", "quota_info": {"remaining_fraction": 0.5, "reset_time": iso(NOW + 3600)}}]}))
+        r, w = os.pipe()  # held open for the whole run
+        try:
+            env = dict(self.h.env(), PATH=self.bin + os.pathsep + self.h.env()["PATH"])
+            p = subprocess.run(argv_of("usage"), stdin=r, cwd=self.h.root, env=env, capture_output=True, text=True,
+                               encoding="utf-8", timeout=30)
+        finally:
+            os.close(w)
+            os.close(r)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("Antigravity · live", p.stdout)
+
     def test_no_quota_groups(self):
         code, out = self.run_usage()
         self.assertEqual(code, 0, out)

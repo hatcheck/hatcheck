@@ -65,6 +65,25 @@ exits 1 at once with "Please sign in" and opens nothing.
   without `NO_BROWSER`; `agy models` didn't. `signed_in` in `agy.rs` runs before `run_usage`.
 - Seen 1× (2026-10-19).
 
+**A reading is asked of an agent once at a time across hatchecks.** The desktop app's engine
+and the CLI can both ask agy for `/usage` at once, and two such runs at the same time made
+Google's quota service answer the second with a 503 after a minute, which hatcheck showed as agy
+not finishing. The first guess, that agy waited on hatcheck's stdin, was wrong: hatcheck has
+given every run `Stdio::null()` since the port, which a test now guards; what the probe had done
+was run two hatchecks at once.
+- Evidence: 2026-10-20, agy 1.4.3: two `agy -p /usage` at once, stdin closed, gave one
+  `SUCCESS` in 3 seconds and one `UNAVAILABLE (code 503)` after 68; `take_run_lock` in `agy.rs`,
+  and a reading under a minute old handed to the one that waited.
+- Seen 1× (2026-10-20).
+
+**An agent's answer is read with the version installed now.** agy 1.4.3 answers `/usage` with
+`buckets` where 1.4.2 had `windows`; hatcheck read the groups and found no limits, and showed no
+data without saying the shape had changed. A reading that finds the groups but none of the
+fields should say so, and the doc names the version the fields were taken from.
+- Evidence: 2026-10-20: `agy's /usage reported limits hatcheck couldn't read` from `hat usage`,
+  the day after agy 1.4.3 arrived; `usage_body` in `agy.rs` reads both shapes now.
+- Seen 1× (2026-10-20).
+
 **A probe that runs another agent stops at the first step that fails.** A check that converts a
 session and then has the real agent read the file must not reach the agent when the conversion
 was refused; run as one script without that check, it ran the agent on an empty path, which

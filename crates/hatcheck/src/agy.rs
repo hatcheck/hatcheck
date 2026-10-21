@@ -431,6 +431,45 @@ pub fn usage_run_dir() -> String {
     ospath::join(&facts::cache_dir(), "agy-usage")
 }
 
+/// How long a run waits for another hatcheck's agy run to finish: the other's two steps at
+/// their longest.
+const LOCK_WAIT: Duration = Duration::from_secs(70);
+/// A reading another hatcheck took this recently is handed on instead of asking agy again.
+pub const FRESH: f64 = 60.0;
+
+/// One agy run at a time across hatchecks: the lock on run.lock in agy's run folder, held while
+/// agy is asked, and waited for up to LOCK_WAIT when another hatcheck holds it (the app's engine
+/// and the CLI can ask at once). Two /usage runs at the same time made Google's quota service
+/// answer the second with a 503, after a minute (probed on agy 1.4.3). The lock, or None when
+/// it can't be made or the wait ran out (the run goes ahead without it), and whether another
+/// hatcheck held it first.
+pub fn take_run_lock() -> (Option<std::fs::File>, bool) {
+    let run_dir = usage_run_dir();
+    let _ = std::fs::create_dir_all(&run_dir);
+    let Ok(file) = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(ospath::join(&run_dir, "run.lock"))
+    else {
+        return (None, false);
+    };
+    let deadline = std::time::Instant::now() + LOCK_WAIT;
+    let mut waited = false;
+    loop {
+        match file.try_lock() {
+            Ok(()) => return (Some(file), waited),
+            Err(std::fs::TryLockError::WouldBlock) => waited = true,
+            Err(_) => return (None, waited),
+        }
+        if std::time::Instant::now() >= deadline {
+            return (None, waited);
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
 /// Run agy's /usage for a data folder: the data it reported, with its quota groups, or why it
 /// gave none. agy reads ~/.gemini/antigravity-cli, so only the default folder can be asked.
 pub fn run_usage(root: &str) -> Result<Value, String> {
@@ -506,12 +545,23 @@ fn label_of(v: &Value, fallback: &str) -> String {
     .map_or(fallback.to_string(), String::from)
 }
 
+/// The length of a bucket's window, from the word agy 1.4.3 names it by.
+fn window_seconds(window: &str) -> Value {
+    match window.trim().to_lowercase().as_str() {
+        "5h" => json!(5 * 3600),
+        "weekly" | "week" | "7d" => json!(7 * 86400),
+        "daily" | "24h" => json!(86400),
+        "monthly" | "month" | "30d" => json!(30 * 86400),
+        _ => Value::Null,
+    }
+}
+
 /// agy's /usage answer as a usage body with limits[] rows like Claude's: one row per quota it
-/// reports, each the share of a model group's quota used and when it resets. The fields are
-/// the ones agy 1.4.2 names: groups, each with a name, and quota_info with remaining_fraction
-/// and reset_time, on the group, on each of its windows or on each of its models; a
-/// remaining_fraction left out beside a reset_time means none left. On a business account
-/// /usage reported no groups, so this hasn't been checked against a Pro or Ultra account yet.
+/// reports, each the share of a model group's quota used and when it resets. agy 1.4.3 names
+/// groups, each with a name and `buckets`, each with a `window` (5h or weekly), a
+/// remaining_fraction and a reset_time; agy 1.4.2 named the same with quota_info on the group,
+/// on each of its windows or on each of its models, which is still read. A remaining_fraction
+/// left out beside a reset_time means none left.
 pub fn usage_body(data: &Value) -> Value {
     let mut rows = Vec::new();
     let groups = match get(data, "groups") {
@@ -520,11 +570,17 @@ pub fn usage_body(data: &Value) -> Value {
     };
     for group in groups {
         let name = label_of(group, "quota");
-        let mut meters: Vec<(String, &Value)> = Vec::new();
-        for (key, prefix) in [("windows", true), ("models", false)] {
+        let mut meters: Vec<(String, &Value, Value)> = Vec::new(); // label, the meter, its window's length
+        for (key, prefix) in [("buckets", true), ("windows", true), ("models", false)] {
             if let Value::Array(items) = get(group, key) {
                 for item in items.iter().filter(|i| i.is_object()) {
-                    let part = label_of(item, "");
+                    // A bucket is named by its window, 5h or weekly, not its long name.
+                    let window = s(get(item, "window")).unwrap_or("").to_string();
+                    let part = if key == "buckets" && !window.is_empty() {
+                        window.clone()
+                    } else {
+                        label_of(item, "")
+                    };
                     let label = if part.is_empty() {
                         name.clone()
                     } else if prefix {
@@ -532,14 +588,14 @@ pub fn usage_body(data: &Value) -> Value {
                     } else {
                         part
                     };
-                    meters.push((label, item));
+                    meters.push((label, item, window_seconds(&window)));
                 }
             }
         }
         if meters.is_empty() {
-            meters.push((name.clone(), group));
+            meters.push((name.clone(), group, Value::Null));
         }
-        for (label, meter) in meters {
+        for (label, meter, window) in meters {
             let quota = if get(meter, "quota_info").is_object() {
                 get(meter, "quota_info")
             } else {
@@ -566,7 +622,7 @@ pub fn usage_body(data: &Value) -> Value {
                 "normal"
             };
             rows.push(json!({"kind": "quota_scoped", "group": "quota", "label": label.clone(), "short": label,
-                             "window_seconds": null, "percent": used,
+                             "window_seconds": window, "percent": used,
                              "resets_at": reset.and_then(times::isoformat_utc).map_or(Value::Null, Value::String),
                              "severity": severity}));
         }
@@ -706,7 +762,40 @@ mod tests {
         assert_eq!(used, [38, 95, 100]); // a remaining_fraction left out beside a reset: none left
         assert_eq!(rows[1]["severity"], "critical");
         assert_eq!(rows[0]["resets_at"], later);
+        assert_eq!(rows[0]["window_seconds"], Value::Null); // 1.4.2 named no window lengths
         assert_eq!(plan_text(Some(&body)), "Antigravity Pro");
         assert_eq!(plan_text(None), "Antigravity");
+    }
+
+    #[test]
+    fn buckets_become_rows_with_their_windows() {
+        // As agy 1.4.3 answered on 2026-10-20: each group's limits in buckets, named by window.
+        let later = times::isoformat_utc(1_800_000_000.0).unwrap();
+        let data = json!({"groups": [
+            {"name": "Gemini Models", "description": "Models within this group: Gemini Flash, Gemini Pro", "buckets": [
+                {"id": "gemini-weekly", "name": "Weekly Limit Remaining", "window": "weekly", "remaining_fraction": 0.9999, "reset_time": later},
+                {"id": "gemini-5h", "name": "Five Hour Limit Remaining", "window": "5h", "remaining_fraction": 0.25, "reset_time": later}]},
+            {"name": "Claude and GPT models", "buckets": [
+                {"id": "3p-weekly", "name": "Weekly Limit Remaining", "window": "weekly", "remaining_fraction": 1, "reset_time": later}]}]});
+        let body = usage_body(&data);
+        let rows = body["limits"].as_array().unwrap();
+        let labels: Vec<&str> = rows.iter().map(|r| r["label"].as_str().unwrap()).collect();
+        assert_eq!(
+            labels,
+            [
+                "Gemini Models weekly",
+                "Gemini Models 5h",
+                "Claude and GPT models weekly"
+            ]
+        );
+        let used: Vec<i64> = rows
+            .iter()
+            .map(|r| r["percent"].as_i64().unwrap())
+            .collect();
+        assert_eq!(used, [0, 75, 0]);
+        assert_eq!(rows[1]["severity"], "warning");
+        assert_eq!(rows[0]["window_seconds"], 7 * 86400);
+        assert_eq!(rows[1]["window_seconds"], 5 * 3600);
+        assert_eq!(plan_text(Some(&body)), "Antigravity"); // 1.4.3 names no tier
     }
 }

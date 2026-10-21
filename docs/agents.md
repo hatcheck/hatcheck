@@ -75,9 +75,13 @@ that one folder, and there are no `agy` profiles or a launcher for them yet (see
   never set off. Signed out, the row says so and nothing else is run. agy's print mode answers
   `/usage` without starting a conversation (checked by counting them before and after). agy saves
   no snapshot, so hatcheck keeps the last reading in that folder and shows it with its age when a
-  run gives nothing. On a business sign-in agy reported no quota groups, so the rows follow the
-  field names agy 1.4.2 uses (`group_name`, `remaining_fraction`, `reset_time`) and haven't been
-  checked against a Pro or Ultra account yet.
+  run gives nothing. One hatcheck asks agy at a time, with a lock in that folder: two `/usage`
+  runs at once made Google's quota service answer the second with a 503 after a minute, so a
+  second hatcheck waits for the first and takes its reading when it's under a minute old. agy
+  1.4.3 answers with each group's limits as `buckets`, each with a
+  `window` (`5h` or `weekly`), a `remaining_fraction` and a `reset_time`, which hatcheck shows as
+  one row per bucket with the window's length; the `windows` and `models` of 1.4.2's answer are
+  still read. Checked against the answer agy 1.4.3 gave on 2026-10-20.
 - A session converted for agy can't be written into its store, so `hatcheck move <id> agy` writes
   the conversation as a file in `imports` in hatcheck's cache folder and prints the command that
   starts agy on it: see [With Antigravity CLI](commands.md#with-antigravity-cli).
@@ -137,9 +141,11 @@ writes, checked against kimi 2.2.0:
 - Usage comes from the endpoint kimi's own `/usage` asks, `…/coding/v1/usages` under the API host
   the home's `region` file names (kimi.com, or kimi.ai for the global region), with the access
   token from `credentials/kimi-code.json` sent as it is and never refreshed: the 5-hour, 7-day and
-  monthly limits, each the share used and when it resets. When the token has expired (kimi renews
-  it when it runs), or the request fails, the last reading hatcheck kept is shown with its age,
-  since kimi saves none. kimi's print mode can't be asked instead: `kimi -p /usage` sends the
+  monthly limits, each the share used and when it resets. The token lasts 15 minutes (kimi 2.2.0
+  writes `expires_in: 900`) and kimi renews it as it runs, so a live reading needs kimi to have
+  run in the last quarter of an hour; otherwise, as when the request fails, the last reading
+  hatcheck kept is shown with its age, since kimi saves none. hatcheck never refreshes the token
+  itself: a refresh would rotate it under kimi. kimi's print mode can't be asked instead: `kimi -p /usage` sends the
   words to the model, and every print-mode run leaves a session folder behind. Nothing else of the
   login is read.
 - `hatcheck move <id> kimi` converts a session into a Kimi session, written as kimi's own importer

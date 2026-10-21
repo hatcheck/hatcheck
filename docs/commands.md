@@ -180,7 +180,8 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
 - Kimi homes show their Kimi Code plan's limits: the 5-hour and 7-day windows and the month's,
   with `month (code)` named in violet as a model group's. They come from the endpoint kimi's own
   `/usage` asks, with the access token in the home's `credentials/kimi-code.json` sent as it is
-  and never refreshed; when it has expired (kimi renews it when it runs), or the request fails,
+  and never refreshed. That token lasts 15 minutes and kimi renews it as it runs, so a live reading
+  needs kimi to have run in the last quarter of an hour; otherwise, as when the request fails,
   hatcheck's last reading is shown with its age, since kimi saves none. Kimi sends no severity, so
   a limit turns yellow from 75% used and red from 90%. Checked against kimi 2.2.0 and the answer
   its endpoint gave on 2026-10-20.
@@ -191,11 +192,14 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   limits Codex recorded in that home's session files are shown, with their age. Codex doesn't send a
   severity, so a limit turns yellow from 75% used and red from 90%. Homes signed in to the same
   account are shown together.
-- Antigravity CLI's folder shows the quota groups agy's own `/usage` reports, one row each, named in
-  violet like per-model limits, under `Antigravity` and the plan tier agy names. When agy isn't
-  signed in, the row says so, with the last reading and its age, and nothing is run that would
-  start agy's sign-in. See [Antigravity CLI](agents.md#antigravity-cli-agy) for how it's run and
-  what's kept.
+- Antigravity CLI's folder shows the limits agy's own `/usage` reports, one row per model group
+  and window (agy 1.4.3 names a 5-hour and a weekly one per group), named in violet like
+  per-model limits, under `Antigravity` and the plan tier agy names. When agy isn't signed in,
+  the row says so, with the last reading and its age, and nothing is run that would start agy's
+  sign-in. One hatcheck asks agy at a time: a second run while another is asking, as when the
+  desktop app's engine and the CLI coincide, waits for it and takes its reading, shown as cached
+  a moment ago. See [Antigravity CLI](agents.md#antigravity-cli-agy) for how it's run and what's
+  kept.
 - `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share. `--json` prints the accounts as data
   ([below](#--json-for-scripts-status-bars-and-apps)).
