@@ -173,6 +173,20 @@ class ZcodeElsewhere(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("isn't a ZCode data folder", out)
 
+    def test_usage_says_why_there_is_none(self):
+        code, out = self.h.run("usage")
+        self.assertEqual(code, 0, out)
+        self.assertIn("%s  ZCode · no data (zcode has no usage command; see z.ai/manage-apikey/subscription for the plan)"
+                      % self.h.shown(self.root), out)
+        code, out = self.h.run("usage", "--json")
+        z = next(a for a in json.loads(out)["accounts"] if a["agent"] == "zcode")
+        self.assertEqual((z["profiles"], z["plan"], z["source"], z["limits"]), ([self.root], "ZCode", "none", []))
+        api = self.h.folder("code", "api")
+        self.h.zcode_session(self.root, api, Z, "Fix the uploader with zcode", 1)
+        code, out = self.h.run("sessions")
+        self.assertIn("No usage data (zcode has no usage command; see z.ai/manage-apikey/subscription for the plan): "
+                      + self.h.shown(self.root), out)
+
     def test_doctor_names_them(self):
         code, out = self.h.run("doctor")
         self.assertIn("Kimi Code CLI    not on your PATH", out)

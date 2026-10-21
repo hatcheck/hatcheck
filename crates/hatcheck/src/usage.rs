@@ -1432,6 +1432,26 @@ pub fn load_kimi_accounts(homes: &[String]) -> Vec<Entry> {
         .collect()
 }
 
+/// ZCode's data folder, one account: listed so its row can say why there's no reading.
+pub fn load_zcode_accounts(roots: &[String]) -> Vec<Entry> {
+    roots
+        .iter()
+        .map(|root| Entry {
+            agent: Agent::Zcode,
+            profiles: vec![root.clone()],
+            email: Value::Null,
+            account: Value::Null,
+            cache: Value::Null,
+            login: Value::Null,
+        })
+        .collect()
+}
+
+/// Why a ZCode folder has no reading: zcode has no usage command, and its bundle asks no usage
+/// endpoint (ZCode 0.16.9); Z.ai shows the plan's usage on its site.
+pub const ZCODE_NO_USAGE: &str =
+    "zcode has no usage command; see z.ai/manage-apikey/subscription for the plan";
+
 fn fetch_kimi_usage(login: &Value, url: &str) -> (Option<Value>, Option<String>) {
     fetch_json(
         url,
@@ -1549,23 +1569,25 @@ fn fetch_usage(entry: &Entry, cached: bool) -> Usage {
         Agent::Claude => account_usage(entry, cached),
         Agent::Agy => agy_account_usage(entry, cached),
         Agent::Kimi => kimi_account_usage(entry, cached),
-        Agent::Zcode => (None, None, Some("zcode has no usage command".into())),
+        Agent::Zcode => (None, None, Some(ZCODE_NO_USAGE.into())),
     }
 }
 
-/// The accounts behind profiles, codex_homes, agy_roots and kimi_homes with their usage,
-/// fetched in parallel.
+/// The accounts behind profiles, codex_homes, agy_roots, kimi_homes and zcode_roots with their
+/// usage, fetched in parallel.
 pub fn load_usage(
     profiles: &[String],
     cached: bool,
     codex_homes: &[String],
     agy_roots: &[String],
     kimi_homes: &[String],
+    zcode_roots: &[String],
 ) -> Vec<(Entry, Usage)> {
     let mut entries = load_accounts(profiles);
     entries.extend(load_codex_accounts(codex_homes));
     entries.extend(load_agy_accounts(agy_roots));
     entries.extend(load_kimi_accounts(kimi_homes));
+    entries.extend(load_zcode_accounts(zcode_roots));
     let results: Vec<Usage> = std::thread::scope(|scope| {
         let handles: Vec<_> = entries
             .iter()
@@ -1597,7 +1619,7 @@ pub fn sorted_by_fable(accounts: Vec<(Entry, Usage)>, now: f64) -> (Vec<(Entry, 
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*).")
+    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode's folder is listed with why zcode gives none.")
         .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
         .flag(&["-e", "--email"], "email", "show each account's email address (hidden by default)")
         .flag(&["--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
@@ -1615,6 +1637,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &find_codex_homes(),
             &paths::find_agy_roots(),
             &paths::find_kimi_homes(),
+            &paths::find_zcode_roots(),
         ),
         now,
     );

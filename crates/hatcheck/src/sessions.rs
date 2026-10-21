@@ -701,6 +701,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .filter(|h| used.contains(h))
         .cloned()
         .collect();
+    let used_zcode: Vec<String> = zcode_roots
+        .iter()
+        .filter(|r| used.contains(r))
+        .cloned()
+        .collect();
     let loaded: Vec<(Entry, Usage)> = if use_usage {
         usage::load_usage(
             &used_profiles,
@@ -708,6 +713,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &used_homes,
             &used_roots,
             &used_kimi,
+            &used_zcode,
         )
     } else {
         Vec::new()
@@ -957,6 +963,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .chain(&used_homes)
         .chain(&used_roots)
         .chain(&used_kimi)
+        .chain(&used_zcode)
     {
         let Some((_, (usage, saved_at, why))) = results.iter().find(|(r, _)| r == pr) else {
             continue;

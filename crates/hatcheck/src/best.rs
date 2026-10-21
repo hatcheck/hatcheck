@@ -385,6 +385,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &paths::find_codex_homes(),
             &paths::find_agy_roots(),
             &paths::find_kimi_homes(),
+            &paths::find_zcode_roots(),
         )
     };
     let mut now = times::now();

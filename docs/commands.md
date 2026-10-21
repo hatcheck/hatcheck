@@ -185,6 +185,8 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   hatcheck's last reading is shown with its age, since kimi saves none. Kimi sends no severity, so
   a limit turns yellow from 75% used and red from 90%. Checked against kimi 2.2.0 and the answer
   its endpoint gave on 2026-10-20.
+- ZCode's folder is listed with no data and why: zcode has no usage command and asks no usage
+  endpoint (ZCode 0.16.9); Z.ai shows the plan's usage at z.ai/manage-apikey/subscription.
 - Codex homes show their ChatGPT plan's Codex limits: the 5-hour and weekly windows (a free plan has
   one 30-day window instead), then limits for single models such as `GPT-5.3-Codex-Spark`, named in
   violet like `Fable`. The access token in the home's `auth.json` is sent as it is to the endpoint

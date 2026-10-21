@@ -186,7 +186,8 @@ reads, checked against ZCode 0.16.9:
   ZCODE_BUILTIN_PROVIDER_CONFIG_FILE=/Applications/ZCode.app/Contents/Resources/config/provider/zcode-builtin.json \
     exec node /Applications/ZCode.app/Contents/Resources/glm/zcode.cjs "$@"
   ```
-- `hatcheck usage` doesn't read ZCode's usage: zcode has no usage command.
+- `hatcheck usage` lists `~/.zcode` with no data and why: zcode has no usage command, and the CLI's
+  bundle asks no usage endpoint; Z.ai shows the plan's usage at z.ai/manage-apikey/subscription.
 - `hatcheck bind default` binds `~/.zcode` along with the rest when it has sessions, and
   `--zcode default` binds just it. No hook is added for zcode.
 
