@@ -1,8 +1,9 @@
 # The agents and their launchers
 
-How Claude Code, Codex and Antigravity CLI keep their profiles, homes and folders, and the
-launchers that run them with one: `cl`, `cx`, and `claude-z` and `claude-k` for Z.ai and Kimi.
-The commands are in [commands.md](commands.md), and installing in [install.md](install.md).
+How Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode keep their profiles, homes and
+folders, and the launchers that run them with one: `cl`, `cx`, `ck`, and `claude-z` and `claude-k`
+for Claude Code on Z.ai and Kimi. The commands are in [commands.md](commands.md), and installing
+in [install.md](install.md).
 
 ## `cl`: run Claude Code with a profile
 
@@ -84,6 +85,104 @@ that one folder, and there are no `agy` profiles or a launcher for them yet (see
   `hatcheck bind --agy default` binds just that, so the session list marks its sessions in a folder
   bound elsewhere. `hatcheck bind --hook` adds a hook for agy too, in `~/.gemini/config/hooks.json`
   in agy's own form: see [`hatcheck bind`](commands.md#hatcheck-bind-tie-a-folder-to-a-profile).
+
+## `ck`: run Kimi Code CLI with a home per account
+
+[Kimi Code CLI](https://moonshotai.github.io/kimi-code/) keeps its sessions, settings and login in
+one home folder, `~/.kimi-code`, and `KIMI_CODE_HOME` points it at another, so you can keep one
+home per Kimi account the way `cx` keeps Codex homes: `~/.kimi-code-work`, `~/.kimi-code-personal`,
+and so on.
+
+```bash
+ck work login                     # sign in once, with the work account (a device code)
+ck work                           # Kimi Code CLI with ~/.kimi-code-work
+ck work --session <session-id>    # resume one of that home's sessions
+ck personal -p "run the tests"    # any kimi option or command works
+```
+
+- `ck` makes the folder on first use, so `ck work login` starts a new home.
+- A new home starts without your `~/.kimi-code/config.toml` (the default model, providers, hooks);
+  kimi writes one when it first runs there, and you can copy yours over.
+- Plain `kimi` keeps using `~/.kimi-code`.
+- In a folder tied to a home with [`hatcheck bind`](commands.md#hatcheck-bind-tie-a-folder-to-a-profile),
+  the name can be left out: `ck --session <session-id>` there uses that home. A Kimi command such
+  as `login` counts as a home's name only when `~/.kimi-code-login` exists; anywhere else,
+  `ck login` says it needs a home rather than making one.
+
+## Kimi Code CLI (`kimi`)
+
+hatcheck reads every `~/.kimi-code*` folder that has a `sessions/` folder. What it reads and
+writes, checked against kimi 2.2.0:
+
+- `sessions/wd_<name>_<hash>/session_<uuid>/`: one folder per session, under a key kimi makes from
+  the folder the session ran in (its name, and the first 12 hex digits of the SHA-256 of its path).
+  `state.json` holds the title, the folder, the times and an absolute path into the home;
+  `agents/main/wire.jsonl` is the event stream kimi resumes from, with one per subagent beside it.
+  hatcheck reads the sessions from these folders, not from the index.
+- `session_index.jsonl`, at the home's root: one line per session with its folder and working
+  directory as absolute paths, which `kimi --session` resolves a session through. A session
+  hatcheck writes or moves gets its line there, and a moved session's line goes with it. kimi has
+  had two lines land on one ([MoonshotAI/kimi-code#1925](https://github.com/MoonshotAI/kimi-code/issues/1925)),
+  so hatcheck gives the file a newline first when it ends without one.
+- The wire's `agent.message.appended` records carry the conversation: what you typed, the replies
+  with their tool calls, and each tool's output. `hatcheck show` prints it, and `move` and `fork`
+  convert it. Kimi's thinking is plain text in it, left out as the other agents' is. Nothing in a
+  session is signed or encrypted, so a session folder copied to another home runs there as it is.
+- hatcheck names a Kimi session by the UUID after `session_`, and puts the prefix back in the
+  commands it prints and the files it writes; a pasted `session_…` is understood.
+- Nothing marks a session open: kimi writes no lock and no pid
+  ([#2848](https://github.com/MoonshotAI/kimi-code/issues/2848)), so `move` can't refuse an open
+  one. Quit kimi before moving a session; the check of every copied byte before anything is
+  deleted still holds.
+- Usage comes from the endpoint kimi's own `/usage` asks, `…/coding/v1/usages` under the API host
+  the home's `region` file names (kimi.com, or kimi.ai for the global region), with the access
+  token from `credentials/kimi-code.json` sent as it is and never refreshed: the 5-hour, 7-day and
+  monthly limits, each the share used and when it resets. When the token has expired (kimi renews
+  it when it runs), or the request fails, the last reading hatcheck kept is shown with its age,
+  since kimi saves none. kimi's print mode can't be asked instead: `kimi -p /usage` sends the
+  words to the model, and every print-mode run leaves a session folder behind. Nothing else of the
+  login is read.
+- `hatcheck move <id> kimi` converts a session into a Kimi session, written as kimi's own importer
+  writes one: see [With Kimi Code CLI](commands.md#with-kimi-code-cli). `hatcheck bind default`
+  binds `~/.kimi-code` along with the rest when it has sessions, `bind work` binds `~/.kimi-code-work`
+  when it exists, and `--kimi NAME` picks one. No hook is added for kimi: its hooks live in
+  `config.toml`.
+
+## ZCode (`zcode`)
+
+[ZCode](https://zcode.z.ai/en) keeps its sessions in a SQLite database, `~/.zcode/cli/db/db.sqlite`,
+shared with the ZCode desktop app, and nothing but `HOME` moves it (`ZCODE_STORAGE_DIR` and
+`ZCODE_DATA_BASE_DIR` move other parts of `~/.zcode`), so hatcheck reads that one folder, and there
+are no ZCode profiles or a launcher for them (see [Roadmap](../README.md#roadmap)). What it
+reads, checked against ZCode 0.16.9:
+
+- The database's `session` rows: the ID (`sess_<uuid>`), the folder the session ran in, its title
+  and times, and whether ZCode ran it itself (a subagent), which aren't listed. Its `message` and
+  `part` rows hold the conversation: text, each tool call with its input and output, and ZCode's
+  reasoning, which is left out. hatcheck opens the database read-only and never writes it:
+  [the proposal](proposals/kimi-zcode.md#writing-into-zcodes-database-the-risk) says why.
+- `cli/artifacts/sess_<id>/` beside it holds tool results spilled to files, which `where` lists
+  when there is one. `v2/` is the desktop app's, with the login, which hatcheck never reads.
+- hatcheck names a session by the UUID after `sess_`, and puts the prefix back in
+  `zcode --resume sess_…`; a pasted `sess_…` is understood.
+- Nothing marks a session open.
+- `hatcheck move <id> zcode` writes the conversation as a file and prints the command that starts
+  zcode on it: see [With ZCode](commands.md#with-zcode).
+- The `zcode` command: the ZCode desktop app ships the CLI as a Node bundle, `Resources/glm/zcode.cjs`
+  inside the app, and puts no `zcode` on the `PATH`; ZCode's source repo builds the same bundle, or
+  a single-file binary that has everything in it. Run from the app's bundle, the CLI needs
+  `ZCODE_BUILTIN_PROVIDER_CONFIG_FILE` pointed at the app's `Resources/config/provider/zcode-builtin.json`,
+  which the app passes it. A wrapper on the `PATH` does the same, and is how the checks here were
+  run:
+
+  ```sh
+  #!/bin/sh
+  ZCODE_BUILTIN_PROVIDER_CONFIG_FILE=/Applications/ZCode.app/Contents/Resources/config/provider/zcode-builtin.json \
+    exec node /Applications/ZCode.app/Contents/Resources/glm/zcode.cjs "$@"
+  ```
+- `hatcheck usage` doesn't read ZCode's usage: zcode has no usage command.
+- `hatcheck bind default` binds `~/.zcode` along with the rest when it has sessions, and
+  `--zcode default` binds just it. No hook is added for zcode.
 
 ## `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
 

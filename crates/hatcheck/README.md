@@ -1,9 +1,9 @@
 # hatcheck
 
-Claude Code, Codex and Antigravity CLI accounts on one computer, each kept apart. `hatcheck`
+Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode accounts on one computer, each kept apart. `hatcheck`
 lists the recent sessions in every Claude Code profile (`~/.claude-<name>`), Codex home
-(`~/.codex-<name>`) and Antigravity CLI's folder, each with the command that resumes it and what's
-left of its account's plan. It carries a session to another account, or converts it between the
+(`~/.codex-<name>`) and Kimi home (`~/.kimi-code-<name>`), and in Antigravity CLI's and ZCode's
+folders, each with the command that resumes it and what's left of its account's plan. It carries a session to another account, or converts it between the
 agents, and makes Claude Desktop instances on macOS. `cl` and `cx` run Claude Code and Codex with
 a profile, and `claude-z` and `claude-k` run Claude Code on Z.ai's or Kimi's models.
 
@@ -27,7 +27,7 @@ hatcheck [HOURS]                   recent sessions in every profile and home, wi
 hatcheck usage                     plan usage left for every profile and home
 hatcheck best [--for SESSION]      which account to use now, or to carry a session to
 hatcheck move SESSION PROFILE      move a session to another profile or home, or convert it
-                                   between Claude Code, Codex and Antigravity CLI
+                                   between the agents
 hatcheck fork SESSION PROFILE      fork a session into another profile or home: a new session
                                    with its own ID, and the original stays
 hatcheck relocate OLD NEW          a moved project folder's sessions, brought along

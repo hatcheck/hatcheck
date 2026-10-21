@@ -1416,6 +1416,73 @@ pub fn load_agy_accounts(roots: &[String]) -> Vec<Entry> {
         .collect()
 }
 
+/// Kimi homes, one account each: the login says nothing about whose it is, and hatcheck asks
+/// nothing else.
+pub fn load_kimi_accounts(homes: &[String]) -> Vec<Entry> {
+    homes
+        .iter()
+        .map(|home| Entry {
+            agent: Agent::Kimi,
+            profiles: vec![home.clone()],
+            email: Value::Null,
+            account: Value::Null,
+            cache: Value::Null,
+            login: crate::kimi::read_login(home),
+        })
+        .collect()
+}
+
+fn fetch_kimi_usage(login: &Value, url: &str) -> (Option<Value>, Option<String>) {
+    fetch_json(
+        url,
+        &[
+            (
+                "Authorization",
+                format!("Bearer {}", s(get(login, "access_token")).unwrap_or("")),
+            ),
+            ("Accept", "application/json".into()),
+            ("User-Agent", "hatcheck".into()),
+        ],
+    )
+}
+
+/// Usage for a Kimi home: Kimi's usage endpoint, the one kimi's own /usage asks, with the
+/// home's token as it is; or else the last reading hatcheck kept, since kimi saves none.
+pub fn kimi_account_usage(entry: &Entry, cached: bool) -> Usage {
+    let Some(home) = entry.profiles.first() else {
+        return (None, None, Some("no home".into()));
+    };
+    let login = &entry.login;
+    let why: String = if cached {
+        "--cached".into()
+    } else if !truthy(login) {
+        "not signed in".into()
+    } else if num_or_zero(get(login, "expires")) < times::now() + 60.0 {
+        "token expired; run kimi in this home to renew it".into()
+    } else {
+        match fetch_kimi_usage(login, &crate::kimi::usage_url(home)) {
+            (Some(body), _) if body.is_object() => {
+                let usage = crate::kimi::usage_body(&body);
+                if get(&usage, "limits")
+                    .as_array()
+                    .is_some_and(|l| !l.is_empty())
+                {
+                    crate::kimi::save_snapshot(home, &usage, times::now());
+                    return (Some(usage), None, None);
+                }
+                "Kimi's usage endpoint reported no limits".into()
+            }
+            (_, why) => why
+                .filter(|w| !w.is_empty())
+                .unwrap_or_else(|| "unexpected answer".into()),
+        }
+    };
+    match crate::kimi::read_snapshot(home) {
+        Some((body, saved_at)) => (Some(body), Some(saved_at), Some(why)),
+        None => (None, None, Some(why)),
+    }
+}
+
 /// Usage for an Antigravity CLI folder: agy's own /usage run now, or else the last reading
 /// hatcheck kept, since agy saves none.
 pub fn agy_account_usage(entry: &Entry, cached: bool) -> Usage {
@@ -1452,6 +1519,9 @@ pub fn account_plan(entry: &Entry, usage: Option<&Value>) -> String {
         Agent::Codex => codex_plan_text(entry, usage),
         Agent::Claude => plan_text(&entry.account),
         Agent::Agy => crate::agy::plan_text(usage),
+        Agent::Kimi => crate::kimi::plan_text(),
+        // zcode has no usage command (docs/proposals/kimi-zcode.md): the plan is the agent.
+        Agent::Zcode => entry.agent.speaker().to_string(),
     }
 }
 
@@ -1461,20 +1531,24 @@ fn fetch_usage(entry: &Entry, cached: bool) -> Usage {
         Agent::Codex => codex_account_usage(entry, cached),
         Agent::Claude => account_usage(entry, cached),
         Agent::Agy => agy_account_usage(entry, cached),
+        Agent::Kimi => kimi_account_usage(entry, cached),
+        Agent::Zcode => (None, None, Some("zcode has no usage command".into())),
     }
 }
 
-/// The accounts behind profiles, codex_homes and agy_roots with their usage, fetched in
-/// parallel.
+/// The accounts behind profiles, codex_homes, agy_roots and kimi_homes with their usage,
+/// fetched in parallel.
 pub fn load_usage(
     profiles: &[String],
     cached: bool,
     codex_homes: &[String],
     agy_roots: &[String],
+    kimi_homes: &[String],
 ) -> Vec<(Entry, Usage)> {
     let mut entries = load_accounts(profiles);
     entries.extend(load_codex_accounts(codex_homes));
     entries.extend(load_agy_accounts(agy_roots));
+    entries.extend(load_kimi_accounts(kimi_homes));
     let results: Vec<Usage> = std::thread::scope(|scope| {
         let handles: Vec<_> = entries
             .iter()
@@ -1506,8 +1580,8 @@ pub fn sorted_by_fable(accounts: Vec<(Entry, Usage)>, now: f64) -> (Vec<(Entry, 
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*) and Antigravity CLI folder (~/.gemini/antigravity-cli).")
-        .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last reading of agy's /usage")
+    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*).")
+        .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
         .flag(&["-e", "--email"], "email", "show each account's email address (hidden by default)")
         .flag(&["--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
     let args = match parser.parse(argv) {
@@ -1523,6 +1597,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             args.flag("cached"),
             &find_codex_homes(),
             &paths::find_agy_roots(),
+            &paths::find_kimi_homes(),
         ),
         now,
     );

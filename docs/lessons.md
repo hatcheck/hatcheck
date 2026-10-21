@@ -73,6 +73,56 @@ cost a model turn and left a conversation in the agent's store.
   conversation `cd859a98` in the maintainer's agy folder, left for them to delete.
 - Seen 1× (2026-10-19).
 
+**A session written for an agent follows what the agent's own importer writes, not what the agent
+writes live.** kimi validates each event of a session it resumes against a schema and folds the
+model's view from its `context.*` records; a wire built from the events kimi writes as it runs
+failed twice over (a `toolCalls` left off a message, a `finishReason` outside its enum), while the
+records kimi's own `kimi migrate` importer writes resume. An agent's importer is the smallest wire
+it accepts, written by the people who know the schema.
+- Evidence: 2026-10-20, kimi 2.2.0: `StoreError: event 'message.appended' at seq 6 failed schema
+  validation`, then `Cannot read properties of undefined (reading 'map')`, both from a wire in the
+  live shape; `write_session` in `kimi.rs` follows the importer (`buildTurnRecords` and
+  `writeMainAgentWire` in kimi's binary).
+- Seen 1× (2026-10-20).
+
+**A resume is checked the way the printed command runs it.** kimi binds its model and profile when
+its terminal UI opens a session; print mode (`-p`) on a session the UI hasn't opened yet says no
+model is set. A probe through print mode alone would have called a working import broken, and the
+command hatcheck prints is the UI's.
+- Evidence: 2026-10-20, kimi 2.2.0: `model.not_configured: Model not set` from `kimi --session
+  <id> -p …` on a session hatcheck wrote; the same session opened in the UI through a
+  pseudo-terminal gained `profile.bind` and answered from the imported history.
+- Seen 1× (2026-10-20).
+
+**An agent's CLI taken from its desktop app may need what the app hands it.** ZCode's desktop app
+ships the CLI as `Resources/glm/zcode.cjs` and starts it with `ZCODE_BUILTIN_PROVIDER_CONFIG_FILE`
+pointed at the app's `Resources/config/provider/zcode-builtin.json`; run by hand without it, the
+CLI refuses with its provider config missing, while `--help` and `doctor` run fine. A probe of a
+bundled CLI starts from how the app starts it.
+- Evidence: 2026-10-20, ZCode 0.16.9: `无法定位 CLI ZCode Built-in Provider Config` from
+  `node zcode.cjs --attach … -p …`; with the variable set it read the file and resumed. docs/agents.md
+  has the wrapper.
+- Seen 1× (2026-10-20).
+
+**An agent's print mode is asked for a reading only once a probe has shown it answers one.**
+`kimi -p /usage` doesn't run the slash command: the words go to the model as a message, which
+answered with the docs for `/usage`, fetched a web page on the way, and left a session folder in
+the home, as every print-mode run does, signed in or not. Kimi's usage is read from the endpoint
+its `/usage` asks instead, found in its binary.
+- Evidence: 2026-10-20, kimi 2.2.0: two sessions in `~/.kimi-code/sessions/wd_kimi-usage-run_…`
+  and two model turns from one probe, removed afterwards; `usage_url` and `usage_body` in
+  `kimi.rs`.
+- Seen 1× (2026-10-20).
+
+**A probe that needs the agent's login runs in its real home: name what it leaves, and take it
+out.** zcode's login moves with `ZCODE_DATA_BASE_DIR`, so its probe ran in a throwaway `HOME` with
+only the login shared; kimi's login lives in its home, so its probe wrote a session into the real
+`~/.kimi-code`, and kimi then added the folder to `workspaces.json`, `workspace-trust/` and
+`user-history/`. Each was removed afterwards, and the index compared with a copy taken before.
+- Evidence: 2026-10-20, the session folders, index lines and the three side files of the probe
+  folder in `~/.kimi-code`, all removed; `session_index.jsonl` identical to its copy from before.
+- Seen 1× (2026-10-20).
+
 **A failed read means unknown, never empty.** A snapshot's limit that has reset since it was
 saved is shown as `?`, not as 100% or 0%; usage that couldn't be fetched is shown as cached with
 its age and the reason, never as fresh.

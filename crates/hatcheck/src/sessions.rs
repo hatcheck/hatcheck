@@ -1,7 +1,8 @@
 //! hatcheck [sessions] [HOURS] ...: recent Claude Code sessions from every ~/.claude*
-//! profile and Codex sessions from every ~/.codex* home, grouped by folder, each with the
-//! command that resumes it and what's left of its account's plan. docs/commands.md's `hatcheck`
-//! section describes the list.
+//! profile, Codex sessions from every ~/.codex* home, Antigravity CLI's from its folder, Kimi
+//! Code CLI's from every ~/.kimi-code* home and ZCode's from its database, grouped by folder,
+//! each with the command that resumes it and what's left of its account's plan.
+//! docs/commands.md's `hatcheck` section describes the list.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -184,15 +185,15 @@ pub fn paint_program(command: &str, agent: Agent, paint: &Paint) -> String {
 }
 
 /// The agents that have a profile, home or folder here, as the heading names them before
-/// "CLI sessions": Claude Code, or Claude Code and Codex, or all three.
-fn agents_text(codex: bool, agy: bool) -> String {
-    let mut names = vec![Agent::Claude.name()];
-    if codex {
-        names.push(Agent::Codex.name());
-    }
-    if agy {
-        names.push(Agent::Agy.speaker()); // Antigravity: the heading says CLI itself
-    }
+/// "CLI sessions": Claude Code, then each of the others that has one, without its own "CLI".
+fn agents_text(present: &[Agent]) -> String {
+    let mut names = vec![Agent::Claude.heading_name()];
+    names.extend(
+        Agent::ALL
+            .iter()
+            .filter(|a| **a != Agent::Claude && present.contains(a))
+            .map(|a| a.heading_name()),
+    );
     match names.len() {
         1 => names[0].to_string(),
         2 => format!("{} and {}", names[0], names[1]),
@@ -361,13 +362,13 @@ impl Found {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, and Antigravity CLI sessions from ~/.gemini/antigravity-cli, with the command that resumes each one.")
+    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes and ZCode sessions from ~/.zcode, with the command that resumes each one.")
         .positional("hours", Count::Optional, &format!("how far back to look (default {DEFAULT_HOURS}); accepts 36, 1.5, 12h or 3d"))
         .option(&["-n", "--per-folder"], "per_folder", "N", "show only the newest N sessions per folder (default: all)")
         .flag(&["--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, and the Antigravity app's conversations")
         .flag(&["--all-folders"], "all_folders", "list every folder, even when run from a folder that has sessions")
-        .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude instead of the cl shortcut, and CODEX_HOME=... codex instead of cx")
-        .flag(&["--cached"], "cached", "take plan usage from the snapshots Claude Code and Codex last saved, and hatcheck's last reading of agy's /usage, instead of the APIs")
+        .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude instead of the cl shortcut, CODEX_HOME=... codex instead of cx, and KIMI_CODE_HOME=... kimi instead of ck")
+        .flag(&["--cached"], "cached", "take plan usage from the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage, instead of the APIs")
         .flag(&["--no-usage"], "no_usage", "leave plan usage out")
         .flag(&["--json"], "json", "print the sessions, and the accounts behind them, as JSON for scripts and apps")
         .flag(&["-e", "--email"], "email", "with --json, include each account's email address");
@@ -535,6 +536,53 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             found.put(key, (session.when, true, session.size), session, false);
         }
     }
+    // Nothing marks a Kimi or ZCode session open, so the window alone decides.
+    let kimi_homes = paths::find_kimi_homes();
+    for home in &kimi_homes {
+        for x in crate::kimi::sessions(home) {
+            if ospath::getmtime(&crate::kimi::wire_path(&x.dir)).is_ok_and(|t| t < cutoff) {
+                continue; // the wire's mtime is never older than its last message
+            }
+            let session = crate::kimi::summary(home, &x);
+            if !session.has_messages {
+                empty += 1;
+                continue;
+            }
+            if session.when < cutoff {
+                continue;
+            }
+            let key = format!(
+                "{}\u{0}{}\u{0}{}",
+                Agent::Kimi.key(),
+                ospath::realpath(home),
+                session.id
+            );
+            found.put(key, (session.when, true, session.size), session, false);
+        }
+    }
+    let zcode_roots = paths::find_zcode_roots();
+    for root in &zcode_roots {
+        for row in crate::zcode::rows(root) {
+            let session = crate::zcode::summary(root, &row);
+            if session.entrypoint_text() == "subagent" {
+                continue; // one zcode ran itself
+            }
+            if !session.has_messages {
+                empty += 1;
+                continue;
+            }
+            if session.when < cutoff {
+                continue;
+            }
+            let key = format!(
+                "{}\u{0}{}\u{0}{}",
+                Agent::Zcode.key(),
+                ospath::realpath(root),
+                session.id
+            );
+            found.put(key, (session.when, true, session.size), session, false);
+        }
+    }
     facts::save_cache();
 
     let mut shown: Vec<Summary> = Vec::new();
@@ -582,6 +630,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .iter()
         .chain(&codex_homes)
         .chain(&agy_roots)
+        .chain(&kimi_homes)
+        .chain(&zcode_roots)
         .map(|p| (p.clone(), 0))
         .collect();
     for s in &shown {
@@ -646,12 +696,18 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .filter(|r| used.contains(r) && !crate::agy::is_app_root(r))
         .cloned()
         .collect();
+    let used_kimi: Vec<String> = kimi_homes
+        .iter()
+        .filter(|h| used.contains(h))
+        .cloned()
+        .collect();
     let loaded: Vec<(Entry, Usage)> = if use_usage {
         usage::load_usage(
             &used_profiles,
             args.flag("cached"),
             &used_homes,
             &used_roots,
+            &used_kimi,
         )
     } else {
         Vec::new()
@@ -738,12 +794,23 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .unwrap_or(0);
 
     let window = format!("{}h", py::g(hours));
+    let mut present = Vec::new();
+    for (agent, folders) in [
+        (Agent::Codex, &codex_homes),
+        (Agent::Agy, &agy_roots),
+        (Agent::Kimi, &kimi_homes),
+        (Agent::Zcode, &zcode_roots),
+    ] {
+        if !folders.is_empty() {
+            present.push(agent);
+        }
+    }
     out::println(
         &(p(
             "1",
             &format!(
                 "{} CLI sessions {}active in the last {window} or open now",
-                agents_text(!codex_homes.is_empty(), !agy_roots.is_empty()),
+                agents_text(&present),
                 if only_here { "in this folder, " } else { "" }
             ),
         ) + &p(
@@ -885,7 +952,12 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     ));
     let mut snapshots: Vec<((String, String), Vec<String>)> = Vec::new();
     let mut no_data: Vec<(String, Vec<String>)> = Vec::new();
-    for pr in used_profiles.iter().chain(&used_homes).chain(&used_roots) {
+    for pr in used_profiles
+        .iter()
+        .chain(&used_homes)
+        .chain(&used_roots)
+        .chain(&used_kimi)
+    {
         let Some((_, (usage, saved_at, why))) = results.iter().find(|(r, _)| r == pr) else {
             continue;
         };
@@ -900,6 +972,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 "Codex's session files"
             } else if used_roots.contains(pr) {
                 "hatcheck's last reading of agy's /usage"
+            } else if used_kimi.contains(pr) {
+                "hatcheck's last reading of Kimi's usage"
             } else {
                 "Claude Code's last snapshot"
             }
@@ -1033,6 +1107,24 @@ mod tests {
                 format!("{} --conversation c134", cyan("agy")),
             ),
             ("agy", Agent::Agy, cyan("agy")),
+            (
+                "ck work --session session_0752",
+                Agent::Kimi,
+                format!("{} work --session session_0752", cyan("ck")),
+            ),
+            (
+                "KIMI_CODE_HOME=~/.kimi-code-work kimi --session session_0752",
+                Agent::Kimi,
+                format!(
+                    "KIMI_CODE_HOME=~/.kimi-code-work {} --session session_0752",
+                    cyan("kimi")
+                ),
+            ),
+            (
+                "zcode --resume sess_1fb0",
+                Agent::Zcode,
+                format!("{} --resume sess_1fb0", cyan("zcode")),
+            ),
         ];
         for (command, agent, painted) in cases {
             assert_eq!(paint_program(command, agent, &on), painted);

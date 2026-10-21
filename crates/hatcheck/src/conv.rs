@@ -87,6 +87,46 @@ pub fn result_text(text: &str) -> String {
     )
 }
 
+// A conversation converted for an agent whose store hatcheck doesn't write (agy, zcode): a
+// file for the agent to read, which hatcheck starts it on.
+
+/// Where converted conversations are written: cache/imports/<id>.md.
+pub fn imports_dir() -> String {
+    ospath::join(&facts::cache_dir(), "imports")
+}
+
+pub fn import_path(id: &str) -> String {
+    ospath::join(&imports_dir(), &format!("{id}.md"))
+}
+
+/// Write the conversation as Markdown, each turn under who said it and when: the file.
+pub fn write_import(conv: &Conversation, turns: &[Turn], id: &str) -> std::io::Result<String> {
+    let mut text = format!(
+        "# Conversation imported from {} session {}\n",
+        conv.agent.name(),
+        conv.id
+    );
+    for (role, texts, when) in turns {
+        let who = if role == "user" {
+            "You"
+        } else {
+            conv.agent.speaker()
+        };
+        let at = s(when)
+            .filter(|w| !w.is_empty())
+            .map_or(String::new(), |w| {
+                format!(" ({})", py::head(w, 16).replace('T', " "))
+            });
+        text += &format!("\n## {who}{at}\n\n{}\n", texts.join("\n\n"));
+    }
+    let path = import_path(id);
+    std::fs::create_dir_all(imports_dir())?;
+    let tmp = format!("{path}.hatcheck-tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(path)
+}
+
 /// Add text to the conversation, joining it to the turn before when that's the same role's.
 pub fn add_turn(turns: &mut Vec<Turn>, role: &str, text: &str, when: &Value) {
     if py::strip(text).is_empty() {

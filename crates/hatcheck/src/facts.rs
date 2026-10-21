@@ -807,6 +807,8 @@ pub fn summarize(agent: Agent, profile: &str, path: &str) -> Option<Summary> {
         Agent::Codex => read_codex_session(path, &codex_names(profile)),
         Agent::Claude => read_session(path),
         Agent::Agy => Ok(crate::agy::summarize(profile, path)),
+        Agent::Kimi => Ok(crate::kimi::summarize(profile, path)),
+        Agent::Zcode => Ok(crate::zcode::summarize(profile, path)),
     };
     let mut s = s.ok().flatten()?;
     s.profile = profile.to_string();

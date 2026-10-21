@@ -22,9 +22,12 @@
       <div class="toolbar">
         <input id="search" type="search" placeholder="Search titles and folders" />
         <select id="filter-agent">
-          <option value="">Claude Code and Codex</option>
+          <option value="">Every agent</option>
           <option value="claude">Claude Code</option>
           <option value="codex">Codex</option>
+          <option value="agy">Antigravity CLI</option>
+          <option value="kimi">Kimi Code CLI</option>
+          <option value="zcode">ZCode</option>
         </select>
         <select id="filter-profile"><option value="">Every profile</option></select>
         <select id="filter-hours">
@@ -56,6 +59,7 @@
         <select id="add-agent">
           <option value="claude">Claude Code profile</option>
           <option value="codex">Codex home</option>
+          <option value="kimi">Kimi home</option>
         </select>
         <input id="add-name" placeholder="name, such as work" pattern="[A-Za-z0-9._-]+" required />
         <button type="submit">Sign in, in a terminal</button>

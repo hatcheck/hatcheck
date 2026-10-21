@@ -353,6 +353,8 @@ fn bind(
     folder: Option<&str>,
     codex: Option<&str>,
     agy: Option<&str>,
+    kimi: Option<&str>,
+    zcode: Option<&str>,
 ) -> i32 {
     let show = paths::shell_path;
     let folder = ospath::realpath(&ospath::expanduser(
@@ -432,6 +434,49 @@ fn bind(
         // default binds every agent's own folder; agy has no other.
         binding.insert(Agent::Agy.key().into(), json!("default"));
     }
+    // Kimi homes are named like Codex's; ZCode has one folder, like agy.
+    if let Some(spec) = kimi {
+        let (name, path) = name_of(Agent::Kimi, spec);
+        if !crate::kimi::is_home(&path) || !ospath::isdir(&path) {
+            let how = if name == "default" {
+                "kimi login".to_string()
+            } else {
+                format!("KIMI_CODE_HOME={} kimi login", show(&path))
+            };
+            return out::fail(&format!(
+                "{} isn't a Kimi home. Sign in there first, e.g. with: {how}",
+                show(&path)
+            ));
+        }
+        binding.insert(Agent::Kimi.key().into(), json!(name));
+    } else if profile.is_none() {
+        if let Some(name) = old.get(Agent::Kimi.key()) {
+            binding.insert(Agent::Kimi.key().into(), name.clone());
+        }
+    } else if let Some(spec) = profile.filter(|p| !p.contains('/') && !p.contains(ospath::SEP)) {
+        let path = paths::profile_folder(Agent::Kimi, spec); // the home named like the profile
+        if ospath::isdir(&ospath::join(&path, "sessions")) {
+            binding.insert(Agent::Kimi.key().into(), json!(spec));
+        }
+    }
+    if let Some(spec) = zcode {
+        let (name, path) = name_of(Agent::Zcode, spec);
+        if !crate::zcode::is_root(&path) {
+            return out::fail(&format!(
+                "{} isn't a ZCode data folder. Run zcode once to sign in",
+                show(&path)
+            ));
+        }
+        binding.insert(Agent::Zcode.key().into(), json!(name));
+    } else if profile.is_none() {
+        if let Some(name) = old.get(Agent::Zcode.key()) {
+            binding.insert(Agent::Zcode.key().into(), name.clone());
+        }
+    } else if profile == Some("default")
+        && crate::zcode::is_root(&paths::default_folder(Agent::Zcode))
+    {
+        binding.insert(Agent::Zcode.key().into(), json!("default"));
+    }
     let binding = Value::Object(binding);
     bindings.insert(folder.clone(), binding.clone());
     if let Err(e) = save_bindings(&bindings) {
@@ -467,6 +512,16 @@ fn bind(
             paths::start_command(
                 Agent::Codex,
                 &paths::profile_folder(Agent::Codex, &name),
+                false
+            )
+        ));
+    }
+    if let Some(name) = bound(Agent::Kimi) {
+        here.push(format!(
+            "ck --session <id> means {} --session <id>",
+            paths::start_command(
+                Agent::Kimi,
+                &paths::profile_folder(Agent::Kimi, &name),
                 false
             )
         ));
@@ -724,11 +779,13 @@ fn check(agent: Agent) -> i32 {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Tie a folder to a profile, so cl and cx pick it there and the session list flags work done under another one.")
+    let parser = Parser::new(prog, "Tie a folder to a profile, so cl, cx and ck pick it there and the session list flags work done under another one.")
         .positional("profile", Count::Optional, "NAME for ~/.claude-NAME, default for ~/.claude, or a path")
         .positional("folder", Count::Optional, "the folder to bind (default: this one)")
         .option(&["--codex"], "codex", "HOME", "the Codex home to bind: NAME for ~/.codex-NAME, default for ~/.codex, or a path (default: the one named like PROFILE)")
         .option(&["--agy"], "agy", "FOLDER", "the Antigravity CLI folder to bind: default for ~/.gemini/antigravity-cli, or a path (default: that one, when PROFILE is default)")
+        .option(&["--kimi"], "kimi", "HOME", "the Kimi home to bind: NAME for ~/.kimi-code-NAME, default for ~/.kimi-code, or a path (default: the one named like PROFILE)")
+        .option(&["--zcode"], "zcode", "FOLDER", "the ZCode folder to bind: default for ~/.zcode, or a path (default: that one, when PROFILE is default)")
         .flag(&["--list"], "list", "list every bound folder")
         .flag(&["--hook"], "hook", "warn in Claude Code, Codex and agy when a session starts in a bound folder under another profile")
         .hidden_choice(&["--which"], "which", "claude", &Agent::KEYS)
@@ -753,12 +810,16 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     }
     let codex = args.value("codex").filter(|c| !c.is_empty());
     let agy = args.value("agy").filter(|a| !a.is_empty());
-    if profile.is_some() || codex.is_some() || agy.is_some() {
+    let kimi = args.value("kimi").filter(|k| !k.is_empty());
+    let zcode = args.value("zcode").filter(|z| !z.is_empty());
+    if profile.is_some() || codex.is_some() || agy.is_some() || kimi.is_some() || zcode.is_some() {
         return bind(
             profile,
             args.value("folder").filter(|f| !f.is_empty()),
             codex,
             agy,
+            kimi,
+            zcode,
         );
     }
     show_here()

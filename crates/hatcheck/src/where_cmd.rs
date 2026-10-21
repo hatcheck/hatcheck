@@ -1,8 +1,10 @@
-//! hatcheck where SESSION [--json]: find a Claude Code or Codex session by its ID, or the
-//! start of it. For Claude Code, the transcript in ~/.claude or a ~/.claude-* profile plus
-//! its data folder if it has one; for Codex, the session file in ~/.codex or a ~/.codex-*
-//! home, under sessions/ by the date it started, or under archived_sessions/. Exits 1 when
-//! nothing matches. --json prints each copy as data.
+//! hatcheck where SESSION [--json]: find a session by its ID, or the start of it. For Claude
+//! Code, the transcript in ~/.claude or a ~/.claude-* profile plus its data folder if it has
+//! one; for Codex, the session file in ~/.codex or a ~/.codex-* home, under sessions/ by the
+//! date it started, or under archived_sessions/; for agy its conversation file and brain
+//! folder; for Kimi its session folder in ~/.kimi-code or a ~/.kimi-code-* home; for ZCode its
+//! database and, when there is one, its folder of tool results. Exits 1 when nothing matches.
+//! --json prints each copy as data.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -76,6 +78,21 @@ pub fn find(prefix: &str) -> Vec<String> {
             }
         }
     }
+    for home_dir in paths::find_kimi_homes() {
+        for x in crate::kimi::sessions_starting_with(&home_dir, prefix) {
+            found.push(x.dir);
+        }
+    }
+    // A ZCode session is a row: its database, then its folder of tool results when it has one.
+    for root in paths::find_zcode_roots() {
+        for row in crate::zcode::rows_starting_with(&root, prefix) {
+            found.push(crate::zcode::db_path(&root));
+            let artifacts = crate::zcode::artifacts_path(&root, &row.id);
+            if ospath::isdir(&artifacts) {
+                found.push(artifacts);
+            }
+        }
+    }
     found
 }
 
@@ -84,7 +101,14 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
     let mut copies = Vec::new();
     let projects = format!("{}projects{}", ospath::SEP, ospath::SEP);
     for path in found {
-        if path.ends_with(".jsonl") && path.contains(&projects) {
+        if crate::kimi::dir_id(path).is_some()
+            && path.contains(&format!("{0}sessions{0}wd_", ospath::SEP))
+        {
+            let id = crate::kimi::dir_id(path).unwrap_or_default();
+            let home_dir = ospath::dirname(&ospath::dirname(&ospath::dirname(path)));
+            copies.push(json!({"agent": Agent::Kimi.key(), "id": id, "profile": home_dir, "file": crate::kimi::wire_path(path),
+                               "data_folder": path, "archived": false}));
+        } else if path.ends_with(".jsonl") && path.contains(&projects) {
             let profile = ospath::dirname(&ospath::dirname(&ospath::dirname(path)));
             let data = &path[..path.len() - ".jsonl".len()];
             copies.push(json!({"agent": Agent::Claude.key(), "id": ospath::basename(data), "profile": profile, "file": path,
@@ -108,13 +132,22 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
                                "archived": false}));
         }
     }
+    // ZCode's sessions are rows, so they come from the database, not from the paths.
+    for root in paths::find_zcode_roots() {
+        for row in crate::zcode::rows_starting_with(&root, prefix) {
+            let artifacts = crate::zcode::artifacts_path(&root, &row.id);
+            copies.push(json!({"agent": Agent::Zcode.key(), "id": row.id, "profile": root, "file": crate::zcode::db_path(&root),
+                               "data_folder": if ospath::isdir(&artifacts) { Value::from(artifacts) } else { Value::Null },
+                               "archived": row.archived}));
+        }
+    }
     json!({"version": 1, "query": prefix, "sessions": copies})
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Find a Claude Code, Codex or Antigravity CLI session by its ID, or the start of it.",
+        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session by its ID, or the start of it.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
     .flag(&["--json"], "json", "print the matches as JSON");

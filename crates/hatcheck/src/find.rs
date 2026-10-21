@@ -11,8 +11,10 @@ use serde_json::Value;
 
 /// (agent, folder) for a PROFILE argument: NAME for ~/.claude-NAME, default or claude for
 /// ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME (claude:NAME spells out a Claude
-/// Code one), agy for ~/.gemini/antigravity-cli, or a path, which is a Codex home when it's
-/// named .codex* or has Codex's sessions/, and agy's when it has its conversations.
+/// Code one), agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for
+/// ~/.kimi-code-NAME, zcode for ~/.zcode, or a path, which is a Codex home when it's named
+/// .codex* or has Codex's sessions/, agy's when it has its conversations, Kimi's when it's named
+/// .kimi-code* or has Kimi's sessions/, and ZCode's when it has its database.
 pub fn place(spec: &str) -> (Agent, String) {
     if spec == "default" {
         return (Agent::Claude, paths::default_folder(Agent::Claude));
@@ -34,11 +36,17 @@ pub fn place(spec: &str) -> (Agent, String) {
     if spec.contains('/') || spec.contains(ospath::SEP) || spec.starts_with('~') || drive {
         let path = ospath::abspath(&ospath::expanduser(spec));
         let agy = ospath::basename(&path) == "antigravity-cli" || crate::agy::is_root(&path);
+        let zcode = ospath::basename(&path) == Agent::Zcode.base() || crate::zcode::is_root(&path);
+        let kimi = crate::kimi::is_home(&path);
         let codex = ospath::basename(&path).starts_with(".codex")
             || (ospath::isdir(&ospath::join(&path, "sessions"))
                 && !ospath::isdir(&ospath::join(&path, "projects")));
         let agent = if agy {
             Agent::Agy
+        } else if zcode {
+            Agent::Zcode
+        } else if kimi {
+            Agent::Kimi
         } else if codex {
             Agent::Codex
         } else {
@@ -105,6 +113,17 @@ pub fn session_copies(prefix: &str) -> Vec<Copies> {
         for row in crate::agy::rows_starting_with(&root, prefix) {
             let path = crate::agy::conversation_path(&root, &row.id);
             add((Agent::Agy, row.id), (root.clone(), path));
+        }
+    }
+    for home in paths::find_kimi_homes() {
+        for x in crate::kimi::sessions_starting_with(&home, prefix) {
+            add((Agent::Kimi, x.id), (home.clone(), x.dir));
+        }
+    }
+    for root in paths::find_zcode_roots() {
+        for row in crate::zcode::rows_starting_with(&root, prefix) {
+            let path = crate::zcode::artifacts_path(&root, &row.id);
+            add((Agent::Zcode, row.id), (root.clone(), path));
         }
     }
     found
@@ -192,6 +211,27 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
             }
         }
     }
+    for home in paths::find_kimi_homes() {
+        for x in crate::kimi::sessions(&home) {
+            let there = s(get(&x.state, "cwd")).is_some_and(|c| paths::same_folder(c, &here));
+            if there {
+                let s = crate::kimi::summary(&home, &x);
+                if better(&s, &best) {
+                    best = Some(s);
+                }
+            }
+        }
+    }
+    for root in paths::find_zcode_roots() {
+        for row in crate::zcode::rows(&root) {
+            if paths::same_folder(&row.directory, &here) {
+                let s = crate::zcode::summary(&root, &row);
+                if better(&s, &best) {
+                    best = Some(s);
+                }
+            }
+        }
+    }
     facts::save_cache();
     best
 }
@@ -259,5 +299,13 @@ mod tests {
         assert_eq!(place("agy:default"), place("agy"));
         assert_eq!(place("/x/.gemini/antigravity-cli").0, Agent::Agy);
         assert_eq!(place("claude"), place("default")); // as codex and agy name theirs
+        assert_eq!(place("kimi"), (Agent::Kimi, format!("{home}/.kimi-code")));
+        assert_eq!(
+            place("kimi:work"),
+            (Agent::Kimi, format!("{home}/.kimi-code-work"))
+        );
+        assert_eq!(place("/srv/.kimi-code-a").0, Agent::Kimi);
+        assert_eq!(place("zcode"), (Agent::Zcode, format!("{home}/.zcode")));
+        assert_eq!(place("/x/.zcode").0, Agent::Zcode);
     }
 }

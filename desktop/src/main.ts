@@ -282,7 +282,8 @@ function wire() {
   $("add-profile").addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = $<HTMLInputElement>("add-name").value.trim();
-    const profile = $<HTMLSelectElement>("add-agent").value === "codex" ? "codex:" + name : name;
+    const agent = $<HTMLSelectElement>("add-agent").value;
+    const profile = agent === "claude" ? name : agent + ":" + name;
     try {
       await signIn(profile);
       toast("Opening a terminal to sign in to " + profile);

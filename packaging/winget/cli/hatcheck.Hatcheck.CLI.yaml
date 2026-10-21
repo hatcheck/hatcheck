@@ -1,4 +1,4 @@
-# winget manifest for the hatcheck CLI (hatcheck, hat, cl, cx, claude-z and claude-k), to send
+# winget manifest for the hatcheck CLI (hatcheck, hat, cl, cx, ck, claude-z and claude-k), to send
 # to github.com/microsoft/winget-pkgs as manifests/h/hatcheck/Hatcheck/CLI/<version>/ with the two
 # files beside this one. It installs the commands from the release's Windows zip, which
 # cargo-dist makes (v-release.yml). For each release: the version here and in the other two,

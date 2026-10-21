@@ -1,7 +1,7 @@
-"""cl, cx, claude-z and claude-k, the hatcheck command and the installers. The launchers are
+"""cl, cx, ck, claude-z and claude-k, the hatcheck command and the installers. The launchers are
 the binaries built beside hatcheck, as every install has them; AsNames runs them through
-hatcheck itself, as a link named cl does. A fake claude stands in for Claude Code, and a fake
-codex for Codex."""
+hatcheck itself, as a link named cl does. A fake claude stands in for Claude Code, a fake
+codex for Codex, and a fake kimi for Kimi Code CLI."""
 import os
 import subprocess
 import unittest
@@ -42,10 +42,13 @@ class Commands(unittest.TestCase):
             write(os.path.join(folder, "claude.cmd"), "\r\n".join(lines) + "\r\n")
             write(os.path.join(folder, "codex.cmd"), "@echo off\r\necho args=%*\r\nif defined CODEX_HOME "
                   "(echo CODEX_HOME=%CODEX_HOME%) else (echo CODEX_HOME=unset)\r\n")
+            write(os.path.join(folder, "kimi.cmd"), "@echo off\r\necho args=%*\r\nif defined KIMI_CODE_HOME "
+                  "(echo KIMI_CODE_HOME=%KIMI_CODE_HOME%) else (echo KIMI_CODE_HOME=unset)\r\n")
             return
         lines = ["#!/bin/sh", 'echo "args=$*"'] + ['echo "%s=${%s-unset}"' % (v, v) for v in SHOWN]
         write(os.path.join(folder, "claude"), "\n".join(lines) + "\n")
         write(os.path.join(folder, "codex"), '#!/bin/sh\necho "args=$*"\necho "CODEX_HOME=${CODEX_HOME-unset}"\n')
+        write(os.path.join(folder, "kimi"), '#!/bin/sh\necho "args=$*"\necho "KIMI_CODE_HOME=${KIMI_CODE_HOME-unset}"\n')
         for name in os.listdir(folder):
             os.chmod(os.path.join(folder, name), 0o755)
 
@@ -61,6 +64,9 @@ class Commands(unittest.TestCase):
 
     def cx(self, *args, **kw):
         return self.run_command([launcher("cx")] + list(args), **kw)
+
+    def ck(self, *args, **kw):
+        return self.run_command([launcher("ck")] + list(args), **kw)
 
     def claude_on(self, name, *args, **kw):
         """claude-z or claude-k."""
@@ -138,6 +144,40 @@ class Commands(unittest.TestCase):
         code, out = self.cx(cwd=inside)
         self.assertEqual(code, 0, out)
         self.assertIn("CODEX_HOME=unset", out)
+
+    def test_ck_runs_kimi_with_the_home(self):
+        home = os.path.join(self.h.home, ".kimi-code-fresh")
+        code, out = self.ck("fresh", "--session", "session_" + ID)
+        self.assertEqual(code, 0, out)
+        self.assertIn("args=--session session_" + ID, out)
+        self.assertIn("KIMI_CODE_HOME=" + home, out)
+        self.assertTrue(os.path.isdir(home))  # made, so ck fresh login starts a new home
+        for args in ((), ("--help",)):
+            code, out = self.ck(*args)
+            self.assertEqual(code, 2, out)
+            self.assertIn("usage: ck <profile> [kimi args...]", out)
+        # A Kimi command first, with no ~/.kimi-code-login and no binding here: not a home's name.
+        code, out = self.ck("login")
+        self.assertEqual(code, 2, out)
+        self.assertIn("ck: login is a Kimi command, not a home's name", out)
+        self.assertFalse(os.path.exists(os.path.join(self.h.home, ".kimi-code-login")))
+        # Bound to a home: the name can be left out, and a Kimi command comes first.
+        self.h.kimi_home("work")
+        code_dir = self.h.folder("code")
+        code, out = self.run_command(HATCHECK + ["bind", "work"], cwd=code_dir)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Kimi Code CLI " + self.h.shown(os.path.join(self.h.home, ".kimi-code-work")), out)
+        code, out = self.ck("login", cwd=code_dir)
+        self.assertEqual(code, 0, out)
+        self.assertIn("ck: this folder is bound to work", out)
+        self.assertIn("args=login", out)
+        self.assertIn("KIMI_CODE_HOME=" + os.path.join(self.h.home, ".kimi-code-work"), out)
+
+    @unittest.skipIf(WINDOWS, "the runner's PATH could have a kimi on it")
+    def test_ck_without_kimi(self):
+        code, out = self.ck("work", fakes=False)
+        self.assertEqual(code, 1, out)
+        self.assertIn("kimi isn't on your PATH", out)
 
     @unittest.skipIf(WINDOWS, "the runner's PATH could have a codex on it")
     def test_cx_without_codex(self):
@@ -240,7 +280,7 @@ class Commands(unittest.TestCase):
 
     def test_installer(self):
         target = os.path.join(self.h.root, "installed")
-        names = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"]
+        names = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k"]
         built = os.path.realpath(os.path.dirname(ENGINE))  # as the installers spell it
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         if WINDOWS:
@@ -344,6 +384,9 @@ class AsNames(Commands):
     def cx(self, *args, **kw):
         return self.launch("cx", args, kw)
 
+    def ck(self, *args, **kw):
+        return self.launch("ck", args, kw)
+
     def claude_on(self, name, *args, **kw):
         return self.launch(name, args, kw)
 
@@ -357,7 +400,7 @@ class AsNames(Commands):
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         links = os.path.join(self.h.root, "links")
         os.makedirs(links)
-        for name in ("cl", "claude-k"):
+        for name in ("cl", "ck", "claude-k"):
             os.symlink(ENGINE, os.path.join(links, name))
         code, out = self.run_command([os.path.join(links, "cl"), "work", "--version"])
         self.assertEqual(code, 0, out)
@@ -366,6 +409,9 @@ class AsNames(Commands):
         code, out = self.run_command([os.path.join(links, "claude-k"), "--version"])
         self.assertEqual(code, 0, out)
         self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
+        code, out = self.run_command([os.path.join(links, "ck"), "work", "--version"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("KIMI_CODE_HOME=" + os.path.join(self.h.home, ".kimi-code-work"), out)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,8 @@ NestedInstallerFiles:
     PortableCommandAlias: cl
   - RelativeFilePath: cx.exe
     PortableCommandAlias: cx
+  - RelativeFilePath: ck.exe
+    PortableCommandAlias: ck
   - RelativeFilePath: claude-z.exe
     PortableCommandAlias: claude-z
   - RelativeFilePath: claude-k.exe
@@ -21,6 +23,7 @@ Commands:
   - hat
   - cl
   - cx
+  - ck
   - claude-z
   - claude-k
 Installers:

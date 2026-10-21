@@ -121,6 +121,7 @@ fn refuse_if_open(s: &Summary) -> Result<(), String> {
                 Ok(())
             };
         }
+        Agent::Kimi | Agent::Zcode => return Ok(()), // nothing marks one of theirs open
         Agent::Claude => {}
     }
     let live = sessions::open_sessions(std::slice::from_ref(&s.profile));
@@ -474,12 +475,13 @@ fn run_here(cwd: &str, command: &str) -> i32 {
     }
 }
 
-/// --login: a terminal in your home folder running cl NAME (or claude), or cx NAME login (or
-/// codex login), so signing in stays with Claude Code and Codex.
+/// --login: a terminal in your home folder running cl NAME (or claude), cx NAME login (or
+/// codex login), ck NAME login (or kimi login), agy or zcode, so signing in stays with the
+/// agent.
 fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&str>) -> i32 {
     let (agent, folder) = find::place(profile);
     let mut command = paths::start_command(agent, &folder, full || !launcher_on_path(agent));
-    if agent == Agent::Codex {
+    if matches!(agent, Agent::Codex | Agent::Kimi) {
         command += " login";
     }
     let cwd = paths::home();
@@ -488,7 +490,7 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
         out::println(&command);
         return 0;
     }
-    if agent == Agent::Codex {
+    if matches!(agent, Agent::Codex | Agent::Kimi) {
         let _ = std::fs::create_dir_all(&folder); // Codex won't start with a CODEX_HOME that doesn't exist
     }
     if here {
@@ -517,16 +519,16 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Resume a Claude Code, Codex or Antigravity CLI session in a new terminal window, already in its folder.")
+    let parser = Parser::new(prog, "Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session in a new terminal window, already in its folder.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has a copy")
         .flag(&["--here"], "here", "resume it in this terminal instead")
         .flag(&["--print"], "print", "print the cd and resume commands instead")
         .exclusive(&["here", "print"])
         .option(&["--terminal"], "terminal", "NAME", "the terminal to open (default: HATCHECK_TERMINAL, or this system's usual one)")
-        .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, and CODEX_HOME=... codex rather than cx")
+        .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=... kimi rather than ck")
         .flag(&["--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec")
-        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME or agy) in a new terminal, instead of resuming a session");
+        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME or zcode) in a new terminal, instead of resuming a session");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),

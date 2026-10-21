@@ -1,7 +1,8 @@
 # The commands
 
 What each `hatcheck` command does, as it is, with its options; the agents and their launchers
-(`cl`, `cx`, Antigravity CLI, `claude-z` and `claude-k`) are in [agents.md](agents.md), and
+(`cl`, `cx`, Antigravity CLI, Kimi Code CLI, ZCode, `claude-z` and `claude-k`) are in
+[agents.md](agents.md), and
 installing, switching and `hatcheck doctor` in [install.md](install.md). The
 [README](../README.md) has the short tour.
 
@@ -21,7 +22,12 @@ which is listed too. Codex files its sessions by the date they started, archived
 `archived_sessions/`; resume one with `codex resume <id>`, or `cx <name> resume <id>` for a
 `~/.codex-<name>` home. An Antigravity CLI conversation is
 `~/.gemini/antigravity-cli/conversations/<id>.db`, listed with the `brain/<id>` folder agy writes
-beside it; resume it with `agy --conversation <id>`.
+beside it; resume it with `agy --conversation <id>`. A Kimi Code CLI session is its folder,
+`~/.kimi-code/sessions/wd_<folder>_<hash>/session_<id>`, resumed with `kimi --session session_<id>`,
+or `ck <name> --session session_<id>` for a `~/.kimi-code-<name>` home; a ZCode session is a row in
+`~/.zcode/cli/db/db.sqlite`, listed as that file and, when there is one, its folder of tool results
+under `cli/artifacts/`, resumed with `zcode --resume sess_<id>`. For both, the ID is the UUID after
+the agent's own prefix, which can be pasted along with it.
 
 ## `hatcheck`: what to resume
 
@@ -64,7 +70,8 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 ```
 
 - Run the folder's `cd` line, then the session's command. The command's program, `cl`, `claude`,
-  `cx`, `codex` or `agy`, is in cyan: that word says which agent the session belongs to. The branch
+  `cx`, `codex`, `agy`, `kimi` or `zcode`, is in cyan: that word says which agent the session
+  belongs to. The branch
   after the title is the one the session ran on, as the agent wrote it down. Sessions still open in
   a terminal are marked `● open`, so you don't resume one twice: Claude Code's say the process, from
   the registry Claude Code keeps; Codex's and agy's, which hold a lock on a session they have open,
@@ -92,6 +99,12 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   title, since agy writes none down. Their comment shows what agy's `/usage` reports. The
   Antigravity app's conversations, read from the app's own folder, are hidden like Desktop ones,
   and conversations agy ran itself aren't listed.
+- Kimi Code CLI sessions, from every `~/.kimi-code*` home, resume with `kimi --session session_<id>`,
+  or `ck <name> --session session_<id>` for a `~/.kimi-code-<name>` home; ZCode sessions, from
+  `~/.zcode`'s database, with `zcode --resume sess_<id>`, and sessions zcode ran itself aren't
+  listed. Neither has a branch, and nothing marks their sessions open. A Kimi session's comment
+  shows the home's Kimi Code limits (see `hatcheck usage` below); a ZCode session has none, since
+  zcode has no usage command.
 - Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
   `setopt interactivecomments`).
 - Usage is fetched live: Claude Code's `/usage` is run once per account, in its profile, and the
@@ -112,8 +125,8 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 | `-n N`       | show only the newest N sessions per folder and count the rest                 |
 | `--all`      | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec` and the Antigravity app |
 | `--all-folders` | list every folder, even when run from one that has sessions                |
-| `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, and `CODEX_HOME=… codex …` instead of `cx` |
-| `--cached`   | take usage from Claude Code's and Codex's saved snapshots and hatcheck's last reading of agy's `/usage`, without calling the APIs |
+| `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, `CODEX_HOME=… codex …` instead of `cx`, and `KIMI_CODE_HOME=… kimi …` instead of `ck` |
+| `--cached`   | take usage from Claude Code's and Codex's saved snapshots and hatcheck's last readings of agy's `/usage` and Kimi's usage, without calling the APIs |
 | `--no-usage` | leave plan usage out                                                          |
 | `--json`     | print the sessions, and the accounts behind them, as JSON ([below](#--json-for-scripts-status-bars-and-apps)) |
 | `-e`, `--email` | with `--json`, include each account's email address                        |
@@ -164,6 +177,13 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   `week (Fable)` are named in violet, with their bar drawn in it, to tell them from `week (all
   models)`; the % keeps the severity's colour. Quota fields the server
   sends that Claude Code doesn't display are listed dimmed under their raw names.
+- Kimi homes show their Kimi Code plan's limits: the 5-hour and 7-day windows and the month's,
+  with `month (code)` named in violet as a model group's. They come from the endpoint kimi's own
+  `/usage` asks, with the access token in the home's `credentials/kimi-code.json` sent as it is
+  and never refreshed; when it has expired (kimi renews it when it runs), or the request fails,
+  hatcheck's last reading is shown with its age, since kimi saves none. Kimi sends no severity, so
+  a limit turns yellow from 75% used and red from 90%. Checked against kimi 2.2.0 and the answer
+  its endpoint gave on 2026-10-20.
 - Codex homes show their ChatGPT plan's Codex limits: the 5-hour and weekly windows (a free plan has
   one 30-day window instead), then limits for single models such as `GPT-5.3-Codex-Spark`, named in
   violet like `Fable`. The access token in the home's `auth.json` is sent as it is to the endpoint
@@ -279,7 +299,7 @@ with `--json`, the copy used last is taken and a line says so; `--from` always d
 `codex` is `~/.codex` and `codex:<name>` is `~/.codex-<name>`, as a place to copy to or `--from`. A
 bare name follows the session: for a Codex session, `work` is `~/.codex-work` when that home exists
 and `~/.claude-work` otherwise, and when both exist you're asked which, or say `codex:work` or
-`claude:work`:
+`claude:work` (a Kimi session follows the same rule with `~/.kimi-code-work` and `kimi:work`):
 
 ```
 $ hatcheck move 019a8c1e claude:work
@@ -346,10 +366,79 @@ Resume it with:
   session converted this way was read from the imports folder and summarised correctly by agy in
   print mode.
 
+### With Kimi Code CLI
+
+`kimi` is `~/.kimi-code` and `kimi:<name>` is `~/.kimi-code-<name>`, as a place to move to or
+`--from`, and a bare name follows a Kimi session the way it follows a Codex one. Between Kimi homes
+the session is moved: its folder is copied with its timestamps, the copy's `state.json` is made to
+point into the new home (and given the new ID for a fork, which also names the session it came
+from), the new home's index gets its line, every copied byte is checked, and then the original
+folder and its index line go. A copy already there is compared by the wires and file snapshots in
+its `agents/` folder, as a Codex copy is by its file; `state.json` changes with every use, so it
+isn't compared. Nothing in a Kimi session is signed or encrypted, so the copy runs on any account.
+
+```
+$ hatcheck move 0752ad88 kimi:work
+Moved Kimi session 0752ad88 "Fix the uploader" from ~/.kimi-code to ~/.kimi-code-work:
+  session folder             19 files
+Its state.json points into ~/.kimi-code-work, whose index lists it.
+Deleted the original from ~/.kimi-code, and its line in the index there.
+Resume it with:
+  cd ~/code/api
+  ck work --session session_0752ad88-cc62-4e00-9912-48e4146b7628
+```
+
+- From Kimi, the wire is converted as a Codex session is: your messages and the replies as text,
+  each tool call as a block with its arguments and the tool's output. Kimi's thinking, images and
+  subagent conversations are left out.
+- To Kimi (`hatcheck move 3f1c2a9e kimi`), the session is written as kimi's own importer (`kimi
+  migrate`, for kimi-cli sessions) writes one: a folder under the working directory's key, with
+  `state.json` and a wire holding, per turn, the prompt, the messages kimi rebuilds the model's view
+  from and the turn's end, and its line in the index. kimi binds its model and profile when its
+  terminal UI opens the session, so resume it with the printed `kimi --session …`; asked in print
+  mode (`-p`) before the UI has opened the session once, kimi 2.2.0 says no model is set.
+- Checked against the real `kimi` (2.2.0): a Claude Code session converted this way was opened in
+  kimi's terminal UI, which showed the conversation and answered a question about it from the
+  history. kimi validates each event of a session it resumes against a schema, which these pass.
+- Nothing marks a Kimi session open, so `move` can't refuse one that is: quit kimi first.
+
+### With ZCode
+
+`zcode` is `~/.zcode`, as a place to convert to or `--from`:
+
+```
+$ hatcheck move 1fb068a4 work
+Converted ZCode session 1fb068a4 "Fix the uploader" from ~/.zcode into a Claude Code session in ~/.claude-work:
+  conversation               5 of your messages, with the replies
+  tool calls                 42, as text with their output shortened
+  left out                   ZCode's reasoning, images, checkpoints and subagent sessions
+  new session                6f6749d7-0f59-4683-997c-a3595421b93f (98.1 KB)
+The original stays in ~/.zcode, since a conversion leaves things out.
+Resume it with:
+  cd ~/code/api
+  cl work --resume 6f6749d7-0f59-4683-997c-a3595421b93f
+```
+
+- From ZCode, the session's rows are converted as a Codex session is: your messages and the replies
+  as text, each tool call as a block with its input and output. ZCode's reasoning, images,
+  checkpoints and subagent sessions are left out.
+- To ZCode, hatcheck never writes ZCode's database ([the proposal](proposals/kimi-zcode.md#writing-into-zcodes-database-the-risk)
+  says why), so the session is written as a Markdown file, `imports/<id>.md` in hatcheck's cache
+  folder, and the command printed runs zcode once in print mode from the session's folder, with the
+  file attached and in plan mode so nothing is changed: `zcode --attach <file> --mode plan -p '…'`,
+  a first prompt that has it read the conversation and say where it left off. That persists the
+  session in zcode's database, and `zcode -c` in the folder then carries it on in the terminal UI.
+  `--json` reports `"new_session": null` and the `file`. The original stays, as after every
+  conversion.
+- Checked against the real ZCode (0.16.9, the CLI from the desktop app's bundle, in a throwaway
+  home): zcode read the attached file, summarised the conversation correctly, and `zcode --resume`
+  on the session it had made answered a question from it; hatcheck then listed and showed that
+  session from the database zcode wrote.
+
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder |
-| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex session `~/.codex-NAME` when that home exists (`claude:NAME` and `codex:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, or a path; left out, this folder's bound Claude Code profile, or `~/.claude` |
+| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, or a path; left out, this folder's bound Claude Code profile, or `~/.claude` |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
 | `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
@@ -394,11 +483,13 @@ Resume it now in ~/.claude? [y/N]
 - It copies what `move` copies and checks it the same way, and the copy gets the new ID in its
   records, and its own folders for subagents, saved tool output and `/rewind` snapshots. Its
   message IDs stay the same, as in Claude Code's own fork. A Codex session gets the new ID in its
-  file name, its `session_meta` and its events.
+  file name, its `session_meta` and its events; a Kimi session in its folder's name and its
+  `state.json`, which also names the session it was forked from.
 - A copy already in the profile stays as it is, so a fork never stops for one, and the original
   always stays where it was. A plan file already there stays too, since the copy there uses it.
 - To another agent, or to a Codex home on another account, it converts the session, as `move`
-  does: a converted session is always a new one, and for agy a file agy starts one on.
+  does: a converted session is always a new one, and for agy and zcode a file the agent starts one
+  on.
 - Resuming a fork was tested with the real `claude` (2.1.301).
 
 | Option           | What it does                                                                 |
@@ -457,12 +548,13 @@ cd ~/code/api
 cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 ```
 
-- It finds the session by its ID or the start of it, in every Claude Code profile and Codex home,
-  and in Antigravity CLI's folder. When more than one profile has a copy, it takes the one used
-  last; `--from <profile>` picks one.
+- It finds the session by its ID or the start of it, in every Claude Code profile, Codex home and
+  Kimi home, and in Antigravity CLI's and ZCode's folders. When more than one profile has a copy,
+  it takes the one used last; `--from <profile>` picks one.
 - The command is the one `hatcheck` prints: `cl` or `claude`, `cx` or `codex`, `agy --conversation`,
-  and `cl -z`/`cl -k` for a session whose last reply came from Z.ai or Kimi. Without `cl` or `cx` on the `PATH` it's the full
-  form (`CLAUDE_CONFIG_DIR=… claude …`), as `--full` gives.
+  `ck` or `kimi --session`, `zcode --resume`, and `cl -z`/`cl -k` for a session whose last reply
+  came from Z.ai or Kimi. Without `cl`, `cx` or `ck` on the `PATH` it's the full form
+  (`CLAUDE_CONFIG_DIR=… claude …`), as `--full` gives.
 - A session that's open in a terminal is refused, so it isn't resumed twice.
 - The terminal:
   - **macOS:** Terminal, or the one `hatcheck` runs in when that's iTerm2, Ghostty or WezTerm. Terminal
@@ -497,8 +589,9 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
 
 - Read-only: your messages and the replies, with each tool call as a block of text with its input
   and the start of its output, as a conversion carries them (see
-  [`hatcheck move`](#hatcheck-move-carry-on-a-session-with-another-profile)). A Codex session or
-  an Antigravity conversation is shown the same way, from its own file.
+  [`hatcheck move`](#hatcheck-move-carry-on-a-session-with-another-profile)). A Codex session, an
+  Antigravity conversation, a Kimi session or a ZCode session is shown the same way, from its own
+  file or rows.
 - `--last N` shows only the last N turns, `--from PROFILE` picks the copy to read when several
   profiles have one, and `--json` prints the turns as data.
 
@@ -568,12 +661,14 @@ $ hatcheck bind --hook                  # warn in Claude Code and Codex (once; h
 - Bindings live in your own config, `~/.config/hatcheck/bindings.json`
   (`%APPDATA%\hatcheck\bindings.json` on Windows), not in the repo, so profile names don't end up in
   git. The deepest bound folder wins, and folders are compared once symlinks are resolved.
-- `default` binds `~/.claude` and `~/.codex`, and `~/.gemini/antigravity-cli` when agy has
-  conversations there. The Codex home is the one named like the profile when there is one;
-  `--codex <name>` picks another, and `--codex` alone binds just the Codex home. `--agy default`
-  binds just Antigravity CLI's folder.
-- `cl` and `cx` use the binding when no profile name is given: `cl --resume <id>`, `cl`,
-  `cx resume <id>`. A name given still wins, and outside bound folders nothing changes.
+- `default` binds `~/.claude` and `~/.codex`, and `~/.gemini/antigravity-cli`, `~/.kimi-code` and
+  `~/.zcode` when agy, kimi and zcode have sessions there. The Codex home and the Kimi home are the
+  ones named like the profile when there are any; `--codex <name>` and `--kimi <name>` pick others,
+  and either alone binds just that home. `--agy default` and `--zcode default` bind just those
+  folders.
+- `cl`, `cx` and `ck` use the binding when no profile name is given: `cl --resume <id>`, `cl`,
+  `cx resume <id>`, `ck --session <id>`. A name given still wins, and outside bound folders
+  nothing changes.
 - `hatcheck` marks sessions that ran in a bound folder under another profile:
   `⚠ folder bound to ~/.claude-work`.
 - `--hook` adds a `SessionStart` hook, `hatcheck bind --check`, to every profile's `settings.json`
@@ -583,7 +678,7 @@ $ hatcheck bind --hook                  # warn in Claude Code and Codex (once; h
   and run cl work here instead.` For a resumed session it gives the `hatcheck move` command instead.
   The hook runs the `hatcheck` that `--hook` found on your `PATH`, by its path. Run `--hook` again
   after installing hatcheck another way, and it points the hooks at the new one. No hook is added
-  for agy (see [Antigravity CLI](agents.md#antigravity-cli-agy)).
+  for kimi or zcode.
   - **Claude Code:** tested with the real `claude` (2.1.301). It shows the warning in the interactive
     UI; `claude -p` doesn't display it.
   - **Codex:** Codex runs a new hook only once you trust it with `/hooks` in `codex`, once per home.
@@ -656,9 +751,11 @@ $ hatcheck --json
   `--no-usage`). `hatcheck usage --json` gives every account, in its Fable order, with `sorted_by`.
 - **Stable:** absolute paths rather than `~`, times in UTC (ISO 8601), no colours. `version` goes up
   only when a field changes meaning or goes away; new fields can appear at any time. `agent` is
-  `claude`, `codex` or `agy`.
+  `claude`, `codex`, `agy`, `kimi` or `zcode`; a Kimi or ZCode session's `id` is the UUID after
+  the agent's own `session_` or `sess_`, which `resume` puts back.
 - `open` is `null`, or what a session is open in: Claude Code's with the process's `pid` and `status`,
-  Codex's and agy's with `pid` and `status` `null`, since only a lock says they're open.
+  Codex's and agy's with `pid` and `status` `null`, since only a lock says they're open. Kimi's and
+  ZCode's are never marked open, since nothing marks one.
 - `left_percent` is `null` for a snapshot's limit that has reset since it was saved. `pace` is what's
   left per hour until the reset (`left_percent` over the hours to go, at least one), `null` without
   a reset ahead. `fable` is `{"left": true, "resets_at": …}`, `{"left": false, "back_at": …}`, or

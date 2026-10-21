@@ -17,6 +17,7 @@
 #                           on your PATH
 #   cl                      claude with a ~/.claude-<name> profile: cl work --resume <id>
 #   cx                      codex with a ~/.codex-<name> home: cx work resume <id>
+#   ck                      kimi with a ~/.kimi-code-<name> home: ck work --session <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic
 #
 # Links this script made before, to the Python hatcheck and the sh launchers, are replaced.
@@ -50,7 +51,7 @@ else
     FROM="$SCRIPT_DIR/target/release"
 fi
 
-COMMANDS="hatcheck hat cl cx claude-z claude-k"
+COMMANDS="hatcheck hat cl cx ck claude-z claude-k"
 # command:file it ran:hatcheck subcommand that replaced it
 REPLACED="claude-recent-sessions:claude-recent-sessions.py: claude-usage:claude-usage.py:usage
 claude-where:claude-where:where claude-move-session:claude-move-session.py:move
@@ -166,8 +167,8 @@ if [ -n "$first" ] && [ "$first" != "$BIN_DIR/hatcheck" ]; then
     echo "ℹ️  $first comes first on your PATH, so it runs, not $BIN_DIR/hatcheck; hatcheck doctor lists every copy"
 fi
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-    if [ -f "$rc" ] && grep -qE '^[[:space:]]*(function[[:space:]]+)?(cl|cx)[[:space:]]*\(\)' "$rc"; then
-        echo "ℹ️  $rc defines cl() or cx() itself. A shell function wins over the"
+    if [ -f "$rc" ] && grep -qE '^[[:space:]]*(function[[:space:]]+)?(cl|cx|ck)[[:space:]]*\(\)' "$rc"; then
+        echo "ℹ️  $rc defines cl(), cx() or ck() itself. A shell function wins over the"
         echo "   installed command; they do the same thing, so keep it or delete it."
     fi
 done

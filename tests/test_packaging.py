@@ -1,4 +1,4 @@
-"""The packages: one version everywhere, one licence, and the same six commands from every
+"""The packages: one version everywhere, one licence, and the same seven commands from every
 way of installing them (the Rust binaries, which PyPI's wheels, the release archives and the
 installers carry)."""
 import os
@@ -8,7 +8,7 @@ import unittest
 
 from helpers import REPO
 
-COMMANDS = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"]
+COMMANDS = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k"]
 CLI_WINGET = ("hatcheck.Hatcheck.CLI.yaml", "hatcheck.Hatcheck.CLI.installer.yaml", "hatcheck.Hatcheck.CLI.locale.en-US.yaml")
 
 

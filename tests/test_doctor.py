@@ -8,7 +8,7 @@ import unittest
 
 from helpers import ENGINE, WINDOWS, FakeHome, write
 
-SIX = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"]
+SIX = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k"]
 
 
 class Doctor(unittest.TestCase):
@@ -47,8 +47,8 @@ class Doctor(unittest.TestCase):
         self.assertEqual(code, 1, out)  # something to fix
         self.assertRegex(out, r"^This is hatcheck \d+\.\d+\.\d+, built in ")
         self.assertIn("Installs of hatcheck on your PATH, the first of each name running:", out)
-        self.assertRegex(out, r"1\. uv: ~/\.local/bin -> ~/\.local/share/uv/tools/hatcheck/bin +\d+\.\d+\.\d+ +all six commands; runs")
-        self.assertRegex(out, r"2\. Homebrew: \S+/homebrew/bin -> \S+/Cellar/hatcheck/0\.3\.0/bin +\d+\.\d+\.\d+ +all six commands; shadowed")
+        self.assertRegex(out, r"1\. uv: ~/\.local/bin -> ~/\.local/share/uv/tools/hatcheck/bin +\d+\.\d+\.\d+ +all seven commands; runs")
+        self.assertRegex(out, r"2\. Homebrew: \S+/homebrew/bin -> \S+/Cellar/hatcheck/0\.3\.0/bin +\d+\.\d+\.\d+ +all seven commands; shadowed")
         self.assertIn("To remove Homebrew's: brew uninstall hatcheck", out)
         self.assertIn("To fix: 2 installs of hatcheck are on your PATH; keep one.", out)
         code, out = self.doctor([brew, uv])  # the other way round
@@ -96,7 +96,7 @@ class Doctor(unittest.TestCase):
         d = json.loads(out)
         self.assertEqual(d["version"], 1)
         self.assertEqual(d["this"]["version"], re.match(r"\S+ (\S+)", h.run("--version")[1]).group(1))
-        self.assertEqual([a["agent"] for a in d["agents"]], ["claude", "codex", "agy"])
+        self.assertEqual([a["agent"] for a in d["agents"]], ["claude", "codex", "agy", "kimi", "zcode"])
         claude = d["agents"][0]["copies"][0]
         self.assertEqual((claude["version"], claude["runs"], claude["runnable"]), ("2.1.303 (Claude Code)", True, True))
         self.assertEqual(d["agents"][1]["copies"], [])

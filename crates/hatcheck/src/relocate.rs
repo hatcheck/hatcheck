@@ -300,6 +300,33 @@ fn plan(old: &str, new: &str) -> Plan {
             }
         }
     }
+    // Kimi files a session under a hash of the folder and keeps the folder in its state and
+    // index; ZCode keeps it in its database. Both stay as they are.
+    for home in paths::find_kimi_homes() {
+        for x in crate::kimi::sessions(&home) {
+            let ran_there = s(get(&x.state, "cwd")).is_some_and(|c| mapped(c, old, new).is_some());
+            if ran_there {
+                plan.skips.push(Skip {
+                    agent: Agent::Kimi,
+                    profile: home.clone(),
+                    id: x.id.clone(),
+                    why: "is filed under a hash of the folder, which stays as it was".into(),
+                });
+            }
+        }
+    }
+    for root in paths::find_zcode_roots() {
+        for row in crate::zcode::rows(&root) {
+            if mapped(&row.directory, old, new).is_some() {
+                plan.skips.push(Skip {
+                    agent: Agent::Zcode,
+                    profile: root.clone(),
+                    id: row.id.clone(),
+                    why: "keeps the folder in zcode's database, which stays as it was".into(),
+                });
+            }
+        }
+    }
     let bindings = paths::load_bindings();
     plan.binding = bindings
         .keys()
@@ -334,6 +361,7 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
             }
             Agent::Agy => crate::agy::session_open(&m.profile, &m.id)
                 .then(|| crate::agy::holder(&m.profile).to_string()),
+            Agent::Kimi | Agent::Zcode => None, // never moved: skipped in plan()
         };
         if let Some(whom) = open {
             why.push(format!(
@@ -412,7 +440,7 @@ fn rewrite(m: &Move, check: bool) -> Result<usize, Stop> {
             {
                 record.get_mut("payload")
             }
-            Agent::Codex | Agent::Agy => None,
+            Agent::Codex | Agent::Agy | Agent::Kimi | Agent::Zcode => None,
         };
         let Some(Value::Object(fields)) = holder else {
             continue;
@@ -706,7 +734,25 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 ));
             }
         }
-        let alike = plan.skips.iter().any(|k| k.agent != Agent::Agy);
+        // Claude Code's and Codex's skips are sessions in folders named alike; the other
+        // agents' are sessions that stay where they are.
+        let alike = plan
+            .skips
+            .iter()
+            .any(|k| matches!(k.agent, Agent::Claude | Agent::Codex));
+        let mut stayers: Vec<&str> = Vec::new();
+        for k in &plan.skips {
+            if !matches!(k.agent, Agent::Claude | Agent::Codex)
+                && !stayers.contains(&k.agent.name())
+            {
+                stayers.push(k.agent.name());
+            }
+        }
+        let staying = match stayers.len() {
+            0 => String::new(),
+            1 => format!("{}'s", stayers[0]),
+            n => format!("{} and {}'s", stayers[..n - 1].join("'s, "), stayers[n - 1]),
+        };
         return fail(&format!(
             "No sessions {}ran in {}{}",
             if plan.skips.is_empty() {
@@ -716,11 +762,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             },
             paths::shell_path(&old),
             if alike {
-                " (only in folders named alike)"
+                " (only in folders named alike)".to_string()
             } else if !plan.skips.is_empty() {
-                " (only Antigravity CLI's, which stay as they are)"
+                format!(" (only {staying}, which stay as they are)")
             } else {
-                ""
+                String::new()
             }
         ));
     }

@@ -507,3 +507,169 @@ FakeHome.agy_root = _agy_root
 FakeHome.agy_session = _agy_session
 FakeHome.fake_agy = _fake_agy
 FakeHome.agy_runs = _agy_runs
+
+
+# Kimi Code CLI (kimi): a home as kimi 2.2.0 keeps it, with sessions in kimi's own shape.
+
+def kimi_wd_key(cwd):
+    """The folder kimi files a working directory's sessions under: wd_<name>_<sha256[:12]>."""
+    import hashlib
+    return "wd_%s_%s" % (os.path.basename(cwd), hashlib.sha256(cwd.encode("utf-8")).hexdigest()[:12])
+
+
+def _kimi_home(self, name="default", signed_in=False, expires=None):
+    """A Kimi home (~/.kimi-code or ~/.kimi-code-NAME), with an empty sessions/ folder; signed in,
+    with the token file kimi's own store writes, when asked. The token has expired unless
+    `expires` says otherwise, so nothing asks the API."""
+    path = os.path.join(self.home, ".kimi-code" if name == "default" else ".kimi-code-" + name)
+    os.makedirs(os.path.join(path, "sessions"), exist_ok=True)
+    if signed_in:
+        write(os.path.join(path, "credentials", "kimi-code.json"), json.dumps({
+            "access_token": "kimi-test-token", "refresh_token": "x", "expires_at": int(expires or NOW - 3600),
+            "scope": "", "token_type": "Bearer", "expires_in": 0}, indent=2) + "\n")
+    return path
+
+
+def _kimi_session(self, home, cwd, sid, title, minutes_ago=5, model="kimi-code/k3", indexed=True, extra=()):
+    """A session as kimi keeps one: its folder under the working directory's key, state.json,
+    the main agent's wire with your prompt, a reply that thinks and calls a tool, the tool's
+    output and the final reply, and its line in the home's index. Returns the folder."""
+    when = NOW - minutes_ago * 60
+    start = when - 60
+    ms = lambda t: int(t * 1000)
+    folder = os.path.join(home, "sessions", kimi_wd_key(cwd), "session_" + sid)
+    main = os.path.join(folder, "agents", "main")
+    pid = "msg_01TESTPROMPT"
+    tool = "tool_TEST0001"
+
+    def ev(etype, t, **fields):
+        return json.dumps(dict({"type": etype}, **fields, time=ms(t)), separators=(",", ":"))  # compact, as kimi writes
+
+    def appended(t, message, meta):
+        return ev("agent.message.appended", t, message={"message": message, "meta": meta})
+
+    lines = [
+        json.dumps({"type": "metadata", "protocol_version": "1.5", "created_at": ms(start)}, separators=(",", ":")),
+        ev("runtime.set_binding", start, workspaceId=kimi_wd_key(cwd), runtimeId="local", agentId="main"),
+        ev("profile.bind", start, agentId="main", modelAlias=model, profileName="agent", thinkingEffort="high",
+           systemPrompt="You are Kimi Code CLI.", environmentDisclosure={"cwd": cwd}, agentsMdPaths=[],
+           activeToolNames=["Read", "Bash"], disallowedTools=[], subagents=[]),
+        ev("permission.set_mode", start, agentId="main", mode="default"),
+        appended(start + 1, {"role": "user", "content": [{"type": "text", "text": title}]},
+                 {"source": "input", "promptId": pid, "origin": {"kind": "user"}, "tracked": True,
+                  "createdAt": iso(start + 1), "userMessageId": pid}),
+        json.dumps({"turnId": 0, "queueItemId": pid, "type": "agent.turn.started", "time": ms(start + 1), "kind": "event"}, separators=(",", ":")),
+        ev("turn.prompt", start + 1, agentId="main", input=[{"type": "text", "text": title}], origin={"kind": "user"},
+           promptId=pid, turnId=0),
+        ev("context.append_message", start + 1, agentId="main",
+           message={"role": "user", "content": [{"type": "text", "text": title}], "id": pid, "toolCalls": [], "origin": {"kind": "user"}}),
+        ev("llm.request", start + 2, agentId="main", kind="loop", provider="openai", model=model.split("/")[-1], modelAlias=model,
+           thinkingEffort="high", thinkingKeep="all", maxTokens=1048576, toolSelect=False, messageCount=2, turnStep="0.1"),
+        appended(start + 3, {"role": "assistant", "content": [{"type": "think", "think": "kept to itself", "reasoningKey": "reasoning_content"}],
+                             "toolCalls": [{"type": "function", "id": tool, "name": "Bash", "arguments": json.dumps({"command": "ls src"})}]},
+                 {"model": {"provider": "agent-loop", "model": "agent-loop"}, "source": "llm",
+                  "usage": {"inputOther": 10, "output": 5, "inputCacheRead": 0, "inputCacheCreation": 0},
+                  "finish": {"finishReason": "tool_calls", "rawFinishReason": "tool_calls"}, "messageId": "chatcmpl-test1"}),
+        appended(start + 4, {"role": "tool", "content": [{"type": "text", "text": "main.py\nutil.py\n"}], "toolCallId": tool},
+                 {"source": "tool"}),
+    ] + list(extra) + [
+        appended(when, {"role": "assistant", "content": [{"type": "text", "text": "Done: " + title}], "toolCalls": []},
+                 {"model": {"provider": "agent-loop", "model": "agent-loop"}, "source": "llm",
+                  "usage": {"inputOther": 10, "output": 5, "inputCacheRead": 0, "inputCacheCreation": 0},
+                  "finish": {"finishReason": "stop", "rawFinishReason": "stop"}, "messageId": "chatcmpl-test2"}),
+        json.dumps({"turnId": 0, "outcome": "done", "type": "agent.turn.ended", "time": ms(when), "kind": "event"}, separators=(",", ":")),
+        ev("turn.ended", when, agentId="main", turnId=0, reason="completed", durationMs=1000),
+        ev("prompt.completed", when, agentId="main", promptId=pid, finishedAt=iso(when), reason="completed"),
+    ]
+    write(os.path.join(main, "wire.jsonl"), "\n".join(lines) + "\n", mtime=when)
+    write(os.path.join(folder, "state.json"), json.dumps({
+        "id": "session_" + sid, "version": 2, "cwd": cwd, "createdAt": ms(start), "updatedAt": ms(when), "archived": False,
+        "agents": {"main": {"homedir": main, "type": "main"}}, "custom": {}, "lastPrompt": title, "title": title,
+        "titleKind": "replaceable", "lastTurnReason": "completed", "isCustomTitle": False}, separators=(",", ":")),
+        mtime=when)
+    if indexed:
+        with open(os.path.join(home, "session_index.jsonl"), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"sessionId": "session_" + sid, "sessionDir": folder, "workDir": cwd}, separators=(",", ":")) + "\n")
+    return folder
+
+
+FakeHome.kimi_home = _kimi_home
+FakeHome.kimi_session = _kimi_session
+
+
+# ZCode (zcode): its data folder as ZCode 0.16.9 keeps it, the session database with the
+# tables hatcheck reads.
+
+ZCODE_SCHEMA = [
+    "CREATE TABLE session (id text primary key, project_id text not null, workspace_id text, parent_id text, slug text not null, "
+    "directory text not null, path text, title text not null, version text not null, share_url text, summary_additions integer, "
+    "summary_deletions integer, summary_files integer, summary_diffs text, revert text, permission text, time_created integer not null, "
+    "time_updated integer not null, time_compacting integer, time_archived integer, task_type text not null default 'interactive', "
+    "title_source text not null default 'first_input', title_message_id text, time_title_updated integer, trace_id text)",
+    "CREATE TABLE message (id text primary key, session_id text not null references session(id) on delete cascade, "
+    "time_created integer not null, time_updated integer not null, data text not null, sequence integer)",
+    "CREATE TABLE part (id text primary key, message_id text not null references message(id) on delete cascade, session_id text not null, "
+    "time_created integer not null, time_updated integer not null, data text not null, sequence integer)",
+    "CREATE TABLE schema_migration (id text primary key, checksum text not null, app_version text, time_applied integer not null)",
+]
+
+
+def _zcode_root(self):
+    """ZCode's data folder, ~/.zcode, with an empty session database."""
+    import sqlite3
+    root = os.path.join(self.home, ".zcode")
+    os.makedirs(os.path.join(root, "cli", "db"), exist_ok=True)
+    os.makedirs(os.path.join(root, "cli", "artifacts"), exist_ok=True)
+    db = sqlite3.connect(os.path.join(root, "cli", "db", "db.sqlite"))
+    for statement in ZCODE_SCHEMA:
+        db.execute(statement)
+    db.execute("INSERT INTO schema_migration VALUES ('0022_backfilled_session_reasoning', 'x', '0.16.5', ?)", (int(NOW * 1000),))
+    db.commit()
+    db.close()
+    return root
+
+
+def _zcode_session(self, root, cwd, sid, title, minutes_ago=5, parent=None, task_type="interactive", artifacts=False):
+    """A session as ZCode keeps one: its row, your message, and a reply made of reasoning, a tool
+    call with its output, and text, as part rows. `parent` makes it one zcode ran itself."""
+    import sqlite3
+    when = NOW - minutes_ago * 60
+    start = when - 60
+    ms = lambda t: int(t * 1000)
+    full = "sess_" + sid
+    db = sqlite3.connect(os.path.join(root, "cli", "db", "db.sqlite"))
+    db.execute("INSERT INTO session (id, project_id, parent_id, slug, directory, title, version, time_created, time_updated, task_type) "
+               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+               (full, "proj_" + re.sub(r"[^a-z0-9]+", "-", cwd.lower()).strip("-"), parent and "sess_" + parent, full, cwd, title,
+                "0.16.5", ms(start), ms(when), task_type))
+    model = {"providerID": "builtin:zai-coding-plan", "modelID": "GLM-5.3"}
+
+    def message(mid, t, data):
+        db.execute("INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)",
+                   (mid, full, ms(t), ms(t), json.dumps(data)))
+
+    def part(pid, mid, t, data, sequence):
+        db.execute("INSERT INTO part (id, message_id, session_id, time_created, time_updated, data, sequence) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   (pid, mid, full, ms(t), ms(t), json.dumps(data), sequence))
+
+    message("msg_u1_" + sid[:8], start, {"role": "user", "time": {"created": ms(start)}, "agent": "zcode-agent", "model": model})
+    part("prt_u1_" + sid[:8], "msg_u1_" + sid[:8], start, {"type": "text", "text": title}, 1)
+    message("msg_a1_" + sid[:8], when, dict({"role": "assistant", "time": {"created": ms(start + 1), "completed": ms(when)},
+                                              "parentID": "msg_u1_" + sid[:8], "agent": "zcode-agent", "path": {"cwd": cwd, "root": cwd},
+                                              "finish": "stop"}, **model))
+    part("prt_a0_" + sid[:8], "msg_a1_" + sid[:8], start + 1, {"type": "step-start"}, 1)
+    part("prt_a1_" + sid[:8], "msg_a1_" + sid[:8], start + 2, {"type": "reasoning", "text": "kept to itself"}, 2)
+    part("prt_a2_" + sid[:8], "msg_a1_" + sid[:8], start + 3, {"type": "tool", "callID": "call_test1", "tool": "Bash",
+         "state": {"status": "completed", "input": {"command": "ls src", "description": "List"}, "output": "main.py\nutil.py\n"}}, 3)
+    part("prt_a3_" + sid[:8], "msg_a1_" + sid[:8], when, {"type": "text", "text": "Done: " + title,
+         "time": {"start": ms(start + 4), "end": ms(when)}}, 4)
+    part("prt_a4_" + sid[:8], "msg_a1_" + sid[:8], when, {"type": "step-finish", "reason": "stop", "cost": 0}, 5)
+    db.commit()
+    db.close()
+    if artifacts:
+        write(os.path.join(root, "cli", "artifacts", full, "call_test1-tool-result-x.json"), json.dumps({"output": "main.py\n"}))
+    return full
+
+
+FakeHome.zcode_root = _zcode_root
+FakeHome.zcode_session = _zcode_session

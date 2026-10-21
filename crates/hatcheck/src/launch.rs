@@ -1,5 +1,5 @@
-//! cl, cx, claude-z and claude-k: Claude Code with a profile's folder (or on Z.ai or Kimi),
-//! and Codex with a home's:
+//! cl, cx, ck, claude-z and claude-k: Claude Code with a profile's folder (or on Z.ai or
+//! Kimi), Codex with a home's, and Kimi Code CLI with a home's:
 //!
 //! ```text
 //! cl [-z|-k] <profile> [claude args...]    Claude Code with ~/.claude-<profile>
@@ -7,17 +7,18 @@
 //! claude-k [claude args...]                CLAUDE_CONFIG_DIR (claude-k: Kimi);
 //!                                          claude-z reconfig sets up the key
 //! cx <profile> [codex args...]             Codex with ~/.codex-<profile>
+//! ck <profile> [kimi args...]              Kimi Code CLI with ~/.kimi-code-<profile>
 //! ```
 //!
 //! Without a profile name, in a folder tied to one with hatcheck bind, they use that one.
 //! The hatcheck binary runs as one of them when it's called by its name (a link named cl)
-//! or with --as cl; the cl, cx, claude-z and claude-k binaries are only this.
+//! or with --as cl; the cl, cx, ck, claude-z and claude-k binaries are only this.
 
 use crate::agent::Agent;
 use crate::{ospath, out, paths, provider, py};
 
 /// The launchers' names.
-pub const NAMES: [&str; 4] = ["cl", "cx", "claude-z", "claude-k"];
+pub const NAMES: [&str; 5] = ["cl", "cx", "ck", "claude-z", "claude-k"];
 
 /// Codex's own commands, which cx doesn't take for a home's name unless ~/.codex-<it> exists.
 const CODEX_COMMANDS: [&str; 29] = [
@@ -52,6 +53,29 @@ const CODEX_COMMANDS: [&str; 29] = [
     "help",
 ];
 
+/// Kimi's own commands, which ck doesn't take for a home's name unless ~/.kimi-code-<it>
+/// exists (kimi 2.2.0).
+const KIMI_COMMANDS: [&str; 18] = [
+    "export",
+    "fork",
+    "provider",
+    "session",
+    "acp",
+    "web",
+    "server",
+    "rc",
+    "remote",
+    "login",
+    "doctor",
+    "vis",
+    "install-desktop",
+    "app",
+    "migrate",
+    "upgrade",
+    "update",
+    "help",
+];
+
 /// What changes in the agent's environment, in order: (name, value), or None to unset it.
 type Changes = Vec<(String, Option<String>)>;
 
@@ -61,6 +85,7 @@ pub fn main(name: &str, args: Vec<String>) -> i32 {
     out::setup_console();
     match name {
         "cx" => cx(args),
+        "ck" => ck(args),
         "claude-z" => cl(args, "claude-z", Some("z")),
         "claude-k" => cl(args, "claude-k", Some("k")),
         _ => cl(args, "cl", None),
@@ -90,10 +115,10 @@ fn use_bound(changes: &mut Changes, variable: &str, base: &str, name: &str) {
 /// Run the agent with args, in place of this process where the system allows.
 fn run(me: &str, program: &str, args: &[String], changes: &Changes) -> i32 {
     let Some(path) = ospath::which(program) else {
-        let what = if program == "codex" {
-            "Codex"
-        } else {
-            "Claude Code"
+        let what = match program {
+            "codex" => "Codex",
+            "kimi" => "Kimi Code CLI",
+            _ => "Claude Code",
         };
         return out::fail(&format!(
             "{me}: {program} isn't on your PATH; install {what} first"
@@ -238,6 +263,58 @@ fn cx(mut args: Vec<String>) -> i32 {
     run("cx", "codex", &args, &changes)
 }
 
+/// ck <profile> [kimi args...]: Kimi Code CLI with ~/.kimi-code-<profile>, as cx runs Codex
+/// with a home. The folder is made first, so a new home starts with `ck <name> login`.
+fn ck(mut args: Vec<String>) -> i32 {
+    let mut changes = Changes::new();
+    let home = paths::home();
+    let base = Agent::Kimi.base();
+    let first = args.first().cloned().unwrap_or_default();
+    let named = !first.is_empty()
+        && !first.starts_with('-')
+        && (!KIMI_COMMANDS.contains(&first.as_str())
+            || ospath::isdir(&ospath::join(&home, &format!("{base}-{first}"))));
+    match if named { None } else { bound(Agent::Kimi) } {
+        Some(name) => {
+            use_bound(&mut changes, "KIMI_CODE_HOME", base, &name);
+            out::eprint(&format!("ck: this folder is bound to {name}\n"));
+        }
+        None => {
+            if !named {
+                if !first.is_empty() && !first.starts_with('-') {
+                    // a Kimi command, with no home of that name
+                    out::eprint(&format!(
+                        "ck: {first} is a Kimi command, not a home's name; run it with a home \
+                         (ck <profile> {first} ...)\n"
+                    ));
+                }
+                out::eprint(
+                    "usage: ck <profile> [kimi args...]  (uses ~/.kimi-code-<profile>)\n   \
+                     or tie this folder to a home with: hatcheck bind <profile>\n",
+                );
+                return 2;
+            }
+            let name = args.remove(0);
+            let dir = ospath::join(&home, &format!("{base}-{name}"));
+            changes.push(("KIMI_CODE_HOME".into(), Some(dir)));
+        }
+    }
+    if ospath::which("kimi").is_none() {
+        return out::fail("ck: kimi isn't on your PATH; install Kimi Code CLI first");
+    }
+    // The KIMI_CODE_HOME it runs with: the one set here, or the one it was given.
+    let kimi_home = match changes.iter().rev().find(|(k, _)| k == "KIMI_CODE_HOME") {
+        Some((_, value)) => value.clone(),
+        None => std::env::var("KIMI_CODE_HOME").ok(),
+    };
+    if let Some(dir) = kimi_home.filter(|d| !d.is_empty()) {
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            return out::fail(&format!("ck: couldn't make {dir}: {e}"));
+        }
+    }
+    run("ck", "kimi", &args, &changes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +323,7 @@ mod tests {
     fn codex_commands_as_cx_lists_them() {
         assert_eq!(CODEX_COMMANDS.len(), 29);
         assert!(CODEX_COMMANDS.contains(&"resume") && !CODEX_COMMANDS.contains(&"work"));
+        assert_eq!(KIMI_COMMANDS.len(), 18);
+        assert!(KIMI_COMMANDS.contains(&"login") && !KIMI_COMMANDS.contains(&"work"));
     }
 }

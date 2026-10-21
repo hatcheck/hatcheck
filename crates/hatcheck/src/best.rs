@@ -342,8 +342,8 @@ fn wait_state(w: &Waiting, by_agent: &[(Agent, Vec<Ranked>)]) -> Result<Option<f
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Which account to use now, and where to carry a session. Advice only: it never starts, moves or switches anything.")
         .option(&["--for"], "session", "SESSION", "where to carry this session: the hatcheck move command for the best other account")
-        .flag(&["--cached"], "cached", "don't call the APIs; use the snapshots Claude Code and Codex last saved, and hatcheck's last reading of agy's /usage")
-        .maybe(&["--wait"], "wait", "PROFILE", "", "wait until an account has room, then answer: any Claude Code account, PROFILE's (NAME, default, codex, codex:NAME, agy), or with --for one of the session's agent");
+        .flag(&["--cached"], "cached", "don't call the APIs; use the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
+        .maybe(&["--wait"], "wait", "PROFILE", "", "wait until an account has room, then answer: any Claude Code account, PROFILE's (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME), or with --for one of the session's agent");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
@@ -384,6 +384,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             args.flag("cached"),
             &paths::find_codex_homes(),
             &paths::find_agy_roots(),
+            &paths::find_kimi_homes(),
         )
     };
     let mut now = times::now();

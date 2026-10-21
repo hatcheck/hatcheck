@@ -17,7 +17,7 @@ use serde_json::{json, Value};
 use std::time::Duration;
 
 /// hatcheck's commands, as the installers put them on the PATH.
-pub const COMMANDS: [&str; 6] = ["hatcheck", "hat", "cl", "cx", "claude-z", "claude-k"];
+pub const COMMANDS: [&str; 7] = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k"];
 /// How long a program may take to say its version.
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -352,6 +352,8 @@ fn agent_origin(agent: Agent, f: &Found) -> &'static str {
         Agent::Agy if lower.ends_with("/.local/bin/agy") || lower.contains("/agy/bin/") => {
             "the agy installer"
         }
+        Agent::Kimi if lower.contains("/.kimi-code/bin/") => "the Kimi Code installer",
+        Agent::Zcode if lower.contains("zcode") && lower.contains(".app/") => "the ZCode app",
         _ => "",
     }
 }
@@ -630,7 +632,7 @@ fn describe(r: &Report) {
     }
     let n = |names: &[String]| {
         if names.len() == COMMANDS.len() {
-            "all six commands".to_string()
+            "all seven commands".to_string()
         } else {
             names.join(", ")
         }

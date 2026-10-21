@@ -101,8 +101,31 @@ pub fn find_agy_stores() -> Vec<String> {
     crate::agy::find_stores()
 }
 
-/// The folder an agent uses when no profile is named: ~/.claude, ~/.codex, or
-/// ~/.gemini/antigravity-cli.
+/// Every Kimi home with sessions: ~/.kimi-code and ~/.kimi-code-* (see kimi.rs).
+pub fn find_kimi_homes() -> Vec<String> {
+    crate::kimi::find_homes()
+}
+
+/// ZCode's data folder, when it has sessions: ~/.zcode (see zcode.rs).
+pub fn find_zcode_roots() -> Vec<String> {
+    crate::zcode::find_roots()
+}
+
+/// Every profile, home and data folder of every agent, as (agent, folder).
+pub fn find_all() -> Vec<(Agent, String)> {
+    let mut all: Vec<(Agent, String)> = find_profiles()
+        .into_iter()
+        .map(|p| (Agent::Claude, p))
+        .collect();
+    all.extend(find_codex_homes().into_iter().map(|h| (Agent::Codex, h)));
+    all.extend(find_agy_stores().into_iter().map(|r| (Agent::Agy, r)));
+    all.extend(find_kimi_homes().into_iter().map(|h| (Agent::Kimi, h)));
+    all.extend(find_zcode_roots().into_iter().map(|r| (Agent::Zcode, r)));
+    all
+}
+
+/// The folder an agent uses when no profile is named: ~/.claude, ~/.codex,
+/// ~/.gemini/antigravity-cli, ~/.kimi-code or ~/.zcode.
 pub fn default_folder(agent: Agent) -> String {
     match agent {
         Agent::Agy => crate::agy::default_root(),
@@ -404,6 +427,60 @@ impl Shell {
         }
         format!("HOME={} agy{tail}", self.shell_path(&home_of))
     }
+
+    /// The command that runs Kimi Code CLI with a home, then tail: kimi for ~/.kimi-code,
+    /// ck <name> for ~/.kimi-code-<name>.
+    pub fn kimi_command(&self, home_dir: &str, tail: &str, full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        if self.is_default(home_dir, Agent::Kimi.base()) {
+            return format!("kimi{tail}");
+        }
+        let (parent, name) = self.parent_and_name(home_dir);
+        if !full && parent == self.home {
+            if let Some(short) = name.strip_prefix(&format!("{}-", Agent::Kimi.base())) {
+                return format!("ck {}{tail}", self.quote(short));
+            }
+        }
+        if self.powershell {
+            return format!(
+                "$env:KIMI_CODE_HOME={}; kimi{tail}; $env:KIMI_CODE_HOME=$null",
+                self.ps_dir(home_dir)
+            );
+        }
+        format!("KIMI_CODE_HOME={} kimi{tail}", self.shell_path(home_dir))
+    }
+
+    /// The command that runs ZCode with a data folder, then tail: zcode for ~/.zcode. Only HOME
+    /// moves the folder, so another (~/.zcode-NAME/.zcode) is run with that as HOME (USERPROFILE
+    /// on Windows), as agy's are.
+    pub fn zcode_command(&self, root: &str, tail: &str, _full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        // <home>/.zcode: the home folder is one folder up.
+        let home_of = self.parent_and_name(root).0;
+        let here = if self.as_written {
+            home_of == self.home
+        } else {
+            ospath::realpath(&home_of) == ospath::realpath(&self.home)
+        };
+        if here {
+            return format!("zcode{tail}");
+        }
+        if self.powershell {
+            return format!(
+                "$env:USERPROFILE={}; zcode{tail}; $env:USERPROFILE=$null",
+                self.ps_dir(&home_of)
+            );
+        }
+        format!("HOME={} zcode{tail}", self.shell_path(&home_of))
+    }
 }
 
 /// A word for the shell commands are printed for: PowerShell's quoting there, else sh's.
@@ -462,12 +539,40 @@ pub fn agy_resume_command(root: &str, session_id: &str, full: bool) -> String {
     agy_command(root, &format!("--conversation {session_id}"), full)
 }
 
+pub fn kimi_command(home_dir: &str, tail: &str, full: bool) -> String {
+    Shell::here().kimi_command(home_dir, tail, full)
+}
+
+/// kimi --session session_<id>: the whole ID, as kimi names it.
+pub fn kimi_resume_command(home_dir: &str, session_id: &str, full: bool) -> String {
+    kimi_command(
+        home_dir,
+        &format!("--session {}", Agent::Kimi.full_id(session_id)),
+        full,
+    )
+}
+
+pub fn zcode_command(root: &str, tail: &str, full: bool) -> String {
+    Shell::here().zcode_command(root, tail, full)
+}
+
+/// zcode --resume sess_<id>: the whole ID, as zcode names it.
+pub fn zcode_resume_command(root: &str, session_id: &str, full: bool) -> String {
+    zcode_command(
+        root,
+        &format!("--resume {}", Agent::Zcode.full_id(session_id)),
+        full,
+    )
+}
+
 /// The command that starts an agent with a profile, home or data folder.
 pub fn start_command(agent: Agent, profile: &str, full: bool) -> String {
     match agent {
         Agent::Codex => codex_command(profile, "", full),
         Agent::Claude => claude_command(profile, "", full, None),
         Agent::Agy => agy_command(profile, "", full),
+        Agent::Kimi => kimi_command(profile, "", full),
+        Agent::Zcode => zcode_command(profile, "", full),
     }
 }
 
@@ -483,6 +588,8 @@ pub fn session_command(
         Agent::Claude => resume_command(profile, session_id, full, provider),
         Agent::Codex => codex_resume_command(profile, session_id, full),
         Agent::Agy => agy_resume_command(profile, session_id, full),
+        Agent::Kimi => kimi_resume_command(profile, session_id, full),
+        Agent::Zcode => zcode_resume_command(profile, session_id, full),
     }
 }
 
@@ -552,8 +659,8 @@ pub fn load_bindings() -> py::Dict {
     }
 }
 
-/// The folder a bound name stands for: default for ~/.claude or ~/.codex, NAME for
-/// ~/.claude-NAME or ~/.codex-NAME, or a path as it is.
+/// The folder a bound name stands for: default for ~/.claude, ~/.codex or ~/.kimi-code, NAME
+/// for ~/.claude-NAME, ~/.codex-NAME or ~/.kimi-code-NAME, or a path as it is.
 pub fn profile_folder(agent: Agent, name: &str) -> String {
     if name == "default" {
         return default_folder(agent);
@@ -565,6 +672,8 @@ pub fn profile_folder(agent: Agent, name: &str) -> String {
     match agent {
         // A home folder of its own, with agy's data where agy keeps it under a home folder.
         Agent::Agy => ospath::join_all(&folder, &crate::agy::ROOT),
+        // The same for ZCode: ~/.zcode-NAME/.zcode.
+        Agent::Zcode => ospath::join(&folder, Agent::Zcode.base()),
         _ => folder,
     }
 }
@@ -789,6 +898,44 @@ mod tests {
             ),
             "$env:USERPROFILE=\"$HOME\\.agy-work\"; agy -c; $env:USERPROFILE=$null"
         );
+    }
+
+    #[test]
+    fn kimi_and_zcode_commands() {
+        let s = Shell {
+            home: "/home/me".into(),
+            windows: false,
+            powershell: false,
+            as_written: true,
+        };
+        assert_eq!(s.kimi_command("/home/me/.kimi-code", "", false), "kimi");
+        assert_eq!(
+            s.kimi_command("/home/me/.kimi-code-work", "--session session_1", false),
+            "ck work --session session_1"
+        );
+        assert_eq!(
+            s.kimi_command("/home/me/.kimi-code-work", "--session session_1", true),
+            "KIMI_CODE_HOME=~/.kimi-code-work kimi --session session_1"
+        );
+        assert_eq!(
+            s.kimi_command("/srv/p/.kimi-code-x", "login", false),
+            "KIMI_CODE_HOME=/srv/p/.kimi-code-x kimi login"
+        );
+        assert_eq!(s.zcode_command("/home/me/.zcode", "-c", false), "zcode -c");
+        assert_eq!(
+            s.zcode_command("/home/me/.zcode-work/.zcode", "-c", false),
+            "HOME=~/.zcode-work zcode -c"
+        );
+        let w = windows(true);
+        assert_eq!(
+            w.kimi_command("C:\\Users\\me\\.kimi-code-work", "--session session_1", true),
+            "$env:KIMI_CODE_HOME=\"$HOME\\.kimi-code-work\"; kimi --session session_1; $env:KIMI_CODE_HOME=$null"
+        );
+        assert_eq!(
+            w.kimi_command("C:\\Users\\me\\.kimi-code-work", "", false),
+            "ck work"
+        );
+        assert_eq!(w.zcode_command("C:\\Users\\me\\.zcode", "", false), "zcode");
     }
 
     #[test]

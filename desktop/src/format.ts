@@ -6,7 +6,7 @@ let homeDir = "";
 /** The home folder, for printing paths as ~/...; guessed from the paths the engine gives. */
 export function learnHome(paths: string[]) {
   for (const p of paths) {
-    const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)[/\\]\.(claude|codex|gemini)/);
+    const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)[/\\]\.(claude|codex|gemini|kimi-code|zcode)/);
     if (m) {
       homeDir = m[1];
       return;
@@ -21,21 +21,26 @@ export function tilde(path: string | null | undefined): string {
   return homeDir && path.startsWith(homeDir) ? "~" + path.slice(homeDir.length) : path;
 }
 
-/** A profile's short name: default, work, codex, codex:work, agy, or its path. */
+/** A profile's short name: default, work, codex, codex:work, agy, kimi, kimi:work, zcode, or its path. */
 export function profileName(path: string): string {
   const base = path.split(/[/\\]/).pop() || path;
   if (base === ".claude") return "default";
   if (base === "antigravity-cli") return "agy";
   if (base === ".codex") return "codex";
+  if (base === ".kimi-code") return "kimi";
+  if (base === ".zcode") return "zcode";
   if (base.startsWith(".claude-")) return base.slice(".claude-".length);
   if (base.startsWith(".codex-")) return "codex:" + base.slice(".codex-".length);
+  if (base.startsWith(".kimi-code-")) return "kimi:" + base.slice(".kimi-code-".length);
   return tilde(path);
 }
 
-/** The agent's name: Claude, Codex or Antigravity; the long form says Claude Code and Antigravity CLI. */
+/** The agent's name: Claude, Codex, Antigravity, Kimi or ZCode; the long form says Claude Code, Antigravity CLI and Kimi Code CLI. */
 export function agentName(agent: Agent, long = false): string {
   if (agent === "codex") return "Codex";
   if (agent === "agy") return long ? "Antigravity CLI" : "Antigravity";
+  if (agent === "kimi") return long ? "Kimi Code CLI" : "Kimi";
+  if (agent === "zcode") return "ZCode";
   return long ? "Claude Code" : "Claude";
 }
 

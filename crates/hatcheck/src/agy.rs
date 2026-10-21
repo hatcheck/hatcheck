@@ -625,45 +625,8 @@ pub fn read_snapshot(root: &str) -> Option<(Value, f64)> {
     truthy(body).then(|| (body.clone(), saved))
 }
 
-// A conversation converted for agy: written as a file for agy to read, since nothing hatcheck
-// could write is a conversation agy would resume.
-
-/// Where converted conversations are written: cache/imports/<id>.md.
-pub fn imports_dir() -> String {
-    ospath::join(&facts::cache_dir(), "imports")
-}
-
-pub fn import_path(id: &str) -> String {
-    ospath::join(&imports_dir(), &format!("{id}.md"))
-}
-
-/// Write the conversation as Markdown, each turn under who said it and when: the file.
-pub fn write_import(conv: &Conversation, turns: &[Turn], id: &str) -> std::io::Result<String> {
-    let mut text = format!(
-        "# Conversation imported from {} session {}\n",
-        conv.agent.name(),
-        conv.id
-    );
-    for (role, texts, when) in turns {
-        let who = if role == "user" {
-            "You"
-        } else {
-            conv.agent.speaker()
-        };
-        let at = s(when)
-            .filter(|w| !w.is_empty())
-            .map_or(String::new(), |w| {
-                format!(" ({})", py::head(w, 16).replace('T', " "))
-            });
-        text += &format!("\n## {who}{at}\n\n{}\n", texts.join("\n\n"));
-    }
-    let path = import_path(id);
-    std::fs::create_dir_all(imports_dir())?;
-    let tmp = format!("{path}.hatcheck-tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, &path)?;
-    Ok(path)
-}
+// A conversation converted for agy: written as a file for agy to read (conv::write_import),
+// since nothing hatcheck could write is a conversation agy would resume.
 
 /// The first prompt agy gets with an imported conversation: read the file, then go on.
 pub fn prompt(file: &str) -> String {
@@ -678,7 +641,7 @@ pub fn start_command(root: &str, file: &str, full: bool) -> String {
         root,
         &format!(
             "--add-dir {} -i {}",
-            paths::shell_path(&imports_dir()),
+            paths::shell_path(&crate::conv::imports_dir()),
             paths::quote(&prompt(file))
         ),
         full,

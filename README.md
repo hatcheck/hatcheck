@@ -9,12 +9,14 @@
 
 Several Claude accounts on one computer, each kept apart: isolated Claude Desktop instances on
 macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume commands across all
-of them. OpenAI's Codex CLI gets the same treatment, Google's Antigravity CLI (`agy`) is read
-beside them, and sessions can be carried between the three.
+of them. OpenAI's Codex CLI and Moonshot's Kimi Code CLI get the same treatment, Google's
+Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them, and sessions can be carried between
+all five.
 
-*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI or Google. Claude, Claude
-Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI;
-Antigravity and Gemini are trademarks of Google LLC.*
+*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI or
+Z.ai. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are
+trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's and
+ZCode and GLM are Z.ai's.*
 
 On macOS, `hatcheck desktop` runs **one Claude Desktop per account, side by side**, a personal one
 and a work one, say: each with its own data folder and login, and a launcher in a colour you pick,
@@ -27,8 +29,9 @@ the launchers.
 
 It also has **command-line tools for Claude Code, [Codex](https://github.com/openai/codex) and
 [Antigravity CLI](https://antigravity.google/docs/cli/)**, for keeping one profile per account:
-`cl` and `cx` run Claude Code and Codex with a profile, and `hatcheck` lists the recent sessions
-in all of them, with the command that resumes each one and what's left of each plan. The rest
+`cl`, `cx` and `ck` run Claude Code, Codex and Kimi Code CLI with a profile, and `hatcheck` lists
+the recent sessions in all of them, with the command that resumes each one and what's left of each
+plan. The rest
 of the commands find, show, carry and convert sessions between the accounts and the agents, tie
 folders to accounts, and check how everything is installed: see
 [the tour](#claude-code-codex-and-antigravity-cli) below, and
@@ -44,7 +47,7 @@ account apart, and knowing which one each session ran on. See [Rules it keeps](#
 |                                 | macOS | Linux | Windows |
 |---------------------------------|:-----:|:-----:|:-------:|
 | Claude Desktop instances        |  yes  | no official Desktop app | [planned](#roadmap) |
-| Claude Code, Codex and Antigravity CLI tools |  yes  |  yes  |   yes   |
+| Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode tools |  yes  |  yes  |   yes   |
 
 ---
 
@@ -84,12 +87,15 @@ above, though sessions from Desktop's Code tab can be filed in them too (the ses
 hides those unless you pass `--all`). Codex works the same way with `CODEX_HOME`: see
 [`cx`](docs/agents.md#cx-run-codex-with-a-home-per-account). Antigravity CLI keeps everything under
 `~/.gemini/antigravity-cli`, which only `HOME` moves, so hatcheck reads that one folder: see
-[Antigravity CLI](docs/agents.md#antigravity-cli-agy).
+[Antigravity CLI](docs/agents.md#antigravity-cli-agy). Kimi Code CLI works like Codex, with
+`KIMI_CODE_HOME` and one home per account (`~/.kimi-code-work`), which [`ck`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account)
+runs it with, and ZCode keeps its sessions in a database under `~/.zcode`, which only `HOME`
+moves: see [Kimi Code CLI](docs/agents.md#kimi-code-cli-kimi) and [ZCode](docs/agents.md#zcode-zcode).
 
 ### Install
 
 One binary per platform, with no Python needed. Each of these installs `hatcheck`, `hat`, `cl`,
-`cx`, `claude-z` and `claude-k`:
+`cx`, `ck`, `claude-z` and `claude-k`:
 
 ```bash
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
@@ -121,6 +127,7 @@ Each is documented as it is, with its options and what it prints, in
 |---|---|
 | [`cl work --resume <id>`](docs/agents.md#cl-run-claude-code-with-a-profile) | Claude Code with `~/.claude-work`; `cl -z` and `cl -k` run it on Z.ai or Kimi there |
 | [`cx work resume <id>`](docs/agents.md#cx-run-codex-with-a-home-per-account) | Codex with `~/.codex-work` |
+| [`ck work --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-work` |
 | [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day, in every profile, home and folder, each with its resume command and what's left of its plan |
 | [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable |
 | [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | which account to use now, or to carry a session to; `--wait` sleeps until one has room |
@@ -137,7 +144,9 @@ Each is documented as it is, with its options and what it prints, in
 
 `hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`.
 [Antigravity CLI](docs/agents.md#antigravity-cli-agy) sessions are listed, shown and converted
-from its one folder, with what its `/usage` reports; [`claude-z` and `claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
+from its one folder, with what its `/usage` reports; [Kimi Code CLI](docs/agents.md#kimi-code-cli-kimi)
+sessions are listed, shown, converted and moved between its homes, and [ZCode](docs/agents.md#zcode-zcode)'s
+are listed, shown and converted from its database; [`claude-z` and `claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
 run Claude Code on Z.ai's or Kimi's models in any profile.
 
 
@@ -145,9 +154,9 @@ run Claude Code on Z.ai's or Kimi's models in any profile.
 
 Each rule names the code that keeps it, so it can be checked rather than taken on trust.
 
-- **Not in the path.** Nothing of Hatcheck sits between an agent and its model. `cl` and `cx`
-  set `CLAUDE_CONFIG_DIR` or `CODEX_HOME` (and, for `cl -z` and `cl -k`, the provider variables
-  you set up) and run the agent in their place; nothing stays running
+- **Not in the path.** Nothing of Hatcheck sits between an agent and its model. `cl`, `cx` and
+  `ck` set `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `KIMI_CODE_HOME` (and, for `cl -z` and `cl -k`, the
+  provider variables you set up) and run the agent in their place; nothing stays running
   ([`launch.rs`](crates/hatcheck/src/launch.rs), `run`).
 - **No agent's config is rewritten**, except when you ask: `hatcheck bind --hook` adds one
   session-start hook to each profile's `settings.json`, each Codex home's `hooks.json` and
@@ -161,11 +170,15 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   never refreshed (`read_codex_login` and `fetch_codex_usage` there). For agy it never reads one
   either: agy's own `/usage` is run, after `agy models` has said agy is signed in, since asked
   without a sign-in agy would start one ([`agy.rs`](crates/hatcheck/src/agy.rs), `run_usage` and
-  `signed_in`).
+  `signed_in`). For Kimi, the home's `credentials/kimi-code.json` token is sent only to Kimi's
+  usage endpoint, the one kimi's own `/usage` asks, as it is, and never refreshed
+  ([`kimi.rs`](crates/hatcheck/src/kimi.rs), `read_login`; `usage.rs`, `fetch_kimi_usage`). For
+  ZCode it reads none, and reads no usage: zcode has no usage command.
 - **Nothing leaves your computer** except those usage requests: Claude Code's to Anthropic, one
-  to ChatGPT per Codex account, and agy's own `/usage` to Google, with the model list agy fetches
-  first to say it's signed in. `CODEX_USAGE_URL` in `usage.rs` is the one address the
-  binary itself calls; `--cached` and `--no-usage` make none. The Z.ai and Kimi endpoints in
+  to ChatGPT per Codex account, one to Kimi per Kimi home, and agy's own `/usage` to Google, with
+  the model list agy fetches first to say it's signed in. `CODEX_USAGE_URL` in `usage.rs` and
+  `DEFAULT_USAGE_URL` and `GLOBAL_USAGE_URL` in `kimi.rs` are the only addresses the binary itself
+  calls; `--cached` and `--no-usage` make none. The Z.ai and Kimi endpoints in
   [`provider.rs`](crates/hatcheck/src/provider.rs) are handed to Claude Code, which calls them
   only when you run `cl -z` or `cl -k`.
 - **No automatic switching** between accounts. `hatcheck best` ranks and prints commands, and
@@ -179,7 +192,9 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   newer one, and is undone by moving the session back; `fork` keeps the original; `relocate`
   prints the command that undoes it; and all three have `--dry-run`, which runs every check and
   writes nothing ([`move_cmd.rs`](crates/hatcheck/src/move_cmd.rs),
-  [`relocate.rs`](crates/hatcheck/src/relocate.rs)).
+  [`relocate.rs`](crates/hatcheck/src/relocate.rs)). A Kimi session's line in kimi's index goes
+  with its folder ([`kimi.rs`](crates/hatcheck/src/kimi.rs), `index_add` and `index_remove`), and
+  ZCode's database is only ever read ([`zcode.rs`](crates/hatcheck/src/zcode.rs), `open`).
 
 Function names rather than line numbers, since lines move; `git grep` finds them.
 
@@ -205,8 +220,9 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 
 - **`crates/hatcheck/`**: hatcheck in Rust, the commands and the launchers. Its `src/` has a file per
   subcommand (`sessions.rs`, `usage.rs`, `move_cmd.rs`, `open_cmd.rs`, `desktop.rs` and the rest),
-  `launch.rs` for `cl`, `cx`, `claude-z` and `claude-k`, `agy.rs` for what it reads of Antigravity
-  CLI, `doctor.rs` for `hatcheck doctor`, and `src/bin/` for those binaries and `hat`.
+  `launch.rs` for `cl`, `cx`, `ck`, `claude-z` and `claude-k`, `agy.rs`, `kimi.rs` and `zcode.rs` for
+  what it reads and writes of Antigravity CLI, Kimi Code CLI and ZCode, `doctor.rs` for
+  `hatcheck doctor`, and `src/bin/` for those binaries and `hat`.
   Its own README is the crate's page on crates.io. It was ported from a Python version with the
   same output; see [docs/rust-port.md](docs/rust-port.md).
 - **`CHANGELOG.md`**: what changed in each release of the CLI; a release's notes on GitHub are its
@@ -220,8 +236,9 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 - **`site/`**: the landing page, one self-contained file, served at [hatcheck.dev](https://hatcheck.dev)
   from Cloudflare as static assets; `site/deploy.sh` ships it. The logo lives there too:
   `logo.svg` and `logo-dark.svg` (the mark), `logo-wordmark.svg` and `logo-wordmark-dark.svg`, `favicon.svg`.
-- **`docs/proposals/`**: the plans these came from: [the CLI features](docs/proposals/cli-features.md)
-  and [the desktop app](docs/proposals/desktop-app.md).
+- **`docs/proposals/`**: the plans these came from: [the CLI features](docs/proposals/cli-features.md),
+  [the desktop app](docs/proposals/desktop-app.md), [Antigravity CLI](docs/proposals/antigravity.md)
+  and [Kimi Code CLI and ZCode](docs/proposals/kimi-zcode.md).
 - **`docs/`**: [commands.md](docs/commands.md), [agents.md](docs/agents.md) and
   [install.md](docs/install.md), each command, agent and way of installing as it is;
   [desktop-instances.md](docs/desktop-instances.md) for the Desktop instances;
@@ -247,6 +264,11 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   then it reads `~/.gemini/antigravity-cli` only. The Antigravity app has the same one login,
   in the system keyring, shared with agy, so an instance of it with its own data folder would
   still be the same account; nothing for hatcheck to make until Google separates logins.
+- **ZCode.** Profiles need a variable from Z.ai that moves the session database (only `HOME` does
+  today), usage needs a usage command zcode doesn't have, and a session is never written into its
+  database, which the desktop app shares: a converted session is a file zcode is started on. If
+  Z.ai documents the import its desktop app uses or adds a `zcode import` command, hatcheck should
+  use that ([the proposal](docs/proposals/kimi-zcode.md) has the reasoning).
 - **Releases:** the CLI is on GitHub, the Homebrew tap, PyPI and crates.io from 0.2.0
   ([CHANGELOG.md](CHANGELOG.md)). Next are winget, then the app's installers, once its release
   workflow has its signing and updater secrets (`desktop.yml` lists them).
