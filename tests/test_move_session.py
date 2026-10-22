@@ -402,6 +402,35 @@ class MoveWithoutArguments(unittest.TestCase):
         code, out = h.run(SCRIPT, S1[:8], "claude", "--dry-run", cwd=self.api)
         self.assertIn("from %s to %s:" % (h.shown(self.work), h.shown(self.default)), out)
 
+    def test_a_profile_alone_takes_the_newest_session_here(self):
+        # One word that names a profile is where it goes, and the session is the newest started
+        # from this folder, as with nothing; a word that names no profile is a session's ID.
+        h = self.h
+        code, out = h.run(SCRIPT, "default", "--dry-run", cwd=self.api)
+        self.assertEqual(code, 0, out)
+        self.assertIn('Would move session 11111111 "Newest here" from %s to %s:' % (h.shown(self.work), h.shown(self.default)), out)
+        code, out = h.run("fork", "default", "--dry-run", cwd=self.api)
+        self.assertEqual(code, 0, out)
+        self.assertIn('Would fork session 11111111 "Newest here" from %s to %s' % (h.shown(self.work), h.shown(self.default)), out)
+        code, out = h.run(SCRIPT, "default", cwd=self.api)  # not a dry run: asked, so a script has to say both
+        self.assertEqual(code, 1, out)
+        self.assertIn("Say which session and where, when there's no terminal to ask: hatcheck move <session> <profile>", out)
+        code, out = h.run(SCRIPT, "nosuch", "--dry-run", cwd=self.api)  # names no profile: a session's ID
+        self.assertEqual(code, 1, out)
+        self.assertIn("No session starting with nosuch", out)
+        code, out = h.run(SCRIPT, "default", "--dry-run", cwd=h.folder("code", "quiet"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("No session was started from this folder. Give its ID: hatcheck move <session> <profile>", out)
+        # A word that starts a session's ID and names a profile that exists too is asked for more.
+        hex_named = h.profile("1111")
+        code, out = h.run(SCRIPT, "1111", "--dry-run", cwd=self.api)
+        self.assertEqual(code, 1, out)
+        self.assertIn("1111 starts a session's ID and names the profile %s; give more of the ID, or say both: "
+                      "hatcheck move <session> 1111" % h.shown(hex_named), out)
+        code, out = h.run(SCRIPT, "11111111", "1111", "--dry-run", cwd=self.api)  # both: as before
+        self.assertEqual(code, 0, out)
+        self.assertIn("to %s:" % h.shown(hex_named), out)
+
     def test_never_to_where_it_already_is(self):
         h = self.h
         quiet = h.folder("code", "quiet")

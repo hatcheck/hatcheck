@@ -241,6 +241,10 @@ Resume it now in ~/.claude-work? [y/N]
   copies, except inside Claude's thinking, whose signatures would stop matching.
 - A session that's open in a terminal is refused: quit it first, so it stops changing.
   `hatcheck` marks those `● open`.
+- `hatcheck move work`, with a profile alone, moves the newest session started from this folder
+  to `~/.claude-work`, after asking, as `hatcheck move` with nothing moves it to the folder's
+  Claude Code profile; `hatcheck fork work` forks it there the same way. A word that starts a
+  session's ID and names a profile that exists too is asked for more.
 - Resume it with the printed command, from the directory it ran in, or answer `y` when it asks and
   it starts Claude Code there with the new profile. It only asks in a terminal, so scripts never
   wait on it. The conversation comes across whole; the account and its plan limits, settings,
@@ -451,7 +455,7 @@ Resume it with:
 
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
-| `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder |
+| `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder. One word alone that names a profile or home that exists, and starts no session's ID, is `PROFILE` (`hatcheck move work`), with the session the newest started from this folder; a word that is both is asked for more |
 | `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, or a path; left out, this folder's bound Claude Code profile, or `~/.claude` |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
@@ -508,7 +512,7 @@ Resume it now in ~/.claude? [y/N]
 
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
-| `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder, as for `move` |
+| `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder, as for `move`, and one word alone that names a profile is `PROFILE`, as for `move` |
 | `PROFILE`        | where it goes, as for [`move`](#hatcheck-move-carry-on-a-session-with-another-profile); left out, this folder's Claude Code profile, after asking |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it, as for `move` |
 | `--dry-run`      | show what would be copied or converted, and change nothing                   |

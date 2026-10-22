@@ -19,6 +19,7 @@ Kimi Code CLI (`kimi`) and ZCode (`zcode`) join Claude Code, Codex and Antigravi
 
 ### Changed
 
+- **`hatcheck move work` and `hatcheck fork work`, with a profile alone:** the newest session started from this folder goes to that profile, after asking, as with nothing it goes to the folder's Claude Code profile. The word has to name a profile or home that exists and start no session's ID; one that does both is asked for more.
 - **The session list's heading** names each agent that has a profile, home or folder here: `Claude Code, Codex and Kimi Code CLI sessions`, and so on.
 
 ### Fixed

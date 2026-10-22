@@ -1366,11 +1366,33 @@ fn choose_target(
 
 /// Fill in what move or fork was given nothing for: the newest session started from this
 /// folder, and the folder's Claude Code profile (its bound one, or ~/.claude), which a terminal
-/// is asked to confirm; a dry run just says. A script, a pipe or --json has to say both.
+/// is asked to confirm; a dry run just says. A script, a pipe or --json has to say both. One
+/// word alone that names a profile or home that exists, and starts no session's ID, is where
+/// the newest session started here goes.
 fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
     let show = paths::shell_path;
     let cwd = ospath::cwd();
     let mut about = String::new();
+    if !a.session.is_empty() && a.profile.is_empty() {
+        let word = a.session.clone();
+        // What the word means for the session it would move, or for a Claude Code one when none
+        // started here, so a bare NAME can be the session's own agent's home.
+        let agent = crate::find::newest_here(&cwd, false).map_or(Agent::Claude, |s| s.agent);
+        let names = match Target::parse(&word).resolve(agent) {
+            Ok((_, folder)) => ospath::isdir(&folder).then_some(folder),
+            Err((own, _)) => Some(own),
+        };
+        if let Some(folder) = names {
+            if !crate::find::session_copies(&word).is_empty() {
+                return Err(format!(
+                    "{word} starts a session's ID and names the profile {}; give more of the ID, or say both: {prog} <session> {word}",
+                    show(&folder)
+                ));
+            }
+            a.profile = word;
+            a.session.clear();
+        }
+    }
     // Where the session is: (agent, folder) of each copy, to notice a move to where it already is.
     let mut copies: Vec<(Agent, String)> = Vec::new();
     if a.session.is_empty() {
@@ -2917,8 +2939,8 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session to another profile, to carry on with it there, or convert it for another agent. With nothing, the newest session started from this folder, to the folder's Claude Code profile, after asking.")
-        .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
+    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, to the folder's Claude Code profile; either after asking.")
+        .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
         .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, or a path (default: this folder's bound Claude Code profile, or ~/.claude)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
@@ -2954,8 +2976,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 /// hatcheck fork SESSION PROFILE ...: bring a session into another profile as a new one, with its
 /// own ID, and keep the original; for the other agent, convert it, as move does.
 pub fn fork_main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With nothing, the newest session started from this folder, into the folder's Claude Code profile, after asking.")
-        .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
+    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, into the folder's Claude Code profile; either after asking.")
+        .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
         .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, or a path (default: this folder's bound Claude Code profile, or ~/.claude)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")

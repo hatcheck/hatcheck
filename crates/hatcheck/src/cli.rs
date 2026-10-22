@@ -51,9 +51,10 @@ Usage:
     hatcheck usage ...                 plan usage left for every profile and home
     hatcheck where SESSION             where a session is stored, by its ID or the start of it
     hatcheck move [SESSION] [PROFILE]  move a session to another profile or home, or convert
-                                       it for another of the agents; with nothing, the
-                                       newest session started here, to this folder's
-                                       Claude Code profile, after asking
+                                       it for another of the agents; with a profile alone,
+                                       the newest session started here goes to it, and
+                                       with nothing, to this folder's Claude Code
+                                       profile, after asking
     hatcheck fork [SESSION] [PROFILE]  fork a session into another profile or home: a new
                                        session with its own ID, and the original stays
     hatcheck relocate OLD NEW          bring the sessions of a project folder that was moved
