@@ -1,20 +1,23 @@
-//! hatcheck best [--for SESSION] [--cached] [--wait [PROFILE]]: which account to use now, and
-//! where to carry a session. Advice only: it prints commands and never starts, moves or
-//! switches anything. --wait sleeps until an account has room, then says which. docs/commands.md's
-//! `hatcheck best` section says how accounts are ranked.
+//! hatcheck best [--for SESSION] [--cached] [--wait [PROFILE]]: the best account now, shown as
+//! hatcheck usage shows it, and the hatcheck move command that carries a session to it: --for's,
+//! or the newest started from this folder. hatcheck move with nothing goes by the same pick.
+//! Advice only: it prints commands and never starts, moves or switches anything. --wait sleeps
+//! until an account has room, then says which. docs/commands.md's `hatcheck best` section says
+//! how accounts are ranked.
 
 use crate::agent::Agent;
 use crate::args::Parser;
 use crate::facts::Summary;
 use crate::find;
+use crate::ospath;
 use crate::out::{self, Paint};
 use crate::paths;
-use crate::py::{self, get, s};
+use crate::py::{self, get, s, truthy};
 use crate::sessions::session_command;
 use crate::times;
 use crate::usage::{self, Entry, Usage, FABLE_OUT, NO_FABLE};
 use crate::widths::truncate;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 /// After the Fable bands and the accounts without a Fable limit: those with no usage data.
 const NO_DATA: u8 = NO_FABLE + 1;
@@ -83,8 +86,9 @@ fn pace_part(left: f64, reset: Option<f64>, now: f64) -> String {
 }
 
 /// What the line says about an account: its Fable limit first, with its pace, then the
-/// tightest other.
-fn summary(result: &Usage, now: f64, room: bool) -> String {
+/// tightest other; for an account whose limits are all per model, as agy's are, the tightest
+/// of those.
+pub fn summary(result: &Usage, now: f64, room: bool) -> String {
     let (usage, saved_at, why) = result;
     let Some(u) = usage else {
         return format!("no data ({})", why.clone().unwrap_or_else(|| "None".into()));
@@ -94,6 +98,9 @@ fn summary(result: &Usage, now: f64, room: bool) -> String {
         .iter()
         .find(|m| s(&m.3) == Some("weekly_scoped") && m.0.to_lowercase().contains("fable"));
     let mut others: Vec<&Meter> = rows.iter().filter(|m| !scoped(&m.3)).collect();
+    if others.is_empty() && fable.is_none() {
+        others = rows.iter().collect();
+    }
     others.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
     let mut parts: Vec<String> = Vec::new();
     if let Some((name, left, reset, _)) = fable {
@@ -143,7 +150,7 @@ fn summary(result: &Usage, now: f64, room: bool) -> String {
 }
 
 /// An account as best ranks it: its sort key, whether it has room now, and its usage.
-type Ranked = ((u8, f64, f64), bool, Entry, Usage);
+pub type Ranked = ((u8, f64, f64), bool, Entry, Usage);
 
 /// One agent's accounts, best first.
 fn ranked(accounts: Vec<(Entry, Usage)>, now: f64) -> Vec<Ranked> {
@@ -196,8 +203,9 @@ fn place_name(agent: Agent, profile: &str) -> String {
     profile.to_string()
 }
 
-/// The one session whose ID starts with prefix: its agent and ID, or why there isn't one.
-fn one_session(prefix: &str) -> Result<(Agent, String), String> {
+/// The session the advice is for, named by its ID or the start of it: the copy hatcheck open
+/// would resume, and how many profiles hold one.
+fn one_summary(prefix: &str) -> Result<(Summary, usize), String> {
     let copies = find::session_copies(prefix);
     if copies.is_empty() {
         return Err(format!("No session starting with {prefix}"));
@@ -208,91 +216,171 @@ fn one_session(prefix: &str) -> Result<(Agent, String), String> {
             copies.len()
         ));
     }
-    let ((agent, sid), _) = &copies[0];
-    Ok((*agent, sid.clone()))
-}
-
-/// --for: the best other account for a session of the same agent, as a hatcheck move command.
-fn carry(prefix: &str, by_agent: &[(Agent, Vec<Ranked>)], now: f64, me: &str) -> i32 {
-    let copies = find::session_copies(prefix);
-    if copies.is_empty() {
-        return out::fail(&format!("No session starting with {prefix}"));
-    }
-    if copies.len() > 1 {
-        return out::fail(&format!(
-            "{prefix} matches {} sessions; give more of the ID",
-            copies.len()
-        ));
-    }
     let ((agent, sid), places) = &copies[0];
     let found: Vec<Summary> = places
         .iter()
         .filter_map(|(p, f)| crate::facts::summarize(*agent, p, f))
         .collect();
     crate::facts::save_cache();
-    let Some(s) = found.iter().fold(None::<&Summary>, |best, s| match best {
-        Some(b) if (s.when, s.canonical, s.size) > (b.when, b.canonical, b.size) => Some(s),
-        Some(b) => Some(b),
-        None => Some(s),
-    }) else {
-        return out::fail(&format!(
-            "Session {} holds no conversation",
-            py::head(sid, 8)
-        ));
-    };
-    let accounts = &by_agent
+    found
+        .into_iter()
+        .fold(None::<Summary>, |best, s| match best {
+            Some(b) if (s.when, s.canonical, s.size) > (b.when, b.canonical, b.size) => Some(s),
+            Some(b) => Some(b),
+            None => Some(s),
+        })
+        .map(|s| (s, places.len()))
+        .ok_or_else(|| format!("Session {} holds no conversation", py::head(sid, 8)))
+}
+
+/// One agent's accounts, best first, from what load_usage gave.
+pub fn ranked_for(agent: Agent, loaded: &[(Entry, Usage)], now: f64) -> Vec<Ranked> {
+    let mine: Vec<(Entry, Usage)> = loaded
         .iter()
-        .find(|(a, _)| a == agent)
-        .expect("every agent is ranked")
-        .1;
-    let mine = accounts.iter().position(|a| {
-        a.2.profiles
-            .iter()
-            .any(|p| paths::same_folder(p, &s.profile))
-    });
-    let state = match mine {
-        Some(k) => summary(&accounts[k].3, now, accounts[k].1),
-        None => "no usage data".into(),
-    };
-    out::println(&format!(
-        "Session {} \"{}\" is in {}: {state}.",
-        py::head(sid, 8),
-        truncate(&s.title, 60),
-        paths::shell_path(&s.profile)
-    ));
-    let best = accounts
+        .filter(|a| a.0.agent == agent)
+        .cloned()
+        .collect();
+    ranked(mine, now)
+}
+
+/// The accounts a profile or home belongs to: their places in the ranking.
+pub fn holding(accounts: &[Ranked], profile: &str) -> Vec<usize> {
+    accounts
         .iter()
         .enumerate()
-        .position(|(k, a)| a.1 && Some(k) != mine);
-    if let Some(k) = mine {
-        if accounts[k].1 && k < best.unwrap_or(accounts.len()) {
-            out::println("Its own account is the best one now; resume it there with:");
-            if let Some(cwd) = s.cwd.as_deref().filter(|c| !c.is_empty()) {
-                out::println(&format!("  cd {}", paths::shell_path(cwd)));
-            }
-            out::println(&format!("  {}", session_command(s, false)));
-            return 0;
-        }
+        .filter(|(_, a)| a.2.profiles.iter().any(|p| paths::same_folder(p, profile)))
+        .map(|(k, _)| k)
+        .collect()
+}
+
+/// Where a session should go, or that it's in the right place already.
+pub enum Pick {
+    /// Its own account is the best one with room: its place in the ranking.
+    Own(usize),
+    /// Another account is: its place in the ranking.
+    Other(usize),
+    /// No account has room.
+    Nothing,
+}
+
+/// Which account a session should go to, its own being the accounts at `mine` (none for no
+/// session): the best with room other than its own, unless its own has room and ranks ahead.
+pub fn pick(accounts: &[Ranked], mine: &[usize]) -> Pick {
+    let other = accounts
+        .iter()
+        .enumerate()
+        .position(|(k, a)| a.1 && !mine.contains(&k));
+    let own = accounts
+        .iter()
+        .enumerate()
+        .position(|(k, a)| a.1 && mine.contains(&k));
+    match (own, other) {
+        (Some(k), Some(b)) if k < b => Pick::Own(k),
+        (Some(k), None) => Pick::Own(k),
+        (_, Some(b)) => Pick::Other(b),
+        (None, None) => Pick::Nothing,
     }
-    let Some(b) = best else {
-        out::println(&format!("No other {} account has room now.", agent.name()));
-        return 1;
-    };
-    let (_, _, entry, result) = &accounts[b];
-    let dest = &entry.profiles[0];
+}
+
+/// Print an account as hatcheck usage shows it, its heading after `lead`: the profiles, the
+/// plan and whether the numbers are live, then one row per limit with its bars.
+pub fn print_account(paint: &Paint, lead: &str, account: &Ranked, now: f64) {
+    let (_, _, entry, result) = account;
     out::println(&format!(
-        "Carry it to {}: {}.",
-        paths::shell_path(dest),
-        summary(result, now, true)
+        "{lead}{}",
+        usage::account_header(paint, entry, result, now, false)
     ));
-    out::println(&format!(
-        "  {me} move {} {} --from {}",
-        py::head(sid, 8),
-        place_name(*agent, dest),
-        place_name(*agent, &s.profile)
-    ));
-    out::println("It prints the command that resumes it there, and offers to run it.");
-    0
+    let (body, saved_at, _) = result;
+    let rows = body
+        .as_ref()
+        .filter(|u| truthy(u))
+        .map_or_else(Vec::new, usage::usage_rows);
+    let width = rows
+        .iter()
+        .map(|r| r.label.chars().count())
+        .max()
+        .unwrap_or(0);
+    let (lines, _) = usage::account_lines(paint, &rows, *saved_at, now, width);
+    for line in &lines {
+        out::println(line);
+    }
+    let extra = usage::extra_usage_text(body.as_ref().unwrap_or(&json!({})));
+    if !extra.is_empty() {
+        out::println(&format!("  {}", paint.p("2", &extra)));
+    }
+}
+
+/// How hatcheck move names a profile of agent for a session of session_agent: a bare NAME
+/// follows the session's own agent, so Claude Code's is spelled out as claude or claude:NAME
+/// for a Codex or Kimi session.
+fn spelled(agent: Agent, session_agent: Agent, profile: &str) -> String {
+    let name = place_name(agent, profile);
+    if agent != Agent::Claude || session_agent == Agent::Claude || !session_agent.has_profiles() {
+        return name;
+    }
+    if name == "default" {
+        "claude".into()
+    } else if name.contains('/') || name.contains(ospath::SEP) || name.starts_with('~') {
+        name
+    } else {
+        format!("claude:{name}")
+    }
+}
+
+/// The ranking's lines, an account each: its place, profiles, what its limits say, and the
+/// command that starts the agent there, aligned; `skip` is the one shown in full above.
+fn print_ranking(
+    paint: &Paint,
+    agent: Agent,
+    accounts: &[Ranked],
+    skip: Option<usize>,
+    mine: &[usize],
+    now: f64,
+) {
+    let p = |code: &str, text: &str| paint.p(code, text);
+    let rows: Vec<(String, String, String, String, bool)> = accounts
+        .iter()
+        .enumerate()
+        .filter(|(k, _)| Some(*k) != skip)
+        .map(|(n, (key, room, entry, result))| {
+            let names = entry
+                .profiles
+                .iter()
+                .map(|pr| paths::shell_path(pr))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let number = if key.0 < NO_DATA {
+                format!("{}.", n + 1)
+            } else {
+                " -".into()
+            };
+            let mut text = summary(result, now, *room);
+            if mine.contains(&n) {
+                text += " (where it is)";
+            }
+            (
+                number,
+                names,
+                text,
+                paths::start_command(agent, &entry.profiles[0], false),
+                *room,
+            )
+        })
+        .collect();
+    let width = rows.iter().map(|r| r.1.chars().count()).max().unwrap_or(0);
+    let text_width = rows.iter().map(|r| r.2.chars().count()).max().unwrap_or(0);
+    for (number, names, text, command, room) in &rows {
+        out::println(&format!(
+            "  {:>3} {}  {}  {}",
+            number,
+            p(if *room { "1" } else { "2" }, &format!("{names:<width$}")),
+            p(
+                if *room { "" } else { "2" },
+                &format!("{text:<text_width$}")
+            ),
+            p("36", &format!("→ {command}"))
+        ));
+    }
 }
 
 /// Whom --wait waits for: an agent's accounts, or one profile or home of it.
@@ -340,21 +428,34 @@ fn wait_state(w: &Waiting, by_agent: &[(Agent, Vec<Ranked>)]) -> Result<Option<f
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Which account to use now, and where to carry a session. Advice only: it never starts, moves or switches anything.")
-        .option(&["--for"], "session", "SESSION", "where to carry this session: the hatcheck move command for the best other account")
+    let parser = Parser::new(prog, "The best account now, shown as hatcheck usage shows it, and the hatcheck move command that carries a session to it: the newest started from this folder, or --for's. Advice only: it never starts, moves or switches anything.")
+        .option(&["--for"], "session", "SESSION", "the session to carry: its ID, or the start of it (default: the newest session started from this folder)")
         .flag(&["--cached"], "cached", "don't call the APIs; use the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
-        .maybe(&["--wait"], "wait", "PROFILE", "", "wait until an account has room, then answer: any Claude Code account, PROFILE's (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME), or with --for one of the session's agent");
+        .maybe(&["--wait"], "wait", "PROFILE", "", "wait until an account has room, then answer: any account of the session's agent (Claude Code's, without a session), or PROFILE's (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME)");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
-    let paint = Paint::new();
-    let p = |code: &str, text: &str| paint.p(code, text);
     let me = prog.split_whitespace().next().unwrap_or("hatcheck");
-    let session = args
-        .value("session")
-        .filter(|s| !s.is_empty())
-        .map(String::from);
+    // The session the advice is for: --for's, or the newest started from this folder, as
+    // hatcheck move with nothing takes it; and how many profiles hold a copy.
+    let named = args.value("session").filter(|s| !s.is_empty());
+    let (subject, copies) = match named {
+        Some(prefix) => match one_summary(prefix) {
+            Ok((s, n)) => (Some(s), n),
+            Err(why) => return out::fail(&why),
+        },
+        None => (find::newest_here(&ospath::cwd(), false), 1),
+    };
+    // Whose accounts are ranked: the session's agent's, or Claude Code's for an agent without
+    // profiles (agy, zcode), whose session can only be converted.
+    let agent = subject.as_ref().map_or(Agent::Claude, |s| {
+        if s.agent.has_profiles() {
+            s.agent
+        } else {
+            Agent::Claude
+        }
+    });
     let waiting = match args.value("wait") {
         None => None,
         Some(spec) if !spec.is_empty() => {
@@ -364,19 +465,10 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 profile: Some(profile),
             })
         }
-        Some(_) => {
-            let agent = match &session {
-                Some(prefix) => match one_session(prefix) {
-                    Ok((agent, _)) => agent,
-                    Err(why) => return out::fail(&why),
-                },
-                None => Agent::Claude,
-            };
-            Some(Waiting {
-                agent,
-                profile: None,
-            })
-        }
+        Some(_) => Some(Waiting {
+            agent,
+            profile: None,
+        }),
     };
     let load = || {
         usage::load_usage(
@@ -394,14 +486,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         let loaded = load();
         by_agent = Agent::ALL
             .iter()
-            .map(|&agent| {
-                let mine: Vec<(Entry, Usage)> = loaded
-                    .iter()
-                    .filter(|a| a.0.agent == agent)
-                    .cloned()
-                    .collect();
-                (agent, ranked(mine, now))
-            })
+            .map(|&agent| (agent, ranked_for(agent, &loaded, now)))
             .collect();
         let Some(w) = &waiting else { break };
         match wait_state(w, &by_agent) {
@@ -429,61 +514,141 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             }
         }
     }
-    if let Some(prefix) = &session {
-        return carry(prefix, &by_agent, now, me);
+    let paint = Paint::new();
+    let p = |code: &str, text: &str| paint.p(code, text);
+    let ranking = |a: Agent| {
+        &by_agent
+            .iter()
+            .find(|(b, _)| *b == a)
+            .expect("every agent is ranked")
+            .1
+    };
+    let accounts = ranking(agent);
+    if accounts.is_empty() {
+        return out::fail(&format!("No {} profile found", agent.name()));
     }
-    for (agent, accounts) in &by_agent {
-        if accounts.is_empty() {
+    let mine: Vec<usize> = subject
+        .as_ref()
+        .map_or_else(Vec::new, |s| holding(accounts, &s.profile));
+    if let Some(s) = &subject {
+        // Where it is and what that account has left, from its own agent's ranking.
+        let own = ranking(s.agent);
+        let state = holding(own, &s.profile).first().map_or_else(
+            || "no usage data".to_string(),
+            |&k| summary(&own[k].3, now, own[k].1),
+        );
+        out::println(&format!(
+            "Session {} \"{}\"{} is in {}: {state}.",
+            py::head(&s.id, 8),
+            truncate(&s.title, 60),
+            if named.is_some() {
+                ""
+            } else {
+                ", the newest started from this folder,"
+            },
+            paths::shell_path(&s.profile)
+        ));
+    }
+    let lead = format!("Best {} account now: ", agent.name());
+    let mut exit = 0;
+    let featured = match pick(accounts, &mine) {
+        Pick::Own(k) => {
+            print_account(&paint, &lead, &accounts[k], now);
+            let s = subject.as_ref().expect("an own account needs a session");
+            out::println("Its own account is the best one now; resume it there with:");
+            if let Some(cwd) = s.cwd.as_deref().filter(|c| !c.is_empty()) {
+                out::println(&format!("  cd {}", paths::shell_path(cwd)));
+            }
+            out::println(&format!("  {}", session_command(s, false)));
+            Some(k)
+        }
+        Pick::Other(b) => {
+            print_account(&paint, &lead, &accounts[b], now);
+            let folder = &accounts[b].2.profiles[0];
+            match &subject {
+                Some(s) => {
+                    let dest = spelled(agent, s.agent, folder);
+                    let sid = if named.is_some() {
+                        format!("{} ", py::head(&s.id, 8))
+                    } else {
+                        String::new()
+                    };
+                    let from = if named.is_some() && copies > 1 {
+                        format!(" --from {}", place_name(s.agent, &s.profile))
+                    } else {
+                        String::new()
+                    };
+                    let keeps = if s.agent == agent {
+                        p(
+                            "2",
+                            &format!("    ({me} fork {sid}{dest}{from} keeps the original)"),
+                        )
+                    } else {
+                        String::new()
+                    };
+                    out::println("Carry it there with:");
+                    out::println(&format!("  {me} move {sid}{dest}{from}{keeps}"));
+                }
+                None => {
+                    out::println("Start there with:");
+                    out::println(&format!("  {}", paths::start_command(agent, folder, false)));
+                    out::println("Carry a session there with:");
+                    out::println(&format!(
+                        "  {me} move <session> {}",
+                        place_name(agent, folder)
+                    ));
+                }
+            }
+            Some(b)
+        }
+        Pick::Nothing => {
+            out::println(&format!(
+                "No {}{} account has room now:",
+                if mine.is_empty() { "" } else { "other " },
+                agent.name()
+            ));
+            exit = 1;
+            None
+        }
+    };
+    if accounts.len() > usize::from(featured.is_some()) {
+        if featured.is_some() {
+            out::println(&p("2", "Then:"));
+        }
+        print_ranking(&paint, agent, accounts, featured, &mine, now);
+    }
+    for (other, theirs) in &by_agent {
+        if *other == agent {
             continue;
         }
-        let title = format!("{}, best first", agent.name());
-        let note = if *agent == Agent::Claude {
-            p("2", " (sorted by Fable, as hatcheck usage sorts)")
-        } else {
-            String::new()
+        let Some((key, room, entry, result)) = theirs.first() else {
+            continue;
         };
-        out::println(&(p("1", &title) + &note));
-        let rows: Vec<(String, String, String, String, bool)> = accounts
-            .iter()
-            .enumerate()
-            .map(|(n, (key, room, entry, result))| {
-                let names = entry
-                    .profiles
-                    .iter()
-                    .map(|pr| paths::shell_path(pr))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let number = if key.0 < NO_DATA {
-                    format!("{}.", n + 1)
-                } else {
-                    " -".into()
-                };
-                (
-                    number,
-                    names,
-                    summary(result, now, *room),
-                    paths::start_command(*agent, &entry.profiles[0], false),
-                    *room,
-                )
-            })
-            .collect();
-        let width = rows.iter().map(|r| r.1.chars().count()).max().unwrap_or(0);
-        let text_width = rows.iter().map(|r| r.2.chars().count()).max().unwrap_or(0);
-        for (number, names, text, command, room) in &rows {
-            out::println(&format!(
-                "  {:>3} {}  {}  {}",
-                number,
-                p(if *room { "1" } else { "2" }, &format!("{names:<width$}")),
-                p(
-                    if *room { "" } else { "2" },
-                    &format!("{text:<text_width$}")
-                ),
-                p("36", &format!("→ {command}"))
-            ));
+        if key.0 == NO_DATA {
+            continue;
         }
+        let names = entry
+            .profiles
+            .iter()
+            .map(|pr| paths::shell_path(pr))
+            .collect::<Vec<_>>()
+            .join(", ");
+        out::println(&format!(
+            "{} {}  {}  {}",
+            p("2", &format!("{}:", other.name())),
+            p(if *room { "1" } else { "2" }, &names),
+            p(if *room { "" } else { "2" }, &summary(result, now, *room)),
+            p(
+                "36",
+                &format!(
+                    "→ {}",
+                    paths::start_command(*other, &entry.profiles[0], false)
+                )
+            )
+        ));
     }
-    out::println(&p("2", &format!("Advice only: nothing is started, moved or switched. {me} best --for <session> says where to carry a session.")));
-    0
+    out::println(&p("2", &format!("Advice only: nothing is started, moved or switched. {me} usage shows every account's limits.")));
+    exit
 }
 
 #[cfg(test)]

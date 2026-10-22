@@ -53,8 +53,7 @@ Usage:
     hatcheck move [SESSION] [PROFILE]  move a session to another profile or home, or convert
                                        it for another of the agents; with a profile alone,
                                        the newest session started here goes to it, and
-                                       with nothing, to this folder's Claude Code
-                                       profile, after asking
+                                       with nothing, to the best account now, after asking
     hatcheck fork [SESSION] [PROFILE]  fork a session into another profile or home: a new
                                        session with its own ID, and the original stays
     hatcheck relocate OLD NEW          bring the sessions of a project folder that was moved
@@ -63,7 +62,8 @@ Usage:
     hatcheck resume [SESSION]          carry on the newest session started here, in this
                                        terminal, after asking; hat r for short
     hatcheck show SESSION              a session's conversation, read-only
-    hatcheck best [--for SESSION]      which account to use now, or to carry a session to;
+    hatcheck best [--for SESSION]      the best account now, in full, and the move command
+                                       that carries the newest session started here to it;
                                        --wait sleeps until one has room
     hatcheck bind PROFILE ...          tie a folder to a profile, for cl, cx, ck and the list
     hatcheck unbind [FOLDER]           untie it again

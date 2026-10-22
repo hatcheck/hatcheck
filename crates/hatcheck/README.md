@@ -25,7 +25,8 @@ PyPI and the install scripts are in [docs/install.md](https://github.com/hatchec
 hatcheck [HOURS]                   recent sessions in every profile and home, with resume
                                    commands and plan usage
 hatcheck usage                     plan usage left for every profile and home
-hatcheck best [--for SESSION]      which account to use now, or to carry a session to
+hatcheck best [--for SESSION]      the best account now, and the move command that carries
+                                   a session to it
 hatcheck move SESSION PROFILE      move a session to another profile or home, or convert it
                                    between the agents
 hatcheck fork SESSION PROFILE      fork a session into another profile or home: a new session

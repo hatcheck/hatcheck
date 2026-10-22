@@ -169,6 +169,8 @@ def fable(used, days, weekly_used=None):
 
 
 class Best(unittest.TestCase):
+    """hatcheck best: the best account in full, the move command that carries a session to it,
+    and the ranking after it."""
     def setUp(self):
         self.h = h = FakeHome()
         self.addCleanup(h.cleanup)
@@ -180,33 +182,46 @@ class Best(unittest.TestCase):
             {"kind": "weekly_all", "group": "weekly", "percent": 30, "resets_at": iso(NOW + 2 * 86400)}]})
         self.api = h.folder("code", "api")
 
-    def test_ranking(self):
+    def ranked(self, out):
+        """The ranking's lines, after the account shown in full."""
+        return [line for line in out.splitlines() if "\u2192" in line]
+
+    def test_the_best_account_in_full(self):
         code, out = run(self.h, ["best", "--cached"])
         self.assertEqual(code, 0, out)
-        lines = [line for line in out.splitlines() if "→" in line]
-        self.assertEqual([line.split()[1] for line in lines],
-                         [self.h.shown(p) for p in (self.soon, self.later, self.spent, self.pro)])
-        self.assertIn("Fable 20% left, resets", lines[0])
-        self.assertRegex(lines[0], r", 0\.8%/h")  # 20% left over a day: what it can spend an hour
-        self.assertTrue(lines[0].rstrip().endswith("→ cl soon"))
-        self.assertIn("Fable 0% left, back", lines[2])
-        self.assertNotIn("%/h", lines[2])
-        self.assertRegex(lines[3], r"5h 10%, 10\.0%/h")  # the tightest limit first, for an account without Fable
+        # soon, as hatcheck usage shows it: the heading, then its rows with their bars.
+        self.assertIn("Best Claude Code account now: %s  " % self.h.shown(self.soon), out)
+        self.assertRegex(out, r"session \(5h\) +80% ████████░░")
+        self.assertRegex(out, r"week \(Fable\) +20% ██░░░░░░░░")
+        # No session here: how to start there, and how to carry one.
+        self.assertIn("Start there with:\n  cl soon\n", out)
+        self.assertIn("Carry a session there with:\n  hatcheck move <session> soon\n", out)
+        # Then the rest, in the ranking's order, a line each, without soon again.
+        lines = self.ranked(out)
+        self.assertEqual([line.split()[1] for line in lines], [self.h.shown(p) for p in (self.later, self.spent, self.pro)])
+        self.assertTrue(lines[0].lstrip().startswith("2. "), lines[0])
+        self.assertIn("Fable 50% left, resets", lines[0])
+        self.assertRegex(lines[0], r", 0\.7%/h")  # 50% left over 3 days: what it can spend an hour
+        self.assertIn("Fable 0% left, back", lines[1])
+        self.assertNotIn("%/h", lines[1])
+        self.assertRegex(lines[2], r"5h 10%, 10\.0%/h")  # the tightest limit first, for an account without Fable
+        self.assertIn("Then:", out)
         self.assertIn("Advice only", out)
 
     def test_nearly_out_goes_behind_fresher_accounts(self):
         low = self.h.profile("low", "acct-6", usage=fable(95, 0.3))  # resets soonest, but 95% used
         code, out = run(self.h, ["best", "--cached"])
-        lines = [line for line in out.splitlines() if "→" in line]
+        self.assertIn("Best Claude Code account now: %s  " % self.h.shown(self.soon), out)
+        lines = self.ranked(out)
         self.assertEqual([line.split()[1] for line in lines],
-                         [self.h.shown(p) for p in (self.soon, self.later, low, self.spent, self.pro)])
-        self.assertIn("Fable 5% left, resets", lines[2])
+                         [self.h.shown(p) for p in (self.later, low, self.spent, self.pro)])
+        self.assertIn("Fable 5% left, resets", lines[1])
 
     def test_wait_answers_at_once_with_room(self):
         code, out = run(self.h, ["best", "--cached", "--wait"])
         self.assertEqual(code, 0, out)
         self.assertNotIn("waiting", out)
-        self.assertIn("→ cl soon", out)
+        self.assertIn("Best Claude Code account now: " + self.h.shown(self.soon), out)
         # For one profile that has room now: the same.
         code, out = run(self.h, ["best", "--cached", "--wait", "later"])
         self.assertEqual(code, 0, out)
@@ -226,9 +241,8 @@ class Best(unittest.TestCase):
         self.assertGreater(time.time() - started, 1)
         self.assertIn("No room yet; waiting for a Claude Code account until", out)
         # Its reset passed while waiting, so the snapshot's limit counts as full again.
-        self.assertIn("Fable 100% left", out)
+        self.assertIn("Best Claude Code account now: " + h.shown(soon), out)
         self.assertEqual(out.count("waiting"), 1)
-        self.assertIn(h.shown(soon), out)
 
     def test_wait_with_nothing_to_wait_for(self):
         h = FakeHome()
@@ -246,18 +260,50 @@ class Best(unittest.TestCase):
         code, out = run(self.h, ["best", "--for", A[:8], "--cached"])
         self.assertEqual(code, 0, out)
         self.assertIn('Session aaaaaaaa "Out of Fable here" is in %s: Fable 0%% left' % self.h.shown(self.spent), out)
-        self.assertIn("Carry it to %s: Fable 20%% left" % self.h.shown(self.soon), out)
-        self.assertIn("hatcheck move aaaaaaaa soon --from spent", out)
+        self.assertIn("Best Claude Code account now: %s  " % self.h.shown(self.soon), out)
+        self.assertRegex(out, r"week \(Fable\) +20% ██░░░░░░░░")
+        self.assertIn("Carry it there with:\n  hatcheck move aaaaaaaa soon", out)
+        self.assertIn("(hatcheck fork aaaaaaaa soon keeps the original)", out)
+        self.assertIn("(where it is)", next(line for line in self.ranked(out) if self.h.shown(self.spent) in line))
+        # From the session's folder, without --for: the same session, and the shorter command,
+        # which takes the newest session started here as hatcheck move does.
+        code, out = run(self.h, ["best", "--cached"], cwd=self.api)
+        self.assertEqual(code, 0, out)
+        self.assertIn('Session aaaaaaaa "Out of Fable here", the newest started from this folder, is in %s' % self.h.shown(self.spent), out)
+        self.assertIn("Carry it there with:\n  hatcheck move soon", out)
+        self.assertIn("(hatcheck fork soon keeps the original)", out)
+        # A copy in two profiles: --from says which one, the one used last.
+        self.h.session(self.later, self.api, A, "Out of Fable here", 2)
+        code, out = run(self.h, ["best", "--for", A[:8], "--cached"])
+        self.assertIn("is in %s: Fable 50%% left" % self.h.shown(self.later), out)
+        self.assertIn("hatcheck move aaaaaaaa soon --from later", out)
+        # A session in the best account already: the resume command instead.
         self.h.session(self.soon, self.api, B, "Already in the best place", 5)
         code, out = run(self.h, ["best", "--for", B[:8], "--cached"])
-        self.assertIn("Its own account is the best one now", out)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Best Claude Code account now: %s  " % self.h.shown(self.soon), out)
+        self.assertIn("Its own account is the best one now; resume it there with:", out)
+        self.assertIn("cd " + self.h.shown(self.api), out)
         self.assertIn("cl soon --resume " + B, out)
+        self.assertNotIn("hatcheck move", out.split("Advice only")[0])
 
     def test_blocked_by_the_weekly_limit(self):
         blocked = self.h.profile("blocked", "acct-5", usage=fable(10, 0.2, weekly_used=100))
         code, out = run(self.h, ["best", "--cached"])
         line = next(line for line in out.splitlines() if self.h.shown(blocked) + " " in line)
         self.assertIn("(the weekly limit blocks Fable)", line)
+
+    def test_no_account_has_room(self):
+        h = FakeHome()
+        self.addCleanup(h.cleanup)
+        spent = h.profile("spent", "acct-3", usage=fable(100, 0.5))
+        h.profile("gone", "acct-4", usage=fable(100, 2))
+        code, out = run(h, ["best", "--cached"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("No Claude Code account has room now:\n", out)
+        self.assertEqual([line.split()[1] for line in self.ranked(out)], [h.shown(spent), h.shown(h.profile("gone"))])
+        self.assertIn("Fable 0% left, back", out)
+        self.assertNotIn("Best Claude Code account", out)
 
 
 if __name__ == "__main__":

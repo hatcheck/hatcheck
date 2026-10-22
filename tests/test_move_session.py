@@ -15,6 +15,14 @@ from helpers import INTERRUPT, NOW, WINDOWS, FakeHome, argv_of, in_terminal, iso
 S1 = "11111111-1111-4111-8111-111111111111"
 S2 = "22222222-2222-4222-8222-222222222222"
 SCRIPT = "move"
+
+
+def fable(used, days):
+    """A usage snapshot with a Fable limit `used` % used, resetting in `days`."""
+    return {"limits": [
+        {"kind": "session", "group": "session", "percent": 20, "severity": "normal", "resets_at": iso(NOW + 3600)},
+        {"kind": "weekly_scoped", "group": "weekly", "percent": used, "severity": "normal",
+         "resets_at": iso(NOW + days * 86400), "scope": {"model": {"display_name": "Fable"}}}]}
 OLD = NOW - 3 * 3600
 
 
@@ -375,14 +383,14 @@ if __name__ == "__main__":
 
 
 class MoveWithoutArguments(unittest.TestCase):
-    """hat move with nothing: the newest session started from this folder, to the folder's Claude
-    Code profile, after asking; and claude as the name of ~/.claude."""
+    """hat move with nothing: the newest session started from this folder, to the best account
+    now as hatcheck best picks it, after asking; and claude as the name of ~/.claude."""
 
     def setUp(self):
         self.h = h = FakeHome()
         self.addCleanup(h.cleanup)
-        self.default = h.profile("default", "acct-1")
-        self.work = h.profile("work", "acct-2")
+        self.default = h.profile("default", "acct-1", usage=fable(50, 3))  # the best account now
+        self.work = h.profile("work", "acct-2", usage=fable(90, 1))  # past 90% used: behind it
         self.api = h.folder("code", "api")
         h.session(self.work, self.api, S1, "Newest here", 1)
         h.session(self.work, self.api, S2, "Older here", 9)
@@ -391,13 +399,24 @@ class MoveWithoutArguments(unittest.TestCase):
         h = self.h
         code, out = h.run(SCRIPT, "--dry-run", cwd=self.api)
         self.assertEqual(code, 0, out)
+        # Where the session is, the best account with its limits as hatcheck usage shows them,
+        # and what would happen.
+        self.assertIn('Session 11111111 "Newest here" is in %s: Fable 10%% left' % h.shown(self.work), out)
+        self.assertIn("Best Claude Code account now: %s  " % h.shown(self.default), out)
+        self.assertRegex(out, r"week \(Fable\) +50% █████░░░░░")
         self.assertIn('Would move session 11111111 "Newest here" from %s to %s:' % (h.shown(self.work), h.shown(self.default)), out)
         self.assertNotIn("[y/N]", out)
-        # Bound to a profile, the folder's sessions go there.
+        # The folder's binding doesn't decide, but is flagged when it's another profile.
         h.run("bind", "work", cwd=self.api)
+        code, out = h.run(SCRIPT, "--dry-run", cwd=self.api)
+        self.assertIn("\u26a0 folder bound to " + h.shown(self.work), out)
+        self.assertIn("to %s:" % h.shown(self.default), out)
+        # A session in the best account already has nowhere better to go.
         h.session(self.default, self.api, "33333333-3333-4333-8333-333333333333", "In the default profile", 0)
         code, out = h.run(SCRIPT, "--dry-run", cwd=self.api)
-        self.assertIn('Would move session 33333333 "In the default profile" from %s to %s:' % (h.shown(self.default), h.shown(self.work)), out)
+        self.assertEqual(code, 1, out)
+        self.assertIn('Session 33333333 "In the default profile" is already in %s, the best Claude Code account now. '
+                      'Say where it goes: hatcheck move 33333333 <profile>' % h.shown(self.default), out)
         # claude names ~/.claude, as codex and agy name theirs.
         code, out = h.run(SCRIPT, S1[:8], "claude", "--dry-run", cwd=self.api)
         self.assertIn("from %s to %s:" % (h.shown(self.work), h.shown(self.default)), out)
@@ -438,12 +457,27 @@ class MoveWithoutArguments(unittest.TestCase):
         for args in ((), ("--dry-run",), ("33333333",)):
             code, out = h.run(SCRIPT, *args, cwd=quiet)
             self.assertEqual(code, 1, out)
-            self.assertIn('Session 33333333%s is already in %s. Say where it goes: hatcheck move 33333333 <profile>'
-                          % ('' if args == ("33333333",) else ' "Already home"', h.shown(self.default)), out)
+            self.assertIn('Session 33333333%s is already in %s, the best Claude Code account now. Say where it goes: '
+                          'hatcheck move 33333333 <profile>' % ('' if args == ("33333333",) else ' "Already home"', h.shown(self.default)), out)
         # Given both, the same answer as before.
         code, out = h.run(SCRIPT, "33333333", "default", cwd=quiet)
         self.assertEqual(code, 1, out)
         self.assertIn("Session 33333333 is already in %s, and in no other profile" % h.shown(self.default), out)
+
+    def test_nowhere_with_room(self):
+        h = FakeHome()
+        self.addCleanup(h.cleanup)
+        h.profile("default", "acct-1", usage=fable(100, 1))
+        work = h.profile("work", "acct-2", usage=fable(100, 2))
+        api = h.folder("code", "api")
+        h.session(work, api, S1, "Newest here", 1)
+        code, out = h.run(SCRIPT, "--dry-run", cwd=api)
+        self.assertEqual(code, 1, out)
+        self.assertIn("No other Claude Code account has room now; hatcheck best says when one will. "
+                      "Say where it goes: hatcheck move 11111111 <profile>", out)
+        code, out = h.run("fork", S1[:8], "--dry-run", cwd=api)  # a session alone goes the same way
+        self.assertEqual(code, 1, out)
+        self.assertIn("Say where it goes: hatcheck fork 11111111 <profile>", out)
 
     def test_a_script_has_to_say_both(self):
         h = self.h
@@ -461,6 +495,8 @@ class MoveWithoutArguments(unittest.TestCase):
         h = self.h
         code, out = in_terminal(argv_of("fork"), [(b"? [y/N] ", b"n\n")], h.env(), self.api)
         self.assertEqual(code, 1, out)
+        self.assertIn("Best Claude Code account now: %s  " % h.shown(self.default), out)  # shown before the question
+        self.assertRegex(out, r"week \(Fable\) +50% █████░░░░░")
         self.assertIn('Fork session 11111111 "Newest here" from %s to %s? [y/N]' % (h.shown(self.work), h.shown(self.default)), out)
         self.assertIn("Nothing changed.", out)
         code, out = in_terminal(argv_of(SCRIPT), [(b"? [y/N] ", b"y\n"), (b"Resume it now", b"n\n")], h.env(), self.api)

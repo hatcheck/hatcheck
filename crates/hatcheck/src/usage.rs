@@ -1728,6 +1728,131 @@ pub fn sorted_by_fable(accounts: Vec<(Entry, Usage)>, now: f64) -> (Vec<(Entry, 
     (ranked.into_iter().map(|(_, a)| a).collect(), any)
 }
 
+/// An account's heading line, as hatcheck usage prints it: its profiles, the plan (and with
+/// email, the address), and whether the numbers are live, cached with their age, or missing.
+pub fn account_header(
+    paint: &Paint,
+    entry: &Entry,
+    result: &Usage,
+    now: f64,
+    email: bool,
+) -> String {
+    let p = |code: &str, text: &str| paint.p(code, text);
+    let home_len = paths::home().chars().count();
+    let (usage, saved_at, why) = result;
+    let names = entry
+        .profiles
+        .iter()
+        .map(|pr| format!("~{}", pr.chars().skip(home_len).collect::<String>()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let why = why.clone().unwrap_or_else(|| "None".into());
+    let source = match (usage, saved_at) {
+        (None, _) => p("31", "no data") + &p("2", &format!(" ({why})")),
+        (Some(_), None) => p("32", "live"),
+        (Some(_), Some(t)) => {
+            p("33", &format!("cached {} ago", times::duration(now - t)))
+                + &p("2", &format!(" ({why})"))
+        }
+    };
+    let plan = account_plan(entry, usage.as_ref());
+    let mut details = Vec::new();
+    if email {
+        details.push(if truthy(&entry.email) {
+            py::str_of(&entry.email)
+        } else {
+            "?".into()
+        });
+    }
+    details.push(plan);
+    p("1;36", &names) + "  " + &p("2", &format!("{} · ", details.join(" · "))) + &source
+}
+
+/// An account's rows, as hatcheck usage prints them under its heading, each label padded to
+/// width: the lines, and whether any is a quota field shown by its raw name.
+pub fn account_lines(
+    paint: &Paint,
+    rows: &[Row],
+    saved_at: Option<f64>,
+    now: f64,
+    width: usize,
+) -> (Vec<String>, bool) {
+    let p = |code: &str, text: &str| paint.p(code, text);
+    let mut lines = Vec::new();
+    let mut unlabeled = false;
+    for row in rows {
+        let t = s(&row.resets_at).and_then(times::parse_time);
+        let left = percent_left(&row.used, &row.resets_at, saved_at, now);
+        let mut time_bar = " ".repeat(10); // blank unless the reset time and the window's length are known
+        let (pct, plan_bar, code, when);
+        match left {
+            None => {
+                // The snapshot predates this window's reset, so its number is gone.
+                pct = "   ?".to_string();
+                plan_bar = "·".repeat(10);
+                code = "2".to_string();
+                when = format!(
+                    "reset {}, after this snapshot",
+                    times::clock(t.unwrap_or(0.0), now)
+                );
+            }
+            Some(left) => {
+                pct = format!("{:>3}%", left.d());
+                plan_bar = bar(left.f() / 100.0, 10);
+                code = severity_color(&row.severity)
+                    .map_or(if row.labeled { "" } else { "2" }.to_string(), String::from);
+                when = match t.filter(|t| *t != 0.0) {
+                    Some(t) => format!(
+                        "resets {} (in {})",
+                        times::clock(t, now),
+                        times::duration(t - now)
+                    ),
+                    None => String::new(),
+                };
+                if let (Some(t), Some(w)) = (
+                    t.filter(|t| *t != 0.0),
+                    Num::of(&row.window).filter(|_| truthy(&row.window)),
+                ) {
+                    let to_go = (t - now) / w.f(); // fraction of the window left
+                    time_bar = p(
+                        &if row.labeled {
+                            urgency_color(to_go, paint.wide)
+                        } else {
+                            "2".into()
+                        },
+                        &bar(to_go, 10),
+                    );
+                }
+            }
+        }
+        let tail = [when.as_str(), row.note.as_str()]
+            .iter()
+            .filter(|t| !t.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" · ");
+        let label = format!("{:<width$}", row.label);
+        let line = format!(
+            "  {} {} {}  {} {}",
+            p(
+                &label_color(&row.kind, if row.labeled { "" } else { "2" }, paint.wide),
+                &label
+            ),
+            p(&code, &pct),
+            p(&label_color(&row.kind, &code, paint.wide), &plan_bar),
+            time_bar,
+            if tail.is_empty() {
+                String::new()
+            } else {
+                p("2", &tail)
+            }
+        );
+        lines.push(line.trim_end_matches(py::is_space).to_string());
+        unlabeled |= !row.labeled;
+    }
+    (lines, unlabeled)
+}
+
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode's folder is listed with why zcode gives none.")
         .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
@@ -1757,47 +1882,21 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         out::println(&py::dumps(&data));
         return 0;
     }
-    let home_len = paths::home().chars().count();
-    let mut blocks = Vec::new();
-    for (entry, (usage, saved_at, why)) in &accounts {
-        let names = entry
-            .profiles
-            .iter()
-            .map(|p| format!("~{}", p.chars().skip(home_len).collect::<String>()))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let why = why.clone().unwrap_or_else(|| "None".into());
-        let source = match (usage, saved_at) {
-            (None, _) => p("31", "no data") + &p("2", &format!(" ({why})")),
-            (Some(_), None) => p("32", "live"),
-            (Some(_), Some(t)) => {
-                p("33", &format!("cached {} ago", times::duration(now - t)))
-                    + &p("2", &format!(" ({why})"))
-            }
-        };
-        let plan = account_plan(entry, usage.as_ref());
-        let mut details = Vec::new();
-        if args.flag("email") {
-            details.push(if truthy(&entry.email) {
-                py::str_of(&entry.email)
-            } else {
-                "?".into()
-            });
-        }
-        details.push(plan);
-        let header =
-            p("1;36", &names) + "  " + &p("2", &format!("{} · ", details.join(" · "))) + &source;
-        let rows = usage
-            .as_ref()
-            .filter(|u| truthy(u))
-            .map_or_else(Vec::new, usage_rows);
-        blocks.push((
-            header,
-            rows,
-            extra_usage_text(usage.as_ref().unwrap_or(&json!({}))),
-            *saved_at,
-        ));
-    }
+    let blocks: Vec<(String, Vec<Row>, String, Option<f64>)> = accounts
+        .iter()
+        .map(|(entry, result)| {
+            let (usage, saved_at, _) = result;
+            (
+                account_header(&paint, entry, result, now, args.flag("email")),
+                usage
+                    .as_ref()
+                    .filter(|u| truthy(u))
+                    .map_or_else(Vec::new, usage_rows),
+                extra_usage_text(usage.as_ref().unwrap_or(&json!({}))),
+                *saved_at,
+            )
+        })
+        .collect();
     let width = blocks
         .iter()
         .flat_map(|b| b.1.iter().map(|r| r.label.chars().count()))
@@ -1812,76 +1911,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     }
     for (header, rows, extra, saved_at) in &blocks {
         out::println(header);
-        for row in rows {
-            let t = s(&row.resets_at).and_then(times::parse_time);
-            let left = percent_left(&row.used, &row.resets_at, *saved_at, now);
-            let mut time_bar = " ".repeat(10); // blank unless the reset time and the window's length are known
-            let (pct, plan_bar, code, when);
-            match left {
-                None => {
-                    // The snapshot predates this window's reset, so its number is gone.
-                    pct = "   ?".to_string();
-                    plan_bar = "·".repeat(10);
-                    code = "2".to_string();
-                    when = format!(
-                        "reset {}, after this snapshot",
-                        times::clock(t.unwrap_or(0.0), now)
-                    );
-                }
-                Some(left) => {
-                    pct = format!("{:>3}%", left.d());
-                    plan_bar = bar(left.f() / 100.0, 10);
-                    code = severity_color(&row.severity)
-                        .map_or(if row.labeled { "" } else { "2" }.to_string(), String::from);
-                    when = match t.filter(|t| *t != 0.0) {
-                        Some(t) => format!(
-                            "resets {} (in {})",
-                            times::clock(t, now),
-                            times::duration(t - now)
-                        ),
-                        None => String::new(),
-                    };
-                    if let (Some(t), Some(w)) = (
-                        t.filter(|t| *t != 0.0),
-                        Num::of(&row.window).filter(|_| truthy(&row.window)),
-                    ) {
-                        let to_go = (t - now) / w.f(); // fraction of the window left
-                        time_bar = p(
-                            &if row.labeled {
-                                urgency_color(to_go, paint.wide)
-                            } else {
-                                "2".into()
-                            },
-                            &bar(to_go, 10),
-                        );
-                    }
-                }
-            }
-            let tail = [when.as_str(), row.note.as_str()]
-                .iter()
-                .filter(|t| !t.is_empty())
-                .copied()
-                .collect::<Vec<_>>()
-                .join(" · ");
-            let label = format!("{:<width$}", row.label);
-            let line = format!(
-                "  {} {} {}  {} {}",
-                p(
-                    &label_color(&row.kind, if row.labeled { "" } else { "2" }, paint.wide),
-                    &label
-                ),
-                p(&code, &pct),
-                p(&label_color(&row.kind, &code, paint.wide), &plan_bar),
-                time_bar,
-                if tail.is_empty() {
-                    String::new()
-                } else {
-                    p("2", &tail)
-                }
-            );
-            out::println(line.trim_end_matches(py::is_space));
-            unlabeled |= !row.labeled;
+        let (lines, dim) = account_lines(&paint, rows, *saved_at, now, width);
+        for line in &lines {
+            out::println(line);
         }
+        unlabeled |= dim;
         if !extra.is_empty() {
             out::println(&format!("  {}", p("2", extra)));
         }

@@ -317,11 +317,24 @@ class AgyElsewhere(unittest.TestCase):
         self.assertIn("isn't an Antigravity CLI folder", out)
 
     def test_best_lists_agy(self):
-        code, out = self.h.run("best", "--cached")
+        # After the best Claude Code account, the other agents' best: agy's folder with what its
+        # /usage reported (a fake agy here), and the command that starts agy.
+        h = self.h
+        h.profile("default", "acct-1", usage={"limits": [
+            {"kind": "weekly_scoped", "group": "weekly", "percent": 40, "severity": "normal",
+             "resets_at": iso(NOW + 2 * 86400), "scope": {"model": {"display_name": "Fable"}}}]})
+        write(os.path.join(self.root, "fake-usage.json"), json.dumps({
+            "groups": [{"group_name": "Gemini 4 Argon", "quota_info": {"remaining_fraction": 0.62, "reset_time": iso(NOW + 5 * 3600)}}],
+            "plan_info": {"tier_display_name": "Pro"}}))
+        code, out = h.run("best", PATH=h.fake_agy() + os.pathsep + h.env()["PATH"])
         self.assertEqual(code, 0, out)
-        self.assertIn("Antigravity CLI, best first", out)
-        self.assertIn(self.h.shown(self.root), out)
+        self.assertIn("Best Claude Code account now: " + h.shown(self.claude), out)
+        self.assertIn("Antigravity CLI: %s  Gemini 4 Argon 62%%" % h.shown(self.root), out)
         self.assertIn("→ agy", out)
+        code, out = h.run("best", "--cached")  # the reading hatcheck kept, since agy saves none
+        self.assertEqual(code, 0, out)
+        self.assertIn("Antigravity CLI: %s  Gemini 4 Argon 62%%" % h.shown(self.root), out)
+        self.assertIn("cached", out.split("Antigravity CLI:")[1])
 
 
 D = "b3ec2639-7291-473f-b317-d5aba5708a97"  # the Antigravity app's conversations

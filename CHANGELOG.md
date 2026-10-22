@@ -19,6 +19,8 @@ Kimi Code CLI (`kimi`) and ZCode (`zcode`) join Claude Code, Codex and Antigravi
 
 ### Changed
 
+- **`hatcheck best` shows the best account in full**, as `hatcheck usage` shows it, bars and resets included, with the `hatcheck move` command that carries the newest session started from this folder, or `--for`'s, to it, and `hatcheck fork` beside it; then the rest of the ranking, a line each, with the session's own account marked, and the other agents' best. The ranking is as it was. Without a session, it prints the command that starts the agent there. `--wait` without a profile waits for an account of the session's agent. It exits 1 when no account has room.
+- **`hatcheck move` and `fork` with nothing, or a session alone, go to the best account now**, the one `hatcheck best` picks, rather than the folder's bound profile or `~/.claude`: the account is shown with its limits before the question, with the folder's binding when that's another profile; already in the best account, or with none that has room, they stop and say so.
 - **`hatcheck move work` and `hatcheck fork work`, with a profile alone:** the newest session started from this folder goes to that profile, after asking, as with nothing it goes to the folder's Claude Code profile. The word has to name a profile or home that exists and start no session's ID; one that does both is asked for more.
 - **The session list's heading** names each agent that has a profile, home or folder here: `Claude Code, Codex and Kimi Code CLI sessions`, and so on.
 

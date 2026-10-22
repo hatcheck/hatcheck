@@ -1365,10 +1365,10 @@ fn choose_target(
 }
 
 /// Fill in what move or fork was given nothing for: the newest session started from this
-/// folder, and the folder's Claude Code profile (its bound one, or ~/.claude), which a terminal
-/// is asked to confirm; a dry run just says. A script, a pipe or --json has to say both. One
-/// word alone that names a profile or home that exists, and starts no session's ID, is where
-/// the newest session started here goes.
+/// folder, and the best account of its agent now, as hatcheck best picks it, shown with its
+/// limits, which a terminal is asked to confirm; a dry run just says. A script, a pipe or
+/// --json has to say both. One word alone that names a profile or home that exists, and starts
+/// no session's ID, is where the newest session started here goes.
 fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
     let show = paths::shell_path;
     let cwd = ospath::cwd();
@@ -1412,9 +1412,89 @@ fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
     }
     let inferred_profile = a.profile.is_empty();
     if inferred_profile {
-        let bindings = paths::load_bindings();
-        a.profile = paths::bound_profile(Some(&cwd), Agent::Claude, &bindings)
-            .unwrap_or_else(|| paths::default_folder(Agent::Claude));
+        // Where it goes: the best account of its agent now, as hatcheck best picks it, other
+        // than its own, shown with its limits before the question or the dry run's report.
+        let Some(&(agent, _)) = copies.first() else {
+            return Ok(()); // no such session: the run says so
+        };
+        let agent = if agent.has_profiles() {
+            agent
+        } else {
+            Agent::Claude
+        };
+        let me = prog.split_whitespace().next().unwrap_or("hatcheck");
+        let now = times::now();
+        let loaded = usage::load_usage(
+            &paths::find_profiles(),
+            false,
+            &paths::find_codex_homes(),
+            &paths::find_agy_roots(),
+            &paths::find_kimi_homes(),
+            &paths::find_zcode_roots(),
+        );
+        let accounts = crate::best::ranked_for(agent, &loaded, now);
+        let mine: Vec<usize> = copies
+            .iter()
+            .flat_map(|(_, folder)| crate::best::holding(&accounts, folder))
+            .collect();
+        // The copy an account holds: its folder.
+        let held_by = |k: usize| {
+            copies
+                .iter()
+                .find(|(_, f)| {
+                    accounts[k]
+                        .2
+                        .profiles
+                        .iter()
+                        .any(|p| paths::same_folder(p, f))
+                })
+                .map_or(accounts[k].2.profiles[0].clone(), |(_, f)| f.clone())
+        };
+        let id8 = py::head(&a.session, 8).to_string();
+        let title = about.split(" from ").next().unwrap_or("").to_string();
+        match crate::best::pick(&accounts, &mine) {
+            crate::best::Pick::Own(k) => {
+                return Err(format!(
+                    "Session {id8}{title} is already in {}, the best {} account now. Say where it goes: {prog} {id8} <profile>",
+                    show(&held_by(k)),
+                    agent.name()
+                ));
+            }
+            crate::best::Pick::Other(b) => {
+                let shown = a.dry_run || interactive();
+                if shown && !a.json {
+                    if let Some(&k) = mine.first() {
+                        out::println(&format!(
+                            "Session {id8}{title} is in {}: {}.",
+                            show(&held_by(k)),
+                            crate::best::summary(&accounts[k].3, now, accounts[k].1)
+                        ));
+                    }
+                    crate::best::print_account(
+                        &out::Paint::new(),
+                        &format!("Best {} account now: ", agent.name()),
+                        &accounts[b],
+                        now,
+                    );
+                }
+                a.profile = accounts[b].2.profiles[0].clone();
+                if shown && !about.is_empty() && !a.json {
+                    // The session is the newest started from this folder: the folder's
+                    // binding, when that's another profile, as the list flags it.
+                    let bound = paths::bound_profile(Some(&cwd), agent, &paths::load_bindings());
+                    if let Some(bound) = bound.filter(|w| !paths::same_folder(w, &a.profile)) {
+                        out::println(&format!("  ⚠ folder bound to {}", show(&bound)));
+                    }
+                }
+            }
+            crate::best::Pick::Nothing => {
+                return Err(format!(
+                    "No {}{} account has room now; {me} best says when one will. Say where it goes: {prog} {id8} <profile>",
+                    if mine.is_empty() { "" } else { "other " },
+                    agent.name()
+                ));
+            }
+        }
     }
     if about.is_empty() && !inferred_profile {
         return Ok(());
@@ -2939,9 +3019,9 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, to the folder's Claude Code profile; either after asking.")
+    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, or a path (default: this folder's bound Claude Code profile, or ~/.claude)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
         // Still taken, so scripts that pass them run: what --no-keep asked for is the default
@@ -2976,9 +3056,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 /// hatcheck fork SESSION PROFILE ...: bring a session into another profile as a new one, with its
 /// own ID, and keep the original; for the other agent, convert it, as move does.
 pub fn fork_main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, into the folder's Claude Code profile; either after asking.")
+    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, or a path (default: this folder's bound Claude Code profile, or ~/.claude)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")
         .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");

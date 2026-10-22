@@ -130,7 +130,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`ck work --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-work` |
 | [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day, in every profile, home and folder, each with its resume command and what's left of its plan |
 | [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable |
-| [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | which account to use now, or to carry a session to; `--wait` sleeps until one has room |
+| [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | the best account now, with its limits, and the `move` command that carries the newest session started here to it; `--wait` sleeps until one has room |
 | [`hatcheck where SESSION`](docs/commands.md#hatcheck-where-find-a-session) | where a session's files are |
 | [`hatcheck open SESSION`](docs/commands.md#hatcheck-open-resume-a-session-in-a-new-terminal) | resume it in a new terminal, in its folder |
 | [`hatcheck resume`](docs/commands.md#hatcheck-resume-carry-on-the-newest-session-here) | carry on the newest session started from this folder, in this terminal, after asking; `hat r` for short |

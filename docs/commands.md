@@ -36,8 +36,9 @@ in two words, so it's `hat` again: `hat check` lists sessions and `hat check usa
 
 A subcommand can be cut to its first letters, after `hat` or `hatcheck`: `hat m …` is `hat move …`
 and `hat f …` is `hat fork …`. Where two share a letter, it goes to the one used more: `b` is
-`best`, `s` is `show`, `u` is `usage` and `d` is `desktop`, so `bind`, `unbind` and `doctor` take
-two letters, `bi`, `un` and `do`. What it prints, and the commands it suggests, use the whole name.
+`best`, `s` is `show`, `u` is `usage`, `d` is `desktop` and `r` is `resume`, so `bind`, `unbind`
+and `doctor` take two letters, `bi`, `un` and `do`, and `relocate` three, `rel`. What it prints,
+and the commands it suggests, use the whole name.
 
 Lists the Claude Code sessions from every `~/.claude*` profile, and the Codex sessions from every
 `~/.codex*` home, that were active in the last 24 hours or are still open, grouped by folder and
@@ -241,10 +242,17 @@ Resume it now in ~/.claude-work? [y/N]
   copies, except inside Claude's thinking, whose signatures would stop matching.
 - A session that's open in a terminal is refused: quit it first, so it stops changing.
   `hatcheck` marks those `● open`.
+- `hatcheck move`, with nothing, moves the newest session started from this folder to the best
+  account of its agent now, the one [`hatcheck best`](#hatcheck-best-which-account-to-use-now)
+  picks: the first with room in its ranking, other than the session's own. It says where the
+  session is and what that account has left, shows the best account as `hatcheck usage` shows it,
+  bars and resets included, flags the folder's binding when that's another profile (`⚠ folder
+  bound to ~/.claude-work`), and asks. A session alone (`hatcheck move 9a8b7c6d`) goes the same
+  way. When the session is already in the best account, or no account has room, it stops and says
+  so; a script, a pipe or `--json` has to say both.
 - `hatcheck move work`, with a profile alone, moves the newest session started from this folder
-  to `~/.claude-work`, after asking, as `hatcheck move` with nothing moves it to the folder's
-  Claude Code profile; `hatcheck fork work` forks it there the same way. A word that starts a
-  session's ID and names a profile that exists too is asked for more.
+  to `~/.claude-work`, after asking; `hatcheck fork work` forks it there the same way. A word that
+  starts a session's ID and names a profile that exists too is asked for more.
 - Resume it with the printed command, from the directory it ran in, or answer `y` when it asks and
   it starts Claude Code there with the new profile. It only asks in a terminal, so scripts never
   wait on it. The conversation comes across whole; the account and its plan limits, settings,
@@ -456,7 +464,7 @@ Resume it with:
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder. One word alone that names a profile or home that exists, and starts no session's ID, is `PROFILE` (`hatcheck move work`), with the session the newest started from this folder; a word that is both is asked for more |
-| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, or a path; left out, this folder's bound Claude Code profile, or `~/.claude` |
+| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, or a path; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
 | `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
@@ -513,7 +521,7 @@ Resume it now in ~/.claude? [y/N]
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder, as for `move`, and one word alone that names a profile is `PROFILE`, as for `move` |
-| `PROFILE`        | where it goes, as for [`move`](#hatcheck-move-carry-on-a-session-with-another-profile); left out, this folder's Claude Code profile, after asking |
+| `PROFILE`        | where it goes, as for [`move`](#hatcheck-move-carry-on-a-session-with-another-profile); left out, the best account now, as for `move` |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it, as for `move` |
 | `--dry-run`      | show what would be copied or converted, and change nothing                   |
 
@@ -642,42 +650,63 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
 
 ## `hatcheck best`: which account to use now
 
+The best account now, shown as `hatcheck usage` shows it, and the `hatcheck move` command that
+carries a session to it: the newest session started from this folder, or the one `--for` names.
+It's the account `hatcheck move` with nothing picks.
+
 ```console
-$ hatcheck best
-Claude Code, best first (sorted by Fable, as hatcheck usage sorts)
-   1. ~/.claude-work      Fable 31% left, resets Tue 12:00pm, 0.5%/h · 5h 80%   → cl work
-   2. ~/.claude-team      Fable 100% left, resets Thu 1:00am, 0.9%/h · 5h 100%  → cl team
-   3. ~/.claude-personal  Fable 0% left, back Sat 4:59pm · 5h 100%              → cl personal
-   4. ~/.claude           week 64%, 1.3%/h · 5h 100%                            → claude
-Codex, best first
-   1. ~/.codex  month 100%, 0.2%/h  → codex
-Advice only: nothing is started, moved or switched. hatcheck best --for <session> says where to carry a session.
-$ hatcheck best --for 9a8b7c6d
-Session 9a8b7c6d "Add rate limiting to the login endpoint" is in ~/.claude-personal: Fable 0% left, back Sat 4:59pm · 5h 100%.
-Carry it to ~/.claude-work: Fable 31% left, resets Tue 12:00pm, 0.5%/h · 5h 80%.
-  hatcheck move 9a8b7c6d work --from personal
-It prints the command that resumes it there, and offers to run it.
+$ hatcheck best                   # in ~/code/api, where session 9a8b7c6d ran last
+Session 9a8b7c6d "Add rate limiting to the login endpoint", the newest started from this folder, is in ~/.claude-personal: Fable 0% left, back Sat 4:59pm · 5h 100%.
+Best Claude Code account now: ~/.claude-work  team max 5x · live
+  session (5h)          80% ████████░░  ░░░░░░░░░░ resets 3:40pm (in 55m)
+  week (Fable)          31% ███░░░░░░░  ██████░░░░ resets Tue 12:00pm (in 2d14h)
+  week (all models)     64% ██████▍░░░  ██████░░░░ resets Tue 12:00pm (in 2d14h)
+Carry it there with:
+  hatcheck move work    (hatcheck fork work keeps the original)
+Then:
+   2. ~/.claude-team      Fable 100% left, resets Thu 1:00am, 0.9%/h · 5h 100%               → cl team
+   3. ~/.claude-personal  Fable 0% left, back Sat 4:59pm · 5h 100% (where it is)             → cl personal
+   4. ~/.claude           week 64%, 1.3%/h · 5h 100%                                         → claude
+Codex: ~/.codex  month 100%, 0.2%/h  → codex
+Advice only: nothing is started, moved or switched. hatcheck usage shows every account's limits.
+$ hatcheck best --for 9a8b7c6d    # the same for a session named by its ID, from any folder
+…
+Carry it there with:
+  hatcheck move 9a8b7c6d work    (hatcheck fork 9a8b7c6d work keeps the original)
 $ hatcheck best --wait work && cl work
 No room yet; waiting for ~/.claude-work until Tue 12:00pm (in 2d14h)…
 ```
 
+- The session it's for is the newest started from this folder, as `hatcheck move` with nothing
+  takes it, or `--for`'s, found as `hatcheck open` finds one. The first line says where it is and
+  what that account has left. Without a session, the best account comes with the command that
+  starts the agent there and `hatcheck move <session> NAME`.
+- The best account is the first with room in the ranking below, other than the session's own,
+  and is shown as `hatcheck usage` shows it: the plan, whether the numbers are live, and one row
+  per limit with its bars and reset. When the session's own account has room and ranks ahead of
+  every other, it says so and prints the resume command instead. When no account has room, it
+  says so, lists them all so you see when one will, and exits 1.
+- The command carries the session there: `hatcheck move NAME` for the newest session started
+  here, `hatcheck move <id> NAME` for one named with `--for`, with `--from` when more than one
+  profile holds a copy, and `hatcheck fork` beside it, which keeps the original. For a session of
+  another agent, the command converts it. The accounts ranked are the session's agent's; an
+  Antigravity CLI or ZCode session, which has no profiles, gets Claude Code's.
+- `Then:` lists the rest of the agent's accounts in the ranking's order, a line each, the
+  session's own marked `(where it is)`, and the other agents' best account after them.
 - Claude Code accounts come in the order `hatcheck usage` sorts them: those with Fable left first,
   the soonest Fable reset on top, with those past 90% used behind the fresher ones and those past
   98% behind those; then those out of Fable, or out of the weekly limit for all models, the soonest
-  back on top; then accounts without a Fable limit, by the limit with the least left. Codex homes
-  and Antigravity CLI's folder are ranked by the limit with the least left.
-- The Fable part ends with the account's pace: what's left, divided by the hours until it resets,
-  so what the account can spend per hour without running out before the reset. `0.5%/h` with 31%
-  left means about 62 hours to go. An account without a Fable limit shows the pace of its tightest
-  limit instead.
-- `--for <session>` picks the best other account of the session's agent that has room now, and
-  prints the [`hatcheck move`](#hatcheck-move-carry-on-a-session-with-another-profile) command. If
-  the session's own account is the best, it says so and prints the resume command.
-- `--wait` sleeps until an account has room, then answers as above: any Claude Code account;
-  `--wait NAME` (or `default`, `codex`, `codex:NAME`) that one profile or home; with `--for`, an
-  account of the session's agent. It sleeps until the soonest reset the numbers name, says so on
-  stderr, then looks again; when nothing says when an account will have room, it stops with an
-  error instead of polling. For a script: `hatcheck best --wait work && cl work`.
+  back on top; then accounts without a Fable limit, by the limit with the least left. Codex homes,
+  Kimi homes and Antigravity CLI's folder are ranked by the limit with the least left.
+- A line's Fable part ends with the account's pace: what's left, divided by the hours until it
+  resets, so what the account can spend per hour without running out before the reset. `0.5%/h`
+  with 31% left means about 62 hours to go. An account without a Fable limit shows the pace of its
+  tightest limit instead.
+- `--wait` sleeps until an account has room, then answers as above: any account of the session's
+  agent (Claude Code's, without a session); `--wait NAME` (or `default`, `codex`, `codex:NAME`,
+  `kimi`, `kimi:NAME`) that one profile or home. It sleeps until the soonest reset the numbers
+  name, says so on stderr, then looks again; when nothing says when an account will have room, it
+  stops with an error instead of polling. For a script: `hatcheck best --wait work && cl work`.
 - The numbers are the ones `hatcheck usage` shows, live when it can be, with a snapshot's age
   otherwise; `--cached` skips the APIs.
 - **Advice only.** It runs when you ask, prints commands, and never starts, moves or switches
