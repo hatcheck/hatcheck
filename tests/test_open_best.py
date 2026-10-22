@@ -1,6 +1,7 @@
-"""hatcheck open and hatcheck best against a throwaway home: which session open picks and
-the command it runs or prints, the terminal it opens (a fake one), and how best ranks
-accounts and where it says to carry a session. No real profiles, no network."""
+"""hatcheck open, hatcheck resume and hatcheck best against a throwaway home: which session
+open picks and the command it runs or prints, the terminal it opens (a fake one), what resume
+shows and asks before it runs, and how best ranks accounts and where it says to carry a
+session. No real profiles, no network."""
 import os
 import subprocess
 import sys
@@ -8,7 +9,7 @@ import tempfile
 import time
 import unittest
 
-from helpers import ENGINE, NOW, WINDOWS, FakeHome, iso, write
+from helpers import ENGINE, NOW, WINDOWS, FakeHome, in_terminal, iso, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 B = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -94,6 +95,67 @@ class Open(unittest.TestCase):
         self.assertIn("Couldn't open a terminal", out)
         self.assertIn("Run these instead:", out)
 
+
+class Resume(unittest.TestCase):
+    """hatcheck resume (hat r): the newest session started from this folder, carried on in
+    this terminal once the question is answered."""
+    def setUp(self):
+        self.h = h = FakeHome()
+        self.addCleanup(h.cleanup)
+        self.work, self.b = h.profile("work"), h.profile("b")
+        self.api = h.folder("code", "api")
+        h.session(self.work, self.api, A, "Fix the login test", 5)
+        self.bindir = os.path.join(h.root, "fakebin")
+        write(os.path.join(self.bindir, "claude"), '#!/bin/sh\necho "CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR cwd=$(pwd) args=$*"\n')
+        os.chmod(os.path.join(self.bindir, "claude"), 0o755)
+        self.path = self.bindir + ":/bin:/usr/bin"
+        self.ran = "CLAUDE_CONFIG_DIR=%s cwd=%s args=--resume %s" % (self.work, self.api, A)
+
+    def test_print(self):
+        code, out = run(self.h, ["resume", "--print"], cwd=self.api)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[0], "cd " + self.h.shown(self.api))
+        self.assertIn("claude --resume " + A, out)
+        code, out = run(self.h, ["resume", "--print"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("No session was started from this folder", out)
+
+    @unittest.skipIf(WINDOWS, "a POSIX shell and a pseudo-terminal")
+    def test_shows_the_session_and_asks(self):
+        env = dict(self.h.env(), PATH=self.path)
+        code, out = in_terminal([ENGINE, "resume"], [(b"[Y/n] ", b"\n")], env, self.api)  # Enter: yes
+        self.assertEqual(code, 0, out)
+        self.assertIn('Session aaaaaaaa "Fix the login test" \u00b7 Claude Code in %s \u00b7 5m ago' % self.h.shown(self.work), out)
+        self.assertIn("claude --resume " + A, out)
+        self.assertIn("Resume it here, in %s? [Y/n]" % self.h.shown(self.api), out)
+        self.assertIn(self.ran, out)
+        code, out = in_terminal([ENGINE, "r"], [(b"[Y/n] ", b"n\n")], env, self.api)  # hat r, declined
+        self.assertEqual(code, 1, out)
+        self.assertIn("Nothing started.", out)
+        self.assertNotIn("args=--resume", out)
+        # The folder bound to another profile is flagged, as the list flags the session.
+        code, out = run(self.h, ["bind", "b"], cwd=self.api)
+        self.assertEqual(code, 0, out)
+        code, out = in_terminal([ENGINE, "r"], [(b"[Y/n] ", b"n\n")], env, self.api)
+        self.assertIn("\u26a0 folder bound to " + self.h.shown(self.b), out)
+
+    @unittest.skipIf(WINDOWS, "a POSIX shell")
+    def test_without_a_terminal_to_ask_at(self):
+        code, out = run(self.h, ["resume"], cwd=self.api, PATH=self.path)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Say --yes when there's no terminal to ask at", out)
+        self.assertNotIn("args=--resume", out)
+        code, out = run(self.h, ["resume", "--yes"], cwd=self.api, PATH=self.path)
+        self.assertEqual(code, 0, out)
+        self.assertIn('Resuming session aaaaaaaa "Fix the login test" here, in %s' % self.h.shown(self.api), out)
+        self.assertIn(self.ran, out)
+
+    def test_refuses_an_open_session(self):
+        self.h.register_open(self.work, A)
+        code, out = run(self.h, ["resume", "--yes", A[:8]], PATH=self.path)
+        self.assertEqual(code, 1, out)
+        self.assertIn("is open in pid", out)
+        self.assertNotIn("args=--resume", out)
 
 
 def fable(used, days, weekly_used=None):

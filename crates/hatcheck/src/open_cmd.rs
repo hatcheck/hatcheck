@@ -99,7 +99,7 @@ pub fn pick(args: &Pick) -> Result<Summary, String> {
 }
 
 /// Refuse a session that's open in a terminal, so it isn't resumed twice.
-fn refuse_if_open(s: &Summary) -> Result<(), String> {
+pub(crate) fn refuse_if_open(s: &Summary) -> Result<(), String> {
     let id8 = py::head(&s.id, 8);
     match s.agent {
         Agent::Codex => {
@@ -427,7 +427,7 @@ fn detach(cmd: &mut Command) {
 }
 
 /// Resume it in this terminal: the same command, run from the session's folder.
-fn run_here(cwd: &str, command: &str) -> i32 {
+pub(crate) fn run_here(cwd: &str, command: &str) -> i32 {
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;

@@ -556,7 +556,7 @@ Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
 ```console
 $ hatcheck open 3f1c2a9e          # a new terminal window in ~/code/api, running cl work --resume …
 $ hatcheck open                   # the newest session started from this folder, in any profile or home
-$ hatcheck open 3f1c2a9e --here   # in this terminal instead
+$ hatcheck open 3f1c2a9e --here   # in this terminal instead (hatcheck resume asks first)
 $ hatcheck open 3f1c2a9e --print  # the two commands, for scripts
 cd ~/code/api
 cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
@@ -579,6 +579,33 @@ cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
     `wezterm`, `wt`, `powershell`, `gnome-terminal`, `konsole`, `kitty`, or any terminal that takes
     `-e`. A shell stays open in the folder after the session ends.
 - If the terminal can't be opened, it prints the two commands to run instead.
+
+## `hatcheck resume`: carry on the newest session here
+
+```console
+$ hat r                           # in the folder the session ran in
+Session 3f1c2a9e "Fix the login test" · Claude Code in ~/.claude-work · 5m ago
+  cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+Resume it here, in ~/code/api? [Y/n]
+$ hatcheck resume 3f1c2a9e --yes  # a session by its ID, without asking
+$ hatcheck resume --print         # the two commands, for scripts
+cd ~/code/api
+cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+```
+
+- `hat r` is the short form. Without a session, it's the newest session started from this folder,
+  in any profile or home, picked as `hatcheck open` picks it (`--all` counts Claude Desktop's, the
+  SDK's and the Codex app's too); with one, that session, found as `hatcheck open` finds it,
+  `--from` included.
+- It shows the session, its agent and profile, how long since it was last active, and the command
+  it would run, flags the folder's binding when the session is in another profile (`⚠ folder
+  bound to ~/.claude-work`, as the list does), and asks. Enter or `y` runs the command, anything
+  else leaves it (`Nothing started.`, exit 1). `--yes` skips the question. Without a terminal to
+  ask at, as in a script, it stops and says to give `--yes`, or `--print` for the commands, so a
+  script never starts an agent by accident.
+- The command runs in this terminal, in the session's folder, in hatcheck's place, as
+  `hatcheck open --here` runs it; `hatcheck open` opens a new terminal window instead.
+- A session that's open in a terminal is refused, so it isn't resumed twice.
 
 ## `hatcheck show`: a session's conversation
 

@@ -133,6 +133,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | which account to use now, or to carry a session to; `--wait` sleeps until one has room |
 | [`hatcheck where SESSION`](docs/commands.md#hatcheck-where-find-a-session) | where a session's files are |
 | [`hatcheck open SESSION`](docs/commands.md#hatcheck-open-resume-a-session-in-a-new-terminal) | resume it in a new terminal, in its folder |
+| [`hatcheck resume`](docs/commands.md#hatcheck-resume-carry-on-the-newest-session-here) | carry on the newest session started from this folder, in this terminal, after asking; `hat r` for short |
 | `hatcheck show SESSION` | its conversation, read-only |
 | [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent |
 | [`hatcheck fork SESSION PROFILE`](docs/commands.md#hatcheck-fork-a-session-as-a-new-one-in-another-profile) | bring it in there as a new session, keeping the original |
@@ -142,7 +143,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck desktop`](#claude-desktop-instances-macos) | Claude Desktop instances on macOS |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |
 
-`hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`.
+`hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`, `hat r` is `hat resume`.
 [Antigravity CLI](docs/agents.md#antigravity-cli-agy) sessions are listed, shown and converted
 from its one folder, with what its `/usage` reports; [Kimi Code CLI](docs/agents.md#kimi-code-cli-kimi)
 sessions are listed, shown, converted and moved between its homes, and [ZCode](docs/agents.md#zcode-zcode)'s

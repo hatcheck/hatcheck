@@ -343,7 +343,7 @@ fn time_text(stamp: &Value) -> String {
     }
 }
 
-fn interactive() -> bool {
+pub(crate) fn interactive() -> bool {
     use std::io::IsTerminal;
     std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
 }
@@ -351,7 +351,7 @@ fn interactive() -> bool {
 /// What you type at a prompt, as input() reads it: None at the end of input, or when Ctrl+C
 /// stops it, which move takes the same way. The prompt goes to stderr, where input() writes it
 /// in a terminal.
-fn read_answer(prompt: &str) -> Option<String> {
+pub(crate) fn read_answer(prompt: &str) -> Option<String> {
     let line = read_line(prompt);
     line.map(|l| l.trim_end_matches(['\n', '\r']).to_string())
 }
