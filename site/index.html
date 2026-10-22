@@ -73,6 +73,18 @@
     .video .play svg { width: 32px; height: 32px; margin-left: 4px; }
     .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
     .video-note { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+    .table { overflow-x: auto; margin: 14px 0 10px; }
+    table { border-collapse: collapse; width: 100%; font-size: 15px; min-width: 720px; }
+    th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 13px; }
+    td:first-child { white-space: nowrap; font-weight: 600; }
+    .none { color: var(--muted); }
+    .helps { margin-top: 14px; }
+    details { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; margin: 8px 0; }
+    details[open] { background: var(--bg-soft); }
+    summary { cursor: pointer; font-weight: 600; }
+    summary span { color: var(--muted); font-weight: 400; margin-left: 6px; }
+    details pre { margin: 10px 0 6px; }
     footer { padding: 26px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
     @media (max-width: 560px) {
       h1 { font-size: 32px; } .tagline { font-size: 18px; }
@@ -96,7 +108,7 @@
       </svg>
       <div>
         <h1>Hatcheck</h1>
-        <p class="tagline">Claude Code, Codex and Kimi Code CLI accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume commands across all of them, and sessions carried between the three.</p>
+        <p class="tagline">Claude Code, Codex and Kimi Code CLI accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume commands across all of them, and sessions carried between all five.</p>
       </div>
     </div>
     <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI or Z.ai. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's and ZCode and GLM are Z.ai's.</p>
@@ -160,6 +172,388 @@ cd ~/code/api
       <div class="limit"><span class="name">session (5h)</span><span class="pct">62%</span><span class="bar ok"><i style="width:62%"></i></span><span class="bar time"><i style="width:54%"></i></span><span class="reset">resets 5:01pm</span></div>
       <div class="limit"><span class="name">week (all models)</span><span class="pct">91%</span><span class="bar ok"><i style="width:91%"></i></span><span class="bar time"><i style="width:44%"></i></span><span class="reset">resets Sat 4:20pm</span></div>
       <div class="limit"><span class="name violet">week (Fable)</span><span class="pct">19%</span><span class="bar violet-bar"><i style="width:19%"></i></span><span class="bar time"><i style="width:57%"></i></span><span class="reset">resets Tue 12:00pm</span></div>
+    </div>
+  </section>
+
+  <section class="wrap" id="agents">
+    <h2>Which agents, and how far</h2>
+    <p>Claude Code, Codex and Kimi Code CLI get a profile per account and a launcher. Antigravity CLI and ZCode keep one login in one folder, which only <code>HOME</code> moves, so hatcheck reads that folder: their sessions are listed, shown and converted, not moved between profiles. Each agent's page in the <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/agents.md">docs</a> says what is read, and the version it was checked against.</p>
+    <div class="table">
+      <table>
+        <thead><tr><th>Agent</th><th>Profiles</th><th>Sessions</th><th>Between its profiles</th><th>To and from the other agents</th><th>Plan usage</th></tr></thead>
+        <tbody>
+          <tr><td>Claude Code</td><td><code>cl work</code> runs it with <code>~/.claude-work</code></td><td>listed, shown, resumed</td><td>moved and forked</td><td>converted, both ways</td><td>its own <code>/usage</code>, run in the profile; no login read</td></tr>
+          <tr><td>Codex</td><td><code>cx work</code> runs it with <code>~/.codex-work</code></td><td>listed, shown, resumed</td><td>moved and forked</td><td>converted, both ways</td><td>ChatGPT's usage endpoint, the home's token sent as it is</td></tr>
+          <tr><td>Kimi Code CLI</td><td><code>ck work</code> runs it with <code>~/.kimi-code-work</code></td><td>listed, shown, resumed</td><td>moved and forked</td><td>converted, both ways</td><td>Kimi's usage endpoint, the home's token sent as it is</td></tr>
+          <tr><td>Antigravity CLI</td><td>one folder, <code>~/.gemini/antigravity-cli</code>; no profiles yet</td><td>listed, shown, resumed</td><td class="none">one folder</td><td>out, converted; in, as a file agy reads to carry on</td><td>its own <code>/usage</code>, once <code>agy models</code> says it's signed in</td></tr>
+          <tr><td>ZCode</td><td>one folder, <code>~/.zcode</code>; no profiles</td><td>listed, shown, resumed; the database is only read</td><td class="none">one folder</td><td>out, converted; in, as a file zcode starts on</td><td class="none">none: zcode has no usage command</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="video-note">Claude Desktop instances are Claude's, on macOS. <code>relocate</code> brings Claude Code and Codex sessions along with a moved folder; the others' stay as they are.</p>
+  </section>
+
+  <section class="wrap" id="commands">
+    <h2>Every command</h2>
+    <p>What <code>hatcheck --help</code> prints, then each command's own <code>--help</code>, as <!-- help:version -->0.5.0<!-- /help:version --> prints them. The <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/commands.md">docs</a> have each command as it is, with examples and its <code>--json</code>.</p>
+<pre><code><!-- help:hatcheck -->hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode accounts
+on one computer, each kept apart. Lists recent sessions with the command that
+resumes each one and what's left of each plan, and carries sessions between
+accounts and agents.
+
+Usage:
+    hatcheck [sessions] [HOURS] ...    recent sessions in every profile and home, with
+                                       resume commands and plan usage (the default)
+    hat check ...                      the same as hat (or hatcheck): the name in two words
+    hatcheck usage ...                 plan usage left for every profile and home
+    hatcheck where SESSION             where a session is stored, by its ID or the start of it
+    hatcheck move [SESSION] [PROFILE]  move a session to another profile or home, or convert
+                                       it for another of the agents; with a profile alone,
+                                       the newest session started here goes to it, and
+                                       with nothing, to the best account now, after asking
+    hatcheck fork [SESSION] [PROFILE]  fork a session into another profile or home: a new
+                                       session with its own ID, and the original stays
+    hatcheck relocate OLD NEW          bring the sessions of a project folder that was moved
+                                       or renamed along to its new place
+    hatcheck open [SESSION] ...        resume a session in a new terminal, in its folder
+    hatcheck resume [SESSION]          carry on the newest session started here, in this
+                                       terminal, after asking; hat r for short
+    hatcheck show SESSION              a session's conversation, read-only
+    hatcheck best [--for SESSION]      the best account now, in full, and the move command
+                                       that carries the newest session started here to it;
+                                       --wait sleeps until one has room
+    hatcheck bind PROFILE ...          tie a folder to a profile, for cl, cx, ck and the list
+    hatcheck unbind [FOLDER]           untie it again
+    hatcheck desktop ...               Claude Desktop instances on macOS: list, open, make one
+    hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
+                                       claude-k, cl -z and cl -k
+    hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
+                                       which runs, and how to remove the rest
+
+hatcheck, usage, where, show, desktop, move, fork, relocate and doctor take --json,
+for scripts, status bars and the desktop app.
+
+`hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
+says which version this is. hat is the short name: hat usage is hatcheck usage,
+and so on. cl, cx and ck run Claude Code, Codex and Kimi Code CLI with a profile.
+
+A subcommand can be cut to its first letters: hat m is hat move, hat f is hat
+fork. Where two share a letter, it goes to the one used more: b is best, s is
+show, u is usage, d is desktop and r is resume, so bind, unbind and doctor take
+two letters, bi, un and do, and relocate three, rel.<!-- /help:hatcheck --></code></pre>
+    <div class="helps">
+      <details><summary><code>hatcheck sessions</code><span>recent sessions in every profile and home, with resume commands and plan usage; the default</span></summary>
+<pre><code><!-- help:sessions -->usage: hatcheck sessions [-h] [-n N] [--all] [--all-folders] [--full]
+                         [--cached] [--no-usage] [--json] [-e]
+                         [hours]
+
+List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI
+sessions across all ~/.codex* homes, Antigravity CLI sessions from
+~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code*
+homes and ZCode sessions from ~/.zcode, with the command that resumes each
+one.
+
+positional arguments:
+  hours               how far back to look (default 24); accepts 36, 1.5, 12h
+                      or 3d
+
+options:
+  -h, --help          show this help message and exit
+  -n, --per-folder N  show only the newest N sessions per folder (default:
+                      all)
+  --all               also list sessions last used from Claude Desktop or the
+                      SDK, Codex sessions from the Codex app, its IDE
+                      extension or codex exec, and the Antigravity app's
+                      conversations
+  --all-folders       list every folder, even when run from a folder that has
+                      sessions
+  --full              print CLAUDE_CONFIG_DIR=... claude instead of the cl
+                      shortcut, CODEX_HOME=... codex instead of cx, and
+                      KIMI_CODE_HOME=... kimi instead of ck
+  --cached            take plan usage from the snapshots Claude Code and Codex
+                      last saved, and hatcheck's last readings of agy's /usage
+                      and Kimi's usage, instead of the APIs
+  --no-usage          leave plan usage out
+  --json              print the sessions, and the accounts behind them, as
+                      JSON for scripts and apps
+  -e, --email         with --json, include each account's email address<!-- /help:sessions --></code></pre>
+      </details>
+      <details><summary><code>hatcheck usage</code><span>plan usage left for every profile and home</span></summary>
+<pre><code><!-- help:usage -->usage: hatcheck usage [-h] [--cached] [-e] [--json]
+
+Show how much of each plan limit is left, for every Claude Code profile
+(~/.claude*), Codex home (~/.codex*), Antigravity CLI folder
+(~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode's folder is
+listed with why zcode gives none.
+
+options:
+  -h, --help   show this help message and exit
+  --cached     don't call the APIs; show the snapshots Claude Code and Codex
+               last saved, and hatcheck's last readings of agy's /usage and
+               Kimi's usage
+  -e, --email  show each account's email address (hidden by default)
+  --json       print the accounts and their limits as JSON, for scripts and
+               status bars<!-- /help:usage --></code></pre>
+      </details>
+      <details><summary><code>hatcheck best</code><span>the best account now, and the move command that carries a session to it</span></summary>
+<pre><code><!-- help:best -->usage: hatcheck best [-h] [--for SESSION] [--cached] [--wait [PROFILE]]
+
+The best account now, shown as hatcheck usage shows it, and the hatcheck move
+command that carries a session to it: the newest started from this folder, or
+--for's. Advice only: it never starts, moves or switches anything.
+
+options:
+  -h, --help        show this help message and exit
+  --for SESSION     the session to carry: its ID, or the start of it (default:
+                    the newest session started from this folder)
+  --cached          don't call the APIs; use the snapshots Claude Code and
+                    Codex last saved, and hatcheck's last readings of agy's
+                    /usage and Kimi's usage
+  --wait [PROFILE]  wait until an account has room, then answer: any account
+                    of the session's agent (Claude Code's, without a session),
+                    or PROFILE's (NAME, default, codex, codex:NAME, agy, kimi,
+                    kimi:NAME)<!-- /help:best --></code></pre>
+      </details>
+      <details><summary><code>hatcheck where</code><span>where a session is stored</span></summary>
+<pre><code><!-- help:where -->usage: hatcheck where [-h] [--json] session
+
+Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session by
+its ID, or the start of it.
+
+positional arguments:
+  session     the session ID, or the start of it
+
+options:
+  -h, --help  show this help message and exit
+  --json      print the matches as JSON<!-- /help:where --></code></pre>
+      </details>
+      <details><summary><code>hatcheck show</code><span>a session's conversation, read-only</span></summary>
+<pre><code><!-- help:show -->usage: hatcheck show [-h] [--from PROFILE] [--last N] [--json] session
+
+Show a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session's
+conversation, read-only.
+
+positional arguments:
+  session         the session ID, or the start of it
+
+options:
+  -h, --help      show this help message and exit
+  --from PROFILE  the profile or home to read it from, when more than one has
+                  a copy
+  --last N        only the last N turns
+  --json          print it as JSON<!-- /help:show --></code></pre>
+      </details>
+      <details><summary><code>hatcheck move</code><span>move a session to another profile or home, or convert it for another agent</span></summary>
+<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--dry-run] [--json]
+                     [session] [profile]
+
+Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session to
+another profile, to carry on with it there, or convert it for another agent.
+With a profile alone, the newest session started from this folder goes to it;
+with nothing, or a session alone, to the best account of its agent now, as
+hatcheck best picks it; either after asking.
+
+positional arguments:
+  session         the session ID, or the start of it (default: the newest
+                  session started from this folder; one word that names a
+                  profile is PROFILE)
+  profile         where it goes: NAME for ~/.claude-NAME, default or claude
+                  for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-
+                  NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-
+                  code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode,
+                  or a path (default: the best account of the session's agent
+                  now, as hatcheck best picks it)
+
+options:
+  -h, --help      show this help message and exit
+  --from PROFILE  the profile or home to take it from, when more than one has
+                  it
+  --keep          keep the original, which copies the session rather than
+                  moving it (a converted session's original is always kept)
+  --dry-run       show what would be moved, copied, converted and deleted, and
+                  change nothing
+  --json          say what was or would be done as JSON, and never ask to
+                  resume it<!-- /help:move --></code></pre>
+      </details>
+      <details><summary><code>hatcheck fork</code><span>fork a session into another profile or home: a new session with its own ID</span></summary>
+<pre><code><!-- help:fork -->usage: hatcheck fork [-h] [--from PROFILE] [--dry-run] [--json]
+                     [session] [profile]
+
+Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session
+into another profile: bring it in as a new session with its own ID, beside any
+copy already there, and keep the original. For another agent, it's converted.
+With a profile alone, the newest session started from this folder goes into
+it; with nothing, or a session alone, into the best account of its agent now,
+as hatcheck best picks it; either after asking.
+
+positional arguments:
+  session         the session ID, or the start of it (default: the newest
+                  session started from this folder; one word that names a
+                  profile is PROFILE)
+  profile         where it goes: NAME for ~/.claude-NAME, default or claude
+                  for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-
+                  NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-
+                  code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode,
+                  or a path (default: the best account of the session's agent
+                  now, as hatcheck best picks it)
+
+options:
+  -h, --help      show this help message and exit
+  --from PROFILE  the profile or home to take it from, when more than one has
+                  it
+  --dry-run       show what would be copied or converted, and change nothing
+  --json          say what was or would be done as JSON, and never ask to
+                  resume it<!-- /help:fork --></code></pre>
+      </details>
+      <details><summary><code>hatcheck relocate</code><span>a moved project folder's sessions, brought along</span></summary>
+<pre><code><!-- help:relocate -->usage: hatcheck relocate [-h] [--dry-run] [--json] old new
+
+Bring the sessions of a project folder that was moved or renamed along to its
+new place, in every Claude Code profile and Codex home: OLD is where they ran,
+NEW where the folder is now.
+
+positional arguments:
+  old         the folder the sessions ran in, as it was
+  new         the folder as it is now; it has to exist
+
+options:
+  -h, --help  show this help message and exit
+  --dry-run   say what would move and change nothing
+  --json      say what was or would be done as JSON<!-- /help:relocate --></code></pre>
+      </details>
+      <details><summary><code>hatcheck open</code><span>resume a session in a new terminal, in its folder</span></summary>
+<pre><code><!-- help:open -->usage: hatcheck open [-h] [--from PROFILE] [--here | --print]
+                     [--terminal NAME] [--full] [--all] [--login PROFILE]
+                     [session]
+
+Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session
+in a new terminal window, already in its folder.
+
+positional arguments:
+  session          the session ID, or the start of it (default: the newest
+                   session started from this folder)
+
+options:
+  -h, --help       show this help message and exit
+  --from PROFILE   the profile or home to take it from, when more than one has
+                   a copy
+  --here           resume it in this terminal instead
+  --print          print the cd and resume commands instead
+  --terminal NAME  the terminal to open (default: HATCHECK_TERMINAL, or this
+                   system's usual one)
+  --full           print CLAUDE_CONFIG_DIR=... claude rather than cl,
+                   CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=...
+                   kimi rather than ck
+  --all            without SESSION, also consider sessions from Claude
+                   Desktop, the SDK, the Codex app or codex exec
+  --login PROFILE  sign in to a profile (NAME, default, codex, codex:NAME,
+                   agy, kimi, kimi:NAME or zcode) in a new terminal, instead
+                   of resuming a session<!-- /help:open --></code></pre>
+      </details>
+      <details><summary><code>hatcheck resume</code><span>carry on the newest session started here, in this terminal, after asking</span></summary>
+<pre><code><!-- help:resume -->usage: hatcheck resume [-h] [--from PROFILE] [-y | --print] [--full] [--all]
+                       [session]
+
+Carry on the newest session started from this folder, or the one named, in
+this terminal: shows which, and asks first. hatcheck open opens a new terminal
+window instead.
+
+positional arguments:
+  session         the session ID, or the start of it (default: the newest
+                  session started from this folder)
+
+options:
+  -h, --help      show this help message and exit
+  --from PROFILE  the profile or home to take it from, when more than one has
+                  a copy
+  -y, --yes       don't ask
+  --print         print the cd and resume commands instead
+  --full          print CLAUDE_CONFIG_DIR=... claude rather than cl,
+                  CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=...
+                  kimi rather than ck
+  --all           without SESSION, also consider sessions from Claude Desktop,
+                  the SDK, the Codex app or codex exec<!-- /help:resume --></code></pre>
+      </details>
+      <details><summary><code>hatcheck bind</code><span>tie a folder to a profile, for cl, cx, ck and the list</span></summary>
+<pre><code><!-- help:bind -->usage: hatcheck bind [-h] [--codex HOME] [--agy FOLDER] [--kimi HOME]
+                     [--zcode FOLDER] [--list] [--hook]
+                     [profile] [folder]
+
+Tie a folder to a profile, so cl, cx and ck pick it there and the session list
+flags work done under another one.
+
+positional arguments:
+  profile         NAME for ~/.claude-NAME, default for ~/.claude, or a path
+  folder          the folder to bind (default: this one)
+
+options:
+  -h, --help      show this help message and exit
+  --codex HOME    the Codex home to bind: NAME for ~/.codex-NAME, default for
+                  ~/.codex, or a path (default: the one named like PROFILE)
+  --agy FOLDER    the Antigravity CLI folder to bind: default for
+                  ~/.gemini/antigravity-cli, or a path (default: that one,
+                  when PROFILE is default)
+  --kimi HOME     the Kimi home to bind: NAME for ~/.kimi-code-NAME, default
+                  for ~/.kimi-code, or a path (default: the one named like
+                  PROFILE)
+  --zcode FOLDER  the ZCode folder to bind: default for ~/.zcode, or a path
+                  (default: that one, when PROFILE is default)
+  --list          list every bound folder
+  --hook          warn in Claude Code, Codex and agy when a session starts in
+                  a bound folder under another profile<!-- /help:bind --></code></pre>
+      </details>
+      <details><summary><code>hatcheck unbind</code><span>untie it again</span></summary>
+<pre><code><!-- help:unbind -->usage: hatcheck unbind [-h] [--hook] [folder]
+
+Remove a folder's binding, or the warning hook.
+
+positional arguments:
+  folder      the bound folder (default: this one)
+
+options:
+  -h, --help  show this help message and exit
+  --hook      remove the warning hook from every profile<!-- /help:unbind --></code></pre>
+      </details>
+      <details><summary><code>hatcheck desktop</code><span>Claude Desktop instances on macOS</span></summary>
+<pre><code><!-- help:desktop -->usage: hatcheck desktop [-h] [--json] {new,open,remove} ...
+
+Claude Desktop instances on macOS: one per account, each with its own data
+folder and a launcher of its own colour.
+
+positional arguments:
+  {new,open,remove}
+    new              make an instance's launcher, /Applications/Claude
+                     DISPLAY.app
+    open             start an instance, or bring it forward
+    remove           delete an instance's launcher
+
+options:
+  -h, --help         show this help message and exit
+  --json             list the instances as JSON<!-- /help:desktop --></code></pre>
+      </details>
+      <details><summary><code>hatcheck provider</code><span>the Z.ai and Kimi keys and models behind claude-z and claude-k</span></summary>
+<pre><code><!-- help:provider -->usage: hatcheck provider [-h] {setup,env} ...
+
+Settings for running Claude Code on Z.ai (z) or Kimi (k) instead of Anthropic.
+
+positional arguments:
+  {setup,env}
+    setup      ask for the API key and model, and save them
+    env        the environment that points Claude Code at the provider
+
+options:
+  -h, --help   show this help message and exit<!-- /help:provider --></code></pre>
+      </details>
+      <details><summary><code>hatcheck doctor</code><span>every copy of hatcheck and the agents on your PATH</span></summary>
+<pre><code><!-- help:doctor -->usage: hatcheck doctor [-h] [--json]
+
+Check how hatcheck and the agents are installed: every copy on the PATH, which
+one runs, and how to remove the rest. Changes nothing.
+
+options:
+  -h, --help  show this help message and exit
+  --json      print what it found as JSON<!-- /help:doctor --></code></pre>
+      </details>
     </div>
   </section>
 

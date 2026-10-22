@@ -2,3 +2,4 @@ wrangler.jsonc
 .assetsignore
 .wrangler
 deploy.sh
+refresh-help.py
