@@ -43,6 +43,11 @@ fn keep(text: &str, to_err: bool) -> bool {
     })
 }
 
+/// Whether what's printed is being kept for hatcheck serve, not written.
+pub fn capturing() -> bool {
+    CAPTURE.with(|c| c.borrow().is_some())
+}
+
 fn write_to(mut w: impl Write, text: &str) {
     if let Err(e) = w.write_all(text.as_bytes()).and_then(|()| w.flush()) {
         if e.kind() == std::io::ErrorKind::BrokenPipe {

@@ -109,9 +109,10 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   `setopt interactivecomments`).
 - Usage is fetched live: Claude Code's `/usage` is run once per account, in its profile, and the
   snapshot it saves is read (see [`hatcheck usage`](#hatcheck-usage-plan-usage-for-every-profile)
-  below); ChatGPT's usage endpoint is asked once per Codex account. When that gives nothing new
-  (offline, not signed in, rate limited), the last saved snapshot is used instead and named at the
-  bottom with its age.
+  below), unless that snapshot is under a minute old, which Claude Code's `/usage` shows again
+  without asking; ChatGPT's usage endpoint is asked once per Codex account. When that gives
+  nothing new (offline, not signed in, rate limited), the last saved snapshot is used instead
+  and named at the bottom with its age.
 - A session that ran in a folder [bound](#hatcheck-bind-tie-a-folder-to-a-profile) to another
   profile is marked `⚠ folder bound to ~/.claude-work`, so it's easy to spot and `hatcheck move`.
 - What it reads from each session file is cached, in `sessions.json` in `~/Library/Caches/hatcheck`
@@ -170,6 +171,11 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   keeps beside the snapshot. The runs take about a second each, in parallel, from a folder of
   hatcheck's own (`claude-usage` in its cache folder), so the one empty project folder Claude Code
   makes for the folder it runs in is the same every time.
+- A snapshot under a minute old is shown as it is, as `cached <1m ago (Claude Code's /usage
+  reuses a reading under a minute old)`, and `claude` isn't run for it: Claude Code's own
+  `/usage` shows such a reading again without asking Anthropic (`nt=60000` beside
+  `cachedUsageUtilization` in 2.1.307; five runs a minute after the last left their snapshots
+  where they were, on 2026-10-21), so a run would give the same numbers a second later.
 - When that gives nothing new (`claude` not on the `PATH`, the profile not signed in, offline, or
   Anthropic rate-limiting the account), Claude Code's last saved snapshot is shown with its age and
   the reason.
@@ -198,10 +204,12 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   and window (agy 1.4.3 names a 5-hour and a weekly one per group), named in violet like
   per-model limits, under `Antigravity` and the plan tier agy names. When agy isn't signed in,
   the row says so, with the last reading and its age, and nothing is run that would start agy's
-  sign-in. One hatcheck asks agy at a time: a second run while another is asking, as when the
-  desktop app's engine and the CLI coincide, waits for it and takes its reading, shown as cached
-  a moment ago. See [Antigravity CLI](agents.md#antigravity-cli-agy) for how it's run and what's
-  kept.
+  sign-in. agy is the slowest to ask, two requests to Google taking five seconds or more, so a
+  reading from the last five minutes is shown again instead, as `cached <1m ago (asked at most
+  once in 5m)`; `--cached` shows it at any age, and once it's five minutes old agy is asked
+  again. One hatcheck asks agy at a time: a second run while another is asking, as when the
+  desktop app's engine and the CLI coincide, waits for it and takes its reading the same way. See
+  [Antigravity CLI](agents.md#antigravity-cli-agy) for how it's run and what's kept.
 - `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share. `--json` prints the accounts as data
   ([below](#--json-for-scripts-status-bars-and-apps)).

@@ -142,9 +142,10 @@ class AgyUsage(unittest.TestCase):
         self.root = h.agy_root()
         h.agy_session(self.root, h.folder("code", "api"), G, "Fix the uploader with agy", 1)
         self.bin = h.fake_agy()
+        self.cache = os.path.join(h.root, "cache")  # where hatcheck keeps its reading of agy's usage
 
     def run_usage(self, *args):
-        return self.h.run("usage", *args, PATH=self.bin + os.pathsep + self.h.env()["PATH"])
+        return self.h.run("usage", *args, PATH=self.bin + os.pathsep + self.h.env()["PATH"], HATCHECK_CACHE_DIR=self.cache)
 
     def test_live_from_agy_then_cached(self):
         write(os.path.join(self.root, "fake-usage.json"), json.dumps({
@@ -162,12 +163,21 @@ class AgyUsage(unittest.TestCase):
         self.assertIn("Antigravity Pro · cached", out)
         self.assertIn("(--cached)", out)
         self.assertEqual(len(self.h.agy_runs()), 2)
+        # A reading from the last five minutes is handed on: agy, the slowest to ask, isn't
+        # asked by every run.
         code, out = self.run_usage("--json")
         account = json.loads(out)["accounts"][0]
-        self.assertEqual((account["agent"], account["profiles"], account["plan"], account["source"]),
-                         ("agy", [self.root], "Antigravity Pro", "live"))
+        self.assertEqual((account["agent"], account["profiles"], account["plan"], account["source"], account["why"]),
+                         ("agy", [self.root], "Antigravity Pro", "cached", "asked at most once in 5m"))
         self.assertEqual((account["limits"][0]["name"], account["limits"][0]["left_percent"], account["limits"][0]["per_model"]),
                          ("Gemini 4 Argon", 62, True))
+        self.assertEqual(len(self.h.agy_runs()), 2)
+        code, out = self.run_usage()
+        self.assertIn("Antigravity Pro · cached <1m ago (asked at most once in 5m)", out)
+        self.backdate_reading(6 * 60)  # six minutes old: agy is asked again
+        code, out = self.run_usage()
+        self.assertIn("Antigravity Pro · live", out)
+        self.assertEqual(len(self.h.agy_runs()), 4)
 
     def test_the_buckets_agy_1_4_3_answers_with(self):
         # agy 1.4.3 puts each group's limits in buckets, each with a window and a remaining fraction.
@@ -201,7 +211,7 @@ class AgyUsage(unittest.TestCase):
         write(os.path.join(self.root, "fake-usage.json"), json.dumps({
             "groups": [{"group_name": "Gemini 4 Argon", "quota_info": {"remaining_fraction": 0.5, "reset_time": iso(NOW + 3600)}}]}))
         write(os.path.join(self.root, "fake-slow"), "")
-        env = dict(self.h.env(), PATH=self.bin + os.pathsep + self.h.env()["PATH"])
+        env = dict(self.h.env(), PATH=self.bin + os.pathsep + self.h.env()["PATH"], HATCHECK_CACHE_DIR=self.cache)
         runs = [subprocess.Popen(argv_of("usage") + ["--json"], cwd=self.h.root, env=env, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, text=True, encoding="utf-8") for _ in range(2)]
         outs = [p.communicate(timeout=60) for p in runs]
@@ -213,7 +223,7 @@ class AgyUsage(unittest.TestCase):
         self.assertEqual([r["args"] for r in self.h.agy_runs()], [["models"], USAGE_ARGS])  # asked once
         self.assertEqual(sorted(a["source"] for a in [json.loads(o)["accounts"][0] for o, _ in outs]), ["cached", "live"])
         cached = next(json.loads(o)["accounts"][0] for o, _ in outs if json.loads(o)["accounts"][0]["source"] == "cached")
-        self.assertEqual(cached["why"], "a reading from a moment ago")
+        self.assertEqual(cached["why"], "asked at most once in 5m")
 
     def test_hatchecks_stdin_never_reaches_agy(self):
         """A status bar or the app's engine runs hatcheck with a pipe on stdin that stays open;
@@ -225,7 +235,7 @@ class AgyUsage(unittest.TestCase):
             "groups": [{"group_name": "Gemini 4 Argon", "quota_info": {"remaining_fraction": 0.5, "reset_time": iso(NOW + 3600)}}]}))
         r, w = os.pipe()  # held open for the whole run
         try:
-            env = dict(self.h.env(), PATH=self.bin + os.pathsep + self.h.env()["PATH"])
+            env = dict(self.h.env(), PATH=self.bin + os.pathsep + self.h.env()["PATH"], HATCHECK_CACHE_DIR=self.cache)
             p = subprocess.run(argv_of("usage"), stdin=r, cwd=self.h.root, env=env, capture_output=True, text=True,
                                encoding="utf-8", timeout=30)
         finally:
@@ -249,11 +259,21 @@ class AgyUsage(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("Antigravity Pro · live", out)
         write(os.path.join(self.root, "fake-signed-out"), "")
+        self.backdate_reading(10 * 60)  # the reading is ten minutes old now: agy is asked again
         code, out = self.run_usage()
         self.assertEqual(code, 0, out)
         self.assertIn("Antigravity Pro · cached", out)  # the last reading, and why there's no new one
         self.assertIn("(agy isn't signed in; run agy to sign in)", out)
         self.assertEqual([r["args"] for r in self.h.agy_runs()], [["models"], USAGE_ARGS, ["models"]])
+
+    def backdate_reading(self, seconds):
+        """Make the reading hatcheck kept of agy's usage `seconds` older."""
+        path = os.path.join(self.cache, "agy-usage", "last-usage.json")
+        with open(path, encoding="utf-8") as fh:
+            kept = json.load(fh)
+        for entry in kept.values():
+            entry["saved_at"] -= seconds
+        write(path, json.dumps(kept))
 
     def test_without_agy(self):
         code, out = self.h.run("usage")

@@ -23,7 +23,9 @@ Kimi Code CLI (`kimi`) and ZCode (`zcode`) join Claude Code, Codex and Antigravi
 ### Fixed
 
 - **agy 1.4.3's `/usage`** puts each group's limits in `buckets`, each with a window; hatcheck showed no data for it, and now shows one row per bucket, with the window's length behind the time bar.
-- **Two hatchecks asking agy at once**, as the desktop app's engine and the CLI can, made the second wait on Google's quota service for a minute and then show no data: now one hatcheck asks agy at a time, and the second takes the reading the first saved when it's under a minute old.
+- **Two hatchecks asking agy at once**, as the desktop app's engine and the CLI can, made the second wait on Google's quota service for a minute and then show no data: now one hatcheck asks agy at a time, and the second takes the reading the first saved.
+- **`hatcheck usage`, `best` and the list took five to ten seconds**, nearly all of it agy's two requests to Google: a reading of agy's `/usage` under five minutes old is now shown again, as `cached <1m ago (asked at most once in 5m)`, so most runs take a second or two; `--cached` shows it at any age. While a run asks, a line on stderr says who is being asked (`Asking Claude Code (5 accounts), Codex, agy and Kimi for usage…`) and goes when the answers are in; only when stderr is a terminal, and never on stdout, so a pipe and `--json` see nothing of it. A run that gives up on an agent says the seconds it waited (`agy didn't finish within 45s`), not `<1m`.
+- **A run within a minute of another said Claude Code's `/usage` `couldn't fetch new numbers; offline, or rate limited?`** for every profile: Claude Code's `/usage` shows a snapshot under a minute old again without asking Anthropic (2.1.307), so hatcheck now shows that snapshot as `cached <1m ago (Claude Code's /usage reuses a reading under a minute old)` and doesn't run `claude` for it, which takes another second off such a run.
 
 ## 0.4.0 - 2026-10-19
 

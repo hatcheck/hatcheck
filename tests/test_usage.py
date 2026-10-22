@@ -118,7 +118,7 @@ class LiveUsage(unittest.TestCase):
         self.assertRegex(out, r"session \(5h\) +25% ")
 
     def test_default_profile_runs_without_a_config_dir(self):
-        default = self.h.profile("default", "acct-d", usage=limits())
+        default = self.h.profile("default", "acct-d", usage=limits(), saved_at=NOW - 120)  # old enough to ask
         write(os.path.join(default, "fake-usage.json"), json.dumps(limits()))
         code, out = self.h.run(SCRIPT, PATH=self.path, CLAUDE_CONFIG_DIR=self.work)
         self.assertEqual(code, 0, out)
@@ -138,6 +138,26 @@ class LiveUsage(unittest.TestCase):
         self.assertIn("stale  team max 5x · cached 10m ago (Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?)", out)
         self.assertIn("solo  not signed in · no data (not signed in)", out)
         self.assertIn("work  team max 5x · live", out)
+
+    def test_a_reading_under_a_minute_old_is_shown_again(self):
+        # Claude Code's /usage shows a snapshot under a minute old again without asking
+        # Anthropic (2.1.307), so hatcheck shows it as it is and doesn't run claude for it.
+        fresh = self.h.profile("fresh", "acct-f", usage=limits(), plan=TEAM)  # saved just now
+        write(os.path.join(fresh, "fake-usage.json"), json.dumps(limits()))
+        code, out = self.h.run(SCRIPT, PATH=self.path)
+        self.assertEqual(code, 0, out)
+        self.assertIn("fresh  team max 5x · cached <1m ago (Claude Code's /usage reuses a reading under a minute old)", out)
+        self.assertIn("work  team max 5x · live", out)  # its snapshot was an hour old: asked
+        self.assertEqual([r["env"].get("CLAUDE_CONFIG_DIR") for r in self.h.claude_runs()], [self.work])
+        code, out = self.h.run(SCRIPT, "--json", PATH=self.path)
+        account = next(a for a in json.loads(out)["accounts"] if a["profiles"] == [fresh])
+        self.assertEqual((account["source"], account["why"]),
+                         ("cached", "Claude Code's /usage reuses a reading under a minute old"))
+        # Within a minute of its run, work's new reading is shown again the same way.
+        self.assertEqual(len(self.h.claude_runs()), 1)
+        code, out = self.h.run(SCRIPT, PATH=self.path)
+        self.assertIn("work  team max 5x · cached <1m ago (Claude Code's /usage reuses a reading under a minute old)", out)
+        self.assertEqual(len(self.h.claude_runs()), 1)
 
     def test_without_claude_on_the_path(self):
         code, out = self.h.run(SCRIPT, PATH="/bin" if not WINDOWS else os.path.join(self.h.root, "empty"))

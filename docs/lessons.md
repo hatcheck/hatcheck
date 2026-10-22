@@ -26,6 +26,17 @@ hatcheck's own instead, so the folder it makes is the same every time.
   one folder now.
 - Seen 1× (2026-10-18).
 
+**An agent that answers from its own cache is read by its cache's rule.** Claude Code's `/usage`
+shows a reading under a minute old again without a request (`nt=60000` beside
+`cachedUsageUtilization` in 2.1.307's binary), so a snapshot that stays put after a run within
+the minute isn't a failed fetch, and a run within the minute asks for nothing. hatcheck called
+every such run "offline, or rate limited?", a guess plausible enough that twenty runs in a row
+passed unquestioned.
+- Evidence: 2026-10-21: every `hat usage` of a timing session said so for all five team
+  profiles; one run alone, 139 seconds after the last, moved the snapshot, and five a minute
+  later didn't. `claude_reuses` in `usage.rs` reads the snapshot's age first.
+- Seen 1× (2026-10-21).
+
 **Logins stay with the agent that made them.** A token read from Claude Code's Keychain item or
 `.credentials.json` and sent anywhere is a copy of a login; refreshing it rotates it and signs
 Claude Code out. Reading usage through Claude Code's own `/usage` needs none of it.

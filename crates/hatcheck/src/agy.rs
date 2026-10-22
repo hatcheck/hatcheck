@@ -434,8 +434,10 @@ pub fn usage_run_dir() -> String {
 /// How long a run waits for another hatcheck's agy run to finish: the other's two steps at
 /// their longest.
 const LOCK_WAIT: Duration = Duration::from_secs(70);
-/// A reading another hatcheck took this recently is handed on instead of asking agy again.
-pub const FRESH: f64 = 60.0;
+/// A reading hatcheck took this recently is handed on instead of asking agy again: agy's two
+/// steps, the model list and /usage, each a request to Google, take five seconds or more
+/// together, the longest of every account's reading, and its limits move slowly.
+pub const FRESH: f64 = 5.0 * 60.0;
 
 /// One agy run at a time across hatchecks: the lock on run.lock in agy's run folder, held while
 /// agy is asked, and waited for up to LOCK_WAIT when another hatcheck holds it (the app's engine

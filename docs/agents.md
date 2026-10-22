@@ -75,12 +75,15 @@ that one folder, and there are no `agy` profiles or a launcher for them yet (see
   never set off. Signed out, the row says so and nothing else is run. agy's print mode answers
   `/usage` without starting a conversation (checked by counting them before and after). agy saves
   no snapshot, so hatcheck keeps the last reading in that folder and shows it with its age when a
-  run gives nothing. One hatcheck asks agy at a time, with a lock in that folder: two `/usage`
-  runs at once made Google's quota service answer the second with a 503 after a minute, so a
-  second hatcheck waits for the first and takes its reading when it's under a minute old. agy
-  1.4.3 answers with each group's limits as `buckets`, each with a
-  `window` (`5h` or `weekly`), a `remaining_fraction` and a `reset_time`, which hatcheck shows as
-  one row per bucket with the window's length; the `windows` and `models` of 1.4.2's answer are
+  run gives nothing. The two steps are two requests to Google and take five seconds or more
+  together, the longest of any account's reading, so a reading under five minutes old is shown
+  again, as cached with its age and `asked at most once in 5m`, and agy is asked after that.
+  One hatcheck asks agy at a time, with a lock in that folder: two `/usage` runs at once made
+  Google's quota service answer the second with a 503 after a minute, so a second hatcheck
+  waits for the first and takes its reading the same way. agy 1.4.3 answers with each group's
+  limits as `buckets`, each with a `window` (`5h` or `weekly`), a `remaining_fraction` and a
+  `reset_time`, which hatcheck shows as one row per bucket with the window's length; the
+  `windows` and `models` of 1.4.2's answer are
   still read. Checked against the answer agy 1.4.3 gave on 2026-10-20.
 - A session converted for agy can't be written into its store, so `hatcheck move <id> agy` writes
   the conversation as a file in `imports` in hatcheck's cache folder and prints the command that

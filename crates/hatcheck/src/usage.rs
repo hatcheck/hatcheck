@@ -4,8 +4,9 @@
 //!
 //! A Claude Code profile's numbers come from Claude Code itself: `claude -p /usage` is run in
 //! the profile, which asks Anthropic with the profile's own login and saves the answer in the
-//! profile's .claude.json (cachedUsageUtilization), and that snapshot is read. hatcheck never
-//! reads a Claude login. When that gives nothing new (claude not on the PATH, the profile not
+//! profile's .claude.json (cachedUsageUtilization), and that snapshot is read, or read as it is
+//! when under a minute old, which Claude Code's /usage shows again without asking. hatcheck
+//! never reads a Claude login. When that gives nothing new (claude not on the PATH, the profile not
 //! signed in, offline) the last snapshot saved is used, with its age. A Codex home's ChatGPT
 //! token goes to the endpoint Codex's /status asks, or else the newest limits Codex wrote in
 //! the home's session files are used.
@@ -48,6 +49,12 @@ const CLAUDE_USAGE_UNSET: [&str; 5] = [
 ];
 /// How long that run may take before it's given up on.
 const CLAUDE_USAGE_TIMEOUT: Duration = Duration::from_secs(45);
+/// Claude Code's /usage shows the profile's snapshot again while it's under a minute old, with
+/// no request (`nt=60000` beside `cachedUsageUtilization` in 2.1.307's binary: five runs a
+/// minute after the last left their snapshots where they were, and one 139 seconds after moved
+/// it, 2026-10-21), so a run within the minute isn't made: the snapshot is what it would show.
+const CLAUDE_REUSES: f64 = 60.0;
+const CLAUDE_REUSE_NOTE: &str = "Claude Code's /usage reuses a reading under a minute old";
 /// Codex's limit windows: (length, group, name, short name). It reports some a minute short.
 const CODEX_WINDOWS: [(i64, &str, &str, &str); 3] = [
     (5 * 3600, "session", "session (5h)", "5h"),
@@ -203,10 +210,7 @@ pub(crate) fn run_within(
     let killed = watchdog.join().unwrap_or(true);
     let status = child.lock().ok().and_then(|mut c| c.wait().ok());
     if killed {
-        return Err(format!(
-            "didn't finish within {}",
-            times::duration(timeout.as_secs_f64())
-        ));
+        return Err(format!("didn't finish within {}s", timeout.as_secs()));
     }
     if !read {
         return Err("gave no output".into());
@@ -1145,6 +1149,9 @@ fn claude_live(entry: &Entry) -> Result<Value, String> {
         return Err("no profile".into());
     };
     let started = times::now();
+    if ospath::which("claude").is_some() && claude_reuses(entry, started) {
+        return Err(CLAUDE_REUSE_NOTE.into());
+    }
     let result = run_claude_usage(profile)?;
     let (_, cache) = read_config(profile);
     let fetched = num_or_zero(get(&cache, "fetchedAtMs")) / 1000.0;
@@ -1152,17 +1159,35 @@ fn claude_live(entry: &Entry) -> Result<Value, String> {
     if fetched >= started - 2.0 && truthy(utilization) {
         return Ok(utilization.clone());
     }
-    // Claude Code prints its last reading when it can't get a new one, and a cost summary
-    // instead of the limits when the profile isn't signed in.
+    // Claude Code prints its last reading when it can't get a new one, or when that reading
+    // is under a minute old, and a cost summary instead of the limits when the profile isn't
+    // signed in.
     Err(
         if result.contains("Current session") || result.contains("Current week") {
-            "Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?".into()
+            if (0.0..CLAUDE_REUSES).contains(&(times::now() - fetched)) {
+                CLAUDE_REUSE_NOTE.into()
+            } else {
+                "Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?".into()
+            }
         } else if !truthy(&entry.account) {
             "not signed in".into()
         } else {
             "Claude Code's /usage gave no numbers; is this profile still signed in?".into()
         },
     )
+}
+
+/// Whether Claude Code's /usage would show the profile's snapshot again instead of asking: it's
+/// the signed-in account's, has numbers, and is under a minute old.
+fn claude_reuses(entry: &Entry, now: f64) -> bool {
+    let cache = &entry.cache;
+    if !truthy(get(cache, "utilization"))
+        || get(cache, "accountUuid") != get(&entry.account, "accountUuid")
+    {
+        return false;
+    }
+    let age = now - num_or_zero(get(cache, "fetchedAtMs")) / 1000.0;
+    (0.0..CLAUDE_REUSES).contains(&age)
 }
 
 /// The live usage body, or else Claude Code's snapshot and when it was saved, and why it isn't live.
@@ -1512,18 +1537,24 @@ pub fn agy_account_usage(entry: &Entry, cached: bool) -> Usage {
     let why: String = if cached {
         "--cached".into()
     } else {
-        // One agy run at a time across hatchecks; the reading another took while this one
-        // waited for it is as good as one now.
-        let started = times::now();
+        // A reading from the last few minutes is handed on, so agy, the slowest to ask, isn't
+        // asked by every run; and one agy run at a time across hatchecks, with the reading
+        // another took while this one waited for it taken the same way.
+        let fresh = |saved_at: f64| saved_at >= times::now() - crate::agy::FRESH;
+        let note = format!(
+            "asked at most once in {}",
+            times::duration(crate::agy::FRESH)
+        );
+        if let Some((body, saved_at)) = crate::agy::read_snapshot(root) {
+            if fresh(saved_at) {
+                return (Some(body), Some(saved_at), Some(note));
+            }
+        }
         let (lock, waited) = crate::agy::take_run_lock();
         if waited {
             if let Some((body, saved_at)) = crate::agy::read_snapshot(root) {
-                if saved_at >= started - crate::agy::FRESH {
-                    return (
-                        Some(body),
-                        Some(saved_at),
-                        Some("a reading from a moment ago".into()),
-                    );
+                if fresh(saved_at) {
+                    return (Some(body), Some(saved_at), Some(note));
                 }
             }
         }
@@ -1588,6 +1619,15 @@ pub fn load_usage(
     entries.extend(load_agy_accounts(agy_roots));
     entries.extend(load_kimi_accounts(kimi_homes));
     entries.extend(load_zcode_accounts(zcode_roots));
+    // In a terminal, a line on stderr says what the wait is for, and goes when it's over.
+    let note = if cached {
+        None
+    } else {
+        asking_note(&entries, times::now())
+    };
+    if let Some(n) = &note {
+        out::eprint(n);
+    }
     let results: Vec<Usage> = std::thread::scope(|scope| {
         let handles: Vec<_> = entries
             .iter()
@@ -1598,7 +1638,77 @@ pub fn load_usage(
             .map(|h| h.join().unwrap_or((None, None, Some("failed".into()))))
             .collect()
     });
+    if let Some(n) = &note {
+        out::eprint(&format!("\r{}\r", " ".repeat(n.chars().count())));
+    }
     entries.into_iter().zip(results).collect()
+}
+
+/// Whether a live run asks over the network for this account's numbers, as the readers above
+/// decide: not for a reading it would show again, an agent that isn't here, or a login that
+/// can't be sent.
+fn will_ask(entry: &Entry, now: f64) -> bool {
+    let login = &entry.login;
+    let token_good = || truthy(login) && num_or_zero(get(login, "expires")) >= now + 60.0;
+    match entry.agent {
+        Agent::Claude => ospath::which("claude").is_some() && !claude_reuses(entry, now),
+        Agent::Codex => {
+            token_good() && !truthy(get(login, "api_key")) && truthy(get(login, "account_id"))
+        }
+        Agent::Agy => {
+            ospath::which("agy").is_some()
+                && !entry.profiles.first().is_some_and(|root| {
+                    crate::agy::read_snapshot(root)
+                        .is_some_and(|(_, saved_at)| saved_at >= now - crate::agy::FRESH)
+                })
+        }
+        Agent::Kimi => token_good(),
+        Agent::Zcode => false,
+    }
+}
+
+/// What a live run is about to ask, for a line on stderr while it waits: "Asking Claude Code
+/// (5 accounts), Codex, agy and Kimi for usage…", clipped to the terminal's width so one `\r`
+/// erases it; None when stderr isn't a terminal, under hatcheck serve, or when nothing is
+/// asked over the network.
+fn asking_note(entries: &[Entry], now: f64) -> Option<String> {
+    use std::io::IsTerminal;
+    if out::capturing() || !std::io::stderr().is_terminal() {
+        return None;
+    }
+    let mut parts: Vec<String> = Vec::new();
+    for agent in Agent::ALL {
+        let n = entries
+            .iter()
+            .filter(|e| e.agent == agent && will_ask(e, now))
+            .count();
+        if n == 0 {
+            continue;
+        }
+        let who = match agent {
+            Agent::Agy => "agy".to_string(),
+            Agent::Kimi => "Kimi".to_string(),
+            other => other.name().to_string(),
+        };
+        parts.push(if n > 1 {
+            format!("{who} ({n} accounts)")
+        } else {
+            who
+        });
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    let names = match parts.len() {
+        1 => parts[0].clone(),
+        n => format!("{} and {}", parts[..n - 1].join(", "), parts[n - 1]),
+    };
+    let note = format!("Asking {names} for usage…");
+    Some(
+        note.chars()
+            .take(out::columns(80).saturating_sub(1))
+            .collect(),
+    )
 }
 
 /// Accounts sorted by their Fable limit, as hatcheck usage lists them, and whether any has one.
