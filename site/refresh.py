@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""Refresh what the pages show of hatcheck's own output, from the built binary. Run at a
+release, after `cargo build --release`:
+
+    python3 site/refresh.py [path/to/hatcheck]
+
+commands.html: each block between <!-- help:NAME --> and <!-- /help:NAME --> becomes what
+`hatcheck NAME --help` prints (hatcheck: `hatcheck --help`; version: the version), HTML-escaped,
+wrapped as in an 80-column terminal.
+
+index.html: each block between <!-- sample:NAME --> and <!-- /sample:NAME --> becomes a command
+run in a demo home made with tests/helpers.py, never your profiles: `list` is `hatcheck` in a
+folder with sessions from every agent, `best` is `hatcheck best` there. They run on a
+pseudo-terminal with 256 colours, so the output is coloured as in a terminal; its colour codes
+become spans (classes b, d, r, g, y, bl, m, c for bold, dim and the basic colours, and a colour
+for the 256-colour ones), styled in style.css. A fake claude answers the usage questions from
+files, so nothing is asked over the network, and the snapshots it saves are backdated between
+runs, so each sample reads live. The list's lines after the sessions (the profiles, where usage
+came from) are left out.
+
+Not uploaded with the pages: .assetsignore names it."""
+import html
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+BINARY = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "target", "release", "hatcheck")
+
+
+def printed(args):
+    env = dict(os.environ, NO_COLOR="1", COLUMNS="80")
+    return subprocess.run([BINARY] + args, capture_output=True, text=True, encoding="utf-8",
+                          check=True, env=env).stdout.rstrip("\n")
+
+
+def help_text(name):
+    if name == "version":
+        return printed(["--version"]).split()[-1]
+    if name == "hatcheck":
+        return printed(["--help"])
+    return printed([name, "--help"])
+
+
+# ---- the demo home, and the commands run in it on a terminal ----
+
+def demo_home():
+    """A home with sessions from every agent in ~/code/api: two Claude Code profiles with usage a
+    fake claude answers, a Codex home with limits in its session, and Antigravity CLI's folder, a
+    Kimi home and ZCode's folder with no usage, as when their agents aren't on the PATH. The
+    newest session is on the profile that's nearly out of Fable, so hatcheck best has somewhere
+    better to point."""
+    os.environ["HATCHECK_ENGINE"] = BINARY  # or the helpers build a debug engine
+    sys.path.insert(0, os.path.join(REPO, "tests"))
+    from helpers import NOW, FakeHome, iso, write
+
+    def limits(session_used, week_used, fable_used, fable_days):
+        sev = lambda used: "critical" if used >= 90 else "warning" if used >= 75 else "normal"
+        return {"limits": [
+            {"kind": "session", "group": "session", "percent": session_used, "severity": sev(session_used),
+             "resets_at": iso(NOW + 2 * 3600 + 40 * 60)},
+            {"kind": "weekly_all", "group": "weekly", "percent": week_used, "severity": sev(week_used),
+             "resets_at": iso(NOW + 3 * 86400 + 3600)},
+            {"kind": "weekly_scoped", "group": "weekly", "percent": fable_used, "severity": sev(fable_used),
+             "resets_at": iso(NOW + fable_days * 86400), "scope": {"model": {"display_name": "Fable"}}}]}
+
+    h = FakeHome()
+    work = h.profile("work", "acct-work", usage=limits(38, 64, 52, 4.2), saved_at=NOW - 3600,
+                     plan={"organizationType": "claude_team", "userRateLimitTier": "default_claude_max_5x"})
+    personal = h.profile("personal", "acct-personal", usage=limits(80, 91, 95, 0.9), saved_at=NOW - 3600,
+                         plan={"organizationType": "claude_pro"})
+    write(os.path.join(work, "fake-usage.json"), __import__("json").dumps(limits(38, 64, 52, 4.2)))
+    write(os.path.join(personal, "fake-usage.json"), __import__("json").dumps(limits(80, 91, 95, 0.9)))
+    api = h.folder("code", "api")
+    h.session(personal, api, "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", "Add rate limiting to the login endpoint", 4)
+    h.session(work, api, "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10", "Fix flaky login test", 35)
+    codex = h.codex_home("default", "acct-codex")
+    h.codex_session(codex, api, "019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e", "Add retries to the uploader", 50,
+                    rate_limits={"limit_id": "codex", "limit_name": None, "plan_type": "plus",
+                                 "primary": {"used_percent": 20, "window_minutes": 300, "resets_at": int(NOW + 3 * 3600)},
+                                 "secondary": {"used_percent": 36, "window_minutes": 10080, "resets_at": int(NOW + 2 * 86400)},
+                                 "credits": {"has_credits": False, "unlimited": False, "balance": None}})
+    agy = h.agy_root()
+    h.agy_session(agy, api, "c134893c-20f5-48ea-bc9b-7f7c9271bc4e", "Profile the slow search query", 70)
+    kimi = h.kimi_home("default")
+    h.kimi_session(kimi, api, "6d2f1b0a-3c4e-4f5a-9b8c-7d6e5f4a3b2c", "Write the migration for the audit table", 130)
+    zcode = h.zcode_root()
+    h.zcode_session(zcode, api, "1fb068a4-b6d4-4a9f-b2d3-6e428e094fbe", "Tidy the uploader's error handling", 200)
+    path = h.fake_claude() + os.pathsep + "/bin" + os.pathsep + "/usr/bin"
+    env = dict(h.env(), PATH=path, TERM="xterm-256color", COLUMNS="150")
+    env.pop("NO_COLOR", None)
+    return h, api, env
+
+
+def backdate(home):
+    """Make each profile's saved usage an hour old, so the next run asks the fake claude again
+    rather than show a reading under a minute old as cached."""
+    import glob
+    import json
+    for path in glob.glob(os.path.join(home, ".claude*", ".claude.json")) + [os.path.join(home, ".claude.json")]:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        if "cachedUsageUtilization" in data:
+            data["cachedUsageUtilization"]["fetchedAtMs"] -= 3600 * 1000
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+
+
+def on_terminal(argv, cwd, env):
+    """What argv prints to a 256-colour terminal 150 columns wide, with its stderr dropped."""
+    import fcntl
+    import pty
+    import struct
+    import termios
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 150, 0, 0))
+    p = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=slave, stderr=subprocess.DEVNULL)
+    os.close(slave)
+    out = b""
+    while True:
+        try:
+            chunk = os.read(master, 65536)
+        except OSError:  # the child has closed its end
+            break
+        if not chunk:
+            break
+        out += chunk
+    p.wait()
+    os.close(master)
+    if p.returncode != 0:
+        sys.exit("%s exited with %d" % (" ".join(argv), p.returncode))
+    return out.decode("utf-8", "replace").replace("\r\n", "\n").rstrip("\n")
+
+
+BASIC = {31: "r", 32: "g", 33: "y", 34: "bl", 35: "m", 36: "c", 91: "r", 92: "g", 93: "y", 94: "bl", 95: "m", 96: "c"}
+
+
+def x256(n):
+    """An xterm 256-colour index as #rrggbb."""
+    if n < 16:
+        return ["#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
+                "#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#ffffff"][n]
+    if n < 232:
+        n -= 16
+        parts = (n // 36, n // 6 % 6, n % 6)
+        return "#%02x%02x%02x" % tuple(0 if v == 0 else 55 + v * 40 for v in parts)
+    v = 8 + (n - 232) * 10
+    return "#%02x%02x%02x" % (v, v, v)
+
+
+def ansi_to_html(text):
+    """The text's SGR colour codes as spans: bold and dim as classes b and d, the basic colours
+    as classes, a 256-colour one as an inline colour."""
+    out, bold, dim, fg = [], False, False, None
+    pos = 0
+    for m in re.finditer(r"\x1b\[([0-9;]*)m", text):
+        chunk = text[pos:m.start()]
+        pos = m.end()
+        if chunk:
+            classes = [c for c, on in (("b", bold), ("d", dim)) if on]
+            style = ""
+            if isinstance(fg, int):
+                style = ' style="color:%s"' % x256(fg)
+            elif fg:
+                classes.append(fg)
+            escaped = html.escape(chunk, quote=False)
+            if classes or style:
+                out.append('<span%s%s>%s</span>' % (' class="%s"' % " ".join(classes) if classes else "", style, escaped))
+            else:
+                out.append(escaped)
+        codes = [int(c) for c in m.group(1).split(";") if c] or [0]
+        i = 0
+        while i < len(codes):
+            c = codes[i]
+            if c == 0:
+                bold, dim, fg = False, False, None
+            elif c == 1:
+                bold = True
+            elif c == 2:
+                dim = True
+            elif c == 22:
+                bold = dim = False
+            elif c == 38 and i + 2 < len(codes) and codes[i + 1] == 5:
+                fg = codes[i + 2]
+                i += 2
+            elif c == 39:
+                fg = None
+            elif c in BASIC:
+                fg = BASIC[c]
+            i += 1
+    out.append(html.escape(text[pos:], quote=False))
+    return "".join(out)
+
+
+def sample(name, home):
+    h, api, env = home
+    backdate(h.home)
+    if name == "list":
+        text = on_terminal([BINARY], api, env)
+        lines = text.split("\n")
+        plain = lambda line: re.sub(r"\x1b\[[0-9;]*m", "", line)
+        cut = next((k for k, line in enumerate(lines)
+                    if re.match(r"Profiles:|Usage from|No usage data|\d+ in other folders|Hidden:", plain(line))), len(lines))
+        text = "\n".join(lines[:cut]).rstrip("\n")
+        return "$ hatcheck\n" + ansi_to_html(text)
+    if name == "best":
+        return "$ hatcheck best\n" + ansi_to_html(on_terminal([BINARY, "best"], api, env))
+    sys.exit("no such sample: " + name)
+
+
+def refresh(page, kind, fill):
+    text = open(page, encoding="utf-8").read()
+    pattern = r"<!-- %s:([a-z]+) -->.*?<!-- /%s:\1 -->" % (kind, kind)
+    new, count = re.subn(pattern, lambda m: "<!-- %s:%s -->%s<!-- /%s:%s -->" % (kind, m.group(1), fill(m.group(1)), kind, m.group(1)), text, flags=re.S)
+    if count == 0:
+        sys.exit("%s has no %s blocks" % (os.path.basename(page), kind))
+    if new == text:
+        print("%d %s blocks in %s already match" % (count, kind, os.path.basename(page)))
+    else:
+        open(page, "w", encoding="utf-8").write(new)
+        print("refreshed %d %s blocks in %s" % (count, kind, os.path.basename(page)))
+
+
+if __name__ == "__main__":
+    refresh(os.path.join(HERE, "commands.html"), "help", lambda name: html.escape(help_text(name), quote=False))
+    home = demo_home()
+    try:
+        refresh(os.path.join(HERE, "index.html"), "sample", lambda name: sample(name, home))
+    finally:
+        home[0].cleanup()

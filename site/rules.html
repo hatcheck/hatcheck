@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- Hatcheck's site, the rules page: what hatcheck never does, each rule with the code that keeps it. The pages share style.css; index.html says how the site is served. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Rules it keeps · Hatcheck</title>
+  <meta name="description" content="Hatcheck is never between an agent and its model, holds no login, runs nothing in the background and switches no account on its own; each rule links to the code that keeps it.">
+  <link rel="canonical" href="https://hatcheck.dev/rules">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://hatcheck.dev/rules">
+  <meta property="og:image" content="https://hatcheck.dev/og.png">
+  <meta property="og:title" content="Rules it keeps · Hatcheck">
+  <meta property="og:description" content="Hatcheck is never between an agent and its model, holds no login, runs nothing in the background and switches no account on its own; each rule links to the code that keeps it.">
+</head>
+<body>
+  <nav class="top wrap" aria-label="Site">
+    <a href="index.html" class="brand"><img src="favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="agents.html">Agents</a>
+    <a href="commands.html">Commands</a>
+    <a href="rules.html" aria-current="page">Rules</a>
+    <a href="https://github.com/hatcheck/hatcheck">GitHub</a>
+  </nav>
+  <main class="wrap page">
+    <h1>Rules it keeps</h1>
+    <p><strong>Not a gateway.</strong> Hatcheck is never between an agent and its model. It rewrites no agent's config, holds no login, and runs nothing in the background. Tools such as <a href="https://github.com/yetone/magpie">magpie</a> put a local gateway in that path so any agent can use any model and accounts can take over from each other when a quota runs out. If that is what you want, use one of those. Hatcheck is for the opposite case: keeping a work account and a personal account apart, and knowing which one each session ran on.</p>
+    <p>Each rule links to the code that keeps it, so it can be checked rather than taken on trust.</p>
+    <ul class="rules">
+      <li><strong>Not in the path.</strong> <code>cl</code>, <code>cx</code> and <code>ck</code> set <code>CLAUDE_CONFIG_DIR</code>, <code>CODEX_HOME</code> or <code>KIMI_CODE_HOME</code> and run the agent in their place; nothing stays running (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/launch.rs">launch.rs</a>, <code>run</code>).</li>
+      <li><strong>No agent's config is rewritten</strong>, except when you ask: <code>hatcheck bind --hook</code> adds one hook to each Claude Code profile's settings, each Codex home's and Antigravity CLI's, or points the one it added at the <code>hatcheck</code> it finds now, and <code>unbind --hook</code> removes only what it added (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/bind.rs">bind.rs</a>, <code>add_hooks</code>).</li>
+      <li><strong>No credentials.</strong> It never asks for, stores, refreshes or moves a login. For Claude it never reads one: Claude Code's own <code>/usage</code> is run in the profile and the snapshot it saves is read. For Codex, the home's token is sent only to ChatGPT's usage endpoint, as it is, never refreshed (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/usage.rs">usage.rs</a>, <code>run_claude_usage</code> and <code>fetch_codex_usage</code>). For Kimi, the home's token is sent only to Kimi's usage endpoint, as it is, never refreshed. For Antigravity CLI it never reads one either: agy's own <code>/usage</code> is run, once <code>agy models</code> has said it's signed in, since agy asked without a sign-in would start one (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/agy.rs">agy.rs</a>, <code>run_usage</code>). Signing in happens in the agents themselves, in a terminal.</li>
+      <li><strong>Live usage is opt-in</strong> in the app, and <code>--cached</code> in the CLI shows what Claude Code and Codex last saved, and the last readings hatcheck kept of agy's and Kimi's, which save none, with their age.</li>
+      <li><strong>No automatic switching</strong> between accounts. <code>hatcheck best</code> ranks and prints commands, for choosing between accounts you may use for the work at hand, such as your own and your company's; nothing starts, moves or switches a session on its own (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/best.rs">best.rs</a>).</li>
+      <li><strong>Nothing leaves your computer</strong> except those usage requests: Claude Code's to Anthropic, one to ChatGPT per Codex account, one to Kimi per Kimi home (the only addresses the binary itself calls: <code>CODEX_USAGE_URL</code> in <code>usage.rs</code>, <code>DEFAULT_USAGE_URL</code> and <code>GLOBAL_USAGE_URL</code> in <code>kimi.rs</code>), and Antigravity CLI's own <code>/usage</code> to Google, with the model list it fetches first to say it's signed in.</li>
+      <li><strong>Nothing runs in the background.</strong> No daemon; the app's engine lives only while the app does (<a href="https://github.com/hatcheck/hatcheck/blob/main/crates/hatcheck/src/serve.rs">serve.rs</a>).</li>
+      <li><strong>Every change to a session can be undone.</strong> <code>move</code> deletes the original only once every copied file is checked, never puts an older copy over a newer one, and is undone by moving the session back; <code>fork</code> keeps the original; <code>relocate</code> prints the command that undoes it; and all three have a <code>--dry-run</code> that runs every check and writes nothing.</li>
+    </ul>
+  </main>
+  <footer class="wrap">
+    <p><a href="index.html">Hatcheck</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
+    <p>Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI or Z.ai.</p>
+  </footer>
+</body>
+</html>
