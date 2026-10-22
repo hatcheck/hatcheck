@@ -2,11 +2,11 @@
 
 <!-- One line per paragraph and per bullet: a release's section here becomes its notes on GitHub, where a line break shows. -->
 
-What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
+What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
-## Unreleased
+## 0.5.0 - 2026-10-22
 
-Kimi Code CLI (`kimi`) and ZCode (`zcode`) join Claude Code, Codex and Antigravity CLI: their sessions are listed, shown and carried to the other agents, and theirs to them; a Kimi session moves between Kimi homes as a Codex session does between Codex homes.
+Kimi Code CLI (`kimi`) and ZCode (`zcode`) join Claude Code, Codex and Antigravity CLI: their sessions are listed, shown and carried to the other agents, and theirs to them; a Kimi session moves between Kimi homes as a Codex session does between Codex homes, and `ck` runs Kimi Code CLI with a home. `hat r` carries on the newest session started from a folder in this terminal, after asking. `hatcheck best` shows the best account in full, with the `move` command that carries a session to it, and `hatcheck move` with nothing goes there. `hatcheck usage`, `best` and the list take a second or two instead of five to ten.
 
 ### Added
 

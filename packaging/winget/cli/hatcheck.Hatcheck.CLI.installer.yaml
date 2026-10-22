@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 PackageIdentifier: hatcheck.Hatcheck.CLI
-PackageVersion: 0.4.0
+PackageVersion: 0.5.0
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
@@ -28,7 +28,7 @@ Commands:
   - claude-k
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/hatcheck/hatcheck/releases/download/v0.4.0/hatcheck-x86_64-pc-windows-msvc.zip
+    InstallerUrl: https://github.com/hatcheck/hatcheck/releases/download/v0.5.0/hatcheck-x86_64-pc-windows-msvc.zip
     InstallerSha256: 22E6964D359B89812F1ED58859D883F3C6E5FE813A2809BD647D93A01EA1D1E4
 ManifestType: installer
 ManifestVersion: 1.12.0
