@@ -665,7 +665,6 @@ Session 9a8b7c6d "Add rate limiting to the login endpoint", the newest started f
 Best Claude Code account now: ~/.claude-work  team max 5x · live
   session (5h)          80% ████████░░  ░░░░░░░░░░ resets 3:40pm (in 55m)
   week (Fable)          31% ███░░░░░░░  ██████░░░░ resets Tue 12:00pm (in 2d14h)
-  week (all models)     64% ██████▍░░░  ██████░░░░ resets Tue 12:00pm (in 2d14h)
 Carry it there with:
   hatcheck move work    (hatcheck fork work keeps the original)
 Then:

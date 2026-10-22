@@ -50,29 +50,36 @@ def demo_home():
     """A home with sessions from every agent in ~/code/api: two Claude Code profiles with usage a
     fake claude answers, a Codex home with limits in its session, and Antigravity CLI's folder, a
     Kimi home and ZCode's folder with no usage, as when their agents aren't on the PATH. The
-    newest session is on the profile that's nearly out of Fable, so hatcheck best has somewhere
-    better to point."""
+    snapshots are shaped as Claude Code saves them: a session limit and a Fable one for the team
+    plan, a session limit and the week's for the Pro plan. The newest session is on the Pro
+    profile, nearly out for the week, so hatcheck best has somewhere better to point."""
     os.environ["HATCHECK_ENGINE"] = BINARY  # or the helpers build a debug engine
     sys.path.insert(0, os.path.join(REPO, "tests"))
     from helpers import NOW, FakeHome, iso, write
 
-    def limits(session_used, week_used, fable_used, fable_days):
-        sev = lambda used: "critical" if used >= 90 else "warning" if used >= 75 else "normal"
-        return {"limits": [
-            {"kind": "session", "group": "session", "percent": session_used, "severity": sev(session_used),
-             "resets_at": iso(NOW + 2 * 3600 + 40 * 60)},
-            {"kind": "weekly_all", "group": "weekly", "percent": week_used, "severity": sev(week_used),
-             "resets_at": iso(NOW + 3 * 86400 + 3600)},
-            {"kind": "weekly_scoped", "group": "weekly", "percent": fable_used, "severity": sev(fable_used),
-             "resets_at": iso(NOW + fable_days * 86400), "scope": {"model": {"display_name": "Fable"}}}]}
+    sev = lambda used: "critical" if used >= 90 else "warning" if used >= 75 else "normal"
 
+    def session(used):
+        return {"kind": "session", "group": "session", "percent": used, "severity": sev(used),
+                "resets_at": iso(NOW + 2 * 3600 + 40 * 60)}
+
+    def week(used, days):
+        return {"kind": "weekly_all", "group": "weekly", "percent": used, "severity": sev(used),
+                "resets_at": iso(NOW + days * 86400)}
+
+    def fable(used, days):
+        return {"kind": "weekly_scoped", "group": "weekly", "percent": used, "severity": sev(used),
+                "resets_at": iso(NOW + days * 86400), "scope": {"model": {"display_name": "Fable"}}}
+
+    team = {"limits": [session(38), fable(52, 4.2)]}
+    pro = {"limits": [session(80), week(91, 0.9)]}
     h = FakeHome()
-    work = h.profile("work", "acct-work", usage=limits(38, 64, 52, 4.2), saved_at=NOW - 3600,
+    work = h.profile("work", "acct-work", usage=team, saved_at=NOW - 3600,
                      plan={"organizationType": "claude_team", "userRateLimitTier": "default_claude_max_5x"})
-    personal = h.profile("personal", "acct-personal", usage=limits(80, 91, 95, 0.9), saved_at=NOW - 3600,
+    personal = h.profile("personal", "acct-personal", usage=pro, saved_at=NOW - 3600,
                          plan={"organizationType": "claude_pro"})
-    write(os.path.join(work, "fake-usage.json"), __import__("json").dumps(limits(38, 64, 52, 4.2)))
-    write(os.path.join(personal, "fake-usage.json"), __import__("json").dumps(limits(80, 91, 95, 0.9)))
+    write(os.path.join(work, "fake-usage.json"), __import__("json").dumps(team))
+    write(os.path.join(personal, "fake-usage.json"), __import__("json").dumps(pro))
     api = h.folder("code", "api")
     h.session(personal, api, "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", "Add rate limiting to the login endpoint", 4)
     h.session(work, api, "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10", "Fix flaky login test", 35)
