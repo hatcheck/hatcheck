@@ -69,7 +69,7 @@ didn't notice the switch.
 | `agy.rs` | Antigravity CLI: its conversation index and transcripts, its lock, its /usage run headless, and a conversation written for it to read | new in the Rust version |
 | `relocate.rs` | `hatcheck relocate`: a moved project folder's sessions brought along | new in the Rust version |
 | `conv.rs` | a session as a conversation, for `show` and `move` | `move.py` |
-| `launch.rs`, `src/bin/` | `cl`, `cx`, `claude-z` and `claude-k`, each also a binary of its own | `launch.py`, `cl`, `cx` |
+| `launch.rs`, `src/bin/` | `cl`, `cx`, `ck`, `claude-z` and `claude-k`, each also a binary of its own | `launch.py`, `cl`, `cx` |
 | `desktop.rs` | Claude Desktop instances, their launchers and recoloured icons | `desktop.py` |
 | `serve.rs` | `hatcheck serve`, the desktop app's line-by-line JSON protocol | `cli.py` |
 | `best.rs`, `bind.rs`, `provider.rs` | `best`; `bind`, `unbind` and the hook; `provider` | `best.py`, `bind.py`, `provider.py` |
@@ -92,7 +92,7 @@ can't do safely, and a command can end its process, which only the engine should
   Python took it: no copy at "Which one?", and no to "Resume it now?".
 - **A Codex lock file that can't be opened** stops the move with the error, where Python stopped
   with a traceback.
-- **`hatcheck --as cl`** (or `cx`, `claude-z`, `claude-k`), and the binary run through a link of
+- **`hatcheck --as cl`** (or `cx`, `ck`, `claude-z`, `claude-k`), and the binary run through a link of
   one of those names, is that launcher; Python's `--as` changed only the name in messages.
   The launchers' own binaries are the same code without the rest, about 400 KB each.
 - **Windows' change time** is in the session cache's stamp, so a session file rewritten at the
@@ -105,7 +105,7 @@ can't do safely, and a command can end its process, which only the engine should
   builds a wheel for each of five platforms and the sdist, and publishes them through PyPI's
   trusted publisher, which names that file.
 - **The release binaries.** cargo-dist (`dist-workspace.toml`) writes `v-release.yml`, which builds
-  the six commands for six targets into the GitHub release, with shell and PowerShell installers
+  the seven commands for six targets into the GitHub release, with shell and PowerShell installers
   and a Homebrew formula it publishes to `hatcheck/homebrew-tap`. The CLI's winget manifests
   (`packaging/winget/cli/`) install from that release's Windows zip. `install.sh` and
   `install.ps1` build the binaries from a clone with cargo and link them.

@@ -1,13 +1,13 @@
 # Installing hatcheck
 
-Every way of installing the six commands, from a clone, switching between installs and
+Every way of installing the seven commands, from a clone, switching between installs and
 removing one, and `hatcheck doctor`, which lists every copy on your `PATH`. The commands
 themselves are in [commands.md](commands.md) and the agents in [agents.md](agents.md).
 
 ## Install
 
 One binary per platform, with no Python needed. Each of these installs `hatcheck`, `hat`, `cl`,
-`cx`, `claude-z` and `claude-k`:
+`cx`, `ck`, `claude-z` and `claude-k`:
 
 ```bash
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
@@ -90,7 +90,7 @@ finds a session's files.
 
 ### Removing it, or switching how it's installed
 
-Each way of installing puts the six commands in a folder of its own, and the copy that comes first
+Each way of installing puts the seven commands in a folder of its own, and the copy that comes first
 on your `PATH` is the one that runs: `which -a hatcheck` (`where.exe hatcheck` on Windows) lists
 them all. A copy left in `~/.local/bin`, which is often first, hides one from Homebrew, and
 Homebrew warns about it. So remove the old install when you switch:
@@ -98,7 +98,7 @@ Homebrew warns about it. So remove the old install when you switch:
 | Installed with | Removed with |
 |---|---|
 | `install.sh` or `install.ps1`, from a clone | `./install.sh --uninstall` or `.\install.ps1 -Uninstall`, which remove only the links and launchers they made |
-| the installer scripts from a release | deleting the six commands from `~/.local/bin`: `rm ~/.local/bin/{hatcheck,hat,cl,cx,claude-z,claude-k}` (on Windows, the `.exe` files in `~\.local\bin`) |
+| the installer scripts from a release | deleting the seven commands from `~/.local/bin`: `rm ~/.local/bin/{hatcheck,hat,cl,cx,ck,claude-z,claude-k}` (on Windows, the `.exe` files in `~\.local\bin`) |
 | Homebrew | `brew uninstall hatcheck` |
 | uv or pipx | `uv tool uninstall hatcheck` or `pipx uninstall hatcheck` |
 | cargo | `cargo uninstall hatcheck` |
@@ -125,8 +125,8 @@ Homebrew warns about it. So remove the old install when you switch:
 $ hatcheck doctor
 This is hatcheck 0.3.0, installed with uv: ~/.local/share/uv/tools/hatcheck/bin/hatcheck
 Installs of hatcheck on your PATH, the first of each name running:
-  1. uv: ~/.local/bin -> ~/.local/share/uv/tools/hatcheck/bin               0.3.0  all six commands; runs
-  2. Homebrew: /opt/homebrew/bin -> /opt/homebrew/Cellar/hatcheck/0.3.0/bin  0.3.0  all six commands; shadowed
+  1. uv: ~/.local/bin -> ~/.local/share/uv/tools/hatcheck/bin               0.3.0  all seven commands; runs
+  2. Homebrew: /opt/homebrew/bin -> /opt/homebrew/Cellar/hatcheck/0.3.0/bin  0.3.0  all seven commands; shadowed
   To remove Homebrew's: brew uninstall hatcheck
 The agents:
   Claude Code      2.1.303 (Claude Code)    ~/.local/bin/claude -> ~/.local/share/claude/versions/2.1.303  (the native installer, runs, and cl runs it)
@@ -140,7 +140,7 @@ Hooks from hatcheck bind --hook:
 To fix: 2 installs of hatcheck are on your PATH; keep one.
 ```
 
-Each way of installing puts hatcheck's six commands in a folder of its own, and the first copy of
+Each way of installing puts hatcheck's seven commands in a folder of its own, and the first copy of
 each name on your `PATH` is the one that runs, so a second install sits there unused, or runs for
 some of the names and not others. `hatcheck doctor` finds every copy, says how it got there (uv,
 pipx, Homebrew, cargo, winget, the release installer or a build from a clone, told by what each
@@ -150,7 +150,7 @@ the others, as in the table above. It changes nothing. It also lists every `clau
 and the resume commands run the first one, and the hooks `hatcheck bind --hook` added, flagging one that runs a
 hatcheck that has gone. A link to a file that's gone, which a shell may find first, a shell
 function `cl()` or `cx()` in `~/.zshrc` or `~/.bashrc`, which wins over the command, and one of
-the six commands that isn't on your `PATH` at all are named too. The exit status is 1 when there's something to fix and 0 otherwise, and `--json` prints what
+the seven commands that isn't on your `PATH` at all are named too. The exit status is 1 when there's something to fix and 0 otherwise, and `--json` prints what
 it found as data. What it says about the agents is for you to act on: Claude Code's `claude doctor`
 and Codex's `codex doctor` know their own installs best. The release installers end by naming it,
 and `install.sh` and `install.ps1` say when another hatcheck comes first on your `PATH`.
