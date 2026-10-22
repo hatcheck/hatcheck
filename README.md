@@ -234,7 +234,7 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   **`dist-workspace.toml`**: the release builds, installers and Homebrew formula, made by cargo-dist.
   **`packaging/`**: the app's Homebrew cask, and the winget manifests for the app and the CLI.
 - **`desktop/`**: the desktop app: Tauri, with the CLI inside it ([its README](desktop/README.md)).
-- **`site/`**: the landing page, one self-contained file, served at [hatcheck.dev](https://hatcheck.dev)
+- **`site/`**: the landing page, one file with its images beside it, served at [hatcheck.dev](https://hatcheck.dev)
   from Cloudflare as static assets; `site/deploy.sh` ships it. The logo lives there too:
   `logo.svg` and `logo-dark.svg` (the mark), `logo-wordmark.svg` and `logo-wordmark-dark.svg`, `favicon.svg`.
 - **`docs/proposals/`**: the plans these came from: [the CLI features](docs/proposals/cli-features.md),

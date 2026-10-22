@@ -1,6 +1,7 @@
 <!doctype html>
-<!-- Hatcheck's landing page: one file, no outside requests, served at hatcheck.dev from
-     Cloudflare as static assets; deploy.sh in this folder ships it (see wrangler.jsonc). -->
+<!-- Hatcheck's landing page: one file with its images beside it, served at hatcheck.dev from
+     Cloudflare as static assets; deploy.sh in this folder ships it (see wrangler.jsonc). It
+     loads nothing from outside until the video is played, which brings in YouTube's player. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -63,6 +64,15 @@
     .downloads a { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; text-decoration: none; color: var(--text); }
     .downloads a span { display: block; color: var(--muted); font-size: 13px; }
     .rules li { margin: 6px 0; }
+    .video { position: relative; aspect-ratio: 16 / 9; margin: 14px 0 10px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-soft); }
+    .video a { display: block; width: 100%; height: 100%; color: inherit; }
+    .video a:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+    .video img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .video .play { position: absolute; inset: 0; margin: auto; width: 76px; height: 76px; border-radius: 50%; background: var(--accent); color: var(--accent-text); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25); transition: transform 0.15s; }
+    .video a:hover .play, .video a:focus-visible .play { transform: scale(1.06); }
+    .video .play svg { width: 32px; height: 32px; margin-left: 4px; }
+    .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .video-note { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
     footer { padding: 26px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
     @media (max-width: 560px) {
       h1 { font-size: 32px; } .tagline { font-size: 18px; }
@@ -92,10 +102,23 @@
     <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI or Z.ai. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's and ZCode and GLM are Z.ai's.</p>
     <div class="buttons">
       <a class="button" href="#install">Install the CLI</a>
+      <a class="button ghost" href="#video">Watch the video</a>
       <a class="button ghost" href="#app">Get the app</a>
       <a class="button ghost" href="https://github.com/hatcheck/hatcheck">Source on GitHub</a>
     </div>
   </header>
+
+  <section class="wrap" id="video">
+    <h2>Half a minute of it</h2>
+    <p>A session carried from a profile that's running low to the account with the most left, in 28 seconds.</p>
+    <div class="video">
+      <a href="https://www.youtube.com/watch?v=9Ymg5ud8KZ0" data-embed="https://www.youtube-nocookie.com/embed/9Ymg5ud8KZ0?autoplay=1&amp;rel=0" aria-label="Play the video: Hatcheck, 28 seconds">
+        <img src="video-poster.jpg" width="1280" height="720" decoding="async" alt="A frame from the video, headed “Carry the session”: a terminal prompt above two profiles, ~/.claude-work with 8% left and ~/.claude-team with 91%, marked best now.">
+        <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
+      </a>
+    </div>
+    <p class="video-note">Press play and it streams from YouTube (youtube-nocookie.com); until then the page loads nothing from outside. <a href="https://www.youtube.com/watch?v=9Ymg5ud8KZ0">Open it on YouTube</a>.</p>
+  </section>
 
   <section class="wrap">
     <h2>What it does</h2>
@@ -185,5 +208,20 @@ cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</cod
     <p>Made by <a href="https://github.com/yiwang">Yi Wang</a>. Source, issues and releases on <a href="https://github.com/hatcheck/hatcheck">GitHub</a>.</p>
     <p>Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI or Z.ai.</p>
   </footer>
+  <script>
+    // The poster links to YouTube; with scripts on, a click plays the video here instead.
+    document.querySelectorAll(".video a[data-embed]").forEach(function (link) {
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        var frame = document.createElement("iframe");
+        frame.src = link.dataset.embed;
+        frame.title = "Hatcheck, the video";
+        frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+        frame.setAttribute("allowfullscreen", "");
+        frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+        link.replaceWith(frame);
+      });
+    });
+  </script>
 </body>
 </html>
