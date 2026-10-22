@@ -63,7 +63,7 @@ also called `cl`, and whichever comes first on `PATH` wins.
 
 ### Or as shell functions
 
-`cl` and `cx` are small enough to keep as shell functions instead. Add this to `~/.zshrc` (or
+`cl`, `cx` and `ck` are small enough to keep as shell functions instead. Add this to `~/.zshrc` (or
 `~/.bashrc`):
 
 ```bash
@@ -82,10 +82,15 @@ cx() {
   mkdir -p "$HOME/.codex-$1" && CODEX_HOME="$HOME/.codex-$1" codex "${@:2}"
 }
 
+# ck work --session <id>  ==  KIMI_CODE_HOME=~/.kimi-code-work kimi --session <id>
+ck() {
+  [ -n "$1" ] || { echo "usage: ck <profile> [kimi args...]  (uses ~/.kimi-code-<profile>)" >&2; return 2; }
+  mkdir -p "$HOME/.kimi-code-$1" && KIMI_CODE_HOME="$HOME/.kimi-code-$1" kimi "${@:2}"
+}
 ```
 
 A shell function takes precedence over an installed command with the same name, and both do the
-same thing. `hatcheck` needs the install; without it, `find ~/.claude* ~/.codex* -name "*3f1c2a9e*"`
+same thing. `hatcheck` needs the install; without it, `find ~/.claude* ~/.codex* ~/.kimi-code* -name "*3f1c2a9e*"`
 finds a session's files.
 
 ### Removing it, or switching how it's installed
@@ -110,8 +115,8 @@ Homebrew warns about it. So remove the old install when you switch:
   on your `PATH`. Other tools use that folder too, so it can stay.
 - `hatcheck bind --hook` writes the path of the `hatcheck` it finds into each profile's hook. After
   a switch, run `hatcheck bind --hook` again with the new install, which points each hook at it.
-  Before removing hatcheck for good, run `hatcheck unbind --hook`, or Claude Code and Codex would
-  try to run a command that's gone each time a session starts.
+  Before removing hatcheck for good, run `hatcheck unbind --hook`, or Claude Code, Codex and
+  Antigravity CLI would try to run a command that's gone each time a session starts.
 - Removing it leaves your profiles, sessions and logins as they are. What's left of hatcheck's own
   is its folder bindings, in `~/.config/hatcheck` (`%APPDATA%\hatcheck` on Windows), its cache
   folder (`~/Library/Caches/hatcheck` on macOS, `~/.cache/hatcheck` on Linux,

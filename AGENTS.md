@@ -1,10 +1,11 @@
 # Notes for coding agents
 
-Hatcheck keeps Claude Code, Codex and Antigravity CLI accounts on one computer apart:
-`crates/hatcheck` is the whole CLI (and the engine the desktop app in `desktop/` runs), `tests/`
-holds the command tests, and `docs/commands.md`, `docs/agents.md` and `docs/install.md` document
-every command, agent and way of installing as it is. Read [docs/lessons.md](docs/lessons.md) before
-changing code: what earlier work got wrong, and the rule that would have caught it.
+Hatcheck keeps Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode accounts on one
+computer apart: `crates/hatcheck` is the whole CLI (and the engine the desktop app in `desktop/`
+runs), `tests/` holds the command tests, and `docs/commands.md`, `docs/agents.md` and
+`docs/install.md` document every command, agent and way of installing as it is. Read
+[docs/lessons.md](docs/lessons.md) before changing code: what earlier work got wrong, and the rule
+that would have caught it.
 
 ## Rules the code keeps
 
@@ -12,9 +13,9 @@ The README's [Rules it keeps](README.md#rules-it-keeps) section lists them with 
 enforces each. In short: hatcheck is never in the path between an agent and its model; it never
 asks for, stores, refreshes or moves a login; it never switches accounts on its own; nothing runs
 in the background; nothing leaves the computer but the usage requests Claude Code, the Codex
-usage endpoint and agy's own `/usage` are asked for, and agy's model list, asked first so a run
-never starts agy's sign-in. A change that bends one of these is a product decision, not a fix: say
-so, and leave it to the maintainer.
+and Kimi usage endpoints and agy's own `/usage` are asked for, and agy's model list, asked first
+so a run never starts agy's sign-in. A change that bends one of these is a product decision, not
+a fix: say so, and leave it to the maintainer.
 
 ## Building and checking
 

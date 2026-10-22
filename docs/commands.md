@@ -40,9 +40,10 @@ and `hat f …` is `hat fork …`. Where two share a letter, it goes to the one 
 and `doctor` take two letters, `bi`, `un` and `do`, and `relocate` three, `rel`. What it prints,
 and the commands it suggests, use the whole name.
 
-Lists the Claude Code sessions from every `~/.claude*` profile, and the Codex sessions from every
-`~/.codex*` home, that were active in the last 24 hours or are still open, grouped by folder and
-newest first. Run from a folder that has sessions, it lists
+Lists the Claude Code sessions from every `~/.claude*` profile, the Codex sessions from every
+`~/.codex*` home and the Kimi Code CLI sessions from every `~/.kimi-code*` home, with Antigravity
+CLI's and ZCode's from their folders, that were active in the last 24 hours or are still open,
+grouped by folder and newest first. Run from a folder that has sessions, it lists
 just that folder's (`--all-folders` lists them all). Each one comes with the command that resumes it
 and what's left of that profile's plan:
 
@@ -470,12 +471,16 @@ Resume it with:
 | `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
 
 With nothing, `hatcheck move` (or `hat m`) moves the newest session started from this folder,
-whichever agent's, to the folder's bound Claude Code profile, or `~/.claude`, after asking in the
-terminal:
+whichever agent's, to the best account of its agent now, as `hatcheck best` picks it, after showing
+that account's limits and asking in the terminal:
 
 ```
 $ hat m
-Move session 3f1c2a9e "Fix flaky login test" from ~/.gemini/antigravity-cli to ~/.claude-work? [y/N] y
+Session 3f1c2a9e "Fix flaky login test" is in ~/.claude-personal: Fable 0% left, back Sat 4:59pm · 5h 100%.
+Best Claude Code account now: ~/.claude-work  team max 5x · live
+  session (5h)          80% ████████░░  ░░░░░░░░░░ resets 3:40pm (in 55m)
+  week (Fable)          31% ███░░░░░░░  ██████░░░░ resets Tue 12:00pm (in 2d14h)
+Move session 3f1c2a9e "Fix flaky login test" from ~/.claude-personal to ~/.claude-work? [y/N] y
 ```
 
 `--dry-run` says what it would do without asking, and a script, a pipe or `--json` has to say
@@ -729,7 +734,7 @@ $ hatcheck bind work --codex personal   # a different Codex home
 $ hatcheck bind                         # what this folder is bound to
 $ hatcheck bind --list                  # every bound folder
 $ hatcheck unbind                       # untie it
-$ hatcheck bind --hook                  # warn in Claude Code and Codex (once; hatcheck unbind --hook undoes it)
+$ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigravity CLI (once; hatcheck unbind --hook undoes it)
 ```
 
 - Bindings live in your own config, `~/.config/hatcheck/bindings.json`

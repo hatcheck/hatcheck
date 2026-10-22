@@ -1,12 +1,12 @@
 # Hatcheck, the app
 
 A menu-bar app (system tray on Windows and Linux) for what `hatcheck` does in a terminal: what's
-left of every Claude and ChatGPT plan at a glance, recent Claude Code and Codex sessions to resume,
-and Claude Desktop instances a click away. A main window browses every session, with a read-only
+left of every plan at a glance, recent sessions from every agent to resume, and Claude Desktop
+instances a click away. A main window browses every session, with a read-only
 preview, moves sessions between profiles, adds profiles and makes Desktop instances.
 
 It's a front end to the `hatcheck` CLI, which it ships inside itself as a standalone binary, so it
-needs no Python. Nothing about Claude Code's or Codex's files is reimplemented here; the app asks
+needs no Python. Nothing about the agents' files is reimplemented here; the app asks
 the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --json`, `hatcheck move
 --json`, `hatcheck desktop --json`), and Resume runs `hatcheck open`, which opens your terminal.
 
@@ -28,9 +28,9 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
     Resume, Copy and **Move**: pick a profile, see the dry run (`hatcheck move --dry-run --json`,
     or `hatcheck fork` for a new session that keeps the original), then do it, and resume it there.
   - *Plans:* every account's limits.
-  - *Profiles:* every profile and Codex home, and **Sign in** or **Add one**, which opens
-    `cl <name>` or `cx <name> login` in a terminal (`hatcheck open --login`), so the login stays
-    with Claude Code and Codex.
+  - *Profiles:* every profile, Codex home and Kimi home, and **Sign in** or **Add one**, which
+    opens `cl <name>`, `cx <name> login` or `ck <name> login` in a terminal (`hatcheck open
+    --login`), so the login stays with the agent.
   - *Desktop* (macOS): the Claude Desktop instances, and **Make one** with its own colour
     (`hatcheck desktop new`), and remove them.
   - *Settings:* live usage, how often to refresh, notifications, which terminal Resume opens, and
@@ -39,10 +39,12 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
 ## Rules it keeps
 
 - **No credentials.** It never asks for, stores, refreshes or passes on a login.
-- **Live usage is opt-in.** By default it shows what Claude Code and Codex last saved
-  (`--cached`). With live usage on, the engine runs Claude Code's `/usage` in each profile, which
-  asks Anthropic with that profile's own login and saves the answer, and asks ChatGPT's usage
-  endpoint for each Codex home with its saved token, read and never refreshed.
+- **Live usage is opt-in.** By default it shows what Claude Code and Codex last saved, and the
+  last readings hatcheck kept of agy's and Kimi's (`--cached`). With live usage on, the engine runs
+  Claude Code's `/usage` in each profile, which asks Anthropic with that profile's own login and
+  saves the answer, asks ChatGPT's and Kimi's usage endpoints for each Codex and Kimi home with its
+  saved token, read and never refreshed, and runs agy's own `/usage` once `agy models` has said
+  it's signed in.
 - **No automatic switching** between accounts.
 
 ## Build and test it
@@ -94,7 +96,7 @@ a template, and a coloured tray icon for Windows and Linux, which show tray icon
   the command the pages call to run `hatcheck`. It keeps up to two engines running
   (`hatcheck serve`, which takes a command per line of JSON) so a call doesn't wait for one to
   start, and runs the engine once per call if that fails. It gives the engine the PATH your login
-  shell sets, so it finds `cl` and `cx`.
+  shell sets, so it finds `cl`, `cx` and `ck`.
 - `tray.html`, `src/tray.ts`: the popover, which also refreshes in the background and sends the
   notifications. `index.html`, `src/main.ts`: the main window.
 - `src/engine.ts`: each engine call and the shape of its JSON. `src/format.ts`: bars, times and

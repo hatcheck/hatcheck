@@ -64,7 +64,7 @@ didn't notice the switch.
 | `open_cmd.rs`, `show.rs` | the session picker and the terminals; a session's conversation | `open.py`, `show.py` |
 | `find.rs` | a session's copies, the newest one in a folder, and `place` (`--from`, `--login`) | `sessions.py`, `move.py` |
 | `move_cmd.rs` | moves and copies, updates, forks (`hatcheck fork`) and conversions, and the copy chooser | `move.py` |
-| `agent.rs` | the agents, Claude Code and Codex, as one enum the commands match on | new in the Rust version |
+| `agent.rs` | the agents, Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode, as one enum the commands match on | new in the Rust version |
 | `doctor.rs` | `hatcheck doctor`: every copy of hatcheck and the agents on the PATH, and the hooks | new in the Rust version |
 | `agy.rs` | Antigravity CLI: its conversation index and transcripts, its lock, its /usage run headless, and a conversation written for it to read | new in the Rust version |
 | `relocate.rs` | `hatcheck relocate`: a moved project folder's sessions brought along | new in the Rust version |

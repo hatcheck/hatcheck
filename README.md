@@ -34,7 +34,7 @@ the recent sessions in all of them, with the command that resumes each one and w
 plan. The rest
 of the commands find, show, carry and convert sessions between the accounts and the agents, tie
 folders to accounts, and check how everything is installed: see
-[the tour](#claude-code-codex-and-antigravity-cli) below, and
+[the tour](#claude-code-codex-antigravity-cli-kimi-code-cli-and-zcode) below, and
 [docs/commands.md](docs/commands.md) for each command as it is.
 
 **Not a gateway.** Hatcheck is never between an agent and its model. It rewrites no agent's
@@ -76,7 +76,7 @@ the launcher does, and how to copy a login you already have into an instance.
 
 ---
 
-## Claude Code, Codex and Antigravity CLI
+## Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode
 
 Claude Code (the `claude` CLI) keeps its settings, history and session transcripts in `~/.claude`
 (plus `~/.claude.json`), and its login in the macOS Keychain, or on Linux and Windows in
@@ -138,7 +138,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent |
 | [`hatcheck fork SESSION PROFILE`](docs/commands.md#hatcheck-fork-a-session-as-a-new-one-in-another-profile) | bring it in there as a new session, keeping the original |
 | [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along |
-| [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl` and `cx` pick it there and the list flags strays |
+| [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
 | [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest |
 | [`hatcheck desktop`](#claude-desktop-instances-macos) | Claude Desktop instances on macOS |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |
@@ -286,7 +286,7 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   [Philipp Stracker's gist](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
   ([write-up](https://philippstracker.com/multiple-claude-instances/)), itself a cleaned-up version
   of [weidwonder/claude-desktop-multi-instance](https://github.com/weidwonder/claude-desktop-multi-instance).
-- **Claude Code and Codex CLI tools:** `hatcheck`, `cl`, `cx`, the installers and the tests are by
+- **The CLI tools:** `hatcheck`, `cl`, `cx`, `ck`, the installers and the tests are by
   [Yi Wang](https://github.com/yiwang).
 - **Z.ai and Kimi:** the provider settings in `crates/hatcheck/src/provider.rs` (endpoints, model slots, context
   windows and the config files) come from [claude-z](https://github.com/sam-fakhreddine/claude-z) by
