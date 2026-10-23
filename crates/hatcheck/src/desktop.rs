@@ -684,7 +684,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 return 0;
             }
             if found.is_empty() {
-                out::println("No Claude Desktop instances yet. Make one with: hatcheck desktop new work Work --hue 190");
+                out::println("No Claude Desktop instances yet. Make one with: hatcheck desktop new a A --hue 190");
                 return 0;
             }
             for inst in &found {

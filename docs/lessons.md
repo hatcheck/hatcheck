@@ -46,7 +46,7 @@ Claude Code out. Reading usage through Claude Code's own `/usage` needs none of 
 - Seen 1× (2026-10-18).
 
 **A path given to another app is spelled one way.** Claude Code names each profile's Keychain
-entry after the exact `CLAUDE_CONFIG_DIR` string, so `~/.claude-work` and `/Users/me/.claude-work`
+entry after the exact `CLAUDE_CONFIG_DIR` string, so `~/.claude-a` and `/Users/me/.claude-a`
 are two logins. `cl` always spells it `~/.claude-<name>` expanded the same way.
 - Evidence: docs/agents.md, "`cl`: run Claude Code with a profile"; `cl` in `launch.rs`.
 

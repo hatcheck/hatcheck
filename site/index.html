@@ -60,7 +60,7 @@
     <p>A session carried from a profile that's running low to the account with the most left, in 28 seconds.</p>
     <div class="video">
       <a href="https://www.youtube.com/watch?v=9Ymg5ud8KZ0" data-embed="https://www.youtube-nocookie.com/embed/9Ymg5ud8KZ0?autoplay=1&amp;rel=0" aria-label="Play the video: Hatcheck, 28 seconds">
-        <img src="video-poster.jpg" width="1280" height="720" decoding="async" alt="A frame from the video, headed “Carry the session”: a terminal prompt above two profiles, ~/.claude-work with 8% left and ~/.claude-team with 91%, marked best now.">
+        <img src="video-poster.jpg" width="1280" height="720" decoding="async" alt="A frame from the video, headed “Carry the session”: a terminal prompt above two profiles, one with 8% left and one with 91%, marked best now.">
         <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
       </a>
     </div>
@@ -70,12 +70,12 @@
   <section class="wrap" id="start">
     <h2>Start with a profile per account</h2>
     <p>Claude Code keeps its login, settings and sessions in one folder, <code>~/.claude</code>. Pointed at another folder with <code>CLAUDE_CONFIG_DIR</code>, it keeps a second set there, with a login of its own: a profile. Hatcheck is built on that: a folder per account, and <code>cl</code> to run Claude Code with one. Codex and Kimi Code CLI work the same way, with <code>CODEX_HOME</code> and <code>KIMI_CODE_HOME</code>, and <code>cx</code> and <code>ck</code> run them.</p>
-<pre><code>cl work              # Claude Code with ~/.claude-work; the first run asks you to sign in
-cl team              # ~/.claude-team, signed in to another account
-cx work login        # Codex with ~/.codex-work
-ck work login        # Kimi Code CLI with ~/.kimi-code-work
+<pre><code>cl a                 # Claude Code with ~/.claude-a; the first run asks you to sign in
+cl b                 # ~/.claude-b, signed in to another account
+cx a login           # Codex with ~/.codex-a
+ck a login           # Kimi Code CLI with ~/.kimi-code-a
 cd ~/code/api
-hatcheck bind work   # in this repo, plain cl means cl work, and cx and ck the same
+hatcheck bind a      # in this repo, plain cl means cl a, and cx and ck the same
 hatcheck             # the sessions here from every profile, and what's left of each plan</code></pre>
     <p>An existing <code>~/.claude</code> counts as a profile too (hatcheck calls it <code>default</code>), and plain <code>claude</code> keeps using it. Antigravity CLI and ZCode keep one login each, so hatcheck reads their one folder beside the profiles: <a href="agents.html">which agents, and how far</a>. The CLI comes first: <a href="#install">install it</a>.</p>
   </section>
@@ -93,7 +93,7 @@ hatcheck             # the sessions here from every profile, and what's left of 
       </div>
       <div class="card">
         <h3>Claude Desktop, one per account</h3>
-        <p>On macOS, <code>hatcheck desktop new work Work</code> makes a Claude Desktop instance with its own data folder and login, and a launcher in a colour you pick that brings a running instance forward instead of opening a second one.</p>
+        <p>On macOS, <code>hatcheck desktop new a A</code> makes a Claude Desktop instance with its own data folder and login, and a launcher in a colour you pick that brings a running instance forward instead of opening a second one.</p>
       </div>
     </div>
 
@@ -103,9 +103,9 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <span class="b">Claude Code, Codex, Antigravity, Kimi Code and ZCode CLI sessions in this folder, active in the last 24h or open now</span><span class="d"> (newest first; % = plan left, ↻ = hours/days until reset)</span>
 <span class="b c">cd ~/code/api</span>
   <span class="d">  4m</span>  <span class="b">Fix flaky login test</span><span class="d"> · </span><span class="d">main</span>
-        <span class="c">cl</span> work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10        <span class="d">#</span> <span class="d">5h</span> <span class="y">20%</span> <span class="y">█░░░░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span class="d">week</span>   <span class="r">9%</span> <span class="r">▋░░░░░░</span> <span style="color:#d75f00">↻▉░░░░░░ 21h35m</span>
+        <span class="c">cl</span> a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10           <span class="d">#</span> <span class="d">5h</span> <span class="y">20%</span> <span class="y">█░░░░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span class="d">week</span>   <span class="r">9%</span> <span class="r">▋░░░░░░</span> <span style="color:#d75f00">↻▉░░░░░░ 21h35m</span>
   <span class="d"> 35m</span>  <span class="b">Add rate limiting to the login endpoint</span><span class="d"> · </span><span class="d">main</span>
-        <span class="c">cl</span> team --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d        <span class="d">#</span> <span class="d">5h</span> <span class="g">62%</span> <span class="g">███▏░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span style="color:#af5fd7">Fable</span> <span class="g">48%</span> <span style="color:#af5fd7">███▍░░░</span> <span style="color:#87afd7">↻████▎░░ 4d4h</span>
+        <span class="c">cl</span> b --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d           <span class="d">#</span> <span class="d">5h</span> <span class="g">62%</span> <span class="g">███▏░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span style="color:#af5fd7">Fable</span> <span class="g">48%</span> <span style="color:#af5fd7">███▍░░░</span> <span style="color:#87afd7">↻████▎░░ 4d4h</span>
   <span class="d"> 50m</span>  <span class="b">Add retries to the uploader</span><span class="d"> · </span><span class="d">main</span>
         <span class="c">codex</span> resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e            <span class="d">#</span> <span class="d">5h</span> <span class="g">80%</span> <span class="g">████░</span> <span style="color:#87afd7">↻███░░ 2h59m</span>  <span class="d">week</span>  <span class="g">64%</span> <span class="g">████▌░░</span> <span style="color:#d7af00">↻██░░░░░ 1d23h</span>
   <span class="d">  1h</span>  <span class="b">Profile the slow search query</span>
@@ -125,14 +125,14 @@ hatcheck             # the sessions here from every profile, and what's left of 
     <h3>Where to carry it</h3>
     <p><code>hat best</code> shows the best account now as <code>hatcheck usage</code> shows it, and the command that carries the newest session started here to it:</p>
 <pre><code><!-- sample:best -->$ hatcheck best
-Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-work: week 9%, 0.4%/h · 5h 20%.
-Best Claude Code account now: <span class="b c">~/.claude-team</span>  <span class="d">team max 5x · </span><span class="g">live</span>
-  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 1:43am (in 2h39m)</span>
-  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Tue 3:51am (in 4d4h)</span>
+Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
+Best Claude Code account now: <span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 1:57am (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Tue 4:05am (in 4d4h)</span>
 Carry it there with:
-  hatcheck move team<span class="d">    (hatcheck fork team keeps the original)</span>
+  hatcheck move b<span class="d">    (hatcheck fork b keeps the original)</span>
 <span class="d">Then:</span>
-   2. <span class="b">~/.claude-work</span>  week 9%, 0.4%/h · 5h 20% (where it is)  <span class="c">→ cl work</span>
+   2. <span class="b">~/.claude-a</span>  week 9%, 0.4%/h · 5h 20% (where it is)  <span class="c">→ cl a</span>
 <span class="d">Codex:</span> <span class="b">~/.codex</span>  week 64%, 1.3%/h · 5h 80% · cached 50m ago  <span class="c">→ codex</span>
 <span class="d">Advice only: nothing is started, moved or switched. hatcheck usage shows every account's limits.</span><!-- /sample:best --></code></pre>
 
@@ -141,8 +141,8 @@ Carry it there with:
 <pre><code><!-- sample:relocate -->$ mv ~/code/web ~/code/site
 $ hatcheck relocate ~/code/web ~/code/site
 Relocated 4 sessions from ~/code/web to ~/code/site:
-  ~/.claude-team  2 sessions: projects/-Users-me-code-web renamed projects/-Users-me-code-site
-  ~/.claude-work  1 session: projects/-Users-me-code-web renamed projects/-Users-me-code-site
+  ~/.claude-a  1 session: projects/-Users-me-code-web renamed projects/-Users-me-code-site
+  ~/.claude-b  2 sessions: projects/-Users-me-code-web renamed projects/-Users-me-code-site
   ~/.codex  1 session: the folder in the file rewritten
 Left alone: Kimi Code CLI session 8d4b5e6f in ~/.kimi-code is filed under a hash of the folder, which stays as it was.
 The folder binding of ~/code/web moved to ~/code/site.

@@ -8,10 +8,10 @@ in [install.md](install.md).
 ## `cl`: run Claude Code with a profile
 
 ```bash
-cl work                           # Claude Code with ~/.claude-work (sign in on first run)
-cl work --resume <session-id>     # resume one of that profile's sessions
-cl personal --continue            # any claude option works
-cl -k work --resume <session-id>  # that session on Kimi; -z for Z.ai (see below)
+cl a                              # Claude Code with ~/.claude-a (sign in on first run)
+cl a --resume <session-id>        # resume one of that profile's sessions
+cl b --continue                   # any claude option works
+cl -k a --resume <session-id>     # that session on Kimi; -z for Z.ai (see below)
 ```
 
 Plain `claude` keeps using `~/.claude`. Claude Code names each profile's Keychain entry after its
@@ -23,13 +23,13 @@ name can be left out: `cl --resume <session-id>` there uses that profile.
 
 [Codex](https://github.com/openai/codex) keeps its login, config and sessions in `~/.codex`, and
 `CODEX_HOME` points it at another folder, so you can keep one home per ChatGPT account the same way:
-`~/.codex-work`, `~/.codex-personal`, and so on.
+`~/.codex-a`, `~/.codex-b`, and so on.
 
 ```bash
-cx work login                     # sign in once, with the work account
-cx work                           # Codex with ~/.codex-work
-cx work resume <session-id>       # resume one of that home's sessions
-cx personal exec "run the tests"  # any codex command works
+cx a login                        # sign in once, with that account
+cx a                              # Codex with ~/.codex-a
+cx a resume <session-id>          # resume one of that home's sessions
+cx b exec "run the tests"         # any codex command works
 ```
 
 - `cx` makes the folder on first use, since Codex won't start with a `CODEX_HOME` that doesn't exist.
@@ -97,17 +97,17 @@ that one folder, and there are no `agy` profiles or a launcher for them yet (see
 
 [Kimi Code CLI](https://moonshotai.github.io/kimi-code/) keeps its sessions, settings and login in
 one home folder, `~/.kimi-code`, and `KIMI_CODE_HOME` points it at another, so you can keep one
-home per Kimi account the way `cx` keeps Codex homes: `~/.kimi-code-work`, `~/.kimi-code-personal`,
+home per Kimi account the way `cx` keeps Codex homes: `~/.kimi-code-a`, `~/.kimi-code-b`,
 and so on.
 
 ```bash
-ck work login                     # sign in once, with the work account (a device code)
-ck work                           # Kimi Code CLI with ~/.kimi-code-work
-ck work --session <session-id>    # resume one of that home's sessions
-ck personal -p "run the tests"    # any kimi option or command works
+ck a login                        # sign in once, with that account (a device code)
+ck a                              # Kimi Code CLI with ~/.kimi-code-a
+ck a --session <session-id>       # resume one of that home's sessions
+ck b -p "run the tests"           # any kimi option or command works
 ```
 
-- `ck` makes the folder on first use, so `ck work login` starts a new home.
+- `ck` makes the folder on first use, so `ck a login` starts a new home.
 - A new home starts without your `~/.kimi-code/config.toml` (the default model, providers, hooks);
   kimi writes one when it first runs there, and you can copy yours over.
 - Plain `kimi` keeps using `~/.kimi-code`.
@@ -153,7 +153,7 @@ writes, checked against kimi 2.2.0:
   login is read.
 - `hatcheck move <id> kimi` converts a session into a Kimi session, written as kimi's own importer
   writes one: see [With Kimi Code CLI](commands.md#with-kimi-code-cli). `hatcheck bind default`
-  binds `~/.kimi-code` along with the rest when it has sessions, `bind work` binds `~/.kimi-code-work`
+  binds `~/.kimi-code` along with the rest when it has sessions, `bind NAME` binds `~/.kimi-code-NAME`
   when it exists, and `--kimi NAME` picks one. No hook is added for kimi: its hooks live in
   `config.toml`.
 
@@ -204,8 +204,8 @@ stay in its profile:
 ```bash
 claude-k reconfig                   # once: your Kimi API key and model (claude-z reconfig for Z.ai)
 claude-k                            # Claude Code on Kimi, with ~/.claude
-cl -k work --resume <session-id>    # carry on a work-profile session on Kimi…
-cl work --resume <session-id>       # …and later back on the work account's Claude plan
+cl -k a --resume <session-id>       # carry on a session in ~/.claude-a on Kimi…
+cl a --resume <session-id>          # …and later back on its account's Claude plan
 ```
 
 - Setup asks for the API key (from [z.ai](https://z.ai/manage-apikey/apikey-list) or the
@@ -222,8 +222,8 @@ cl work --resume <session-id>       # …and later back on the work account's Cl
   profile's claude.ai login token to the provider instead.
 - The model is pinned with `ANTHROPIC_MODEL`, so a `"model"` in the profile's `settings.json`, such
   as `"fable"`, can't send a Claude model name to Z.ai or Kimi.
-- Resuming a session on another provider sends it the whole conversation so far, so check that's
-  allowed before doing it with a work account's sessions.
+- Resuming a session on another provider sends it the whole conversation so far, so check that
+  what's in it may go there first.
 - `hatcheck usage` and the comments in `hatcheck` show the Claude and ChatGPT plans, not Z.ai's or
   Kimi's.
 

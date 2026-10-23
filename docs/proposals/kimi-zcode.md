@@ -220,8 +220,8 @@ Built on 2026-10-20, checked against kimi 2.2.0 and ZCode 0.16.9 on the maintain
 - **Probe 1, run later the same day.** A session kimi had opened once was moved to a second home,
   `~/.kimi-code-probe`, where kimi's UI opened it with its history (signed out there, so no model
   turn), moved back, and opened again in the real home. Both homes were cleaned afterwards.
-- **The `ck` launcher**, named by the pattern `cl` and `cx` set: `ck work login`, `ck work`,
-  `ck work --session <id>`, with the folder made on first use and the binding used without a
+- **The `ck` launcher**, named by the pattern `cl` and `cx` set: `ck NAME login`, `ck NAME`,
+  `ck NAME --session <id>`, with the folder made on first use and the binding used without a
   name; carried by the installers, the winget manifests, the PyPI package and the desktop app.
 - **Kimi usage**, from the endpoint kimi's own `/usage` asks (`…/coding/v1/usages`, by region),
   with the home's token sent as it is and never refreshed, as Codex's is; the last reading kept

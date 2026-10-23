@@ -18,9 +18,9 @@ Z.ai. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex 
 trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's and
 ZCode and GLM are Z.ai's.*
 
-On macOS, `hatcheck desktop` runs **one Claude Desktop per account, side by side**, a personal one
-and a work one, say: each with its own data folder and login, and a launcher in a colour you pick,
-which brings the running one forward rather than opening it twice.
+On macOS, `hatcheck desktop` runs **one Claude Desktop per account, side by side**: each with its
+own data folder and login, and a launcher in a colour you pick, which brings the running one
+forward rather than opening it twice.
 
 Running Claude Desktop with its own `--user-data-dir` is
 [Philipp Stracker's approach](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
@@ -41,8 +41,8 @@ folders to accounts, and check how everything is installed: see
 config, holds no login, and runs nothing in the background. Tools such as
 [magpie](https://github.com/yetone/magpie) put a local gateway in that path so any agent can use
 any model and accounts can take over from each other when a quota runs out. If that is what you
-want, use one of those. Hatcheck is for the opposite case: keeping a work account and a personal
-account apart, and knowing which one each session ran on. See [Rules it keeps](#rules-it-keeps).
+want, use one of those. Hatcheck is for the opposite case: keeping several accounts apart, and
+knowing which one each session ran on. See [Rules it keeps](#rules-it-keeps).
 
 |                                 | macOS | Linux | Windows |
 |---------------------------------|:-----:|:-----:|:-------:|
@@ -58,11 +58,11 @@ and a launcher in `/Applications` with Claude's icon in a colour you pick. The l
 running instance's window forward instead of starting a second one on the same folder.
 
 ```bash
-hatcheck desktop new work Work --hue 190          # Claude Work.app, blue
-hatcheck desktop new personal Personal --hue -10  # Claude Personal.app, red-orange
-hatcheck desktop open work                        # or open it from Launchpad or the Dock
+hatcheck desktop new a A --hue 190                # Claude A.app, blue
+hatcheck desktop new b B --hue -10                # Claude B.app, red-orange
+hatcheck desktop open a                           # or open it from Launchpad or the Dock
 hatcheck desktop                                  # the instances, and which are running
-hatcheck desktop remove work                      # its launcher; --data deletes its data folder too
+hatcheck desktop remove a                         # its launcher; --data deletes its data folder too
 ```
 
 Sign each one in to its account the first time it opens. The first time a launcher brings a window
@@ -82,13 +82,13 @@ Claude Code (the `claude` CLI) keeps its settings, history and session transcrip
 (plus `~/.claude.json`), and its login in the macOS Keychain, or on Linux and Windows in
 `~/.claude/.credentials.json`. Point `CLAUDE_CONFIG_DIR` at another folder and you get a separate
 profile with its own login, so you can keep one per account:
-`~/.claude-work`, `~/.claude-personal`, and so on. These are separate from the Desktop instances
+`~/.claude-a`, `~/.claude-b`, and so on. These are separate from the Desktop instances
 above, though sessions from Desktop's Code tab can be filed in them too (the session list
 hides those unless you pass `--all`). Codex works the same way with `CODEX_HOME`: see
 [`cx`](docs/agents.md#cx-run-codex-with-a-home-per-account). Antigravity CLI keeps everything under
 `~/.gemini/antigravity-cli`, which only `HOME` moves, so hatcheck reads that one folder: see
 [Antigravity CLI](docs/agents.md#antigravity-cli-agy). Kimi Code CLI works like Codex, with
-`KIMI_CODE_HOME` and one home per account (`~/.kimi-code-work`), which [`ck`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account)
+`KIMI_CODE_HOME` and one home per account (`~/.kimi-code-a`), which [`ck`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account)
 runs it with, and ZCode keeps its sessions in a database under `~/.zcode`, which only `HOME`
 moves: see [Kimi Code CLI](docs/agents.md#kimi-code-cli-kimi) and [ZCode](docs/agents.md#zcode-zcode).
 
@@ -125,9 +125,9 @@ Each is documented as it is, with its options and what it prints, in
 
 | Command | What it does |
 |---|---|
-| [`cl work --resume <id>`](docs/agents.md#cl-run-claude-code-with-a-profile) | Claude Code with `~/.claude-work`; `cl -z` and `cl -k` run it on Z.ai or Kimi there |
-| [`cx work resume <id>`](docs/agents.md#cx-run-codex-with-a-home-per-account) | Codex with `~/.codex-work` |
-| [`ck work --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-work` |
+| [`cl a --resume <id>`](docs/agents.md#cl-run-claude-code-with-a-profile) | Claude Code with `~/.claude-a`; `cl -z` and `cl -k` run it on Z.ai or Kimi there |
+| [`cx a resume <id>`](docs/agents.md#cx-run-codex-with-a-home-per-account) | Codex with `~/.codex-a` |
+| [`ck a --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-a` |
 | [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day, in every profile, home and folder, each with its resume command and what's left of its plan |
 | [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable |
 | [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | the best account now, with its limits, and the `move` command that carries the newest session started here to it; `--wait` sleeps until one has room |
@@ -260,7 +260,7 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   opening a duplicate. It needs testing on a Windows machine first.
 - **Linux.** There's no official Claude Desktop for Linux, so only the CLI tools apply there.
 - **Antigravity CLI profiles.** agy keeps one login per home folder, so a second account needs a
-  home folder of its own (`HOME=~/.agy-work agy`), which every command the agent runs would see
+  home folder of its own (`HOME=~/.agy-a agy`), which every command the agent runs would see
   too. Whether hatcheck should make such folders, and a launcher for them, is still open; until
   then it reads `~/.gemini/antigravity-cli` only. The Antigravity app has the same one login,
   in the system keyring, shared with agy, so an instance of it with its own data folder would

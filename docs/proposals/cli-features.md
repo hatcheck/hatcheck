@@ -48,7 +48,7 @@ $ hatcheck --json
     {
       "agent": "claude",
       "id": "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10",
-      "profile": "/Users/me/.claude-work",
+      "profile": "/Users/me/.claude-a",
       "account": 0,
       "title": "Fix flaky login test",
       "cwd": "/Users/me/code/api",
@@ -57,13 +57,13 @@ $ hatcheck --json
       "branch": "main",
       "model": "claude-fable-5-1",
       "open": {"pid": 48213, "status": "busy"},
-      "resume": "cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10"
+      "resume": "cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10"
     }
   ],
   "accounts": [
     {
       "agent": "claude",
-      "profiles": ["/Users/me/.claude-work"],
+      "profiles": ["/Users/me/.claude-a"],
       "plan": "team max 5x",
       "source": "live",
       "saved_at": null,
@@ -96,12 +96,12 @@ from a desktop app there's no terminal to type them in.
 **Proposal:**
 
 ```console
-$ hatcheck open 3f1c2a9e        # a new terminal window in ~/code/api, running cl work --resume …
+$ hatcheck open 3f1c2a9e        # a new terminal window in ~/code/api, running cl a --resume …
 $ hatcheck open                 # the newest session in this folder, in any profile or home
 $ hatcheck open 3f1c2a9e --here # in this terminal instead
 $ hatcheck open 3f1c2a9e --print
 cd ~/code/api
-cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 ```
 
 - **Finding it:** by ID or the start of it, in Claude Code profiles and Codex homes, as
@@ -124,15 +124,15 @@ cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 
 ## 3. Folder bindings (`hatcheck bind`)
 
-**Problem:** with a work and a personal account, it's easy to start `claude` in a work repo out of
-habit. The session then runs on the personal account and is filed in the personal profile.
+**Problem:** with several accounts, it's easy to start `claude` in a repo out of habit, under the
+wrong one. The session then runs on that account and is filed in its profile.
 
 **Proposal:**
 
 ```console
 $ cd ~/code/api
-$ hatcheck bind work            # this folder and everything under it: ~/.claude-work, ~/.codex-work
-$ hatcheck bind work --codex personal   # a different Codex home
+$ hatcheck bind a               # this folder and everything under it: ~/.claude-a, ~/.codex-a
+$ hatcheck bind a --codex b             # a different Codex home
 $ hatcheck bind --list
 $ hatcheck unbind
 ```
@@ -141,7 +141,7 @@ $ hatcheck unbind
   (`%APPDATA%\hatcheck\bindings.json` on Windows), not in the repo, so profile names don't end up in
   git. The deepest bound folder wins, and folders are compared after resolving symlinks.
 - **`cl` and `cx` use it:** without a profile name in a bound folder, `cl --resume <id>` means
-  `cl work --resume <id>`. Today `cl` needs a profile name, so nothing that works now changes.
+  `cl a --resume <id>`. Today `cl` needs a profile name, so nothing that works now changes.
 - **A warning when it's ignored:** an opt-in `hatcheck bind --hook` adds a SessionStart hook to each
   profile's `settings.json`. When a session starts in a bound folder under another profile, it shows
   a warning that names the folder's profile and the `cl` command to use. It warns and doesn't block.
@@ -160,8 +160,8 @@ every account's bars and doing the sums.
 ```console
 $ hatcheck best
 Claude Code, best first (sorted by Fable, as hatcheck usage sorts)
-   1. ~/.claude-work      Fable 52% left, resets Sun 8:20pm · 5h 80%   → cl work
-   2. ~/.claude-personal  week 90% · 5h 31%                            → cl personal
+   1. ~/.claude-a  Fable 52% left, resets Sun 8:20pm · 5h 80%   → cl a
+   2. ~/.claude-b  week 90% · 5h 31%                            → cl b
 Codex, best first
    1. ~/.codex  month 100%  → codex
 $ hatcheck best --for 3f1c2a9e   # where to carry this session: prints the hatcheck move command
@@ -177,7 +177,7 @@ $ hatcheck best --for 3f1c2a9e   # where to carry this session: prints the hatch
   anything by itself. Nothing in Hatcheck rotates accounts in the background.
 - **The terms still apply.** Using several accounts to get around one plan's limits may break
   Anthropic's or OpenAI's terms. This is for choosing between accounts you may use for the work at
-  hand, such as your own and your company's.
+  hand.
 
 ## Not a CLI feature, but next too
 

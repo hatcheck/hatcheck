@@ -10,12 +10,12 @@ installing, switching and `hatcheck doctor` in [install.md](install.md). The
 
 ```console
 $ hatcheck where 3f1c2a9e
-/Users/me/.claude-work/projects/-Users-me-code-api/3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10.jsonl
+/Users/me/.claude-a/projects/-Users-me-code-api/3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10.jsonl
 $ hatcheck where 019a8c1e
 /Users/me/.codex/sessions/2026/10/14/rollout-2026-10-14T09-12-33-019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e.jsonl
 ```
 
-The profile in the path tells you how to resume it (`claude`, or `cl work` here), and the folder
+The profile in the path tells you how to resume it (`claude`, or `cl a` here), and the folder
 under `projects/` is the directory the session ran in, with every non-alphanumeric character turned
 into `-`. A session with subagents or large tool results also has a data folder of the same name,
 which is listed too. Codex files its sessions by the date they started, archived ones under
@@ -52,23 +52,23 @@ $ hatcheck
 Claude Code and Codex CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
     4m  Fix flaky login test · main · ● open in pid 48213 (busy)
-        cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10      # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
+        cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10         # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
    40m  Add retries to the uploader · main
-        cx work resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e        # 5h  80% ████░ ↻███▏░ 3h10m  week  64% ████▌░░ ↻█▊░░░░░ 1d18h
+        cx a resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e           # 5h  80% ████░ ↻███▏░ 3h10m  week  64% ████▌░░ ↻█▊░░░░░ 1d18h
     1h  Refactor the auth middleware · main · on k3
-        cl -k work --resume 2d4f6a8c-1e3b-4d5f-9a7c-0b2d4e6f8a1c
+        cl -k a --resume 2d4f6a8c-1e3b-4d5f-9a7c-0b2d4e6f8a1c
     3h  Add rate limiting to the login endpoint · feat/rate-limit
         claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d       # 5h  62% ███▏░ ↻██▋░░ 2h41m  week  91% ██████▍ ↻███▏░░░ 3d2h
 cd ~/code/blog
    20h  Draft post on Rust lifetimes · main
-        cl personal --resume c47e2b1d-0a9f-4e8d-b7c6-5d4e3f2a1b0c  # 5h    ? ·····               week  97% ██████▊ ↻█████▏░ 5d2h
+        cl b --resume c47e2b1d-0a9f-4e8d-b7c6-5d4e3f2a1b0c         # 5h    ? ·····               week  97% ██████▊ ↻█████▏░ 5d2h
 cd ~/notes
     6h  Plan next sprint · main
-        cl work --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e      # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
+        cl a --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e         # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
     9h  Write release notes · main
-        cl work --resume 7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b
-Profiles: ~/.claude (1), ~/.claude-personal (1), ~/.claude-work (4)
-Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?): ~/.claude-personal 9h ago
+        cl a --resume 7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b
+Profiles: ~/.claude (1), ~/.claude-a (4), ~/.claude-b (1)
+Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?): ~/.claude-b 9h ago
 ```
 
 - Run the folder's `cd` line, then the session's command. The command's program, `cl`, `claude`,
@@ -91,7 +91,7 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 - A command without the comment, like the second one in `~/notes`, uses the same account as the
   command above it, even through another profile, so its usage is the same.
 - A session whose newest reply came from Z.ai or Kimi shows that model, like `on k3` above, and its
-  command resumes it there (`claude-k` for `~/.claude`). Use `cl work` instead to go back to Claude;
+  command resumes it there (`claude-k` for `~/.claude`). Use `cl a` instead to go back to Claude;
   its comment is still the profile's Claude plan.
 - Codex sessions resume with `codex resume <id>`, or `cx <name> resume <id>` for a `~/.codex-<name>`
   home. Their comment shows the ChatGPT plan's Codex limits (see `hatcheck usage` below). Sessions
@@ -116,7 +116,7 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   nothing new (offline, not signed in, rate limited), the last saved snapshot is used instead
   and named at the bottom with its age.
 - A session that ran in a folder [bound](#hatcheck-bind-tie-a-folder-to-a-profile) to another
-  profile is marked `⚠ folder bound to ~/.claude-work`, so it's easy to spot and `hatcheck move`.
+  profile is marked `⚠ folder bound to ~/.claude-a`, so it's easy to spot and `hatcheck move`.
 - What it reads from each session file is cached, in `sessions.json` in `~/Library/Caches/hatcheck`
   on macOS (`%LOCALAPPDATA%\hatcheck\Cache` on Windows, `~/.cache/hatcheck` elsewhere, or
   `$HATCHECK_CACHE_DIR`). A repeat run reads only what was added to a session since, so a session
@@ -140,16 +140,16 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 $ hatcheck usage
 Plan usage by profile (% left, then time left until reset)
 Sorted by Fable: those with some left first, the soonest reset on top; then those out of it, the soonest back on top.
-~/.claude-work  team max 5x · live
+~/.claude-a  team max 5x · live
   session (5h)      100% ██████████
   week (Fable)       48% ████▊░░░░░  ██████▏░░░ resets Sun 8:20pm (in 4d6h)
 ~/.claude  pro · live
   session (5h)       62% ██████▎░░░  █████▍░░░░ resets 5:01pm (in 2h41m)
   week (all models)  91% █████████▏  ████▍░░░░░ resets Sat 4:20pm (in 3d2h)
-~/.claude-personal  pro · cached 9h00m ago (Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?)
+~/.claude-b  pro · cached 9h00m ago (Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?)
   session (5h)         ? ··········             reset 10:20am, after this snapshot
   week (all models)  97% █████████▊  ███████▎░░ resets Mon 4:20pm (in 5d2h)
-~/.codex-work  ChatGPT plus · live
+~/.codex-a  ChatGPT plus · live
   session (5h)       80% ████████░░  ██████▍░░░ resets 5:30pm (in 3h10m)
   week (all models)  64% ██████▍░░░  ██▌░░░░░░░ resets Fri 8:20am (in 1d18h)
 ```
@@ -223,8 +223,8 @@ the session: the original is deleted once every copied file is checked against i
 copy never replaces a newer one. `--keep` keeps the original, which copies it instead.
 
 ```
-$ hatcheck move 9a8b7c6d work
-Moved session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude to ~/.claude-work:
+$ hatcheck move 9a8b7c6d a
+Moved session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude to ~/.claude-a:
   transcript                 53.0 KB
   subagents and tool output  3 files
   /rewind file snapshots     4 files
@@ -233,8 +233,8 @@ Paths in the conversation to these files now point to the copies.
 Deleted the original from ~/.claude; the plan file stays, since sessions can share one.
 Resume it with:
   cd ~/code/api
-  cl work --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
-Resume it now in ~/.claude-work? [y/N]
+  cl a --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+Resume it now in ~/.claude-a? [y/N]
 ```
 
 - It copies the transcript, the folder of subagent transcripts and saved tool output, the `/rewind`
@@ -248,11 +248,11 @@ Resume it now in ~/.claude-work? [y/N]
   picks: the first with room in its ranking, other than the session's own. It says where the
   session is and what that account has left, shows the best account as `hatcheck usage` shows it,
   bars and resets included, flags the folder's binding when that's another profile (`⚠ folder
-  bound to ~/.claude-work`), and asks. A session alone (`hatcheck move 9a8b7c6d`) goes the same
+  bound to ~/.claude-a`), and asks. A session alone (`hatcheck move 9a8b7c6d`) goes the same
   way. When the session is already in the best account, or no account has room, it stops and says
   so; a script, a pipe or `--json` has to say both.
-- `hatcheck move work`, with a profile alone, moves the newest session started from this folder
-  to `~/.claude-work`, after asking; `hatcheck fork work` forks it there the same way. A word that
+- `hatcheck move NAME`, with a profile alone, moves the newest session started from this folder
+  to `~/.claude-NAME`, after asking; `hatcheck fork NAME` forks it there the same way. A word that
   starts a session's ID and names a profile that exists too is asked for more.
 - Resume it with the printed command, from the directory it ran in, or answer `y` when it asks and
   it starts Claude Code there with the new profile. It only asks in a terminal, so scripts never
@@ -281,11 +281,11 @@ it left behind is an older version of it. The two copies are compared line by li
   as a new session with its own ID and keeps both. Or delete the copy there first.
 
 ```
-$ hatcheck move 9a8b7c6d work
-~/.claude-work already has session 9a8b7c6d "Add rate limiting to the login endpoint", with everything in this copy and more: the session went on there. This copy is older, so nothing was moved.
+$ hatcheck move 9a8b7c6d a
+~/.claude-a already has session 9a8b7c6d "Add rate limiting to the login endpoint", with everything in this copy and more: the session went on there. This copy is older, so nothing was moved.
 Resume it there with:
   cd ~/code/api
-  cl work --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+  cl a --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
 To drop the older copy in ~/.claude, delete:
   ~/.claude/projects/-Users-me-code-api/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d.jsonl
   ~/.claude/projects/-Users-me-code-api/9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
@@ -294,7 +294,7 @@ To drop the older copy in ~/.claude, delete:
 
 ```
 $ hatcheck move 9a8b7c6d default
-Session 9a8b7c6d went on in both ~/.claude-work and ~/.claude after Oct 15 01:40: 3 new prompts in ~/.claude-work, 1 in ~/.claude. Moving this one over would lose what's only in ~/.claude, so nothing was moved.
+Session 9a8b7c6d went on in both ~/.claude-a and ~/.claude after Oct 15 01:40: 3 new prompts in ~/.claude-a, 1 in ~/.claude. Moving this one over would lose what's only in ~/.claude, so nothing was moved.
 To keep both, bring this one in as a new session with its own ID:
   hatcheck fork 9a8b7c6d default
 Or delete the copy in ~/.claude first, to replace it:
@@ -324,28 +324,28 @@ with `--json`, the copy used last is taken and a line says so; `--from` always d
 ### With Codex
 
 `codex` is `~/.codex` and `codex:<name>` is `~/.codex-<name>`, as a place to copy to or `--from`. A
-bare name follows the session: for a Codex session, `work` is `~/.codex-work` when that home exists
-and `~/.claude-work` otherwise, and when both exist you're asked which, or say `codex:work` or
-`claude:work` (a Kimi session follows the same rule with `~/.kimi-code-work` and `kimi:work`):
+bare name follows the session: for a Codex session, `NAME` is `~/.codex-NAME` when that home exists
+and `~/.claude-NAME` otherwise, and when both exist you're asked which, or say `codex:NAME` or
+`claude:NAME` (a Kimi session follows the same rule with `~/.kimi-code-NAME` and `kimi:NAME`):
 
 ```
-$ hatcheck move 019a8c1e claude:work
-Converted Codex session 019a8c1e "Add retries to the uploader" from ~/.codex-work into a Claude Code session in ~/.claude-work:
+$ hatcheck move 019a8c1e claude:a
+Converted Codex session 019a8c1e "Add retries to the uploader" from ~/.codex-a into a Claude Code session in ~/.claude-a:
   conversation               5 of your messages, with the replies
   tool calls                 191, as text with their output shortened
   left out                   Codex's reasoning, images, goals and subagent sessions
   new session                6f6749d7-0f59-4683-997c-a3595421b93f (241.9 KB)
-The original stays in ~/.codex-work, since a conversion leaves things out.
+The original stays in ~/.codex-a, since a conversion leaves things out.
 Resume it with:
   cd ~/code/api
-  cl work --resume 6f6749d7-0f59-4683-997c-a3595421b93f
-Resume it now in ~/.claude-work? [y/N]
+  cl a --resume 6f6749d7-0f59-4683-997c-a3595421b93f
+Resume it now in ~/.claude-a? [y/N]
 ```
 
 - Between Codex homes signed in to the same ChatGPT account, the session file is copied as it is,
   with its ID and its name, and the original is deleted once the copy is checked, as for Claude
   Code. A copy already there is compared the same way.
-- Between Claude Code and Codex (`hatcheck move 3f1c2a9e codex:work` goes the other way), and
+- Between Claude Code and Codex (`hatcheck move 3f1c2a9e codex:a` goes the other way), and
   between Codex homes on different accounts, the session is converted into a new one with a new ID,
   and the original is always kept. Codex encrypts its reasoning and its summaries of compacted
   context for the account that wrote them, so a copy can't take them to another account.
@@ -368,8 +368,8 @@ Resume it now in ~/.claude-work? [y/N]
 `agy` is `~/.gemini/antigravity-cli`, as a place to convert to or `--from`:
 
 ```
-$ hatcheck move c134893c work
-Converted Antigravity CLI session c134893c "Fix the uploader" from ~/.gemini/antigravity-cli into a Claude Code session in ~/.claude-work:
+$ hatcheck move c134893c a
+Converted Antigravity CLI session c134893c "Fix the uploader" from ~/.gemini/antigravity-cli into a Claude Code session in ~/.claude-a:
   conversation               5 of your messages, with the replies
   tool calls                 88, as text with their output shortened
   left out                   Antigravity's thinking, images, artifacts and subagent conversations
@@ -377,7 +377,7 @@ Converted Antigravity CLI session c134893c "Fix the uploader" from ~/.gemini/ant
 The original stays in ~/.gemini/antigravity-cli, since a conversion leaves things out.
 Resume it with:
   cd ~/code/api
-  cl work --resume 6f6749d7-0f59-4683-997c-a3595421b93f
+  cl a --resume 6f6749d7-0f59-4683-997c-a3595421b93f
 ```
 
 - From agy, the transcript agy writes beside each conversation is converted as a Codex session is:
@@ -405,14 +405,14 @@ its `agents/` folder, as a Codex copy is by its file; `state.json` changes with 
 isn't compared. Nothing in a Kimi session is signed or encrypted, so the copy runs on any account.
 
 ```
-$ hatcheck move 0752ad88 kimi:work
-Moved Kimi session 0752ad88 "Fix the uploader" from ~/.kimi-code to ~/.kimi-code-work:
+$ hatcheck move 0752ad88 kimi:a
+Moved Kimi session 0752ad88 "Fix the uploader" from ~/.kimi-code to ~/.kimi-code-a:
   session folder             19 files
-Its state.json points into ~/.kimi-code-work, whose index lists it.
+Its state.json points into ~/.kimi-code-a, whose index lists it.
 Deleted the original from ~/.kimi-code, and its line in the index there.
 Resume it with:
   cd ~/code/api
-  ck work --session session_0752ad88-cc62-4e00-9912-48e4146b7628
+  ck a --session session_0752ad88-cc62-4e00-9912-48e4146b7628
 ```
 
 - From Kimi, the wire is converted as a Codex session is: your messages and the replies as text,
@@ -434,8 +434,8 @@ Resume it with:
 `zcode` is `~/.zcode`, as a place to convert to or `--from`:
 
 ```
-$ hatcheck move 1fb068a4 work
-Converted ZCode session 1fb068a4 "Fix the uploader" from ~/.zcode into a Claude Code session in ~/.claude-work:
+$ hatcheck move 1fb068a4 a
+Converted ZCode session 1fb068a4 "Fix the uploader" from ~/.zcode into a Claude Code session in ~/.claude-a:
   conversation               5 of your messages, with the replies
   tool calls                 42, as text with their output shortened
   left out                   ZCode's reasoning, images, checkpoints and subagent sessions
@@ -443,7 +443,7 @@ Converted ZCode session 1fb068a4 "Fix the uploader" from ~/.zcode into a Claude 
 The original stays in ~/.zcode, since a conversion leaves things out.
 Resume it with:
   cd ~/code/api
-  cl work --resume 6f6749d7-0f59-4683-997c-a3595421b93f
+  cl a --resume 6f6749d7-0f59-4683-997c-a3595421b93f
 ```
 
 - From ZCode, the session's rows are converted as a Codex session is: your messages and the replies
@@ -464,7 +464,7 @@ Resume it with:
 
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
-| `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder. One word alone that names a profile or home that exists, and starts no session's ID, is `PROFILE` (`hatcheck move work`), with the session the newest started from this folder; a word that is both is asked for more |
+| `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder. One word alone that names a profile or home that exists, and starts no session's ID, is `PROFILE` (`hatcheck move NAME`), with the session the newest started from this folder; a word that is both is asked for more |
 | `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, or a path; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
@@ -476,11 +476,11 @@ that account's limits and asking in the terminal:
 
 ```
 $ hat m
-Session 3f1c2a9e "Fix flaky login test" is in ~/.claude-personal: Fable 0% left, back Sat 4:59pm · 5h 100%.
-Best Claude Code account now: ~/.claude-work  team max 5x · live
+Session 3f1c2a9e "Fix flaky login test" is in ~/.claude-b: Fable 0% left, back Sat 4:59pm · 5h 100%.
+Best Claude Code account now: ~/.claude-a  team max 5x · live
   session (5h)          80% ████████░░  ░░░░░░░░░░ resets 3:40pm (in 55m)
   week (Fable)          31% ███░░░░░░░  ██████░░░░ resets Tue 12:00pm (in 2d14h)
-Move session 3f1c2a9e "Fix flaky login test" from ~/.claude-personal to ~/.claude-work? [y/N] y
+Move session 3f1c2a9e "Fix flaky login test" from ~/.claude-b to ~/.claude-a? [y/N] y
 ```
 
 `--dry-run` says what it would do without asking, and a script, a pipe or `--json` has to say
@@ -496,7 +496,7 @@ how to keep both when a move stops because the session went on in both profiles.
 
 ```
 $ hatcheck fork 9a8b7c6d default
-Forked session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude-work to ~/.claude as a new session:
+Forked session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude-a to ~/.claude as a new session:
   transcript                 61.2 KB
   subagents and tool output  3 files
   /rewind file snapshots     5 files
@@ -504,7 +504,7 @@ Forked session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude
   new session                5b1e0c4a-7d2f-4e6b-9a3c-8f1d2e3c4b5a
 Paths in the conversation to these files now point to the copies.
 The copy of session 9a8b7c6d that was already in ~/.claude stays as it was.
-The original stays in ~/.claude-work.
+The original stays in ~/.claude-a.
 Resume it with:
   cd ~/code/api
   claude --resume 5b1e0c4a-7d2f-4e6b-9a3c-8f1d2e3c4b5a
@@ -541,7 +541,7 @@ relocate` brings the sessions along, in every profile and home:
 $ mv ~/code/api ~/code/api2
 $ hatcheck relocate ~/code/api ~/code/api2
 Relocated 4 sessions from ~/code/api to ~/code/api2:
-  ~/.claude-work  2 sessions: projects/-Users-me-code-api renamed projects/-Users-me-code-api2, with its memory and index
+  ~/.claude-a  2 sessions: projects/-Users-me-code-api renamed projects/-Users-me-code-api2, with its memory and index
   ~/.claude  1 session: projects/-Users-me-code-api renamed projects/-Users-me-code-api2
   ~/.codex  1 session: the folder in the file rewritten
 The folder binding of ~/code/api moved to ~/code/api2.
@@ -572,12 +572,12 @@ Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
 ## `hatcheck open`: resume a session in a new terminal
 
 ```console
-$ hatcheck open 3f1c2a9e          # a new terminal window in ~/code/api, running cl work --resume …
+$ hatcheck open 3f1c2a9e          # a new terminal window in ~/code/api, running cl a --resume …
 $ hatcheck open                   # the newest session started from this folder, in any profile or home
 $ hatcheck open 3f1c2a9e --here   # in this terminal instead (hatcheck resume asks first)
 $ hatcheck open 3f1c2a9e --print  # the two commands, for scripts
 cd ~/code/api
-cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 ```
 
 - It finds the session by its ID or the start of it, in every Claude Code profile, Codex home and
@@ -602,13 +602,13 @@ cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 
 ```console
 $ hat r                           # in the folder the session ran in
-Session 3f1c2a9e "Fix the login test" · Claude Code in ~/.claude-work · 5m ago
-  cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+Session 3f1c2a9e "Fix the login test" · Claude Code in ~/.claude-a · 5m ago
+  cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 Resume it here, in ~/code/api? [Y/n]
 $ hatcheck resume 3f1c2a9e --yes  # a session by its ID, without asking
 $ hatcheck resume --print         # the two commands, for scripts
 cd ~/code/api
-cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 ```
 
 - `hat r` is the short form. Without a session, it's the newest session started from this folder,
@@ -617,7 +617,7 @@ cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
   `--from` included.
 - It shows the session, its agent and profile, how long since it was last active, and the command
   it would run, flags the folder's binding when the session is in another profile (`⚠ folder
-  bound to ~/.claude-work`, as the list does), and asks. Enter or `y` runs the command, anything
+  bound to ~/.claude-a`, as the list does), and asks. Enter or `y` runs the command, anything
   else leaves it (`Nothing started.`, exit 1). `--yes` skips the question. Without a terminal to
   ask at, as in a script, it stops and says to give `--yes`, or `--print` for the commands, so a
   script never starts an agent by accident.
@@ -629,7 +629,7 @@ cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 
 ```console
 $ hatcheck show 3f1c2a9e --last 2
-Session 3f1c2a9e "Fix flaky login test" in ~/.claude-work, 14 turns, the last 2:
+Session 3f1c2a9e "Fix flaky login test" in ~/.claude-a, 14 turns, the last 2:
 
 You  (2026-10-15 22:30)
   Run the login test again
@@ -662,24 +662,24 @@ It's the account `hatcheck move` with nothing picks.
 
 ```console
 $ hatcheck best                   # in ~/code/api, where session 9a8b7c6d ran last
-Session 9a8b7c6d "Add rate limiting to the login endpoint", the newest started from this folder, is in ~/.claude-personal: Fable 0% left, back Sat 4:59pm · 5h 100%.
-Best Claude Code account now: ~/.claude-work  team max 5x · live
+Session 9a8b7c6d "Add rate limiting to the login endpoint", the newest started from this folder, is in ~/.claude-b: Fable 0% left, back Sat 4:59pm · 5h 100%.
+Best Claude Code account now: ~/.claude-a  team max 5x · live
   session (5h)          80% ████████░░  ░░░░░░░░░░ resets 3:40pm (in 55m)
   week (Fable)          31% ███░░░░░░░  ██████░░░░ resets Tue 12:00pm (in 2d14h)
 Carry it there with:
-  hatcheck move work    (hatcheck fork work keeps the original)
+  hatcheck move a    (hatcheck fork a keeps the original)
 Then:
-   2. ~/.claude-team      Fable 100% left, resets Thu 1:00am, 0.9%/h · 5h 100%               → cl team
-   3. ~/.claude-personal  Fable 0% left, back Sat 4:59pm · 5h 100% (where it is)             → cl personal
-   4. ~/.claude           week 64%, 1.3%/h · 5h 100%                                         → claude
+   2. ~/.claude-c  Fable 100% left, resets Thu 1:00am, 0.9%/h · 5h 100%               → cl c
+   3. ~/.claude-b  Fable 0% left, back Sat 4:59pm · 5h 100% (where it is)             → cl b
+   4. ~/.claude    week 64%, 1.3%/h · 5h 100%                                         → claude
 Codex: ~/.codex  month 100%, 0.2%/h  → codex
 Advice only: nothing is started, moved or switched. hatcheck usage shows every account's limits.
 $ hatcheck best --for 9a8b7c6d    # the same for a session named by its ID, from any folder
 …
 Carry it there with:
-  hatcheck move 9a8b7c6d work    (hatcheck fork 9a8b7c6d work keeps the original)
-$ hatcheck best --wait work && cl work
-No room yet; waiting for ~/.claude-work until Tue 12:00pm (in 2d14h)…
+  hatcheck move 9a8b7c6d a    (hatcheck fork 9a8b7c6d a keeps the original)
+$ hatcheck best --wait a && cl a
+No room yet; waiting for ~/.claude-a until Tue 12:00pm (in 2d14h)…
 ```
 
 - The session it's for is the newest started from this folder, as `hatcheck move` with nothing
@@ -711,26 +711,25 @@ No room yet; waiting for ~/.claude-work until Tue 12:00pm (in 2d14h)…
   agent (Claude Code's, without a session); `--wait NAME` (or `default`, `codex`, `codex:NAME`,
   `kimi`, `kimi:NAME`) that one profile or home. It sleeps until the soonest reset the numbers
   name, says so on stderr, then looks again; when nothing says when an account will have room, it
-  stops with an error instead of polling. For a script: `hatcheck best --wait work && cl work`.
+  stops with an error instead of polling. For a script: `hatcheck best --wait a && cl a`.
 - The numbers are the ones `hatcheck usage` shows, live when it can be, with a snapshot's age
   otherwise; `--cached` skips the APIs.
 - **Advice only.** It runs when you ask, prints commands, and never starts, moves or switches
   anything. Using several accounts to get around one plan's limits may break Anthropic's or OpenAI's
-  terms; this is for choosing between accounts you may use for the work at hand, such as your own
-  and your company's.
+  terms; this is for choosing between accounts you may use for the work at hand.
 
 ## `hatcheck bind`: tie a folder to a profile
 
-With a work and a personal account, it's easy to start `claude` in a work repo out of habit. The
-session then runs on the personal account and is filed in the personal profile. A binding says
-which profile a folder's work belongs to:
+With several accounts, it's easy to start `claude` in a repo out of habit, under the wrong one.
+The session then runs on that account and is filed in its profile. A binding says which profile
+a folder belongs to:
 
 ```console
 $ cd ~/code/api
-$ hatcheck bind work                    # this folder and everything under it: ~/.claude-work, ~/.codex-work
-Bound ~/code/api and everything under it: Claude Code ~/.claude-work · Codex ~/.codex-work.
-Here, cl --resume <id> means cl work --resume <id> and cx resume <id> means cx work resume <id>.
-$ hatcheck bind work --codex personal   # a different Codex home
+$ hatcheck bind a                       # this folder and everything under it: ~/.claude-a, ~/.codex-a
+Bound ~/code/api and everything under it: Claude Code ~/.claude-a · Codex ~/.codex-a.
+Here, cl --resume <id> means cl a --resume <id> and cx resume <id> means cx a resume <id>.
+$ hatcheck bind a --codex b             # a different Codex home
 $ hatcheck bind                         # what this folder is bound to
 $ hatcheck bind --list                  # every bound folder
 $ hatcheck unbind                       # untie it
@@ -749,12 +748,12 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
   `cx resume <id>`, `ck --session <id>`. A name given still wins, and outside bound folders
   nothing changes.
 - `hatcheck` marks sessions that ran in a bound folder under another profile:
-  `⚠ folder bound to ~/.claude-work`.
+  `⚠ folder bound to ~/.claude-a`.
 - `--hook` adds a `SessionStart` hook, `hatcheck bind --check`, to every profile's `settings.json`
   and every Codex home's `hooks.json`. When a session starts in a bound folder under another
   profile, it shows a warning and nothing is blocked:
-  `hatcheck: ~/code/api is bound to ~/.claude-work, but this session runs in ~/.claude-personal. Quit
-  and run cl work here instead.` For a resumed session it gives the `hatcheck move` command instead.
+  `hatcheck: ~/code/api is bound to ~/.claude-a, but this session runs in ~/.claude-b. Quit
+  and run cl a here instead.` For a resumed session it gives the `hatcheck move` command instead.
   The hook runs the `hatcheck` that `--hook` found on your `PATH`, by its path. Run `--hook` again
   after installing hatcheck another way, and it points the hooks at the new one. No hook is added
   for kimi or zcode.
@@ -787,7 +786,7 @@ $ hatcheck --json
     {
       "agent": "claude",
       "id": "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10",
-      "profile": "/Users/me/.claude-work",
+      "profile": "/Users/me/.claude-a",
       "account": 0,
       "title": "Fix flaky login test",
       "cwd": "/Users/me/code/api",
@@ -798,13 +797,13 @@ $ hatcheck --json
       "open": {"pid": 48213, "status": "busy", "in": "claude"},
       "continued_in": null,
       "bound_to": null,
-      "resume": "cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10"
+      "resume": "cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10"
     }
   ],
   "accounts": [
     {
       "agent": "claude",
-      "profiles": ["/Users/me/.claude-work"],
+      "profiles": ["/Users/me/.claude-a"],
       "plan": "team max 5x",
       "source": "live",
       "saved_at": null,

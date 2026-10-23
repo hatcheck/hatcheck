@@ -67,8 +67,8 @@ also called `cl`, and whichever comes first on `PATH` wins.
 `~/.bashrc`):
 
 ```bash
-# cl work --resume <id>  ==  CLAUDE_CONFIG_DIR=~/.claude-work claude --resume <id>
-# cl -k work ... runs the installed claude-k instead (-z: claude-z)
+# cl a --resume <id>  ==  CLAUDE_CONFIG_DIR=~/.claude-a claude --resume <id>
+# cl -k a ... runs the installed claude-k instead (-z: claude-z)
 cl() {
   local run=claude
   case $1 in -z|-k) run=claude$1; shift ;; esac
@@ -76,13 +76,13 @@ cl() {
   CLAUDE_CONFIG_DIR="$HOME/.claude-$1" "$run" "${@:2}"
 }
 
-# cx work resume <id>  ==  CODEX_HOME=~/.codex-work codex resume <id>
+# cx a resume <id>  ==  CODEX_HOME=~/.codex-a codex resume <id>
 cx() {
   [ -n "$1" ] || { echo "usage: cx <profile> [codex args...]  (uses ~/.codex-<profile>)" >&2; return 2; }
   mkdir -p "$HOME/.codex-$1" && CODEX_HOME="$HOME/.codex-$1" codex "${@:2}"
 }
 
-# ck work --session <id>  ==  KIMI_CODE_HOME=~/.kimi-code-work kimi --session <id>
+# ck a --session <id>  ==  KIMI_CODE_HOME=~/.kimi-code-a kimi --session <id>
 ck() {
   [ -n "$1" ] || { echo "usage: ck <profile> [kimi args...]  (uses ~/.kimi-code-<profile>)" >&2; return 2; }
   mkdir -p "$HOME/.kimi-code-$1" && KIMI_CODE_HOME="$HOME/.kimi-code-$1" kimi "${@:2}"
@@ -141,7 +141,7 @@ The agents:
   Kimi Code CLI    2.2.0                    ~/.kimi-code/bin/kimi  (the Kimi Code installer, runs, and ck runs it)
   ZCode            not on your PATH
 Hooks from hatcheck bind --hook:
-  ~/.claude-work           Claude Code runs ~/.local/bin/hatcheck
+  ~/.claude-a              Claude Code runs ~/.local/bin/hatcheck
 To fix: 2 installs of hatcheck are on your PATH; keep one.
 ```
 

@@ -11,7 +11,7 @@ option points it at another folder for everything it keeps: the login, settings,
 servers and Cowork data.
 
 ```
-open -n -a /Applications/Claude.app --args --user-data-dir="$HOME/.claude-instances/work"
+open -n -a /Applications/Claude.app --args --user-data-dir="$HOME/.claude-instances/a"
 ```
 
 That idea comes from [Philipp Stracker's gist](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
@@ -28,13 +28,12 @@ Two things make a plain `open -n` unpleasant on its own:
 
 ## One instance per account
 
-The most reliable setup is to create a **separate, dedicated instance for each account —
-including your "personal" one — and stop using Claude's built-in default profile for day-to-day
-use.** Don't try to make one launcher target the shared default profile.
+The most reliable setup is to create a **separate, dedicated instance for each account, the one
+you use most included, and stop using Claude's built-in default profile for day-to-day use.** Don't try to make one launcher target the shared default profile.
 
 Why: Claude has **no per-profile single-instance lock**, so two processes can run on one profile
 at once — and **only the *first* instance on a profile can use its login database. Every
-additional instance on that same profile shows up logged out.** If a "personal" launcher points
+additional instance on that same profile shows up logged out.** If a launcher points
 at the default profile (which the stock Claude icon also uses), you end up with duplicate,
 logged-out windows. Giving each account its own dir guarantees **one profile → one instance →
 always logged in**, and makes the focus-don't-duplicate logic rock-solid.
@@ -52,7 +51,7 @@ An instance is a data folder, `~/.claude-instances/<name>`, and a small launcher
 `/Applications/Claude <Display>.app`, made by `hatcheck desktop new <name> "<Display>"`:
 
 ```
-Claude Work.app/
+Claude A.app/
   Contents/
     Info.plist          the app's name and bundle ID (dev.hatcheck.hatcheck.claude-<name>), and the
                         instance's name and data folder, as HatcheckInstance and HatcheckDataDir
@@ -112,7 +111,7 @@ hatcheck desktop --json                            the list as data, for the app
 ```
 
 `NAME` is letters, digits, `.`, `_` and `-`. `DISPLAY` is what the launcher is called, as in
-`Claude Work.app`. `--replace` rebuilds a launcher that exists, including one made by the
+`Claude A.app`. `--replace` rebuilds a launcher that exists, including one made by the
 `make-claude-instance.sh` script that `hatcheck desktop` replaced; such launchers are listed and
 opened as they are, since the launcher reads their `config.sh` for the instance's name.
 
@@ -126,7 +125,7 @@ Claude Desktop is fully quit (⌘Q, every instance), leaving out its caches and 
 rsync -a --exclude 'Singleton*' --exclude 'Cache' --exclude 'Code Cache' --exclude 'GPUCache' \
   --exclude 'DawnGraphiteCache' --exclude 'DawnWebGPUCache' --exclude 'ShaderCache' \
   --exclude 'Crashpad' --exclude 'blob_storage' \
-  "$HOME/Library/Application Support/Claude/" "$HOME/.claude-instances/personal/"
+  "$HOME/Library/Application Support/Claude/" "$HOME/.claude-instances/a/"
 ```
 
 The built-in folder is left as it was. The copy can be large: the Cowork runtime's `vm_bundles/`

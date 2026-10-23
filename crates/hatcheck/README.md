@@ -41,9 +41,9 @@ hatcheck bind PROFILE              tie a folder to a profile, for cl, cx, ck and
 hatcheck doctor                    every copy of hatcheck and the agents on your PATH
 hatcheck desktop                   Claude Desktop instances on macOS
 hatcheck provider                  the Z.ai and Kimi keys and models behind claude-z and claude-k
-cl work --resume <id>              Claude Code with ~/.claude-work
-cx work resume <id>                Codex with ~/.codex-work
-ck work --session <id>             Kimi Code CLI with ~/.kimi-code-work
+cl a --resume <id>                 Claude Code with ~/.claude-a
+cx a resume <id>                   Codex with ~/.codex-a
+ck a --session <id>                Kimi Code CLI with ~/.kimi-code-a
 ```
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and most take `--json`. A subcommand
