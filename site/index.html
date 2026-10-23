@@ -127,8 +127,8 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 9a8b7c6d "Add rate limiting to the login endpoint", the newest started from this folder, is in ~/.claude-personal: week 9%, 0.4%/h · 5h 20%.
 Best Claude Code account now: <span class="b c">~/.claude-work</span>  <span class="d">team max 5x · </span><span class="g">live</span>
-  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 1:32am (in 2h39m)</span>
-  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Tue 3:40am (in 4d4h)</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 1:36am (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Tue 3:44am (in 4d4h)</span>
 Carry it there with:
   hatcheck move work<span class="d">    (hatcheck fork work keeps the original)</span>
 <span class="d">Then:</span>
@@ -146,7 +146,7 @@ Relocated 4 sessions from ~/code/web to ~/code/site:
   ~/.codex  1 session: the folder in the file rewritten
 Left alone: Kimi Code CLI session 8d4b5e6f in ~/.kimi-code is filed under a hash of the folder, which stays as it was.
 The folder binding of ~/code/web moved to ~/code/site.
-Resume them from ~/code/site. To undo: hatcheck relocate /Users/me/code/site /Users/me/code/web<!-- /sample:relocate --></code></pre>
+Resume them from ~/code/site. To undo: hatcheck relocate ~/code/site ~/code/web<!-- /sample:relocate --></code></pre>
     <p>Only the folder each session records is rewritten; what the conversation says about the old path stays as it was. Antigravity CLI and ZCode keep the folder in their own databases, which hatcheck never writes, and Kimi Code CLI files sessions under a hash of it, so theirs stay as they are, and it says so. <code>--dry-run</code> shows what would move, a session that's open or still being written stops it before anything changes, and running it the other way round undoes it, byte for byte.</p>
   </section>
 

@@ -77,7 +77,8 @@ class Relocate(unittest.TestCase):
         self.assertIn("Relocated 4 sessions from", out)
         self.assertIn("projects/%s renamed projects/%s, with its memory and index" % (encoded(self.api), encoded(self.api2)), out)
         self.assertIn("1 session: the folder in the file rewritten", out)
-        self.assertIn("To undo: hatcheck relocate", out)
+        # The undo command names the folders with ~, as every command hatcheck prints.
+        self.assertIn("To undo: hatcheck relocate %s %s" % (self.h.shown(self.api2), self.h.shown(self.api)), out)
         # A and its data folder, memory and index: the whole project folder renamed.
         new_a = self.moved(self.work, self.api2, A)
         self.assertTrue(os.path.isfile(new_a), new_a)
@@ -141,6 +142,8 @@ class Relocate(unittest.TestCase):
         self.assertEqual([s["id"] for s in data["skipped"]], [C])
         self.assertEqual(data["binding"]["to"], self.api2)
         self.assertIn("hatcheck relocate", data["undo"])
+        self.assertIn(self.api2, data["undo"])  # in full, as every path in --json
+        self.assertNotIn("~", data["undo"])
 
     def test_refusals(self):
         # An open session, one written a moment ago, and one already filed under the new folder.

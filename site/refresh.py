@@ -12,8 +12,8 @@ index.html: each block between <!-- sample:NAME --> and <!-- /sample:NAME --> be
 run in a demo home made with tests/helpers.py, never your profiles: `list` is `hatcheck` in a
 folder with sessions from every agent, `best` is `hatcheck best` there, and `relocate` is
 `hatcheck relocate` once ~/code/web, with sessions in two profiles, a Codex home and a Kimi home,
-is renamed ~/code/site; the demo home's path reads /Users/me, in the project folders' names and
-in the undo command, which names the folders in full. They
+is renamed ~/code/site; the demo home's path reads /Users/me wherever it's printed in full, as
+in the project folders' names. They
 run on a
 pseudo-terminal with 256 colours, so the output is coloured as in a terminal; its colour codes
 become spans (classes b, d, r, g, y, bl, m, c for bold, dim and the basic colours, and a colour

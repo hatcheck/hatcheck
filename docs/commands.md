@@ -566,7 +566,8 @@ Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
   that isn't JSON; and when NEW doesn't exist, is OLD, or is inside OLD. `--dry-run` shows what
   would move. Running it the other way round, `hatcheck relocate NEW OLD`, undoes it, byte for
   byte.
-- `--json` prints the sessions moved and skipped, the binding and the undo command.
+- `--json` prints the sessions moved and skipped, the binding and the undo command, which names
+  the folders in full there, as every path in `--json` is.
 
 ## `hatcheck open`: resume a session in a new terminal
 

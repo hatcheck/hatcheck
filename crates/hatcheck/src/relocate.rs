@@ -721,7 +721,14 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let now = times::now();
     let plan = plan(&old, &new);
     facts::save_cache();
-    let undo = format!("{prog} {} {}", paths::quote(&new), paths::quote(&old));
+    // The command that undoes it: with ~, as every command hatcheck prints, and with the paths
+    // in full in --json, whose paths are absolute.
+    let undo = format!(
+        "{prog} {} {}",
+        paths::shell_path(&new),
+        paths::shell_path(&old)
+    );
+    let undo_json = format!("{prog} {} {}", paths::quote(&new), paths::quote(&old));
     if plan.moves.is_empty() {
         if !json_out {
             for skip in &plan.skips {
@@ -782,7 +789,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         }
     }
     if json_out {
-        out::println(&py::dumps(&report(&plan, dry_run, &undo)));
+        out::println(&py::dumps(&report(&plan, dry_run, &undo_json)));
     } else {
         describe(&plan, dry_run, &undo);
     }
