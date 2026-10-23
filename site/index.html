@@ -48,6 +48,7 @@
     <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI or Z.ai. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's and ZCode and GLM are Z.ai's.</p>
     <div class="buttons">
       <a class="button" href="#install">Install the CLI</a>
+      <a class="button ghost" href="#start">Start a profile per account</a>
       <a class="button ghost" href="#video">Watch the video</a>
       <a class="button ghost" href="#app">Get the app</a>
       <a class="button ghost" href="https://github.com/hatcheck/hatcheck">Source on GitHub</a>
@@ -66,13 +67,22 @@
     <p class="video-note">Press play and it streams from YouTube (youtube-nocookie.com); until then the page loads nothing from outside. <a href="https://www.youtube.com/watch?v=9Ymg5ud8KZ0">Open it on YouTube</a>.</p>
   </section>
 
+  <section class="wrap" id="start">
+    <h2>Start with a profile per account</h2>
+    <p>Claude Code keeps its login, settings and sessions in one folder, <code>~/.claude</code>. Pointed at another folder with <code>CLAUDE_CONFIG_DIR</code>, it keeps a second set there, with a login of its own: a profile. Hatcheck is built on that: a folder per account, and <code>cl</code> to run Claude Code with one. Codex and Kimi Code CLI work the same way, with <code>CODEX_HOME</code> and <code>KIMI_CODE_HOME</code>, and <code>cx</code> and <code>ck</code> run them.</p>
+<pre><code>cl work              # Claude Code with ~/.claude-work; the first run asks you to sign in
+cl personal          # ~/.claude-personal, signed in to another account
+cx work login        # Codex with ~/.codex-work
+ck work login        # Kimi Code CLI with ~/.kimi-code-work
+cd ~/code/api
+hatcheck bind work   # in this repo, plain cl means cl work, and cx and ck the same
+hatcheck             # the sessions here from every profile, and what's left of each plan</code></pre>
+    <p>An existing <code>~/.claude</code> counts as a profile too (hatcheck calls it <code>default</code>), and plain <code>claude</code> keeps using it. Antigravity CLI and ZCode keep one login each, so hatcheck reads their one folder beside the profiles: <a href="agents.html">which agents, and how far</a>. The CLI comes first: <a href="#install">install it</a>.</p>
+  </section>
+
   <section class="wrap">
     <h2>What it does</h2>
-    <div class="cards">
-      <div class="card">
-        <h3>One profile per account</h3>
-        <p><code>cl work</code> runs Claude Code with <code>~/.claude-work</code>, <code>cx work</code> runs Codex with <code>~/.codex-work</code>, <code>ck work</code> runs Kimi Code CLI with <code>~/.kimi-code-work</code>: each with its own login, settings and sessions. Bind a folder to a profile, and the name can be left out there.</p>
-      </div>
+    <div class="cards three">
       <div class="card">
         <h3>What to resume, and what's left</h3>
         <p><code>hatcheck</code> lists recent sessions from every profile and home, and Antigravity CLI's and ZCode's beside them, with the command that resumes each and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> shows the best account now and the <code>move</code> command that carries a session to it.</p>
