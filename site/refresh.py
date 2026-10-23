@@ -55,8 +55,9 @@ def demo_home():
     fake claude answers, a Codex home with limits in its session, and Antigravity CLI's folder, a
     Kimi home and ZCode's folder with no usage, as when their agents aren't on the PATH. The
     snapshots are shaped as Claude Code saves them: a session limit and a Fable one for the team
-    plan, a session limit and the week's for the Pro plan. The newest session is on the Pro
-    profile, nearly out for the week, so hatcheck best has somewhere better to point."""
+    plan, a session limit and the week's for the Pro plan. As in the video, ~/.claude-work is the
+    Pro one, nearly out for the week, with the newest session, and ~/.claude-team the team one,
+    so hatcheck best has somewhere better to point."""
     os.environ["HATCHECK_ENGINE"] = BINARY  # or the helpers build a debug engine
     sys.path.insert(0, os.path.join(REPO, "tests"))
     from helpers import NOW, FakeHome, iso, write
@@ -75,18 +76,18 @@ def demo_home():
         return {"kind": "weekly_scoped", "group": "weekly", "percent": used, "severity": sev(used),
                 "resets_at": iso(NOW + days * 86400), "scope": {"model": {"display_name": "Fable"}}}
 
-    team = {"limits": [session(38), fable(52, 4.2)]}
-    pro = {"limits": [session(80), week(91, 0.9)]}
+    team_plan = {"limits": [session(38), fable(52, 4.2)]}
+    pro_plan = {"limits": [session(80), week(91, 0.9)]}
     h = FakeHome()
-    work = h.profile("work", "acct-work", usage=team, saved_at=NOW - 3600,
+    team = h.profile("team", "acct-team", usage=team_plan, saved_at=NOW - 3600,
                      plan={"organizationType": "claude_team", "userRateLimitTier": "default_claude_max_5x"})
-    personal = h.profile("personal", "acct-personal", usage=pro, saved_at=NOW - 3600,
-                         plan={"organizationType": "claude_pro"})
-    write(os.path.join(work, "fake-usage.json"), __import__("json").dumps(team))
-    write(os.path.join(personal, "fake-usage.json"), __import__("json").dumps(pro))
+    work = h.profile("work", "acct-work", usage=pro_plan, saved_at=NOW - 3600,
+                     plan={"organizationType": "claude_pro"})
+    write(os.path.join(team, "fake-usage.json"), __import__("json").dumps(team_plan))
+    write(os.path.join(work, "fake-usage.json"), __import__("json").dumps(pro_plan))
     api = h.folder("code", "api")
-    h.session(personal, api, "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", "Add rate limiting to the login endpoint", 4)
-    h.session(work, api, "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10", "Fix flaky login test", 35)
+    h.session(work, api, "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10", "Fix flaky login test", 4)
+    h.session(team, api, "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", "Add rate limiting to the login endpoint", 35)
     codex = h.codex_home("default", "acct-codex")
     h.codex_session(codex, api, "019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e", "Add retries to the uploader", 50,
                     rate_limits={"limit_id": "codex", "limit_name": None, "plan_type": "plus",
@@ -227,16 +228,16 @@ def sample(name, home):
 
 def relocate_sample(h, env):
     """A project folder renamed, and hatcheck relocate bringing its sessions along: two in the
-    work profile, one in personal, one in Codex, and one in Kimi, which stays; the folder is
-    bound to work, so the binding moves too."""
-    work, personal = os.path.join(h.home, ".claude-work"), os.path.join(h.home, ".claude-personal")
+    team profile, one in work, one in Codex, and one in Kimi, which stays; the folder is bound
+    to team, so the binding moves too."""
+    team, work = os.path.join(h.home, ".claude-team"), os.path.join(h.home, ".claude-work")
     web = h.folder("code", "web")
-    h.session(work, web, "5a1e2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b", "Move the checkout page to the new API", 300)
-    h.session(work, web, "6b2f3c4d-5e6f-4071-9b8c-0d1e2f3a4b5c", "Fix the date picker on Safari", 240)
-    h.session(personal, web, "7c3a4d5e-6f70-4182-8c9d-1e2f3a4b5c6d", "Try the new image pipeline", 200)
+    h.session(team, web, "5a1e2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b", "Move the checkout page to the new API", 300)
+    h.session(team, web, "6b2f3c4d-5e6f-4071-9b8c-0d1e2f3a4b5c", "Fix the date picker on Safari", 240)
+    h.session(work, web, "7c3a4d5e-6f70-4182-8c9d-1e2f3a4b5c6d", "Try the new image pipeline", 200)
     h.codex_session(os.path.join(h.home, ".codex"), web, "019a8c1e-aaaa-7b21-9c4e-2f1a0b9c8d7e", "Speed up the build", 180)
     h.kimi_session(os.path.join(h.home, ".kimi-code"), web, "8d4b5e6f-7081-4293-9dae-2f3a4b5c6d7e", "Write the store's README", 150)
-    subprocess.run([BINARY, "bind", "work"], cwd=web, env=env, capture_output=True, check=True)
+    subprocess.run([BINARY, "bind", "team"], cwd=web, env=env, capture_output=True, check=True)
     site = os.path.join(h.home, "code", "site")
     os.rename(web, site)
     text = on_terminal([BINARY, "relocate", web, site], h.home, env)
