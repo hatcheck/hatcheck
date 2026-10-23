@@ -10,7 +10,11 @@ wrapped as in an 80-column terminal.
 
 index.html: each block between <!-- sample:NAME --> and <!-- /sample:NAME --> becomes a command
 run in a demo home made with tests/helpers.py, never your profiles: `list` is `hatcheck` in a
-folder with sessions from every agent, `best` is `hatcheck best` there. They run on a
+folder with sessions from every agent, `best` is `hatcheck best` there, and `relocate` is
+`hatcheck relocate` once ~/code/web, with sessions in two profiles, a Codex home and a Kimi home,
+is renamed ~/code/site; the demo home's path reads /Users/me, in the project folders' names and
+in the undo command, which names the folders in full. They
+run on a
 pseudo-terminal with 256 colours, so the output is coloured as in a terminal; its colour codes
 become spans (classes b, d, r, g, y, bl, m, c for bold, dim and the basic colours, and a colour
 for the 256-colour ones), styled in style.css. A fake claude answers the usage questions from
@@ -216,7 +220,29 @@ def sample(name, home):
         return "$ hatcheck\n" + ansi_to_html(text)
     if name == "best":
         return "$ hatcheck best\n" + ansi_to_html(on_terminal([BINARY, "best"], api, env))
+    if name == "relocate":
+        return relocate_sample(h, env)
     sys.exit("no such sample: " + name)
+
+
+def relocate_sample(h, env):
+    """A project folder renamed, and hatcheck relocate bringing its sessions along: two in the
+    work profile, one in personal, one in Codex, and one in Kimi, which stays; the folder is
+    bound to work, so the binding moves too."""
+    work, personal = os.path.join(h.home, ".claude-work"), os.path.join(h.home, ".claude-personal")
+    web = h.folder("code", "web")
+    h.session(work, web, "5a1e2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b", "Move the checkout page to the new API", 300)
+    h.session(work, web, "6b2f3c4d-5e6f-4071-9b8c-0d1e2f3a4b5c", "Fix the date picker on Safari", 240)
+    h.session(personal, web, "7c3a4d5e-6f70-4182-8c9d-1e2f3a4b5c6d", "Try the new image pipeline", 200)
+    h.codex_session(os.path.join(h.home, ".codex"), web, "019a8c1e-aaaa-7b21-9c4e-2f1a0b9c8d7e", "Speed up the build", 180)
+    h.kimi_session(os.path.join(h.home, ".kimi-code"), web, "8d4b5e6f-7081-4293-9dae-2f3a4b5c6d7e", "Write the store's README", 150)
+    subprocess.run([BINARY, "bind", "work"], cwd=web, env=env, capture_output=True, check=True)
+    site = os.path.join(h.home, "code", "site")
+    os.rename(web, site)
+    text = on_terminal([BINARY, "relocate", web, site], h.home, env)
+    for home in sorted({h.home, os.path.realpath(h.home)}, key=len, reverse=True):
+        text = text.replace(re.sub(r"[^A-Za-z0-9]", "-", home), "-Users-me").replace(home, "/Users/me")
+    return "$ mv ~/code/web ~/code/site\n$ hatcheck relocate ~/code/web ~/code/site\n" + ansi_to_html(text)
 
 
 def refresh(page, kind, fill):

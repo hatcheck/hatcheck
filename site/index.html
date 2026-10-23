@@ -127,14 +127,27 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 9a8b7c6d "Add rate limiting to the login endpoint", the newest started from this folder, is in ~/.claude-personal: week 9%, 0.4%/h · 5h 20%.
 Best Claude Code account now: <span class="b c">~/.claude-work</span>  <span class="d">team max 5x · </span><span class="g">live</span>
-  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 9:37pm (in 2h39m)</span>
-  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Mon 11:45pm (in 4d4h)</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 1:32am (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Tue 3:40am (in 4d4h)</span>
 Carry it there with:
   hatcheck move work<span class="d">    (hatcheck fork work keeps the original)</span>
 <span class="d">Then:</span>
    2. <span class="b">~/.claude-personal</span>  week 9%, 0.4%/h · 5h 20% (where it is)  <span class="c">→ cl personal</span>
 <span class="d">Codex:</span> <span class="b">~/.codex</span>  week 64%, 1.3%/h · 5h 80% · cached 50m ago  <span class="c">→ codex</span>
 <span class="d">Advice only: nothing is started, moved or switched. hatcheck usage shows every account's limits.</span><!-- /sample:best --></code></pre>
+
+    <h3>When a project folder moves</h3>
+    <p>Claude Code files each session under the folder it ran in, and Codex records the folder in each session file, so once a project folder is renamed or moved, resuming from the new place finds nothing. <code>hatcheck relocate</code> brings the folder's sessions along, in every profile and home at once:</p>
+<pre><code><!-- sample:relocate -->$ mv ~/code/web ~/code/site
+$ hatcheck relocate ~/code/web ~/code/site
+Relocated 4 sessions from ~/code/web to ~/code/site:
+  ~/.claude-personal  1 session: projects/-Users-me-code-web renamed projects/-Users-me-code-site
+  ~/.claude-work  2 sessions: projects/-Users-me-code-web renamed projects/-Users-me-code-site
+  ~/.codex  1 session: the folder in the file rewritten
+Left alone: Kimi Code CLI session 8d4b5e6f in ~/.kimi-code is filed under a hash of the folder, which stays as it was.
+The folder binding of ~/code/web moved to ~/code/site.
+Resume them from ~/code/site. To undo: hatcheck relocate /Users/me/code/site /Users/me/code/web<!-- /sample:relocate --></code></pre>
+    <p>Only the folder each session records is rewritten; what the conversation says about the old path stays as it was. Antigravity CLI and ZCode keep the folder in their own databases, which hatcheck never writes, and Kimi Code CLI files sessions under a hash of it, so theirs stay as they are, and it says so. <code>--dry-run</code> shows what would move, a session that's open or still being written stops it before anything changes, and running it the other way round undoes it, byte for byte.</p>
   </section>
 
   <section class="wrap" id="more">
