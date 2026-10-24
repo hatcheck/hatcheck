@@ -1904,7 +1904,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .unwrap_or(0);
     let mut unlabeled = false;
     out::println(
-        &(p("1", "Plan usage by profile") + &p("2", " (% left, then time left until reset)")),
+        &(paint.heading("Plan usage by profile")
+            + &p("2", " (% left, then time left until reset)")),
     );
     if any_fable {
         out::println(&p("2", "Sorted by Fable: those with some left first, the soonest reset on top, any past 90% used behind them; then those out of it, the soonest back on top."));

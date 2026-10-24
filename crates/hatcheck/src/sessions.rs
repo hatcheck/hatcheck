@@ -812,14 +812,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         }
     }
     out::println(
-        &(p(
-            "1",
-            &format!(
-                "{} CLI sessions {}active in the last {window} or open now",
-                agents_text(&present),
-                if only_here { "in this folder, " } else { "" }
-            ),
-        ) + &p(
+        &(paint.heading(&format!(
+            "🎩 {} CLI sessions {}active in the last {window} or open now",
+            agents_text(&present),
+            if only_here { "in this folder, " } else { "" }
+        )) + &p(
             "2",
             &format!(
                 " ({}newest first{})",
@@ -844,7 +841,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         } else {
             format!("  {}", p("31", "(directory missing)"))
         };
-        out::println(&(p("1;36", &format!("cd {}", paths::shell_path(folder))) + &missing));
+        out::println(&(paint.accent(&format!("cd {}", paths::shell_path(folder))) + &missing));
         for s in listed {
             // No profile or agent here: the command shows both (plain `claude` means ~/.claude).
             let mut meta: Vec<(String, &str)> = Vec::new();

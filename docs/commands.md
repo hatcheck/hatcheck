@@ -40,6 +40,12 @@ and `hat f …` is `hat fork …`. Where two share a letter, it goes to the one 
 and `doctor` take two letters, `bi`, `un` and `do`, and `relocate` three, `rel`. What it prints,
 and the commands it suggests, use the whole name.
 
+On a terminal, human-facing reports use one style: `✓` for a completed change, `◇` for a dry run
+and `⚠` for a warning, with bold headings, cyan commands, dim explanations and red errors. `🎩`
+appears only in the main help and the session list's heading. `NO_COLOR` turns the colours off,
+and a pipe never gets them. `--json` and raw output (`--print`, `where`, `bind --which` and
+`provider env`) have no colours or added symbols.
+
 Lists the Claude Code sessions from every `~/.claude*` profile, the Codex sessions from every
 `~/.codex*` home and the Kimi Code CLI sessions from every `~/.kimi-code*` home, with Antigravity
 CLI's and ZCode's from their folders, that were active in the last 24 hours or are still open,
@@ -49,7 +55,7 @@ and what's left of that profile's plan:
 
 ```
 $ hatcheck
-Claude Code and Codex CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
+🎩 Claude Code and Codex CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
     4m  Fix flaky login test · main · ● open in pid 48213 (busy)
         cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10         # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
@@ -224,7 +230,7 @@ copy never replaces a newer one. `--keep` keeps the original, which copies it in
 
 ```
 $ hatcheck move 9a8b7c6d a
-Moved session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude to ~/.claude-a:
+✓ Moved session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude to ~/.claude-a:
   transcript                 53.0 KB
   subagents and tool output  3 files
   /rewind file snapshots     4 files
@@ -330,7 +336,7 @@ and `~/.claude-NAME` otherwise, and when both exist you're asked which, or say `
 
 ```
 $ hatcheck move 019a8c1e claude:a
-Converted Codex session 019a8c1e "Add retries to the uploader" from ~/.codex-a into a Claude Code session in ~/.claude-a:
+✓ Converted Codex session 019a8c1e "Add retries to the uploader" from ~/.codex-a into a Claude Code session in ~/.claude-a:
   conversation               5 of your messages, with the replies
   tool calls                 191, as text with their output shortened
   left out                   Codex's reasoning, images, goals and subagent sessions
@@ -369,7 +375,7 @@ Resume it now in ~/.claude-a? [y/N]
 
 ```
 $ hatcheck move c134893c a
-Converted Antigravity CLI session c134893c "Fix the uploader" from ~/.gemini/antigravity-cli into a Claude Code session in ~/.claude-a:
+✓ Converted Antigravity CLI session c134893c "Fix the uploader" from ~/.gemini/antigravity-cli into a Claude Code session in ~/.claude-a:
   conversation               5 of your messages, with the replies
   tool calls                 88, as text with their output shortened
   left out                   Antigravity's thinking, images, artifacts and subagent conversations
@@ -406,7 +412,7 @@ isn't compared. Nothing in a Kimi session is signed or encrypted, so the copy ru
 
 ```
 $ hatcheck move 0752ad88 kimi:a
-Moved Kimi session 0752ad88 "Fix the uploader" from ~/.kimi-code to ~/.kimi-code-a:
+✓ Moved Kimi session 0752ad88 "Fix the uploader" from ~/.kimi-code to ~/.kimi-code-a:
   session folder             19 files
 Its state.json points into ~/.kimi-code-a, whose index lists it.
 Deleted the original from ~/.kimi-code, and its line in the index there.
@@ -435,7 +441,7 @@ Resume it with:
 
 ```
 $ hatcheck move 1fb068a4 a
-Converted ZCode session 1fb068a4 "Fix the uploader" from ~/.zcode into a Claude Code session in ~/.claude-a:
+✓ Converted ZCode session 1fb068a4 "Fix the uploader" from ~/.zcode into a Claude Code session in ~/.claude-a:
   conversation               5 of your messages, with the replies
   tool calls                 42, as text with their output shortened
   left out                   ZCode's reasoning, images, checkpoints and subagent sessions
@@ -496,7 +502,7 @@ how to keep both when a move stops because the session went on in both profiles.
 
 ```
 $ hatcheck fork 9a8b7c6d default
-Forked session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude-a to ~/.claude as a new session:
+✓ Forked session 9a8b7c6d "Add rate limiting to the login endpoint" from ~/.claude-a to ~/.claude as a new session:
   transcript                 61.2 KB
   subagents and tool output  3 files
   /rewind file snapshots     5 files
@@ -540,7 +546,7 @@ relocate` brings the sessions along, in every profile and home:
 ```console
 $ mv ~/code/api ~/code/api2
 $ hatcheck relocate ~/code/api ~/code/api2
-Relocated 4 sessions from ~/code/api to ~/code/api2:
+✓ Relocated 4 sessions from ~/code/api to ~/code/api2:
   ~/.claude-a  2 sessions: projects/-Users-me-code-api renamed projects/-Users-me-code-api2, with its memory and index
   ~/.claude  1 session: projects/-Users-me-code-api renamed projects/-Users-me-code-api2
   ~/.codex  1 session: the folder in the file rewritten
@@ -727,7 +733,7 @@ a folder belongs to:
 ```console
 $ cd ~/code/api
 $ hatcheck bind a                       # this folder and everything under it: ~/.claude-a, ~/.codex-a
-Bound ~/code/api and everything under it: Claude Code ~/.claude-a · Codex ~/.codex-a.
+✓ Bound ~/code/api and everything under it: Claude Code ~/.claude-a · Codex ~/.codex-a.
 Here, cl --resume <id> means cl a --resume <id> and cx resume <id> means cx a resume <id>.
 $ hatcheck bind a --codex b             # a different Codex home
 $ hatcheck bind                         # what this folder is bound to

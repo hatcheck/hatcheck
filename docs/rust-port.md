@@ -20,7 +20,8 @@ where the bundled Python engine took 649 ms, from a 2.8 MB binary instead of 8.1
 
 Command by command, with the same output: the same text, the same JSON, the same exit codes and
 the same argparse messages. Nothing about the formats changed, so the desktop app and scripts
-didn't notice the switch.
+didn't notice the switch. The shared terminal style in `out.rs` later added status symbols and
+colour to human-facing output; the JSON and raw-output compatibility described here still holds.
 
 - **The Python tests were the specification.** `tests/` ran each subcommand through the Python
   code or, with `HATCHECK_ENGINE` set, the Rust binary, and both had to pass. Now they run the

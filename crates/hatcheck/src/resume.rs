@@ -70,9 +70,10 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let title = truncate(if s.title.is_empty() { "?" } else { &s.title }, 60);
     let here = paths::shell_path(&cwd);
     if args.flag("yes") {
-        out::println(&format!(
-            "Resuming session {id8} \"{title}\" here, in {here}:\n  {command}"
+        out::heading(&format!(
+            "Resuming session {id8} \"{title}\" here, in {here}:"
         ));
+        out::command(&format!("  {command}"));
         return open_cmd::run_here(&cwd, &command);
     }
     if !interactive() {
@@ -83,20 +84,17 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     // What would run, and where it comes from: the agent, its profile, and how long since the
     // session was last active, as the list shows it; and the folder's binding when the session
     // is in another profile, as the list flags it.
-    out::println(&format!(
+    out::heading(&format!(
         "Session {id8} \"{title}\" · {} in {} · {} ago",
         s.agent.name(),
         paths::shell_path(&s.profile),
         times::ago(times::now() - s.when)
     ));
-    out::println(&format!("  {command}"));
+    out::command(&format!("  {command}"));
     let bound = paths::bound_profile(Some(&cwd), s.agent, &paths::load_bindings())
         .filter(|b| !paths::same_folder(b, &s.profile));
     if let Some(bound) = bound {
-        out::println(&format!(
-            "  ⚠ folder bound to {}",
-            paths::shell_path(&bound)
-        ));
+        out::warn(&format!("folder bound to {}", paths::shell_path(&bound)));
     }
     let answer = read_answer(&format!("Resume it here, in {here}? [Y/n] "));
     if answer.is_none() {

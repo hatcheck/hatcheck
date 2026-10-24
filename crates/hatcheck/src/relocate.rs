@@ -592,7 +592,7 @@ fn report(plan: &Plan, dry_run: bool, undo: &str) -> Value {
 fn describe(plan: &Plan, dry_run: bool, undo: &str) {
     let show = paths::shell_path;
     let n = plan.moves.len();
-    out::println(&format!(
+    let text = format!(
         "{} {n} session{} from {} to {}:",
         if dry_run {
             "Would relocate"
@@ -602,7 +602,12 @@ fn describe(plan: &Plan, dry_run: bool, undo: &str) {
         if n == 1 { "" } else { "s" },
         show(&plan.old),
         show(&plan.new)
-    ));
+    );
+    if dry_run {
+        out::preview(&text);
+    } else {
+        out::success(&text);
+    }
     for project in &plan.projects {
         let count = project.moves.len();
         let what = if project.whole {
@@ -658,7 +663,7 @@ fn describe(plan: &Plan, dry_run: bool, undo: &str) {
         ));
     }
     for skip in &plan.skips {
-        out::println(&format!(
+        out::warn(&format!(
             "Left alone: {} session {} in {} {}.",
             skip.agent.name(),
             py::head(&skip.id, 8),
@@ -678,8 +683,9 @@ fn describe(plan: &Plan, dry_run: bool, undo: &str) {
         out::println("Nothing was changed; without --dry-run it does this.");
     } else {
         out::println(&format!(
-            "Resume them from {}. To undo: {undo}",
-            show(&plan.new)
+            "Resume them from {}. To undo: {}",
+            show(&plan.new),
+            out::Paint::new().command(undo)
         ));
     }
 }
@@ -732,7 +738,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     if plan.moves.is_empty() {
         if !json_out {
             for skip in &plan.skips {
-                out::println(&format!(
+                out::warn(&format!(
                     "Left alone: {} session {} in {} {}.",
                     skip.agent.name(),
                     py::head(&skip.id, 8),

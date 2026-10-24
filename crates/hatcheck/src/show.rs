@@ -90,7 +90,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     } else {
         String::new()
     };
-    out::println(&format!(
+    let paint = out::Paint::new();
+    out::heading(&format!(
         "Session {} \"{title}\" in {}, {total} turns{some}:",
         py::head(&s.id, 8),
         paths::shell_path(&s.profile)
@@ -103,15 +104,18 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         };
         let at = match when {
             Value::String(w) if !w.is_empty() => {
-                format!("  ({})", py::head(w, 16).replace('T', " "))
+                paint.muted(&format!("  ({})", py::head(w, 16).replace('T', " ")))
             }
             _ => String::new(),
         };
-        out::println(&format!("\n{name}{at}"));
+        out::println(&format!("\n{}{}", paint.accent(name), at));
         for line in py::splitlines(&texts.join("\n\n")) {
             out::println(&format!("  {line}"));
         }
     }
-    out::println(&format!("\nLeft out: {}.", conv.left_out));
+    out::println(&format!(
+        "\n{}",
+        paint.muted(&format!("Left out: {}.", conv.left_out))
+    ));
     0
 }

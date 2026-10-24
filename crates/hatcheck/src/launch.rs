@@ -169,7 +169,7 @@ fn cl(mut args: Vec<String>, me: &str, mut provider: Option<&'static str>) -> i3
             .is_none_or(|a| a.is_empty() || a.starts_with('-'))
         {
             let Some(name) = bound(Agent::Claude) else {
-                out::eprint(
+                out::error(
                     "usage: cl [-z|-k] <profile> [claude args...]  (uses ~/.claude-<profile>)\n   \
                      or tie this folder to a profile with: hatcheck bind <profile>\n",
                 );
@@ -230,12 +230,12 @@ fn cx(mut args: Vec<String>) -> i32 {
             if !named {
                 if !first.is_empty() && !first.starts_with('-') {
                     // a Codex command, with no home of that name
-                    out::eprint(&format!(
+                    out::error(&format!(
                         "cx: {first} is a Codex command, not a home's name; run it with a home \
                          (cx <profile> {first} ...)\n"
                     ));
                 }
-                out::eprint(
+                out::error(
                     "usage: cx <profile> [codex args...]  (uses ~/.codex-<profile>)\n   \
                      or tie this folder to a home with: hatcheck bind <profile>\n",
                 );
@@ -283,12 +283,12 @@ fn ck(mut args: Vec<String>) -> i32 {
             if !named {
                 if !first.is_empty() && !first.starts_with('-') {
                     // a Kimi command, with no home of that name
-                    out::eprint(&format!(
+                    out::error(&format!(
                         "ck: {first} is a Kimi command, not a home's name; run it with a home \
                          (ck <profile> {first} ...)\n"
                     ));
                 }
-                out::eprint(
+                out::error(
                     "usage: ck <profile> [kimi args...]  (uses ~/.kimi-code-<profile>)\n   \
                      or tie this folder to a home with: hatcheck bind <profile>\n",
                 );

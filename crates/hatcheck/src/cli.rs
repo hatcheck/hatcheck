@@ -148,7 +148,9 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
             if me == "hat" {
                 out::println("hat is the short name for hatcheck.\n");
             }
-            out::println(HELP);
+            let (banner, rest) = HELP.split_once('\n').unwrap_or((HELP, ""));
+            out::heading(&format!("🎩 {banner}"));
+            out::println(rest);
             return 0;
         }
         (_, Some("-V" | "--version")) => {
@@ -156,14 +158,14 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
             return 0;
         }
         ([first @ .., last], Some(w)) => {
-            out::eprint(&format!(
+            out::error(&format!(
                 "{me}: '{w}' could be {} or {last}; give more of it\n",
                 first.join(", ")
             ));
             return 2;
         }
         (_, Some(w)) if !w.starts_with('-') && !is_hours(w) => {
-            out::eprint(&format!(
+            out::error(&format!(
                 "{me}: there's no '{w}' subcommand; see {me} --help\n"
             ));
             return 2;
@@ -188,7 +190,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "doctor" => doctor::main(&argv, &prog),
         other => {
             // Not reached: every name in SUBCOMMANDS has its arm above (a test checks).
-            out::eprint(&format!(
+            out::error(&format!(
                 "{me}: there's no '{other}' subcommand; see {me} --help\n"
             ));
             2

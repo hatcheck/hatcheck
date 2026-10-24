@@ -142,7 +142,7 @@ The agents:
   ZCode            not on your PATH
 Hooks from hatcheck bind --hook:
   ~/.claude-a              Claude Code runs ~/.local/bin/hatcheck
-To fix: 2 installs of hatcheck are on your PATH; keep one.
+⚠ To fix: 2 installs of hatcheck are on your PATH; keep one.
 ```
 
 Each way of installing puts hatcheck's seven commands in a folder of its own, and the first copy of

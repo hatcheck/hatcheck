@@ -494,7 +494,7 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
         let _ = std::fs::create_dir_all(&folder); // Codex won't start with a CODEX_HOME that doesn't exist
     }
     if here {
-        out::println(&format!(
+        out::heading(&format!(
             "Signing in to {} here",
             paths::shell_path(&folder)
         ));
@@ -506,15 +506,17 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
         None => Some("no terminal found; set HATCHECK_TERMINAL".into()),
     };
     if let Some(why) = why {
+        let command = out::Paint::stderr().command(&format!("  {command}"));
         return out::fail(&format!(
-            "Couldn't open a terminal ({why}). Run this instead:\n  {command}"
+            "Couldn't open a terminal ({why}). Run this instead:\n{command}"
         ));
     }
-    out::println(&format!(
-        "Signing in to {} in a new {} window:\n  {command}",
+    out::heading(&format!(
+        "Signing in to {} in a new {} window:",
         paths::shell_path(&folder),
         ospath::basename(terminal.as_deref().unwrap_or(""))
     ));
+    out::command(&format!("  {command}"));
     0
 }
 
@@ -582,7 +584,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     }
     let title = truncate(if s.title.is_empty() { "?" } else { &s.title }, 60);
     if here {
-        out::println(&format!(
+        out::heading(&format!(
             "Resuming session {id8} \"{title}\" here, in {}",
             paths::shell_path(&cwd)
         ));
@@ -594,16 +596,19 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         None => Some("no terminal found; set HATCHECK_TERMINAL".into()),
     };
     if let Some(why) = why {
+        let paint = out::Paint::stderr();
+        let cd = paint.command(&format!("  cd {}", paths::shell_path(&cwd)));
+        let command = paint.command(&format!("  {command}"));
         return out::fail(&format!(
-            "Couldn't open a terminal ({why}). Run these instead:\n  cd {}\n  {command}",
-            paths::shell_path(&cwd)
+            "Couldn't open a terminal ({why}). Run these instead:\n{cd}\n{command}"
         ));
     }
-    out::println(&format!(
-        "Resuming session {id8} \"{title}\" in a new {} window, in {}:\n  {command}",
+    out::heading(&format!(
+        "Resuming session {id8} \"{title}\" in a new {} window, in {}:",
         ospath::basename(terminal.as_deref().unwrap_or("")),
         paths::shell_path(&cwd)
     ));
+    out::command(&format!("  {command}"));
     0
 }
 

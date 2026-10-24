@@ -38,10 +38,15 @@ commands are in [desktop/README.md](desktop/README.md#build-and-test-it).
 
 ## Conventions
 
-- Output is what the Python version printed, byte for byte, where a user or a test sees it:
-  `py.rs`, `times.rs`, `args.rs` and `widths.rs` exist for that ([docs/rust-port.md](docs/rust-port.md)).
-  New commands follow the same voice: plain sentences about what happened, paths shown with `~`,
-  commands the user can paste.
+- Output keeps the Python version's wording and layout, with the shared terminal style below;
+  `py.rs`, `times.rs`, `args.rs` and `widths.rs` exist for that compatibility
+  ([docs/rust-port.md](docs/rust-port.md)). New commands follow the same voice: plain sentences
+  about what happened, paths shown with `~`, commands the user can paste.
+- Human-facing output uses the semantic styles in `out.rs`: `✓` for a completed change, `◇` for a
+  dry run and `⚠` for a warning, with bold headings, cyan commands, dim explanations and red
+  errors; `🎩` only in the main help and the session list's heading. Colour needs a terminal and
+  respects `NO_COLOR`; pipes, `hatcheck serve`, `--json` and raw output (`--print`, `where`,
+  `bind --which`, `provider env`, `--version`) get no ANSI or added symbols.
 - Every command documents itself in `docs/commands.md` (launchers and agents in `docs/agents.md`,
   installing in `docs/install.md`), in the section named after it, and the module's doc comment
   points there. A change in behaviour changes that section in the same change; the README keeps

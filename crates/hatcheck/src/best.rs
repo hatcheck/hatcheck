@@ -549,7 +549,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             paths::shell_path(&s.profile)
         ));
     }
-    let lead = format!("Best {} account now: ", agent.name());
+    let lead = paint.accent(&format!("Best {} account now: ", agent.name()));
     let mut exit = 0;
     let featured = match pick(accounts, &mine) {
         Pick::Own(k) => {
@@ -557,9 +557,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             let s = subject.as_ref().expect("an own account needs a session");
             out::println("Its own account is the best one now; resume it there with:");
             if let Some(cwd) = s.cwd.as_deref().filter(|c| !c.is_empty()) {
-                out::println(&format!("  cd {}", paths::shell_path(cwd)));
+                out::command(&format!("  cd {}", paths::shell_path(cwd)));
             }
-            out::println(&format!("  {}", session_command(s, false)));
+            out::command(&format!("  {}", session_command(s, false)));
             Some(k)
         }
         Pick::Other(b) => {
@@ -587,13 +587,16 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                         String::new()
                     };
                     out::println("Carry it there with:");
-                    out::println(&format!("  {me} move {sid}{dest}{from}{keeps}"));
+                    out::println(&format!(
+                        "{}{keeps}",
+                        paint.command(&format!("  {me} move {sid}{dest}{from}"))
+                    ));
                 }
                 None => {
                     out::println("Start there with:");
-                    out::println(&format!("  {}", paths::start_command(agent, folder, false)));
+                    out::command(&format!("  {}", paths::start_command(agent, folder, false)));
                     out::println("Carry a session there with:");
-                    out::println(&format!(
+                    out::command(&format!(
                         "  {me} move <session> {}",
                         place_name(agent, folder)
                     ));
@@ -602,7 +605,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             Some(b)
         }
         Pick::Nothing => {
-            out::println(&format!(
+            out::warn(&format!(
                 "No {}{} account has room now:",
                 if mine.is_empty() { "" } else { "other " },
                 agent.name()

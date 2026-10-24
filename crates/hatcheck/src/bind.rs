@@ -482,13 +482,13 @@ fn bind(
     if let Err(e) = save_bindings(&bindings) {
         return out::fail(&e.to_string());
     }
-    out::println(&format!(
+    out::success(&format!(
         "Bound {} and everything under it: {}.",
         show(&folder),
         describe(&binding)
     ));
     for note in notes {
-        out::println(&note);
+        out::warn(&note);
     }
     let bound = |agent: Agent| {
         s(get(&binding, agent.key()))
@@ -533,7 +533,10 @@ fn bind(
         .iter()
         .any(|(_, _, path)| read_settings(path).is_ok_and(|s| has_hook(&s)))
     {
-        out::println("hatcheck bind --hook adds a warning to Claude Code, Codex and agy when a session starts here under another profile.");
+        out::println(&format!(
+            "{} adds a warning to Claude Code, Codex and agy when a session starts here under another profile.",
+            out::Paint::new().command("hatcheck bind --hook")
+        ));
     }
     0
 }
@@ -542,7 +545,8 @@ fn show_here() -> i32 {
     let bindings = paths::load_bindings();
     let cwd = ospath::cwd();
     let Some(folder) = paths::bound_folder(Some(&cwd), &bindings) else {
-        out::println("This folder isn't bound. Bind it with: hatcheck bind <profile>");
+        let command = out::Paint::new().command("hatcheck bind <profile>");
+        out::println(&format!("This folder isn't bound. Bind it with: {command}"));
         return 0;
     };
     let where_ = if paths::same_folder(&folder, &cwd) {
@@ -560,10 +564,13 @@ fn show_here() -> i32 {
 fn list_bindings() -> i32 {
     let bindings = paths::load_bindings();
     if bindings.is_empty() {
-        out::println("No folders are bound. Bind this one with: hatcheck bind <profile>");
+        let command = out::Paint::new().command("hatcheck bind <profile>");
+        out::println(&format!(
+            "No folders are bound. Bind this one with: {command}"
+        ));
         return 0;
     }
-    out::println(&format!(
+    out::heading(&format!(
         "Bound folders, from {}:",
         paths::shell_path(&paths::bindings_path())
     ));
@@ -575,16 +582,16 @@ fn list_bindings() -> i32 {
     let mut folders: Vec<&String> = bindings.keys().collect();
     folders.sort_by_key(|f| f.to_lowercase());
     for folder in folders {
-        let missing = if ospath::isdir(folder) {
-            ""
-        } else {
-            "  (folder missing)"
-        };
-        out::println(&format!(
-            "  {:<width$}  {}{missing}",
+        let line = format!(
+            "  {:<width$}  {}",
             paths::shell_path(folder),
             describe(&bindings[folder])
-        ));
+        );
+        if ospath::isdir(folder) {
+            out::println(&line);
+        } else {
+            out::warn(&format!("{line}  (folder missing)"));
+        }
     }
     0
 }
@@ -605,13 +612,14 @@ fn which(agent: Agent, folder: Option<&str>) -> i32 {
 }
 fn add_hooks() -> i32 {
     let command = hook_command();
+    let paint = out::Paint::new();
     let mut codex = false;
     for (agent, folder, path) in hook_files() {
         let show = paths::shell_path(&folder);
         let mut settings = match read_settings(&path) {
             Ok(s) => s,
             Err(why) => {
-                out::println(&format!("  {show}  skipped: {why}"));
+                out::warn(&format!("  {show}  skipped: {why}"));
                 continue;
             }
         };
@@ -631,14 +639,14 @@ fn add_hooks() -> i32 {
                 _ => repoint_hooks(&mut settings, &line),
             };
             let Some(old) = old else {
-                out::println(&format!("  {show}  already has it"));
+                out::note(&format!("  {show}  already has it"));
                 continue;
             };
             if let Err(e) = write_json(&path, &Value::Object(settings)) {
-                out::println(&format!("  {show}  skipped: {e}"));
+                out::warn(&format!("  {show}  skipped: {e}"));
                 continue;
             }
-            out::println(&format!(
+            out::success(&format!(
                 "  {show}  updated, in {}: it ran {old}",
                 ospath::basename(&path)
             ));
@@ -650,22 +658,26 @@ fn add_hooks() -> i32 {
             _ => add_hook(&mut settings, &line),
         };
         if !added {
-            out::println(&format!(
+            out::warn(&format!(
                 "  {show}  skipped: its hooks aren't in the usual form"
             ));
             continue;
         }
         if let Err(e) = write_json(&path, &Value::Object(settings)) {
-            out::println(&format!("  {show}  skipped: {e}"));
+            out::warn(&format!("  {show}  skipped: {e}"));
             continue;
         }
-        out::println(&format!("  {show}  added, in {}", ospath::basename(&path)));
+        out::success(&format!("  {show}  added, in {}", ospath::basename(&path)));
         codex |= agent == Agent::Codex;
     }
     out::println(&format!(
-        "They run: {command} (with codex or agy after it for Codex and agy)"
+        "They run: {} (with codex or agy after it for Codex and agy)",
+        paint.command(&command)
     ));
-    out::println("Claude Code, Codex and agy warn when a session starts in a bound folder under another profile. hatcheck unbind --hook removes them.");
+    out::println(&format!(
+        "Claude Code, Codex and agy warn when a session starts in a bound folder under another profile. {} removes them.",
+        paint.command("hatcheck unbind --hook")
+    ));
     if codex {
         out::println("Codex runs a new hook only once you trust it: in each Codex home, open /hooks in codex (or cx <name>) and trust it.");
     }
@@ -693,7 +705,7 @@ fn remove_hooks() -> i32 {
             write_json(&path, &Value::Object(settings))
         };
         if written.is_ok() {
-            out::println(&format!("  {}  removed", paths::shell_path(&folder)));
+            out::success(&format!("  {}  removed", paths::shell_path(&folder)));
         }
     }
     out::println("No profile, home or folder runs the hook now.");
@@ -862,7 +874,7 @@ pub fn unbind_main(argv: &[String], prog: &str) -> i32 {
         if let Err(e) = save_bindings(&bindings) {
             return out::fail(&e.to_string());
         }
-        out::println(&format!(
+        out::success(&format!(
             "Unbound {} (it was bound to {}).",
             show(&folder),
             describe(&binding)

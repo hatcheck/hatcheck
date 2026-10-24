@@ -6,6 +6,10 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 
 ## Unreleased
 
+### Changed
+
+- **Human-facing command output shares one style:** `✓` marks a completed change, `◇` a dry run and `⚠` a warning, with bold headings, cyan commands, dim explanations and red errors on a terminal; `🎩` appears only in the main help and the session list's heading. Colour still respects `NO_COLOR` and is never added to pipes, `hatcheck serve`, `--json` or raw output such as `--print`, `where`, `bind --which` and `provider env`.
+
 ### Fixed
 
 - **`hatcheck relocate`'s undo command** names the folders with `~`, as every command hatcheck prints does: `hatcheck relocate ~/code/api2 ~/code/api`, where it printed each path in full. `--json`'s `undo` keeps them in full, as every path there is.

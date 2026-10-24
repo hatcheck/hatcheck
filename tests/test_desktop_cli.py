@@ -100,7 +100,7 @@ class DesktopCommand(unittest.TestCase):
     def test_make_list_and_remove(self):
         code, out = self.desktop("new", "work", "Work")
         app, data = os.path.join(self.apps, "Claude Work.app"), os.path.join(self.instances, "work")
-        self.assertEqual((code, out), (0, "Made %s.\nIts data folder is %s: sign in there once, on first launch.\n"
+        self.assertEqual((code, out), (0, "✓ Made %s.\nIts data folder is %s: sign in there once, on first launch.\n"
                                           "Open it from Launchpad, or with: hatcheck desktop open work\n" % (app, data)))
         with open(os.path.join(app, "Contents", "Info.plist"), "rb") as fh:
             plist = plistlib.load(fh)
@@ -138,10 +138,10 @@ class DesktopCommand(unittest.TestCase):
         self.assertIn("(made by the old script; --replace rebuilds it)", self.desktop()[1])
         os.makedirs(data)
         self.assertEqual(self.desktop("remove", "work"),
-                         (0, "Removed %s.\nIts data folder, %s, is kept; --data deletes it too.\n" % (app, data)))
+                         (0, "✓ Removed %s.\nIts data folder, %s, is kept; --data deletes it too.\n" % (app, data)))
         self.assertTrue(os.path.isdir(data))
         self.desktop("new", "work", "Work")
-        self.assertEqual(self.desktop("remove", "Work", "--data"), (0, "Removed %s, and its data folder.\n" % app))
+        self.assertEqual(self.desktop("remove", "Work", "--data"), (0, "✓ Removed %s, and its data folder.\n" % app))
         self.assertFalse(os.path.exists(data))
         self.assertEqual(self.desktop("open", "nosuch"), (1, "No Claude Desktop instance named nosuch; hatcheck desktop lists them\n"))
 

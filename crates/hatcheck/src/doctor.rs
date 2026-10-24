@@ -613,19 +613,20 @@ fn as_json(r: &Report) -> Value {
 }
 
 fn describe(r: &Report) {
+    let paint = out::Paint::new();
     let where_ = match r.me.1 {
         Install::Clone => format!("built in {}", show(&r.me.2)),
         other => format!("installed with {}", other.label()),
     };
-    out::println(&format!(
+    out::heading(&format!(
         "This is hatcheck {}, {where_}: {}",
         cli::version(),
         show(&r.me.0)
     ));
     if r.groups.is_empty() {
-        out::println("None of hatcheck's commands is on your PATH.");
+        out::println(&paint.p("33", "None of hatcheck's commands is on your PATH."));
     } else {
-        out::println(&format!(
+        out::heading(&format!(
             "Install{} of hatcheck on your PATH, the first of each name running:",
             if r.groups.len() == 1 { "" } else { "s" }
         ));
@@ -637,7 +638,7 @@ fn describe(r: &Report) {
             names.join(", ")
         }
     };
-    let lines: Vec<(String, String, String)> = r
+    let lines: Vec<(String, String, String, String)> = r
         .groups
         .iter()
         .map(|g| {
@@ -658,62 +659,77 @@ fn describe(r: &Report) {
             (
                 format!("{}: {place}", g.install.label()),
                 g.version.clone().unwrap_or_else(|| "?".into()),
-                format!("{}; {standing}", n(&g.commands)),
+                n(&g.commands),
+                standing,
             )
         })
         .collect();
     let width = |k: usize| {
         lines
             .iter()
-            .map(|l| [&l.0, &l.1, &l.2][k].chars().count())
+            .map(|l| [&l.0, &l.1, &l.2, &l.3][k].chars().count())
             .max()
             .unwrap_or(0)
     };
     let (w0, w1) = (width(0), width(1));
-    for (k, (place, version, rest)) in lines.iter().enumerate() {
+    for (k, (place, version, commands, standing)) in lines.iter().enumerate() {
+        let standing = if standing == "shadowed" {
+            paint.p("33", standing)
+        } else {
+            paint.p("32", standing)
+        };
         out::println(&format!(
-            "  {}. {place:<w0$}  {version:<w1$}  {rest}",
+            "  {}. {place:<w0$}  {version:<w1$}  {commands}; {standing}",
             k + 1
         ));
     }
     if !r.groups.is_empty() {
         for name in &r.missing {
-            out::println(&format!("  {name} isn't on your PATH."));
+            out::println(&paint.p("33", &format!("  {name} isn't on your PATH.")));
         }
     }
     for g in r.groups.iter().filter(|g| g.runs.len() < g.commands.len()) {
         if let Some(command) = g.remove_command() {
-            out::println(&format!("  To remove {}'s: {command}", g.install.label()));
+            out::println(&format!(
+                "  To remove {}'s: {}",
+                g.install.label(),
+                paint.command(&command)
+            ));
         }
     }
     for f in &r.others {
         if f.runnable {
-            out::println(&format!(
-                "  {} is also {}, another program.",
-                f.name,
-                show(&f.path)
+            out::println(&paint.p(
+                "33",
+                &format!("  {} is also {}, another program.", f.name, show(&f.path)),
             ));
         } else {
-            out::println(&format!(
+            out::println(&paint.error(&format!(
                 "  {} is a link to a file that's gone.",
                 show(&f.path)
-            ));
+            )));
         }
     }
     for (name, rc) in &r.functions {
-        out::println(&format!(
-            "  {} defines {name}() itself, which wins over the command; both do the same.",
-            show(rc)
+        out::println(&paint.p(
+            "33",
+            &format!(
+                "  {} defines {name}() itself, which wins over the command; both do the same.",
+                show(rc)
+            ),
         ));
     }
-    out::println("The agents:");
+    out::heading("The agents:");
     for (agent, copies) in &r.agents {
         let label = format!("{:<16}", agent.name());
         if copies.is_empty() {
             let needs = agent
                 .launcher()
                 .map_or(String::new(), |l| format!("; {l} needs it"));
-            out::println(&format!("  {label} not on your PATH{needs}"));
+            out::println(&format!(
+                "  {label} {}",
+                paint.p("33", &format!("not on your PATH{needs}"))
+            ));
             continue;
         }
         for (k, (f, version, origin)) in copies.iter().enumerate() {
@@ -727,14 +743,15 @@ fn describe(r: &Report) {
             if !f.runnable {
                 notes.push("a link to a file that's gone".into());
             } else if k == 0 {
-                notes.push(match agent.launcher() {
+                let running = match agent.launcher() {
                     Some(l) => format!("runs, and {l} runs it"),
                     None => "runs".into(),
-                });
+                };
+                notes.push(paint.p("32", &running));
             } else {
-                notes.push("shadowed".into());
+                notes.push(paint.p("33", "shadowed"));
             }
-            out::println(&format!(
+            let line = format!(
                 "  {} {:<24} {}{link}  ({})",
                 if k == 0 {
                     label.clone()
@@ -746,31 +763,41 @@ fn describe(r: &Report) {
                     .unwrap_or(if f.runnable { "?" } else { "" }),
                 show(&f.path),
                 notes.join(", ")
-            ));
+            );
+            if f.runnable {
+                out::println(&line);
+            } else {
+                out::println(&paint.error(&line));
+            }
         }
     }
     if r.hooks.is_empty() {
-        out::println("Hooks from hatcheck bind --hook: none.");
+        out::heading("Hooks from hatcheck bind --hook: none.");
     } else {
-        out::println("Hooks from hatcheck bind --hook:");
+        out::heading("Hooks from hatcheck bind --hook:");
         for (agent, folder, program, there) in &r.hooks {
+            let state = if *there {
+                String::new()
+            } else {
+                format!(
+                    "{}: run {} to point it at this one",
+                    paint.error(", which is gone"),
+                    paint.command("hatcheck bind --hook")
+                )
+            };
             out::println(&format!(
                 "  {:<24} {} runs {}{}",
                 show(folder),
                 agent.name(),
                 show(program),
-                if *there {
-                    String::new()
-                } else {
-                    ", which is gone: run hatcheck bind --hook to point it at this one".into()
-                }
+                state
             ));
         }
     }
     if r.problems.is_empty() {
-        out::println("Nothing to fix.");
+        out::success("Nothing to fix.");
     } else {
-        out::println(&format!("To fix: {}.", r.problems.join("; ")));
+        out::warn(&format!("To fix: {}.", r.problems.join("; ")));
     }
 }
 

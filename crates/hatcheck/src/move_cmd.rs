@@ -358,7 +358,7 @@ pub(crate) fn read_answer(prompt: &str) -> Option<String> {
 
 #[cfg(not(unix))]
 fn read_line(prompt: &str) -> Option<String> {
-    out::eprint(prompt);
+    out::prompt(prompt);
     let mut line = String::new();
     match std::io::stdin().read_line(&mut line) {
         Ok(0) | Err(_) => None,
@@ -385,7 +385,7 @@ fn read_line(prompt: &str) -> Option<String> {
         catch.sa_flags = 0; // no SA_RESTART: read() returns EINTR on Ctrl+C
         libc::sigemptyset(&mut catch.sa_mask);
         libc::sigaction(libc::SIGINT, &catch, &mut was);
-        out::eprint(prompt); // once Ctrl+C is caught, as it always is in Python
+        out::prompt(prompt); // once Ctrl+C is caught, as it always is in Python
         let mut line = Vec::new();
         let got = loop {
             let mut byte = 0u8;
@@ -1483,7 +1483,7 @@ fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
                     // binding, when that's another profile, as the list flags it.
                     let bound = paths::bound_profile(Some(&cwd), agent, &paths::load_bindings());
                     if let Some(bound) = bound.filter(|w| !paths::same_folder(w, &a.profile)) {
-                        out::println(&format!("  ⚠ folder bound to {}", show(&bound)));
+                        out::warn(&format!("folder bound to {}", show(&bound)));
                     }
                 }
             }
@@ -1887,12 +1887,18 @@ fn move_claude(
     let title = info
         .as_ref()
         .map_or("(no conversation)".to_string(), |i| truncate(&i.title, 60));
-    out::println(&format!(
+    let text = format!(
         "{heading} session {id8} \"{title}\" from {} to {}{}:",
         show(source),
         show(target),
         if a.fork { " as a new session" } else { "" }
-    ));
+    );
+    if a.dry_run {
+        out::preview(&text);
+    } else {
+        out::success(&text);
+    }
+    let paint = out::Paint::new();
     for (item, detail) in items.iter().zip(&details) {
         let note = match state_of(&states, &item.dst) {
             "same" => "  (already there)".to_string(),
@@ -1903,10 +1909,16 @@ fn move_claude(
             "kept" => "  (the one there stays: the copy there uses it too)".to_string(),
             _ => String::new(),
         };
-        out::println(&format!("  {:<26} {detail}{note}", item.what));
+        out::println(&format!(
+            "  {} {detail}{note}",
+            paint.muted(&format!("{:<26}", item.what))
+        ));
     }
     if a.fork {
-        out::println(&format!("  {:<26} {new_sid}", "new session"));
+        out::println(&format!(
+            "  {} {new_sid}",
+            paint.muted(&format!("{:<26}", "new session"))
+        ));
     }
     if repointed {
         out::println(&format!(
@@ -1961,23 +1973,26 @@ fn move_claude(
     } else {
         out::println(&format!("The original stays in {}.", show(source)));
     }
-    out::println(if a.dry_run {
+    out::heading(if a.dry_run {
         "Then resume it with:"
     } else {
         "Resume it with:"
     });
     if let Some(c) = cwd.as_deref().filter(|c| !c.is_empty()) {
-        out::println(&format!("  cd {}", show(c)));
+        out::command(&format!("  cd {}", show(c)));
     }
-    out::println(&format!(
+    out::command(&format!(
         "  {}",
         paths::resume_command(target, &new_sid, false, None)
     ));
     if let Some(info) = &info {
         if let Some(provider) = paths::provider_of(s(&info.model)) {
             out::println(&format!(
-                "Its last reply came from {}; to carry on there rather than on this profile's Claude plan:\n  {}",
-                py::str_of(&info.model),
+                "Its last reply came from {}; to carry on there rather than on this profile's Claude plan:",
+                py::str_of(&info.model)
+            ));
+            out::command(&format!(
+                "  {}",
                 paths::resume_command(target, &new_sid, false, Some(provider))
             ));
         }
@@ -2185,12 +2200,18 @@ fn copy_codex(
     }
     drop(lock);
     let heading = heading_of(a);
-    out::println(&format!(
+    let text = format!(
         "{heading} Codex session {id8} \"{title_text}\" from {} to {}{}:",
         show(source),
         show(target),
         if a.fork { " as a new session" } else { "" }
-    ));
+    );
+    if a.dry_run {
+        out::preview(&text);
+    } else {
+        out::success(&text);
+    }
+    let paint = out::Paint::new();
     let note = match state {
         "same" => "  (already there)".to_string(),
         "older" => format!(
@@ -2199,12 +2220,22 @@ fn copy_codex(
         ),
         _ => String::new(),
     };
-    out::println(&format!("  {:<26} {size}{note}", "session file"));
+    out::println(&format!(
+        "  {} {size}{note}",
+        paint.muted(&format!("{:<26}", "session file"))
+    ));
     if let Some(n) = &name {
-        out::println(&format!("  {:<26} {}", "name", py::str_of(n)));
+        out::println(&format!(
+            "  {} {}",
+            paint.muted(&format!("{:<26}", "name")),
+            py::str_of(n)
+        ));
     }
     if a.fork {
-        out::println(&format!("  {:<26} {new_sid}", "new session"));
+        out::println(&format!(
+            "  {} {new_sid}",
+            paint.muted(&format!("{:<26}", "new session"))
+        ));
     }
     if state == "older" {
         let since = older_since.filter(truthy).map_or(String::new(), |t| {
@@ -2238,15 +2269,15 @@ fn copy_codex(
     } else {
         out::println(&format!("The original stays in {}.", show(source)));
     }
-    out::println(if a.dry_run {
+    out::heading(if a.dry_run {
         "Then resume it with:"
     } else {
         "Resume it with:"
     });
     if let Some(c) = cwd.as_deref().filter(|c| !c.is_empty()) {
-        out::println(&format!("  cd {}", show(c)));
+        out::command(&format!("  cd {}", show(c)));
     }
-    out::println(&format!(
+    out::command(&format!(
         "  {}",
         paths::codex_resume_command(target, &new_sid, false)
     ));
@@ -2423,12 +2454,18 @@ fn copy_kimi(
         }
     }
     let heading = heading_of(a);
-    out::println(&format!(
+    let text = format!(
         "{heading} Kimi session {id8} \"{title_text}\" from {} to {}{}:",
         show(source),
         show(target),
         if a.fork { " as a new session" } else { "" }
-    ));
+    );
+    if a.dry_run {
+        out::preview(&text);
+    } else {
+        out::success(&text);
+    }
+    let paint = out::Paint::new();
     let note = match state_of_copy {
         "same" => "  (already there)".to_string(),
         "older" => format!(
@@ -2437,9 +2474,15 @@ fn copy_kimi(
         ),
         _ => String::new(),
     };
-    out::println(&format!("  {:<26} {detail}{note}", "session folder"));
+    out::println(&format!(
+        "  {} {detail}{note}",
+        paint.muted(&format!("{:<26}", "session folder"))
+    ));
     if a.fork {
-        out::println(&format!("  {:<26} {new_sid}", "new session"));
+        out::println(&format!(
+            "  {} {new_sid}",
+            paint.muted(&format!("{:<26}", "new session"))
+        ));
     }
     out::println(&format!(
         "Its state.json {} into {}, whose index {} it.",
@@ -2476,15 +2519,15 @@ fn copy_kimi(
     } else {
         out::println(&format!("The original stays in {}.", show(source)));
     }
-    out::println(if a.dry_run {
+    out::heading(if a.dry_run {
         "Then resume it with:"
     } else {
         "Resume it with:"
     });
     if let Some(c) = cwd.as_deref().filter(|c| !c.is_empty()) {
-        out::println(&format!("  cd {}", show(c)));
+        out::command(&format!("  cd {}", show(c)));
     }
-    out::println(&format!(
+    out::command(&format!(
         "  {}",
         paths::kimi_resume_command(target, &new_sid, false)
     ));
@@ -2616,7 +2659,7 @@ fn convert(
         ),
         other => format!("into a {} session in {}", other.name(), show(target)),
     };
-    out::println(&format!(
+    let text = format!(
         "{} {} session {id8} \"{}\" from {} {into}:",
         if a.dry_run {
             "Would convert"
@@ -2632,21 +2675,35 @@ fn convert(
             60
         ),
         show(source)
-    ));
+    );
+    if a.dry_run {
+        out::preview(&text);
+    } else {
+        out::success(&text);
+    }
+    let paint = out::Paint::new();
     if let Some(w) = why {
         out::println(&format!("  ({w})"));
     }
     out::println(&format!(
-        "  {:<26} {prompts} of your messages, with the replies",
-        "conversation"
+        "  {} {prompts} of your messages, with the replies",
+        paint.muted(&format!("{:<26}", "conversation"))
     ));
     out::println(&format!(
-        "  {:<26} {}, as text with their output shortened",
-        "tool calls", conv.calls
+        "  {} {}, as text with their output shortened",
+        paint.muted(&format!("{:<26}", "tool calls")),
+        conv.calls
     ));
-    out::println(&format!("  {:<26} {}", "left out", conv.left_out));
+    out::println(&format!(
+        "  {} {}",
+        paint.muted(&format!("{:<26}", "left out")),
+        conv.left_out
+    ));
     if dropped > 0 {
-        out::println(&format!("  {:<26} the oldest {dropped} turns after the first are left out, to fit the context window", "too long"));
+        out::println(&format!(
+            "  {} the oldest {dropped} turns after the first are left out, to fit the context window",
+            paint.muted(&format!("{:<26}", "too long"))
+        ));
     }
     if let Some((sid_new, path_new)) = &written {
         let size = if target_agent == Agent::Kimi {
@@ -2661,12 +2718,15 @@ fn convert(
         };
         if to_file {
             out::println(&format!(
-                "  {:<26} {} ({size})",
-                "written to",
+                "  {} {} ({size})",
+                paint.muted(&format!("{:<26}", "written to")),
                 show(path_new)
             ));
         } else {
-            out::println(&format!("  {:<26} {sid_new} ({size})", "new session"));
+            out::println(&format!(
+                "  {} {sid_new} ({size})",
+                paint.muted(&format!("{:<26}", "new session"))
+            ));
         }
     }
     match target_agent {
@@ -2678,19 +2738,17 @@ fn convert(
         "The original stays in {}, since a conversion leaves things out.",
         show(source)
     ));
-    out::println(match (a.dry_run, to_file) {
+    out::heading(match (a.dry_run, to_file) {
         (true, false) => "Then resume it with:",
         (false, false) => "Resume it with:",
         (true, true) => "Then start it with:",
         (false, true) => "Start it with:",
     });
-    out::println(&format!("  cd {}", show(&cwd)));
-    out::println(&format!("  {resume}"));
+    out::command(&format!("  cd {}", show(&cwd)));
+    out::command(&format!("  {resume}"));
     if target_agent == Agent::Zcode {
-        out::println(&format!(
-            "Once it has answered, carry on in the terminal UI with:\n  {}",
-            paths::zcode_command(target, "-c", false)
-        ));
+        out::println("Once it has answered, carry on in the terminal UI with:");
+        out::command(&format!("  {}", paths::zcode_command(target, "-c", false)));
     }
     // What to start, when asked to: the new session, or for agy and zcode the file.
     let handle = if to_file {
@@ -3048,7 +3106,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         json: args.flag("json"),
     };
     if let Err(stop) = fill_in(&mut a, prog) {
-        return out::fail(&stop);
+        return if stop == "Nothing changed." {
+            out::cancel(&stop)
+        } else {
+            out::fail(&stop)
+        };
     }
     answer(&a, prog)
 }
@@ -3079,7 +3141,11 @@ pub fn fork_main(argv: &[String], prog: &str) -> i32 {
         json: args.flag("json"),
     };
     if let Err(stop) = fill_in(&mut a, prog) {
-        return out::fail(&stop);
+        return if stop == "Nothing changed." {
+            out::cancel(&stop)
+        } else {
+            out::fail(&stop)
+        };
     }
     answer(&a, prog)
 }
@@ -3103,6 +3169,7 @@ fn answer(a: &Ask, prog: &str) -> i32 {
         };
     }
     match run(a, prog, &mut report) {
+        Err(stop) if stop == "Nothing changed." => out::cancel(&stop),
         Err(stop) => out::fail(&stop),
         Ok(Done {
             session,

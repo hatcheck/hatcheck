@@ -616,6 +616,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 Ok(m) => m,
                 Err(message) => return out::fail(&message),
             };
+            let paint = out::Paint::new();
             let how = if made.recoloured {
                 ", with a recoloured icon"
             } else if hue.rem_euclid(360.0) == 0.0 && saturation == 1.0 {
@@ -623,17 +624,18 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             } else {
                 ", with the stock icon (it couldn't be recoloured)"
             };
-            out::println(&format!("Made {}{how}.", made.app));
+            out::success(&format!("Made {}{how}.", made.app));
             match &made.data_dir {
                 Some(dir) => out::println(&format!(
                     "Its data folder is {dir}: sign in there once, on first launch."
                 )),
-                None => out::println(
+                None => out::warn(
                     "It runs Claude's built-in data folder; don't also use the stock Claude icon.",
                 ),
             }
             out::println(&format!(
-                "Open it from Launchpad, or with: hatcheck desktop open {name}"
+                "Open it from Launchpad, or with: {}",
+                paint.command(&format!("hatcheck desktop open {name}"))
             ));
             0
         }
@@ -654,7 +656,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 Ok(gone) => gone,
                 Err(e) => return out::fail(&e.to_string()),
             };
-            out::println(&format!(
+            out::success(&format!(
                 "Removed {}{}.",
                 inst.app,
                 if data_gone {
@@ -684,21 +686,30 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 return 0;
             }
             if found.is_empty() {
-                out::println("No Claude Desktop instances yet. Make one with: hatcheck desktop new a A --hue 190");
+                out::println(&format!(
+                    "No Claude Desktop instances yet. Make one with: {}",
+                    out::Paint::new().command("hatcheck desktop new a A --hue 190")
+                ));
                 return 0;
             }
+            let paint = out::Paint::new();
             for inst in &found {
+                let running = if inst.running {
+                    paint.p("32", "  ● running")
+                } else {
+                    String::new()
+                };
+                let legacy = if inst.legacy {
+                    format!(
+                        "  {}",
+                        paint.warning("(made by the old script; --replace rebuilds it)")
+                    )
+                } else {
+                    String::new()
+                };
                 out::println(&format!(
-                    "  {:<20} {:<12} {}{}{}",
-                    inst.display,
-                    inst.name,
-                    inst.app,
-                    if inst.running { "  ● running" } else { "" },
-                    if inst.legacy {
-                        "  (made by the old script; --replace rebuilds it)"
-                    } else {
-                        ""
-                    }
+                    "  {:<20} {:<12} {}{running}{legacy}",
+                    inst.display, inst.name, inst.app
                 ));
             }
             0

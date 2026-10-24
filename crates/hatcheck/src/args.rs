@@ -98,7 +98,7 @@ impl Stop {
                 0
             }
             Stop::Error(text) => {
-                crate::out::eprint(&text);
+                crate::out::error(&text);
                 2
             }
         }
@@ -710,7 +710,9 @@ impl Parser {
     /// laid out as its HelpFormatter lays them out: one help column for all of them.
     pub fn help(&self) -> String {
         let width = width();
-        let mut out = self.usage() + "\n";
+        let paint = crate::out::Paint::new();
+        let usage = self.usage();
+        let mut out = paint.heading(usage.trim_end_matches('\n')) + "\n\n";
         if !self.description.is_empty() {
             out += &wrap(&self.description, width, "", "").join("\n");
             out += "\n\n";
@@ -777,11 +779,13 @@ impl Parser {
             text
         };
         if !positional.is_empty() {
-            out += "positional arguments:\n";
+            out += &paint.heading("positional arguments:");
+            out += "\n";
             out += &entries(&positional);
             out += "\n";
         }
-        out += "options:\n";
+        out += &paint.heading("options:");
+        out += "\n";
         out += &entries(&options);
         if !self.epilog.is_empty() {
             out += "\n";

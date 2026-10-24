@@ -378,10 +378,11 @@ fn read_line() -> Option<String> {
 /// A line from the user; Enter or the end of input gives "".
 fn ask(prompt: &str, secret: bool) -> String {
     use std::io::IsTerminal;
+    let prompt = out::Paint::new().prompt(prompt);
     let line = if secret && std::io::stdin().is_terminal() {
-        read_hidden(prompt)
+        read_hidden(&prompt)
     } else {
-        out::print(prompt);
+        out::print(&prompt);
         let _ = std::io::stdout().flush();
         read_line()
     };
@@ -443,7 +444,7 @@ pub fn setup(p: &Provider) -> i32 {
     let (values, lines) = read_config(&path);
     let values = values.unwrap_or_default();
     let pre = p.prefix;
-    out::println(&format!(
+    out::heading(&format!(
         "Claude Code on {}. Settings go in {}",
         p.name,
         shown(&path)
@@ -482,7 +483,7 @@ pub fn setup(p: &Provider) -> i32 {
         out::println("That has spaces, quotes or backslashes in it; paste just the key.");
     };
     let mut chosen: Vec<String> = models(p, &values);
-    out::println("Model:");
+    out::heading("Model:");
     for (n, (label, about, _)) in p.choices.iter().enumerate() {
         out::println(&format!("  {}) {label:<26} {about}", n + 1));
     }
@@ -535,7 +536,7 @@ pub fn setup(p: &Provider) -> i32 {
     if let Err(e) = write_config(&path, &lines, &updates) {
         return out::fail(&e.to_string());
     }
-    out::println(&format!(
+    out::success(&format!(
         "Saved. Start Claude Code on {} with claude-{}, or with a profile: cl -{} <profile>",
         p.name, p.key, p.key
     ));
