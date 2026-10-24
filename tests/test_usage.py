@@ -26,6 +26,17 @@ class CachedUsage(unittest.TestCase):
         self.h = FakeHome()
         self.addCleanup(self.h.cleanup)
 
+    def test_a_profile_outside_the_home_folder_is_named_in_full(self):
+        # CLAUDE_CONFIG_DIR can name a profile anywhere; its heading names it as it is.
+        elsewhere = os.path.join(self.h.root, "elsewhere", "claude-x")
+        os.makedirs(os.path.join(elsewhere, "projects"))
+        write(os.path.join(elsewhere, ".claude.json"), json.dumps({
+            "oauthAccount": {"accountUuid": "acct-x"},
+            "cachedUsageUtilization": {"fetchedAtMs": NOW * 1000, "accountUuid": "acct-x", "utilization": limits()}}))
+        code, out = self.h.run(SCRIPT, "--cached", CLAUDE_CONFIG_DIR=elsewhere)
+        self.assertEqual(code, 0, out)
+        self.assertIn(elsewhere + "  ", out)
+
     def test_rows_bars_and_the_plan(self):
         # The plan comes from the oauthAccount in the profile's .claude.json, never a login.
         self.h.profile("work", "acct-w", usage=limits(), saved_at=NOW - 120, plan=TEAM)

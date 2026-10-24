@@ -15,7 +15,7 @@ use crate::paths;
 use crate::py::{self, get, s, truthy};
 use crate::sessions::session_command;
 use crate::times;
-use crate::usage::{self, Entry, Usage, FABLE_OUT, NO_FABLE};
+use crate::usage::{self, Entry, Usage, NO_FABLE};
 use crate::widths::truncate;
 use serde_json::{json, Value};
 
@@ -50,31 +50,50 @@ fn scoped(kind: &Value) -> bool {
     s(kind).unwrap_or("").ends_with("_scoped")
 }
 
-/// Sort key and state: (band, time or -% left, reset), and whether it has room now. The
-/// bands are usage's Fable ones, then NO_FABLE, ranked by the tightest limit, then NO_DATA.
+fn is_fable(m: &Meter) -> bool {
+    s(&m.3) == Some("weekly_scoped") && m.0.to_lowercase().contains("fable")
+}
+
+/// The limits an account needs room in to be used: every one that isn't per model, and its
+/// Fable limit; for an account whose limits are all per model, as agy's are, all of them.
+fn needed(rows: &[Meter]) -> Vec<&Meter> {
+    let wanted: Vec<&Meter> = rows
+        .iter()
+        .filter(|m| !scoped(&m.3) || is_fable(m))
+        .collect();
+    if wanted.is_empty() {
+        rows.iter().collect()
+    } else {
+        wanted
+    }
+}
+
+/// Sort key and state: (band, time or -% left, reset), and whether it has room now, in every
+/// limit it needs. The bands are usage's Fable ones, then NO_FABLE, ranked by the tightest
+/// limit, then NO_DATA, for no usage or none that reads: unknown, so never room.
 fn rank(usage: Option<&Value>, saved_at: Option<f64>, now: f64) -> ((u8, f64, f64), bool) {
-    if usage.is_none() {
+    let rows = meters(usage, saved_at, now);
+    if rows.is_empty() {
         return ((NO_DATA, 0.0, 0.0), false);
     }
+    let needed = needed(&rows);
+    let room = needed.iter().all(|m| m.1 > 0.0);
     let (band, at) = usage::fable_rank(usage, saved_at, now);
     if band < NO_FABLE {
-        return ((band, at, 0.0), band < FABLE_OUT);
+        return ((band, at, 0.0), room);
     }
-    let rows: Vec<Meter> = meters(usage, saved_at, now)
-        .into_iter()
-        .filter(|m| !scoped(&m.3))
-        .collect();
-    let key = |m: &Meter| (m.1, m.2.unwrap_or(f64::INFINITY));
-    let Some(tightest) = rows.iter().fold(None::<&Meter>, |best, m| match best {
-        Some(b) if key(m).partial_cmp(&key(b)) == Some(std::cmp::Ordering::Less) => Some(m),
-        Some(b) => Some(b),
-        None => Some(m),
-    }) else {
-        return ((NO_FABLE, 0.0, 0.0), true);
-    };
+    let key = |m: &&Meter| (m.1, m.2.unwrap_or(f64::INFINITY));
+    let tightest = needed
+        .iter()
+        .min_by(|a, b| {
+            key(a)
+                .partial_cmp(&key(b))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .expect("an account with limits needs one");
     (
         (NO_FABLE, -tightest.1, tightest.2.unwrap_or(f64::INFINITY)),
-        tightest.1 > 0.0,
+        room,
     )
 }
 
@@ -135,8 +154,16 @@ pub fn summary(result: &Usage, now: f64, room: bool) -> String {
             }
         }
     }
-    if !room && fable.is_some_and(|f| f.1 > 0.0) {
-        parts.push("(the weekly limit blocks Fable)".into());
+    // With Fable left and no room, another limit it counts against is used up: which one.
+    if let Some(blocking) = fable
+        .filter(|f| !room && f.1 > 0.0)
+        .and_then(|_| others.iter().find(|m| m.1 <= 0.0))
+    {
+        parts.push(if s(&blocking.3) == Some("weekly_all") {
+            "(the weekly limit blocks Fable)".into()
+        } else {
+            format!("(the {} limit blocks Fable)", blocking.0)
+        });
     }
     let text = if parts.is_empty() {
         "no limits".to_string()
@@ -165,17 +192,20 @@ fn ranked(accounts: Vec<(Entry, Usage)>, now: f64) -> Vec<Ranked> {
     out
 }
 
-/// When an account without room will have some again, as far as its numbers say.
-fn back_at(account: &Ranked) -> Option<f64> {
-    let (band, at, reset) = account.0;
-    let t = if band == FABLE_OUT {
-        at
-    } else if band == NO_FABLE {
-        reset
-    } else {
+/// When an account without room will have some again, as far as its numbers say: once every
+/// limit it needs that's used up is back. None when one of them doesn't say when.
+fn back_at(account: &Ranked, now: f64) -> Option<f64> {
+    if account.1 {
         return None;
-    };
-    (t != 0.0 && t.is_finite()).then_some(t)
+    }
+    let (usage, saved_at, _) = &account.3;
+    let rows = meters(usage.as_ref(), *saved_at, now);
+    let mut back = None::<f64>;
+    for m in needed(&rows).into_iter().filter(|m| m.1 <= 0.0) {
+        let t = m.2.filter(|t| *t != 0.0 && t.is_finite())?;
+        back = Some(back.map_or(t, |b| b.max(t)));
+    }
+    back
 }
 
 /// How hatcheck move names a profile or home: default, NAME, codex, codex:NAME, or a path.
@@ -391,7 +421,11 @@ struct Waiting {
 
 /// Whether what --wait waits for has room now; when it hasn't, when to look again, or the
 /// reason nothing can be waited for.
-fn wait_state(w: &Waiting, by_agent: &[(Agent, Vec<Ranked>)]) -> Result<Option<f64>, String> {
+fn wait_state(
+    w: &Waiting,
+    by_agent: &[(Agent, Vec<Ranked>)],
+    now: f64,
+) -> Result<Option<f64>, String> {
     let accounts = &by_agent
         .iter()
         .find(|(a, _)| *a == w.agent)
@@ -416,7 +450,7 @@ fn wait_state(w: &Waiting, by_agent: &[(Agent, Vec<Ranked>)]) -> Result<Option<f
     }
     let wake = relevant
         .iter()
-        .filter_map(|a| back_at(a))
+        .filter_map(|a| back_at(a, now))
         .fold(None::<f64>, |m, t| Some(m.map_or(t, |m| m.min(t))));
     match wake {
         Some(t) => Ok(Some(t)),
@@ -489,7 +523,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             .map(|&agent| (agent, ranked_for(agent, &loaded, now)))
             .collect();
         let Some(w) = &waiting else { break };
-        match wait_state(w, &by_agent) {
+        match wait_state(w, &by_agent, now) {
             Err(why) => return out::fail(&why),
             Ok(None) => break,
             Ok(Some(t)) => {
@@ -679,6 +713,30 @@ mod tests {
     }
 
     #[test]
+    fn room_needs_every_limit_it_counts_against() {
+        let now = 1_800_000_000.0;
+        let at = |hours: f64| times::iso_utc(now + hours * 3600.0).unwrap();
+        // Fable mostly left, the 5-hour limit used up: ranked by Fable still, but no room.
+        let five_hours_out = json!({"limits": [
+            {"kind": "session", "group": "session", "percent": 100, "resets_at": at(1.0)},
+            {"kind": "weekly_scoped", "group": "weekly", "percent": 20, "resets_at": at(72.0),
+             "scope": {"model": {"display_name": "Fable"}}}]});
+        let (key, room) = rank(Some(&five_hours_out), None, now);
+        assert_eq!((key.0, room), (usage::FABLE_FRESH, false));
+        // Nothing hatcheck can read: no data, never room.
+        let (key, room) = rank(Some(&json!({})), None, now);
+        assert_eq!((key.0, room), (NO_DATA, false));
+        // agy's limits are all per model: ranked by the tightest, with room while it has some.
+        let agy = |used: i64| {
+            json!({"limits": [{"kind": "quota_scoped", "group": "quota", "label": "Gemini 4",
+                               "short": "Gemini 4", "percent": used, "resets_at": at(5.0)}]})
+        };
+        assert!(rank(Some(&agy(40)), None, now).1);
+        let (key, room) = rank(Some(&agy(100)), None, now);
+        assert_eq!((key.0, room), (NO_FABLE, false));
+    }
+
+    #[test]
     fn summaries_say_the_pace() {
         let now = 1_800_000_000.0;
         // 40% left with 2 days to go: 0.8% an hour.
@@ -705,10 +763,17 @@ mod tests {
         };
         let spent = (Some(fable(100.0, 0.5, now)), None, None);
         let (key, room) = rank(spent.0.as_ref(), None, now);
-        let back = back_at(&(key, room, entry.clone(), spent));
+        let back = back_at(&(key, room, entry.clone(), spent), now);
         assert!((back.unwrap() - (now + 0.5 * 86400.0)).abs() < 1.0);
         let fresh = (Some(fable(10.0, 1.0, now)), None, None);
         let (key, room) = rank(fresh.0.as_ref(), None, now);
-        assert_eq!(back_at(&(key, room, entry, fresh)), None); // has room: nothing to wait for
+        assert_eq!(back_at(&(key, room, entry.clone(), fresh), now), None); // has room: nothing to wait for
+                                                                            // Fable left, the 5-hour limit used up: back when that resets.
+        let mut five_hours_out = fable(10.0, 3.0, now);
+        five_hours_out["limits"][0]["percent"] = json!(100);
+        let five_hours_out = (Some(five_hours_out), None, None);
+        let (key, room) = rank(five_hours_out.0.as_ref(), None, now);
+        let back = back_at(&(key, room, entry, five_hours_out), now);
+        assert!((back.unwrap() - (now + 3600.0)).abs() < 1.0);
     }
 }

@@ -305,6 +305,44 @@ class Best(unittest.TestCase):
         self.assertIn("Fable 0% left, back", out)
         self.assertNotIn("Best Claude Code account", out)
 
+    def test_a_used_up_5h_limit_leaves_no_room(self):
+        h = FakeHome()
+        self.addCleanup(h.cleanup)
+
+        def five_hours_out(name, account, back_in):  # Fable mostly left, the 5-hour limit used up
+            return h.profile(name, account, usage={"limits": [
+                {"kind": "session", "group": "session", "percent": 100, "resets_at": iso(time.time() + back_in)},
+                {"kind": "weekly_scoped", "group": "weekly", "percent": 20, "resets_at": iso(NOW + 3 * 86400),
+                 "scope": {"model": {"display_name": "Fable"}}}]})
+
+        five_hours_out("later", "acct-1", 3600)
+        code, out = run(h, ["best", "--cached"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("No Claude Code account has room now:\n", out)
+        self.assertIn("5h used up, back", out)
+        self.assertIn("(the 5h limit blocks Fable)", out)
+        # --wait waits for the 5-hour limit to be back, rather than answering at once.
+        soon = five_hours_out("soon", "acct-2", 1)
+        started = time.time()
+        code, out = run(h, ["best", "--cached", "--wait"])
+        self.assertEqual(code, 0, out)
+        self.assertGreater(time.time() - started, 1)
+        self.assertIn("No room yet; waiting for a Claude Code account until", out)
+        self.assertIn("Best Claude Code account now: " + h.shown(soon), out)
+
+    def test_usage_that_does_not_read_is_never_room(self):
+        h = FakeHome()
+        self.addCleanup(h.cleanup)
+        h.profile("odd", "acct-1", usage={"utilization_v2": {"five_hour": 12}})  # a shape hatcheck can't read
+        h.profile("spent", "acct-2", usage=fable(100, 2))
+        code, out = run(h, ["best", "--cached"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("No Claude Code account has room now:\n", out)
+        self.assertNotIn("Best Claude Code account", out)
+        code, out = run(h, ["best", "--cached", "--wait", "odd"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("none says when it will again", out)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1738,12 +1738,13 @@ pub fn account_header(
     email: bool,
 ) -> String {
     let p = |code: &str, text: &str| paint.p(code, text);
-    let home_len = paths::home().chars().count();
     let (usage, saved_at, why) = result;
+    // With ~ for the home folder, as every path hatcheck prints; one elsewhere, such as
+    // CLAUDE_CONFIG_DIR's, in full.
     let names = entry
         .profiles
         .iter()
-        .map(|pr| format!("~{}", pr.chars().skip(home_len).collect::<String>()))
+        .map(|pr| paths::shell_path(pr))
         .collect::<Vec<_>>()
         .join(", ");
     let why = why.clone().unwrap_or_else(|| "None".into());

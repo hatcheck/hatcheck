@@ -715,6 +715,10 @@ No room yet; waiting for ~/.claude-a until Tue 12:00pm (in 2d14h)…
   98% behind those; then those out of Fable, or out of the weekly limit for all models, the soonest
   back on top; then accounts without a Fable limit, by the limit with the least left. Codex homes,
   Kimi homes and Antigravity CLI's folder are ranked by the limit with the least left.
+- An account has room when every limit it needs has some left: its Fable limit and every limit
+  that isn't per model, so a used-up 5-hour limit leaves none until it resets, which `--wait`
+  waits for; for Antigravity CLI, whose limits are all per model, every one. Usage that's missing,
+  or that hatcheck can't read, is never room.
 - A line's Fable part ends with the account's pace: what's left, divided by the hours until it
   resets, so what the account can spend per hour without running out before the reset. `0.5%/h`
   with 31% left means about 62 hours to go. An account without a Fable limit shows the pace of its

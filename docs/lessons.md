@@ -156,7 +156,10 @@ only the login shared; kimi's login lives in its home, so its probe wrote a sess
 **A failed read means unknown, never empty.** A snapshot's limit that has reset since it was
 saved is shown as `?`, not as 100% or 0%; usage that couldn't be fetched is shown as cached with
 its age and the reason, never as fresh.
-- Evidence: `percent_left` returning `None` in `usage.rs`; `why` on every cached account.
+- Evidence: `percent_left` returning `None` in `usage.rs`; `why` on every cached account. And
+  2026-10-24: `rank` in `best.rs` took a body with no limits it could read for an account with
+  room, so `hatcheck best` recommended it; it's `NO_DATA` now.
+- Seen 2× (2026-10-24).
 
 ## What hatcheck changes
 

@@ -670,23 +670,33 @@ pub fn plan_text() -> String {
     "Kimi Code".into()
 }
 
-fn snapshot_path() -> String {
-    ospath::join_all(&facts::cache_dir(), &["kimi-usage", "last-usage.json"])
+/// The folder Kimi's readings are kept in, a file per home.
+fn snapshots_dir() -> String {
+    ospath::join(&facts::cache_dir(), "kimi-usage")
+}
+
+/// A home's reading's file, named by a hash of the home's path: homes read at once, as usage
+/// reads them, each write their own, so none's reading is lost to another's.
+fn snapshot_file(dir: &str, home: &str) -> String {
+    let hash: String = Sha256::digest(home.as_bytes())[..8]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    ospath::join(dir, &format!("{hash}.json"))
 }
 
 /// Keep the last reading, with when it was taken, so a later run without one can show it with
 /// its age, as the other agents' own snapshots are shown.
 pub fn save_snapshot(home: &str, body: &Value, now: f64) {
-    let path = snapshot_path();
-    let mut all: Value = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .filter(Value::is_object)
-        .unwrap_or_else(|| json!({}));
-    all[home] = json!({"saved_at": now, "usage": body});
-    let _ = std::fs::create_dir_all(ospath::dirname(&path));
+    save_snapshot_in(&snapshots_dir(), home, body, now);
+}
+
+fn save_snapshot_in(dir: &str, home: &str, body: &Value, now: f64) {
+    let path = snapshot_file(dir, home);
+    let _ = std::fs::create_dir_all(dir);
     let tmp = format!("{path}.{}.tmp", std::process::id());
-    if std::fs::write(&tmp, py::dumps(&all))
+    let entry = json!({"home": home, "saved_at": now, "usage": body});
+    if std::fs::write(&tmp, py::dumps(&entry))
         .and_then(|()| std::fs::rename(&tmp, &path))
         .is_err()
     {
@@ -694,18 +704,60 @@ pub fn save_snapshot(home: &str, body: &Value, now: f64) {
     }
 }
 
-/// (usage body, when it was read) of the last reading kept for a home.
+/// (usage body, when it was read) of the last reading kept for a home: in its own file, or in
+/// last-usage.json, the one file every home shared in 0.5.0.
 pub fn read_snapshot(home: &str) -> Option<(Value, f64)> {
-    let all: Value = serde_json::from_str(&std::fs::read_to_string(snapshot_path()).ok()?).ok()?;
-    let entry = get(&all, home);
-    let saved = Num::of(get(entry, "saved_at"))?.f();
-    let body = get(entry, "usage");
+    read_snapshot_in(&snapshots_dir(), home)
+}
+
+fn read_snapshot_in(dir: &str, home: &str) -> Option<(Value, f64)> {
+    let read = |path: &str| -> Option<Value> {
+        serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    };
+    let entry = match read(&snapshot_file(dir, home)).filter(|e| s(get(e, "home")) == Some(home)) {
+        Some(own) => own,
+        None => get(&read(&ospath::join(dir, "last-usage.json"))?, home).clone(),
+    };
+    let saved = Num::of(get(&entry, "saved_at"))?.f();
+    let body = get(&entry, "usage");
     truthy(body).then(|| (body.clone(), saved))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn readings_of_homes_kept_at_once_all_stay() {
+        let dir =
+            std::env::temp_dir().join(format!("hatcheck-kimi-readings-{}", std::process::id()));
+        let dir = dir.to_string_lossy().into_owned();
+        let homes: Vec<String> = (0..8).map(|n| format!("/h/.kimi-code-{n}")).collect();
+        std::thread::scope(|scope| {
+            for (n, home) in homes.iter().enumerate() {
+                let dir = &dir;
+                scope.spawn(move || {
+                    for round in 1..=20 {
+                        let body = json!({"limits": [{"home": n, "round": round}]});
+                        save_snapshot_in(dir, home, &body, f64::from(round));
+                    }
+                });
+            }
+        });
+        for (n, home) in homes.iter().enumerate() {
+            let (body, saved) = read_snapshot_in(&dir, home).expect("every home's reading is kept");
+            assert_eq!(
+                (body["limits"][0]["home"].as_u64(), saved),
+                (Some(n as u64), 20.0)
+            );
+        }
+        // A reading 0.5.0 kept, in the file every home shared then, is still read.
+        let old = "/h/.kimi-code-old";
+        let shared = json!({old: {"saved_at": 5.0, "usage": {"limits": [{"home": "old"}]}}});
+        std::fs::write(ospath::join(&dir, "last-usage.json"), shared.to_string()).unwrap();
+        assert_eq!(read_snapshot_in(&dir, old).map(|r| r.1), Some(5.0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn usage_windows_become_rows() {
