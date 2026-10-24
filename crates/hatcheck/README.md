@@ -1,13 +1,12 @@
 # hatcheck
 
-Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode accounts on one computer, each kept apart. `hatcheck`
+Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness accounts on one computer, each kept apart. `hatcheck`
 lists the recent sessions in every Claude Code profile (`~/.claude-<name>`), Codex home
-(`~/.codex-<name>`) and Kimi home (`~/.kimi-code-<name>`), and in Antigravity CLI's and ZCode's
-folders, each with the command that resumes it and what's left of its account's plan. It carries a session to another account, or converts it between the
-agents, and makes Claude Desktop instances on macOS. `cl`, `cx` and `ck` run Claude Code, Codex and
+(`~/.codex-<name>`), Kimi home (`~/.kimi-code-<name>`) and DeepSeek Harness home (`~/.dsh-<name>`), and in Antigravity CLI's and ZCode's
+folders, each with the command that resumes it or opens DSH's session history, and what's left of its account's plan. It carries a session to another account, converts it between the other agents or out of DSH, and makes Claude Desktop instances on macOS. `cl`, `cx` and `ck` run Claude Code, Codex and
 Kimi Code CLI with a profile, and `claude-z` and `claude-k` run Claude Code on Z.ai's or Kimi's models.
 
-*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI or Google.*
+*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai or DeepSeek.*
 
 ## Install
 
@@ -28,13 +27,13 @@ hatcheck usage                     plan usage left for every profile and home
 hatcheck best [--for SESSION]      the best account now, and the move command that carries
                                    a session to it
 hatcheck move SESSION PROFILE      move a session to another profile or home, or convert it
-                                   between the agents
+                                   between the other agents or out of DSH
 hatcheck fork SESSION PROFILE      fork a session into another profile or home: a new session
                                    with its own ID, and the original stays
 hatcheck relocate OLD NEW          a moved project folder's sessions, brought along
-hatcheck open [SESSION]            resume a session in a new terminal, in its folder
-hatcheck resume [SESSION]          carry on the newest session started here, in this
-                                   terminal, after asking (hat r)
+hatcheck open [SESSION]            resume a session in a new terminal, or open DSH's web UI
+hatcheck resume [SESSION]          carry on the newest session started here, or open DSH,
+                                   after asking (hat r)
 hatcheck show SESSION              a session's conversation, read-only
 hatcheck where SESSION             where a session is stored
 hatcheck bind PROFILE              tie a folder to a profile, for cl, cx, ck and the list

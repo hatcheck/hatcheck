@@ -1,7 +1,7 @@
 //! hatcheck open [SESSION] ...: resume a session in a new terminal window, already in its
-//! folder, or here (--here), or print the commands (--print); --login PROFILE signs in to a
-//! profile or Codex home in a new terminal instead. docs/commands.md's `hatcheck open` section says
-//! which terminal opens and how.
+//! folder, or open DSH's web UI there and choose the session; here (--here), or print the commands
+//! (--print); --login PROFILE signs in to a profile or home instead. docs/commands.md's
+//! `hatcheck open` section says which terminal opens and how.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -116,6 +116,15 @@ pub(crate) fn refuse_if_open(s: &Summary) -> Result<(), String> {
                 Err(format!(
                     "Antigravity session {id8} is open in {}; switch to it, or quit it first",
                     crate::agy::holder(&s.profile)
+                ))
+            } else {
+                Ok(())
+            };
+        }
+        Agent::Dsh => {
+            return if crate::dsh::session_open(&s.path) {
+                Err(format!(
+                    "DeepSeek Harness session {id8} is open in dsh; switch to it, or close it first"
                 ))
             } else {
                 Ok(())
@@ -505,9 +514,8 @@ pub(crate) fn run_here(cwd: &str, command: &str) -> i32 {
     }
 }
 
-/// --login: a terminal in your home folder running cl NAME (or claude), cx NAME login (or
-/// codex login), ck NAME login (or kimi login), agy or zcode, so signing in stays with the
-/// agent.
+/// --login: a terminal running cl, cx login, ck login, agy, zcode or dsh web, so signing in
+/// stays with the agent. DSH's official web UI supplies its account flow; no login subcommand is invented.
 fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&str>) -> i32 {
     let (agent, folder) = find::place(profile);
     let line = |shell: &paths::Shell| {
@@ -556,7 +564,7 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session in a new terminal window, already in its folder.")
+    let parser = Parser::new(prog, "Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session in a new terminal window, already in its folder; for DeepSeek Harness, open dsh web there and choose the session in its session history.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has a copy")
         .flag(&["--here"], "here", "resume it in this terminal instead")
@@ -565,7 +573,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .option(&["--terminal"], "terminal", "NAME", "the terminal to open (default: HATCHECK_TERMINAL, or this system's usual one)")
         .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=... kimi rather than ck")
         .flag(&["--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec")
-        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME or zcode) in a new terminal, instead of resuming a session");
+        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME, zcode, dsh or dsh:NAME) in a new terminal, instead of resuming a session");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
@@ -618,11 +626,16 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         return out::fail(&message);
     }
     let title = truncate(if s.title.is_empty() { "?" } else { &s.title }, 60);
+    let opening = s.agent == Agent::Dsh;
     if here {
-        out::heading(&format!(
-            "Resuming session {id8} \"{title}\" here, in {}",
-            paths::shell_path(&cwd)
-        ));
+        out::heading(&if opening {
+            format!("Opening DeepSeek Harness for session {id8} \"{title}\" here, in {}; choose it in DSH's web UI:", paths::shell_path(&cwd))
+        } else {
+            format!(
+                "Resuming session {id8} \"{title}\" here, in {}",
+                paths::shell_path(&cwd)
+            )
+        });
         return run_here(&cwd, &command);
     }
     let terminal = pick_terminal(args.value("terminal"));
@@ -641,11 +654,16 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             "Couldn't open a terminal ({why}). Run these instead:\n{cd}\n{command}"
         ));
     }
-    out::heading(&format!(
-        "Resuming session {id8} \"{title}\" in a new {} window, in {}:",
-        ospath::basename(terminal.as_deref().unwrap_or("")),
-        paths::shell_path(&cwd)
-    ));
+    out::heading(&if opening {
+        format!("Opening DeepSeek Harness for session {id8} \"{title}\" in a new {} window, in {}; choose it in DSH's web UI:",
+            ospath::basename(terminal.as_deref().unwrap_or("")), paths::shell_path(&cwd))
+    } else {
+        format!(
+            "Resuming session {id8} \"{title}\" in a new {} window, in {}:",
+            ospath::basename(terminal.as_deref().unwrap_or("")),
+            paths::shell_path(&cwd)
+        )
+    });
     out::command(&format!("  {}", launched.unwrap_or(command)));
     0
 }

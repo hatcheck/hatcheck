@@ -39,10 +39,11 @@ fn subcommands_named(word: &str) -> Vec<&'static str> {
         .collect()
 }
 
-const HELP: &str = "hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode accounts
-on one computer, each kept apart. Lists recent sessions with the command that
-resumes each one and what's left of each plan, and carries sessions between
-accounts and agents.
+const HELP: &str =
+    "hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek
+Harness accounts on one computer, each kept apart. Lists recent sessions with
+the command that resumes each one or opens DSH's session history, what's left
+of each plan, and carries sessions between accounts and agents.
 
 Usage:
     hatcheck [sessions] [HOURS] ...    recent sessions in every profile and home, with
@@ -58,7 +59,8 @@ Usage:
                                        session with its own ID, and the original stays
     hatcheck relocate OLD NEW          bring the sessions of a project folder that was moved
                                        or renamed along to its new place
-    hatcheck open [SESSION] ...        resume a session in a new terminal, in its folder
+    hatcheck open [SESSION] ...        resume a session in a new terminal, in its folder;
+                                       for DSH, open dsh web and its session history
     hatcheck resume [SESSION]          carry on the newest session started here, in this
                                        terminal, after asking; hat r for short
     hatcheck show SESSION              a session's conversation, read-only

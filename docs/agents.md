@@ -1,9 +1,9 @@
 # The agents and their launchers
 
-How Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode keep their profiles, homes and
-folders, and the launchers that run them with one: `cl`, `cx`, `ck`, and `claude-z` and `claude-k`
-for Claude Code on Z.ai and Kimi. The commands are in [commands.md](commands.md), and installing
-in [install.md](install.md).
+How Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness keep their
+profiles, homes and folders, and the launchers that run them with one: `cl`, `cx`, `ck`, and
+`claude-z` and `claude-k` for Claude Code on Z.ai and Kimi. The commands are in
+[commands.md](commands.md), and installing in [install.md](install.md).
 
 ## `cl`: run Claude Code with a profile
 
@@ -193,6 +193,50 @@ reads, checked against ZCode 0.16.9:
   bundle asks no usage endpoint; Z.ai shows the plan's usage at z.ai/manage-apikey/subscription.
 - `hatcheck bind default` binds `~/.zcode` along with the rest when it has sessions, and
   `--zcode default` binds just it. No hook is added for zcode.
+
+## DeepSeek Harness (`dsh`)
+
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) keeps its home at `~/.dsh`, and
+`DSH_HOME` moves that home whole. hatcheck discovers `~/.dsh`, every `~/.dsh-NAME` with sessions
+and the home `DSH_HOME` names; `dsh` and `dsh:NAME` name these in profile arguments. There is no
+hatcheck DSH launcher or installer alias. DSH's own profiles are plugin stacks under
+`DSH_HOME/profiles`, not hatcheck account homes: the shipped app profiles are `web`, `headless`,
+`acp`, `sdk` and `sdk-minimal`, while `tui` is only an example custom profile name in DSH's docs.
+What hatcheck reads, checked against dsh 0.2.1-rc.2:
+
+- `sessions/<project>/<id>/session.v4.jsonl[.zstd]`: the current v4 log, raw or as concatenated
+  Zstandard frames. hatcheck selects the highest canonical generation; an unsupported or corrupt
+  newest one is never passed over for an older one. The header supplies the session's cwd, start
+  time and origin.
+- `session/title`, `request/context` and `model/selection` supply the title and model. `show` and
+  conversions understand direct `source.kind=user` prompts, assistant text and tool calls, tool
+  results, compact checkpoints and surface replacements. Runtime or injected context, reasoning,
+  images and files, replaced history and subagent sessions are left out; subagents are hidden from
+  the session list as usual.
+- A conventional `session-<uuid>` is shown without `session-` in JSON and short IDs; a pasted full
+  ID is understood.
+- On POSIX, a held `session.lock` marks the session open in `dsh`: it stays listed even when older
+  than the time window, and `open` and `move` refuse it. A stale lock file isn't open. Windows uses
+  a named semaphore, which hatcheck doesn't detect, so it neither marks nor refuses an open DSH
+  session there.
+- The session's command is `dsh web`, or `DSH_HOME=… dsh web` for a named or custom home (in
+  PowerShell, `$env:DSH_HOME=…; dsh web; $env:DSH_HOME=$null`). From the session's recorded cwd it
+  opens the official web UI and its session history; choose the session there. The chosen ID isn't
+  deep-linked or resumed. This is the only DSH open or sign-in command hatcheck uses:
+  `hatcheck open --login dsh[:NAME]` starts it explicitly so sign-in stays with DSH, rather than
+  inventing a `dsh login` command.
+- `hatcheck usage` lists one no-data account per DSH home, with agent `dsh` and plan `DeepSeek`:
+  `dsh has no plan-usage command or endpoint (0.2.1-rc.2)`. It reads no DSH credentials and makes
+  no DSH usage request.
+- `move` and `fork` convert DSH sessions out to existing writable targets, always keeping the
+  original. A DSH target is refused, and so are copies between DSH homes: the logs and workspace
+  state aren't safe for hatcheck to copy. hatcheck never writes DSH's store or converts into it.
+- `relocate` lists affected DSH sessions as skipped: the header's cwd and project key are
+  immutable, and the workspace state stays as it was. `--dry-run` changes nothing.
+- `hatcheck bind default` binds `~/.dsh` along with the rest, `bind NAME` binds `~/.dsh-NAME` when
+  it has sessions, and `--dsh NAME` or `--dsh default` picks one explicitly. `bind --which dsh`
+  prints `default`, `NAME` or the bound path. An agent-only binding command with no PROFILE keeps
+  the existing DSH binding unless `--dsh` replaces it. No hook is added for DSH.
 
 ## `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
 

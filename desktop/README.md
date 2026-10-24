@@ -1,7 +1,7 @@
 # Hatcheck, the app
 
 A menu-bar app (system tray on Windows and Linux) for what `hatcheck` does in a terminal: what's
-left of every plan at a glance, recent sessions from every agent to resume, and Claude Desktop
+left of every plan at a glance, recent sessions from every agent to resume or open, and Claude Desktop
 instances a click away. A main window browses every session, with a read-only
 preview, moves sessions between profiles, adds profiles and makes Desktop instances.
 
@@ -10,7 +10,7 @@ needs no Python. Nothing about the agents' files is reimplemented here; the app 
 the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --json`, `hatcheck move
 --json`, `hatcheck desktop --json`), and Resume runs `hatcheck open`, which opens your terminal.
 
-*Unofficial: not made by, affiliated with or endorsed by Anthropic or OpenAI.*
+*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai or DeepSeek.*
 
 ## What it does
 
@@ -36,6 +36,15 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
   - *Settings:* live usage, how often to refresh, notifications, which terminal Resume opens, and
     **Check for updates**.
 
+DeepSeek Harness account homes are `~/.dsh` and `~/.dsh-NAME`, selected with `DSH_HOME`; **Add one**
+makes `dsh:NAME`. DSH's own profiles are plugin stacks, not Hatcheck account homes, and there is no
+Hatcheck DSH launcher. **Sign in** runs `dsh web`, keeping sign-in with DSH.
+
+For a DSH session, **Open DeepSeek Harness** in the main window or **Open DSH** in the menu bar runs
+`dsh web` (with `DSH_HOME` for a nondefault home). That opens DSH's web UI and session history in
+the session's recorded working directory. Choose the session there; Hatcheck doesn't deep-link or
+resume the selected ID directly.
+
 ## Rules it keeps
 
 - **No credentials.** It never asks for, stores, refreshes or passes on a login.
@@ -44,7 +53,8 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
   Claude Code's `/usage` in each profile, which asks Anthropic with that profile's own login and
   saves the answer, asks ChatGPT's and Kimi's usage endpoints for each Codex and Kimi home with its
   saved token, read and never refreshed, and runs agy's own `/usage` once `agy models` has said
-  it's signed in.
+  it's signed in. DeepSeek Harness has no plan-quota command or endpoint, so Plans shows **no data**
+  for its homes.
 - **No automatic switching** between accounts.
 
 ## Build and test it

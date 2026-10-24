@@ -1,5 +1,5 @@
-//! hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode accounts on one
-//! computer, each kept apart. The hatcheck and hat commands, the cl, cx, claude-z and claude-k
+//! hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness
+//! accounts on one computer, each kept apart. The hatcheck and hat commands, the cl, cx, claude-z and claude-k
 //! launchers, and hatcheck serve, the engine the desktop app runs. It was ported from a Python
 //! version, with the same output, which the command tests in tests/ still hold it to
 //! (docs/rust-port.md).
@@ -16,6 +16,7 @@ pub mod cli;
 pub mod conv;
 pub mod desktop;
 pub mod doctor;
+pub mod dsh;
 pub mod facts;
 pub mod find;
 pub mod kimi;

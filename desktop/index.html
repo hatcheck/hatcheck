@@ -28,6 +28,7 @@
           <option value="agy">Antigravity CLI</option>
           <option value="kimi">Kimi Code CLI</option>
           <option value="zcode">ZCode</option>
+          <option value="dsh">DeepSeek Harness</option>
         </select>
         <select id="filter-profile"><option value="">Every profile</option></select>
         <select id="filter-hours">
@@ -60,10 +61,14 @@
           <option value="claude">Claude Code profile</option>
           <option value="codex">Codex home</option>
           <option value="kimi">Kimi home</option>
+          <option value="dsh">DeepSeek Harness home</option>
         </select>
         <input id="add-name" placeholder="name, such as work" pattern="[A-Za-z0-9._-]+" required />
         <button type="submit">Sign in, in a terminal</button>
       </form>
+      <p class="note">DeepSeek Harness account homes are <code>~/.dsh</code> and <code>~/.dsh-NAME</code>, selected with
+        <code>DSH_HOME</code>; Add one makes <code>dsh:NAME</code>. DSH's own profiles are plugin stacks, not Hatcheck account homes.
+        DSH sign-in opens <code>dsh web</code>, so sign-in stays with DSH.</p>
     </section>
 
     <section id="tab-desktop" class="tab-body" hidden>
@@ -107,10 +112,10 @@
       </div>
       <div class="about">
         <h3>About</h3>
-        <p><strong>Hatcheck</strong> <span id="about-version"></span>: Claude Code and Codex accounts on one computer, each kept apart.
+        <p><strong>Hatcheck</strong> <span id="about-version"></span>: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness accounts on one computer, each kept apart.
           A front end to the <code>hatcheck</code> command.</p>
-        <p class="note">Unofficial: not made by, affiliated with or endorsed by Anthropic or OpenAI. Claude, Claude Code and
-          Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI.</p>
+        <p class="note">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai or DeepSeek. Claude, Claude Code and
+          Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, and DeepSeek Harness is DeepSeek's.</p>
         <p class="note">It shows what each plan has left and helps you pick an account you may use for the work at hand; it never
           switches accounts by itself.</p>
       </div>

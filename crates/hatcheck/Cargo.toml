@@ -1,6 +1,6 @@
 [package]
 name = "hatcheck"
-description = "Claude Code and Codex accounts on one computer, each kept apart"
+description = "Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness accounts on one computer, each kept apart"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -57,6 +57,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 terminal_size = "0.4"
 ureq = { version = "3", features = ["json"] }
+zstd = "0.13"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

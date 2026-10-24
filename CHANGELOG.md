@@ -6,6 +6,10 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 
 ## Unreleased
 
+### Added
+
+- **DeepSeek Harness (`dsh`) joins the agents, read-only.** `hatcheck` lists, finds and shows sessions from `~/.dsh`, `~/.dsh-NAME` and `DSH_HOME`, reading current v4 JSONL and concatenated-Zstandard logs; `where`, `open`, `resume`, `best`, `bind --dsh`, `relocate`, `doctor` and the desktop app know them. A session's command is the official `dsh web`, which opens DSH's session history in the recorded folder: hatcheck doesn't deep-link or resume the ID, and never invents a custom `tui` profile. `move` and `fork` convert DSH sessions out; DSH isn't a conversion target, and sessions aren't copied between DSH homes because their logs and workspace state stay untouched. `relocate` leaves DSH's immutable cwd and workspace state alone. POSIX writer locks mark sessions open and stop duplicate opens or conversions; Windows named semaphores aren't detected. Usage lists each DSH home with no data and why, without reading credentials or making a request. Checked against dsh 0.2.1-rc.2.
+
 ### Changed
 
 - **Human-facing command output shares one style:** `✓` marks a completed change, `◇` a dry run and `⚠` a warning, with bold headings, cyan commands, dim explanations and red errors on a terminal; `🎩` appears only in the main help and the session list's heading. Colour still respects `NO_COLOR` and is never added to pipes, `hatcheck serve`, `--json` or raw output such as `--print`, `where`, `bind --which` and `provider env`.

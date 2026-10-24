@@ -1,10 +1,6 @@
-//! hatcheck where SESSION [--json]: find a session by its ID, or the start of it. For Claude
-//! Code, the transcript in ~/.claude or a ~/.claude-* profile plus its data folder if it has
-//! one; for Codex, the session file in ~/.codex or a ~/.codex-* home, under sessions/ by the
-//! date it started, or under archived_sessions/; for agy its conversation file and brain
-//! folder; for Kimi its session folder in ~/.kimi-code or a ~/.kimi-code-* home; for ZCode its
-//! database and, when there is one, its folder of tool results. Exits 1 when nothing matches.
-//! --json prints each copy as data.
+//! hatcheck where SESSION [--json]: find a session by its ID, or the start of it. Reports
+//! each agent's transcript or readable store and any session-owned data folder; for DSH, the
+//! selected v4 log and its session directory. Exits 1 when nothing matches. --json prints copies as data.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -93,6 +89,11 @@ pub fn find(prefix: &str) -> Vec<String> {
             }
         }
     }
+    for home in paths::find_dsh_homes() {
+        for x in crate::dsh::sessions_starting_with(&home, prefix) {
+            found.push(x.dir);
+        }
+    }
     found
 }
 
@@ -141,13 +142,21 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
                                "archived": row.archived}));
         }
     }
+    for home in paths::find_dsh_homes() {
+        for x in crate::dsh::sessions_starting_with(&home, prefix) {
+            copies.push(
+                json!({"agent": Agent::Dsh.key(), "id": x.id, "profile": home, "file": x.log,
+                               "data_folder": x.dir, "archived": false}),
+            );
+        }
+    }
     json!({"version": 1, "query": prefix, "sessions": copies})
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session by its ID, or the start of it.",
+        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode or DeepSeek Harness session by its ID, or the start of it.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
     .flag(&["--json"], "json", "print the matches as JSON");

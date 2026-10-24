@@ -1,4 +1,4 @@
-// The main window: browse every session with a read-only preview, resume, copy or move one
+// The main window: browse every session with a read-only preview, resume or open, copy or move one
 // (with a dry run first), see every plan, add profiles, and Claude Desktop instances.
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -65,16 +65,18 @@ async function select(s: Session) {
   selected = s;
   renderSessions();
   const detail = $("session-detail");
+  const dsh = s.agent === "dsh";
   detail.innerHTML = `<div class="detail-head">
       <h2>${esc(s.title)}</h2>
       <div class="meta">${agentName(s.agent, true)} · ${esc(tilde(s.profile))} · ${esc(tilde(s.cwd))}${
         s.branch ? " · " + esc(s.branch) : ""}${s.model ? " · " + esc(s.model) : ""} · ${ago(s.last_active)} ago</div>
       <div class="meta mono">${esc(s.id)}</div>
       <div class="actions">
-        <button id="act-resume" ${s.open ? "disabled title=\"It's open in a terminal\"" : ""}>Resume in a terminal</button>
+        <button id="act-resume" ${s.open ? `disabled title="It's open in ${dsh ? "dsh" : "a terminal"}"` : ""}>${dsh ? "Open DeepSeek Harness" : "Resume in a terminal"}</button>
         <button id="act-copy" class="ghost">Copy command</button>
         <button id="act-move" class="ghost">Move to another profile…</button>
       </div>
+      ${dsh ? `<p class="note">Opens DSH in this session's recorded folder. Choose the session in its web UI; the selected session isn't resumed directly.</p>` : ""}
       ${s.open ? `<p class="note">Open in ${s.open.pid ? "pid " + s.open.pid : esc(s.open.in ?? "a terminal")}${s.open.status ? " (" + esc(s.open.status) + ")" : ""}: quit it before moving it.</p>` : ""}
       ${s.bound_to ? `<p class="warn">This folder is bound to ${esc(tilde(s.bound_to))}; this session ran in ${esc(tilde(s.profile))}.</p>` : ""}
     </div>
@@ -149,13 +151,16 @@ function reportText(r: MoveReport): string {
   const what = { copy: "copy it", move: "move it", update: "bring an older copy up to date", fork: "bring it in as a new session",
     convert: "convert it into a new session" }[r.action];
   const items = (r.items || []).map((i) => `<tr><td>${esc(i.what)}</td><td>${esc(i.detail)}</td><td>${esc(i.state)}</td></tr>`).join("");
+  const dsh = (r.target_agent ?? r.agent) === "dsh";
   return `<p>${verb} ${esc(what)}, to ${esc(tilde(r.target))}.</p>` +
     (items ? `<table class="items"><tr><th>What</th><th>Size</th><th>There</th></tr>${items}</table>` : "") +
     (r.action === "convert" ? `<p class="note">${r.prompts} of your messages and ${r.tool_calls} tool calls come across as text; left out: ${esc(r.left_out)}.${
       r.turns_dropped ? ` The oldest ${r.turns_dropped} turns are left out to fit.` : ""}</p>` : "") +
     (r.new_session ? `<p class="note">New session: <span class="mono">${esc(r.new_session)}</span></p>` : "") +
     (r.deleted_original ? `<p class="note">${r.dry_run ? "Would delete" : "Deleted"} the original from ${esc(tilde(r.source))}.</p>` : "") +
-    `<p class="note">Resume it with <code>${esc(r.resume)}</code></p>`;
+    (dsh
+      ? `<p class="note">Open DSH with <code>${esc(r.resume)}</code>, then choose the session in its web UI; the selected session isn't resumed directly.</p>`
+      : `<p class="note">Resume it with <code>${esc(r.resume)}</code></p>`);
 }
 
 async function startMove(s: Session) {
@@ -194,7 +199,11 @@ async function runMove(s: Session, dryRun: boolean) {
       const moved = sessions.find((x) => x.id === (report.new_session || report.session) && x.profile === report.target);
       dialog("Moved", reportText(report), [
         { label: "Close", kind: "ghost", run: closeDialog },
-        ...(moved ? [{ label: "Resume it there", run: async () => { await resume(moved); closeDialog(); } }] : []),
+        ...(moved ? [{ label: moved.agent === "dsh" ? "Open DeepSeek Harness" : "Resume it there", run: async () => {
+          await resume(moved);
+          if (moved.agent === "dsh") toast("Opening DSH; choose the session in its web UI.");
+          closeDialog();
+        } }] : []),
       ]);
     }
   } catch (e) {
@@ -260,7 +269,7 @@ function wire() {
         if (s) await select(s);
       } else if (el.id === "act-resume" && selected) {
         await resume(selected);
-        toast("Opening a terminal for " + selected.title);
+        toast(selected.agent === "dsh" ? "Opening DSH; choose the session in its web UI." : "Opening a terminal for " + selected.title);
       } else if (el.id === "act-copy" && selected) {
         const text = pasteCommand(selected);
         if (inApp) await writeText(text);
@@ -268,8 +277,9 @@ function wire() {
         toast("Copied: " + text);
       } else if (el.id === "act-move" && selected) await startMove(selected);
       else if (el.dataset.signin) {
+        const dsh = el.dataset.signin === "dsh" || el.dataset.signin.startsWith("dsh:");
         await signIn(el.dataset.signin);
-        toast("Opening a terminal to sign in to " + el.dataset.signin);
+        toast(dsh ? "Opening DSH to sign in to " + el.dataset.signin : "Opening a terminal to sign in to " + el.dataset.signin);
       } else if (el.dataset.instance) await openInstance(el.dataset.instance);
       else if (el.id === "reload") await Promise.all([loadSessions(), loadAccounts()]);
       else if (el.id === "check-updates") await checkUpdates();
@@ -286,7 +296,7 @@ function wire() {
     const profile = agent === "claude" ? name : agent + ":" + name;
     try {
       await signIn(profile);
-      toast("Opening a terminal to sign in to " + profile);
+      toast(agent === "dsh" ? "Opening DSH to sign in to " + profile : "Opening a terminal to sign in to " + profile);
     } catch (e) {
       toast(errorText(e), "error");
     }

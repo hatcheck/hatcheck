@@ -153,6 +153,15 @@ only the login shared; kimi's login lives in its home, so its probe wrote a sess
   folder in `~/.kimi-code`, all removed; `session_index.jsonl` identical to its copy from before.
 - Seen 1× (2026-10-20).
 
+**An example custom profile name isn't a shipped interface; verify the official templates before
+probing.** DSH's docs show `dsh --profile tui --resume` only as an example assuming a custom
+terminal app, so `dsh tui` can't be assumed to start a shipped terminal UI. The shipped app
+profiles are `web`, `headless`, `acp`, `sdk` and `sdk-minimal`.
+- Evidence: dsh 0.2.1-rc.2, 2026-10-24: this checkout's `~/.dsh/profiles/tui` was base-only;
+  `dsh tui --help` waited until the probe timed out, with no model turn or session created, while
+  `dsh --help` and `dsh --profile headless --help` exited.
+- Seen 1× (2026-10-24).
+
 **A failed read means unknown, never empty.** A snapshot's limit that has reset since it was
 saved is shown as `?`, not as 100% or 0%; usage that couldn't be fetched is shown as cached with
 its age and the reason, never as fresh.

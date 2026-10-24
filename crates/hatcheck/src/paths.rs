@@ -111,6 +111,11 @@ pub fn find_zcode_roots() -> Vec<String> {
     crate::zcode::find_roots()
 }
 
+/// Every DSH home with sessions: ~/.dsh and ~/.dsh-* (see dsh.rs).
+pub fn find_dsh_homes() -> Vec<String> {
+    crate::dsh::find_homes()
+}
+
 /// Every profile, home and data folder of every agent, as (agent, folder).
 pub fn find_all() -> Vec<(Agent, String)> {
     let mut all: Vec<(Agent, String)> = find_profiles()
@@ -121,11 +126,12 @@ pub fn find_all() -> Vec<(Agent, String)> {
     all.extend(find_agy_stores().into_iter().map(|r| (Agent::Agy, r)));
     all.extend(find_kimi_homes().into_iter().map(|h| (Agent::Kimi, h)));
     all.extend(find_zcode_roots().into_iter().map(|r| (Agent::Zcode, r)));
+    all.extend(find_dsh_homes().into_iter().map(|h| (Agent::Dsh, h)));
     all
 }
 
 /// The folder an agent uses when no profile is named: ~/.claude, ~/.codex,
-/// ~/.gemini/antigravity-cli, ~/.kimi-code or ~/.zcode.
+/// ~/.gemini/antigravity-cli, ~/.kimi-code, ~/.zcode or ~/.dsh.
 pub fn default_folder(agent: Agent) -> String {
     match agent {
         Agent::Agy => crate::agy::default_root(),
@@ -488,6 +494,25 @@ impl Shell {
         }
         format!("HOME={} zcode{tail}", self.shell_path(&home_of))
     }
+
+    /// The command that runs DSH with a home, then tail: dsh for ~/.dsh, DSH_HOME elsewhere.
+    pub fn dsh_command(&self, home_dir: &str, tail: &str, _full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        if self.is_default(home_dir, Agent::Dsh.base()) {
+            return format!("dsh{tail}");
+        }
+        if self.powershell {
+            return format!(
+                "$env:DSH_HOME={}; dsh{tail}; $env:DSH_HOME=$null",
+                self.ps_dir(home_dir)
+            );
+        }
+        format!("DSH_HOME={} dsh{tail}", self.shell_path(home_dir))
+    }
 }
 
 /// A word for the shell commands are printed for: PowerShell's quoting there, else sh's.
@@ -582,12 +607,12 @@ impl Shell {
             Agent::Agy => self.agy_command(profile, "", full),
             Agent::Kimi => self.kimi_command(profile, "", full),
             Agent::Zcode => self.zcode_command(profile, "", full),
+            Agent::Dsh => self.dsh_command(profile, "web", full),
         }
     }
 
-    /// The command that resumes a session of an agent in a profile, home or data folder: agy's
-    /// app's sessions with plain agy, which imports them from its /resume picker, and kimi's and
-    /// zcode's by their whole IDs, as they name them.
+    /// The command that resumes a session, or opens its agent's session picker: agy's app with
+    /// plain agy, DSH's official web UI, and kimi's and zcode's by their whole IDs.
     pub fn session_command(
         &self,
         agent: Agent,
@@ -613,6 +638,7 @@ impl Shell {
                 &format!("--resume {}", Agent::Zcode.full_id(session_id)),
                 full,
             ),
+            Agent::Dsh => self.dsh_command(profile, "web", full),
         }
     }
 }
@@ -944,7 +970,7 @@ mod tests {
     }
 
     #[test]
-    fn kimi_and_zcode_commands() {
+    fn kimi_zcode_and_dsh_commands() {
         let s = Shell {
             home: "/home/me".into(),
             windows: false,
@@ -969,6 +995,15 @@ mod tests {
             s.zcode_command("/home/me/.zcode-work/.zcode", "-c", false),
             "HOME=~/.zcode-work zcode -c"
         );
+        assert_eq!(s.dsh_command("/home/me/.dsh", "web", false), "dsh web");
+        assert_eq!(
+            s.dsh_command("/home/me/.dsh-work", "web", false),
+            "DSH_HOME=~/.dsh-work dsh web"
+        );
+        assert_eq!(
+            s.session_command(Agent::Dsh, "/home/me/.dsh-work", ID, false, None),
+            "DSH_HOME=~/.dsh-work dsh web"
+        );
         let w = windows(true);
         assert_eq!(
             w.kimi_command("C:\\Users\\me\\.kimi-code-work", "--session session_1", true),
@@ -979,6 +1014,18 @@ mod tests {
             "ck work"
         );
         assert_eq!(w.zcode_command("C:\\Users\\me\\.zcode", "", false), "zcode");
+        assert_eq!(
+            w.dsh_command("C:\\Users\\me\\.dsh", "web", false),
+            "dsh web"
+        );
+        assert_eq!(
+            w.dsh_command("C:\\Users\\me\\.dsh-work", "web", false),
+            "$env:DSH_HOME=\"$HOME\\.dsh-work\"; dsh web; $env:DSH_HOME=$null"
+        );
+        assert_eq!(
+            windows(false).dsh_command("C:\\Users\\me\\.dsh-work", "web", false),
+            "DSH_HOME=~/.dsh-work dsh web"
+        );
     }
 
     #[test]

@@ -11,13 +11,13 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <title>Hatcheck</title>
-  <meta name="description" content="Claude Code, Codex and Kimi Code CLI accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume commands across all of them.">
+  <meta name="description" content="Claude Code, Codex, Kimi Code CLI and DeepSeek Harness accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands across them.">
   <link rel="canonical" href="https://hatcheck.dev/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hatcheck.dev/">
   <meta property="og:image" content="https://hatcheck.dev/og.png">
   <meta property="og:title" content="Hatcheck">
-  <meta property="og:description" content="Claude Code, Codex and Kimi Code CLI accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume commands across all of them.">
+  <meta property="og:description" content="Claude Code, Codex, Kimi Code CLI and DeepSeek Harness accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands across them.">
 </head>
 <body>
   <nav class="top wrap" aria-label="Site">
@@ -42,10 +42,10 @@
       </svg>
       <div>
         <h1>Hatcheck</h1>
-        <p class="tagline">Claude Code, Codex and Kimi Code CLI accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume commands across all of them, and sessions carried between all five.</p>
+        <p class="tagline">Claude Code, Codex, Kimi Code CLI and DeepSeek Harness accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands, with sessions carried between the other five and out of DSH.</p>
       </div>
     </div>
-    <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI or Z.ai. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's and ZCode and GLM are Z.ai's.</p>
+    <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai or DeepSeek. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, and DeepSeek Harness is DeepSeek's.</p>
     <div class="buttons">
       <a class="button" href="#install">Install the CLI</a>
       <a class="button ghost" href="#start">Start a profile per account</a>
@@ -77,7 +77,7 @@ ck a login           # Kimi Code CLI with ~/.kimi-code-a
 cd ~/code/api
 hatcheck bind a      # in this repo, plain cl means cl a, and cx and ck the same
 hatcheck             # the sessions here from every profile, and what's left of each plan</code></pre>
-    <p>An existing <code>~/.claude</code> counts as a profile too (hatcheck calls it <code>default</code>), and plain <code>claude</code> keeps using it. Antigravity CLI and ZCode keep one login each, so hatcheck reads their one folder beside the profiles: <a href="agents.html">which agents, and how far</a>. The CLI comes first: <a href="#install">install it</a>.</p>
+    <p>An existing <code>~/.claude</code> counts as a profile too (hatcheck calls it <code>default</code>), and plain <code>claude</code> keeps using it. Antigravity CLI and ZCode keep one login each, so hatcheck reads their one folder beside the profiles. DeepSeek Harness homes move with <code>DSH_HOME</code>, read-only, and its own profiles are plugin stacks rather than account homes: <a href="agents.html">which agents, and how far</a>. The CLI comes first: <a href="#install">install it</a>, and <a href="agents.html#get">any agent you don't have yet</a>.</p>
   </section>
 
   <section class="wrap">
@@ -85,11 +85,11 @@ hatcheck             # the sessions here from every profile, and what's left of 
     <div class="cards three">
       <div class="card">
         <h3>What to resume, and what's left</h3>
-        <p><code>hatcheck</code> lists recent sessions from every profile and home, and Antigravity CLI's and ZCode's beside them, with the command that resumes each and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> shows the best account now and the <code>move</code> command that carries a session to it.</p>
+        <p><code>hatcheck</code> lists recent sessions from every profile and home, and Antigravity CLI's and ZCode's beside them, with the command that resumes each or opens DSH's session history, and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> shows the best account now and the <code>move</code> command that carries a session to it.</p>
       </div>
       <div class="card">
         <h3>Sessions that travel</h3>
-        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, or converts it between Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
+        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, converts it between Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode, or converts it out of DeepSeek Harness. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
       </div>
       <div class="card">
         <h3>Claude Desktop, one per account</h3>
@@ -100,7 +100,7 @@ hatcheck             # the sessions here from every profile, and what's left of 
     <h3>In the terminal</h3>
     <p>Run in a folder, it lists that folder's sessions from every agent, newest first, each with the command that resumes it and what's left of its plan, as the terminal shows them:</p>
 <pre><code><!-- sample:list -->$ hatcheck
-<span class="b">🎩 Claude Code, Codex, Antigravity, Kimi Code and ZCode CLI sessions in this folder, active in the last 24h or open now</span><span class="d"> (newest first; % = plan left, ↻ = hours/days until reset)</span>
+<span class="b">🎩 Claude Code, Codex, Antigravity, Kimi Code, ZCode and DeepSeek Harness CLI sessions in this folder, active in the last 24h or open now</span><span class="d"> (newest first; % = plan left, ↻ = hours/days until reset)</span>
 <span class="b c">cd ~/code/api</span>
   <span class="d">  4m</span>  <span class="b">Fix flaky login test</span><span class="d"> · </span><span class="d">main</span>
         <span class="c">cl</span> a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10           <span class="d">#</span> <span class="d">5h</span> <span class="y">20%</span> <span class="y">█░░░░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span class="d">week</span>   <span class="r">9%</span> <span class="r">▋░░░░░░</span> <span style="color:#d75f00">↻▉░░░░░░ 21h35m</span>
@@ -113,7 +113,9 @@ hatcheck             # the sessions here from every profile, and what's left of 
   <span class="d">  2h</span>  <span class="b">Write the migration for the audit table</span>
         <span class="c">kimi</span> --session session_6d2f1b0a-3c4e-4f5a-9b8c-7d6e5f4a3b2c  <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  3h</span>  <span class="b">Tidy the uploader's error handling</span>
-        <span class="c">zcode</span> --resume sess_1fb068a4-b6d4-4a9f-b2d3-6e428e094fbe     <span class="d">#</span> <span class="d">usage ?</span><!-- /sample:list --></code></pre>
+        <span class="c">zcode</span> --resume sess_1fb068a4-b6d4-4a9f-b2d3-6e428e094fbe     <span class="d">#</span> <span class="d">usage ?</span>
+  <span class="d">  4h</span>  <span class="b">Trace the missing webhook</span>
+        <span class="c">dsh</span> web                                                      <span class="d">#</span> <span class="d">usage ?</span><!-- /sample:list --></code></pre>
 
     <h3>Every plan, at a glance</h3>
     <p>Each limit has two bars: what's left of it, then how much of its window is left before it resets. A per-model limit such as Fable, which team and Max plans have, is violet, so it stands apart from the weekly limit for all models that Pro plans have.</p>
@@ -127,8 +129,8 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
 <span class="b c">Best Claude Code account now: </span><span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
-  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 1:54am (in 2h39m)</span>
-  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Wed 4:02am (in 4d4h)</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 8:29pm (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Wed 10:37pm (in 4d4h)</span>
 Carry it there with:
 <span class="c">  hatcheck move b</span><span class="d">    (hatcheck fork b keeps the original)</span>
 <span class="d">Then:</span>
@@ -145,9 +147,44 @@ $ hatcheck relocate ~/code/web ~/code/site
   ~/.claude-b  2 sessions: projects/-Users-me-code-web renamed projects/-Users-me-code-site
   ~/.codex  1 session: the folder in the file rewritten
 <span class="y">⚠ Left alone: Kimi Code CLI session 8d4b5e6f in ~/.kimi-code is filed under a hash of the folder, which stays as it was.</span>
+<span class="y">⚠ Left alone: DeepSeek Harness session d54e0010 in ~/.dsh keeps an immutable folder in its session header and workspace state, which stay as they were.</span>
 The folder binding of ~/code/web moved to ~/code/site.
 Resume them from ~/code/site. To undo: <span class="c">hatcheck relocate ~/code/site ~/code/web</span><!-- /sample:relocate --></code></pre>
-    <p>Only the folder each session records is rewritten; what the conversation says about the old path stays as it was. Antigravity CLI and ZCode keep the folder in their own databases, which hatcheck never writes, and Kimi Code CLI files sessions under a hash of it, so theirs stay as they are, and it says so. <code>--dry-run</code> shows what would move, a session that's open or still being written stops it before anything changes, and running it the other way round undoes it, byte for byte.</p>
+    <p>Only the folder each session records is rewritten; what the conversation says about the old path stays as it was. Antigravity CLI and ZCode keep the folder in their own databases, which hatcheck never writes, Kimi Code CLI files sessions under a hash of it, and DSH keeps it in an immutable header and workspace state, so theirs stay as they are, and it says so. <code>--dry-run</code> shows what would move, a session that's open or still being written stops it before anything changes, and running it the other way round undoes it, byte for byte.</p>
+  </section>
+
+  <section class="wrap" id="short">
+    <h2>Every command in a few letters</h2>
+    <p><code>hat</code> is hatcheck's short name, and each command can be cut to its first letters. In a project folder:</p>
+<pre><code>hat                 # the sessions here, with resume commands and plan usage
+hat u               # what's left of every plan
+hat b               # the best account now
+hat m               # move the newest session here to it, after asking
+hat m 3f1c2a9e b    # or session 3f1c2a9e to ~/.claude-b
+hat r               # carry on the newest session here, after asking</code></pre>
+    <div class="table shorts">
+      <table>
+        <thead><tr><th>Short</th><th>For</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>hat</code></td><td><code>hatcheck</code></td><td>the recent sessions, with the command that resumes each and what's left of its plan</td></tr>
+          <tr><td><code>hat u</code></td><td><code>usage</code></td><td>what's left of every plan</td></tr>
+          <tr><td><code>hat b</code></td><td><code>best</code></td><td>the best account now, and the command that carries a session to it</td></tr>
+          <tr><td><code>hat m</code></td><td><code>move</code></td><td>carry a session to another profile, or convert it for another agent</td></tr>
+          <tr><td><code>hat f</code></td><td><code>fork</code></td><td>bring a session into another profile as a new one, keeping the original</td></tr>
+          <tr><td><code>hat r</code></td><td><code>resume</code></td><td>carry on the newest session here, in this terminal</td></tr>
+          <tr><td><code>hat o</code></td><td><code>open</code></td><td>resume a session in a new terminal, in its folder</td></tr>
+          <tr><td><code>hat s</code></td><td><code>show</code></td><td>read a session's conversation</td></tr>
+          <tr><td><code>hat w</code></td><td><code>where</code></td><td>find a session's files</td></tr>
+          <tr><td><code>hat rel</code></td><td><code>relocate</code></td><td>bring a moved folder's sessions along</td></tr>
+          <tr><td><code>hat bi</code></td><td><code>bind</code></td><td>tie this folder to a profile</td></tr>
+          <tr><td><code>hat un</code></td><td><code>unbind</code></td><td>untie it again</td></tr>
+          <tr><td><code>hat d</code></td><td><code>desktop</code></td><td>Claude Desktop instances, on macOS</td></tr>
+          <tr><td><code>hat p</code></td><td><code>provider</code></td><td>the keys and models behind <code>claude-z</code> and <code>claude-k</code></td></tr>
+          <tr><td><code>hat do</code></td><td><code>doctor</code></td><td>which copies of hatcheck and the agents are installed, and which run</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A longer start works too, such as <code>hat mo</code>, and options follow as after the whole name: <code>hat u --cached</code>. Where two commands start with the same letter, the one used more gets it, so bind, unbind and doctor take two letters and relocate three; what hatcheck prints uses the whole name. The launchers are short too: <code>cl a</code>, <code>cx a</code> and <code>ck a</code> run Claude Code, Codex and Kimi Code CLI with profile <code>a</code> (<a href="#start">a profile per account</a>).</p>
   </section>
 
   <section class="wrap" id="more">
@@ -155,7 +192,7 @@ Resume them from ~/code/site. To undo: <span class="c">hatcheck relocate ~/code/
     <div class="cards three">
       <div class="card">
         <h3><a href="agents.html">Which agents, and how far</a></h3>
-        <p>Claude Code, Codex and Kimi Code CLI get a profile per account and a launcher; Antigravity CLI and ZCode, with one login each, are read beside them. A table of what each agent gets.</p>
+        <p>Claude Code, Codex and Kimi Code CLI get a profile per account and a launcher; Antigravity CLI and ZCode, with one login each, are read beside them. A table of what each agent gets, and where to get each one.</p>
       </div>
       <div class="card">
         <h3><a href="commands.html">Every command</a></h3>
@@ -170,7 +207,7 @@ Resume them from ~/code/site. To undo: <span class="c">hatcheck relocate ~/code/
 
   <section class="wrap" id="install">
     <h2>Install the CLI</h2>
-    <p>macOS, Linux and Windows: one binary per platform, nothing else needed. It installs <code>hatcheck</code> (<code>hat</code> for short, and each command to its first letters: <code>hat m</code> is <code>hat move</code>), <code>cl</code>, <code>cx</code>, <code>ck</code>, <code>claude-z</code> and <code>claude-k</code>. Installed more than one way, <code>hatcheck doctor</code> says which copy runs and how to remove the rest.</p>
+    <p>macOS, Linux and Windows: one binary per platform, nothing else needed. It installs <code>hatcheck</code> and <code>hat</code>, <a href="#short">its short name</a>, with <code>cl</code>, <code>cx</code>, <code>ck</code>, <code>claude-z</code> and <code>claude-k</code>, but no agent: <a href="agents.html#get">get those from their makers</a>. Installed more than one way, <code>hatcheck doctor</code> says which copy runs and how to remove the rest.</p>
 <pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
 uv tool install hatcheck            # or: pipx install hatcheck</code></pre>

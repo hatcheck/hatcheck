@@ -69,6 +69,7 @@ class Doctor(unittest.TestCase):
         self.assertRegex(out, r"Claude Code +2\.1\.303 \(Claude Code\) +\S+/fakebin/claude +\(runs, and cl runs it\)")
         self.assertIn("Codex            not on your PATH; cx needs it", out)
         self.assertIn("Antigravity CLI  not on your PATH", out)
+        self.assertIn("DeepSeek Harness not on your PATH", out)
         self.assertIn("Hooks from hatcheck bind --hook: none.", out)
         self.assertIn("Nothing to fix.", out)
 
@@ -96,7 +97,7 @@ class Doctor(unittest.TestCase):
         d = json.loads(out)
         self.assertEqual(d["version"], 1)
         self.assertEqual(d["this"]["version"], re.match(r"\S+ (\S+)", h.run("--version")[1]).group(1))
-        self.assertEqual([a["agent"] for a in d["agents"]], ["claude", "codex", "agy", "kimi", "zcode"])
+        self.assertEqual([a["agent"] for a in d["agents"]], ["claude", "codex", "agy", "kimi", "zcode", "dsh"])
         claude = d["agents"][0]["copies"][0]
         self.assertEqual((claude["version"], claude["runs"], claude["runnable"]), ("2.1.303 (Claude Code)", True, True))
         self.assertEqual(d["agents"][1]["copies"], [])

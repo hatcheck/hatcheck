@@ -12,9 +12,7 @@ use serde_json::Value;
 /// (agent, folder) for a PROFILE argument: NAME for ~/.claude-NAME, default or claude for
 /// ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME (claude:NAME spells out a Claude
 /// Code one), agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for
-/// ~/.kimi-code-NAME, zcode for ~/.zcode, or a path, which is a Codex home when it's named
-/// .codex* or has Codex's sessions/, agy's when it has its conversations, Kimi's when it's named
-/// .kimi-code* or has Kimi's sessions/, and ZCode's when it has its database.
+/// ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, or a path.
 pub fn place(spec: &str) -> (Agent, String) {
     if spec == "default" {
         return (Agent::Claude, paths::default_folder(Agent::Claude));
@@ -38,6 +36,7 @@ pub fn place(spec: &str) -> (Agent, String) {
         let agy = ospath::basename(&path) == "antigravity-cli" || crate::agy::is_root(&path);
         let zcode = ospath::basename(&path) == Agent::Zcode.base() || crate::zcode::is_root(&path);
         let kimi = crate::kimi::is_home(&path);
+        let dsh = crate::dsh::is_home(&path);
         let codex = ospath::basename(&path).starts_with(".codex")
             || (ospath::isdir(&ospath::join(&path, "sessions"))
                 && !ospath::isdir(&ospath::join(&path, "projects")));
@@ -47,6 +46,8 @@ pub fn place(spec: &str) -> (Agent, String) {
             Agent::Zcode
         } else if kimi {
             Agent::Kimi
+        } else if dsh {
+            Agent::Dsh
         } else if codex {
             Agent::Codex
         } else {
@@ -124,6 +125,11 @@ pub fn session_copies(prefix: &str) -> Vec<Copies> {
         for row in crate::zcode::rows_starting_with(&root, prefix) {
             let path = crate::zcode::artifacts_path(&root, &row.id);
             add((Agent::Zcode, row.id), (root.clone(), path));
+        }
+    }
+    for home in paths::find_dsh_homes() {
+        for x in crate::dsh::sessions_starting_with(&home, prefix) {
+            add((Agent::Dsh, x.id), (home.clone(), x.dir));
         }
     }
     found
@@ -232,6 +238,16 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
             }
         }
     }
+    for home in paths::find_dsh_homes() {
+        for x in crate::dsh::sessions(&home) {
+            if s(get(&x.header, "cwd")).is_some_and(|cwd| paths::same_folder(cwd, &here)) {
+                let summary = crate::dsh::summary(&home, &x);
+                if better(&summary, &best) {
+                    best = Some(summary);
+                }
+            }
+        }
+    }
     facts::save_cache();
     best
 }
@@ -307,5 +323,8 @@ mod tests {
         assert_eq!(place("/srv/.kimi-code-a").0, Agent::Kimi);
         assert_eq!(place("zcode"), (Agent::Zcode, format!("{home}/.zcode")));
         assert_eq!(place("/x/.zcode").0, Agent::Zcode);
+        assert_eq!(place("dsh"), (Agent::Dsh, format!("{home}/.dsh")));
+        assert_eq!(place("dsh:work"), (Agent::Dsh, format!("{home}/.dsh-work")));
+        assert_eq!(place("/srv/.dsh-a").0, Agent::Dsh);
     }
 }

@@ -355,6 +355,7 @@ fn bind(
     agy: Option<&str>,
     kimi: Option<&str>,
     zcode: Option<&str>,
+    dsh: Option<&str>,
 ) -> i32 {
     let show = paths::shell_path;
     let folder = ospath::realpath(&ospath::expanduser(
@@ -401,6 +402,10 @@ fn bind(
             ));
         }
         binding.insert(Agent::Codex.key().into(), json!(name));
+    } else if profile.is_none() {
+        if let Some(name) = old.get(Agent::Codex.key()) {
+            binding.insert(Agent::Codex.key().into(), name.clone());
+        }
     } else if let Some(spec) = profile.filter(|p| {
         s(binding.get(Agent::Claude.key()).unwrap_or(py::null())) == Some(*p)
             && !p.contains('/')
@@ -476,6 +481,34 @@ fn bind(
         && crate::zcode::is_root(&paths::default_folder(Agent::Zcode))
     {
         binding.insert(Agent::Zcode.key().into(), json!("default"));
+    }
+    // DSH_HOME moves a whole home; its own plugin-stack profiles are unrelated to these bindings.
+    if let Some(spec) = dsh {
+        let (name, path) = name_of(Agent::Dsh, spec);
+        if !crate::dsh::is_home(&path) || !ospath::isdir(&path) {
+            return out::fail(&format!(
+                "{} isn't a DeepSeek Harness home. Sign in there first, e.g. with: {}",
+                show(&path),
+                paths::start_command(Agent::Dsh, &path, false)
+            ));
+        }
+        binding.insert(Agent::Dsh.key().into(), json!(name));
+    } else if profile.is_none() {
+        if let Some(name) = old.get(Agent::Dsh.key()) {
+            binding.insert(Agent::Dsh.key().into(), name.clone());
+        }
+    } else if profile == Some("default")
+        && ospath::isdir(&ospath::join(
+            &paths::default_folder(Agent::Dsh),
+            "sessions",
+        ))
+    {
+        binding.insert(Agent::Dsh.key().into(), json!("default"));
+    } else if let Some(spec) = profile.filter(|p| !p.contains('/') && !p.contains(ospath::SEP)) {
+        let path = paths::profile_folder(Agent::Dsh, spec);
+        if ospath::isdir(&ospath::join(&path, "sessions")) {
+            binding.insert(Agent::Dsh.key().into(), json!(spec));
+        }
     }
     let binding = Value::Object(binding);
     bindings.insert(folder.clone(), binding.clone());
@@ -798,6 +831,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .option(&["--agy"], "agy", "FOLDER", "the Antigravity CLI folder to bind: default for ~/.gemini/antigravity-cli, or a path (default: that one, when PROFILE is default)")
         .option(&["--kimi"], "kimi", "HOME", "the Kimi home to bind: NAME for ~/.kimi-code-NAME, default for ~/.kimi-code, or a path (default: the one named like PROFILE)")
         .option(&["--zcode"], "zcode", "FOLDER", "the ZCode folder to bind: default for ~/.zcode, or a path (default: that one, when PROFILE is default)")
+        .option(&["--dsh"], "dsh", "HOME", "the DeepSeek Harness home to bind: NAME for ~/.dsh-NAME, default for ~/.dsh, or a path (default: the one named like PROFILE)")
         .flag(&["--list"], "list", "list every bound folder")
         .flag(&["--hook"], "hook", "warn in Claude Code, Codex and agy when a session starts in a bound folder under another profile")
         .hidden_choice(&["--which"], "which", "claude", &Agent::KEYS)
@@ -824,7 +858,14 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let agy = args.value("agy").filter(|a| !a.is_empty());
     let kimi = args.value("kimi").filter(|k| !k.is_empty());
     let zcode = args.value("zcode").filter(|z| !z.is_empty());
-    if profile.is_some() || codex.is_some() || agy.is_some() || kimi.is_some() || zcode.is_some() {
+    let dsh = args.value("dsh").filter(|d| !d.is_empty());
+    if profile.is_some()
+        || codex.is_some()
+        || agy.is_some()
+        || kimi.is_some()
+        || zcode.is_some()
+        || dsh.is_some()
+    {
         return bind(
             profile,
             args.value("folder").filter(|f| !f.is_empty()),
@@ -832,6 +873,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             agy,
             kimi,
             zcode,
+            dsh,
         );
     }
     show_here()

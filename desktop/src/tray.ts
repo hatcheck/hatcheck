@@ -1,4 +1,4 @@
-// The menu-bar popover: what's left of each plan, recent sessions to resume, and the Claude
+// The menu-bar popover: what's left of each plan, recent sessions to resume or open, and the Claude
 // Desktop instances. It also refreshes in the background and sends the notifications.
 import { listen } from "@tauri-apps/api/event";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -50,7 +50,7 @@ async function loadSessions() {
                   s.bound_to ? ` · <span class="warn" title="This folder is bound to ${esc(tilde(s.bound_to))}">⚠ bound</span>` : ""}</span>
             </div>
             <div class="actions">
-              <button data-resume="${esc(s.id + s.profile)}" ${s.open ? "disabled title=\"It's open in a terminal\"" : ""}>Resume</button>
+              <button data-resume="${esc(s.id + s.profile)}" ${s.open ? `disabled title="It's open in ${s.agent === "dsh" ? "dsh" : "a terminal"}"` : s.agent === "dsh" ? "title=\"Open DSH and choose the session in its web UI\"" : ""}>${s.agent === "dsh" ? "Open DSH" : "Resume"}</button>
               <button class="ghost" data-copy="${esc(s.id + s.profile)}" title="Copy the command">Copy</button>
             </div>
           </div>`).join("")}</div>`).join("")
@@ -146,7 +146,7 @@ document.addEventListener("click", async (event) => {
       const s = sessionsById.get(button.dataset.resume)!;
       button.disabled = true;
       await resume(s);
-      toast("Opening a terminal for " + s.title);
+      toast(s.agent === "dsh" ? "Opening DSH; choose the session in its web UI." : "Opening a terminal for " + s.title);
       await hidePopover();
     } else if (button.dataset.copy) {
       const s = sessionsById.get(button.dataset.copy)!;

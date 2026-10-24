@@ -1,7 +1,6 @@
-//! hatcheck [sessions] [HOURS] ...: recent Claude Code sessions from every ~/.claude*
-//! profile, Codex sessions from every ~/.codex* home, Antigravity CLI's from its folder, Kimi
-//! Code CLI's from every ~/.kimi-code* home and ZCode's from its database, grouped by folder,
-//! each with the command that resumes it and what's left of its account's plan.
+//! hatcheck [sessions] [HOURS] ...: recent sessions from every agent's profiles and homes,
+//! grouped by folder, each with the command that resumes it or opens DSH's session history,
+//! and what's left of its account's plan.
 //! docs/commands.md's `hatcheck` section describes the list.
 
 use crate::agent::Agent;
@@ -367,7 +366,7 @@ impl Found {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes and ZCode sessions from ~/.zcode, with the command that resumes each one.")
+    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes, ZCode sessions from ~/.zcode and DeepSeek Harness sessions across all ~/.dsh* homes, with the command that resumes each one or opens DSH's session history.")
         .positional("hours", Count::Optional, &format!("how far back to look (default {DEFAULT_HOURS}); accepts 36, 1.5, 12h or 3d"))
         .option(&["-n", "--per-folder"], "per_folder", "N", "show only the newest N sessions per folder (default: all)")
         .flag(&["--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, and the Antigravity app's conversations")
@@ -588,6 +587,31 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             found.put(key, (session.when, true, session.size), session, false);
         }
     }
+    let dsh_homes = paths::find_dsh_homes();
+    for home in &dsh_homes {
+        for x in crate::dsh::sessions(home) {
+            let mut session = crate::dsh::summary(home, &x);
+            if session.entrypoint_text() == "subagent" {
+                continue;
+            }
+            let is_open = crate::dsh::session_open(&x.dir);
+            if !session.has_messages && !is_open {
+                empty += 1;
+                continue;
+            }
+            if session.when < cutoff && !is_open {
+                continue;
+            }
+            session.open = is_open.then(|| open_in(Agent::Dsh.program()));
+            let key = format!(
+                "{}\u{0}{}\u{0}{}",
+                Agent::Dsh.key(),
+                ospath::realpath(home),
+                session.id
+            );
+            found.put(key, (session.when, true, session.size), session, false);
+        }
+    }
     facts::save_cache();
 
     let mut shown: Vec<Summary> = Vec::new();
@@ -637,6 +661,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .chain(&agy_roots)
         .chain(&kimi_homes)
         .chain(&zcode_roots)
+        .chain(&dsh_homes)
         .map(|p| (p.clone(), 0))
         .collect();
     for s in &shown {
@@ -711,6 +736,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .filter(|r| used.contains(r))
         .cloned()
         .collect();
+    let used_dsh: Vec<String> = dsh_homes
+        .iter()
+        .filter(|h| used.contains(h))
+        .cloned()
+        .collect();
     let loaded: Vec<(Entry, Usage)> = if use_usage {
         usage::load_usage(
             &used_profiles,
@@ -719,6 +749,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &used_roots,
             &used_kimi,
             &used_zcode,
+            &used_dsh,
         )
     } else {
         Vec::new()
@@ -811,6 +842,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         (Agent::Agy, &agy_roots),
         (Agent::Kimi, &kimi_homes),
         (Agent::Zcode, &zcode_roots),
+        (Agent::Dsh, &dsh_homes),
     ] {
         if !folders.is_empty() {
             present.push(agent);
@@ -966,6 +998,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .chain(&used_roots)
         .chain(&used_kimi)
         .chain(&used_zcode)
+        .chain(&used_dsh)
     {
         let Some((_, (usage, saved_at, why))) = results.iter().find(|(r, _)| r == pr) else {
             continue;

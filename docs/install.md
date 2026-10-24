@@ -7,7 +7,9 @@ themselves are in [commands.md](commands.md) and the agents in [agents.md](agent
 ## Install
 
 One binary per platform, with no Python needed. Each of these installs `hatcheck`, `hat`, `cl`,
-`cx`, `ck`, `claude-z` and `claude-k`:
+`cx`, `ck`, `claude-z` and `claude-k`.
+
+DeepSeek Harness support uses your own `dsh`; no DSH launcher or installer alias is installed.
 
 ```bash
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
@@ -90,8 +92,8 @@ ck() {
 ```
 
 A shell function takes precedence over an installed command with the same name, and both do the
-same thing. `hatcheck` needs the install; without it, `find ~/.claude* ~/.codex* ~/.kimi-code* -name "*3f1c2a9e*"`
-finds a session's files.
+same thing. `hatcheck` needs the install; without it,
+`find ~/.claude* ~/.codex* ~/.kimi-code* ~/.dsh* -name "*3f1c2a9e*"` finds a session's files.
 
 ### Removing it, or switching how it's installed
 
@@ -140,6 +142,7 @@ The agents:
   Antigravity CLI  1.4.2                    ~/.local/bin/agy  (the agy installer, runs)
   Kimi Code CLI    2.2.0                    ~/.kimi-code/bin/kimi  (the Kimi Code installer, runs, and ck runs it)
   ZCode            not on your PATH
+  DeepSeek Harness not on your PATH
 Hooks from hatcheck bind --hook:
   ~/.claude-a              Claude Code runs ~/.local/bin/hatcheck
 ⚠ To fix: 2 installs of hatcheck are on your PATH; keep one.
@@ -151,9 +154,9 @@ some of the names and not others. `hatcheck doctor` finds every copy, says how i
 pipx, Homebrew, cargo, winget, the release installer or a build from a clone, told by what each
 links to and by the version each prints) and which runs, and prints the line that removes each of
 the others, as in the table above. It changes nothing. It also lists every `claude`, `codex`,
-`agy`, `kimi` and `zcode` on your `PATH` with its version and where it came from, since `cl`, `cx`, `ck`
-and the resume commands run the first one, and the hooks `hatcheck bind --hook` added, flagging one that runs a
-hatcheck that has gone. A link to a file that's gone, which a shell may find first, a shell
+`agy`, `kimi`, `zcode` and `dsh` on your `PATH` with its version and where it came from, since
+`cl`, `cx`, `ck` and the resume or DSH web commands run the first one, and the hooks
+`hatcheck bind --hook` added, flagging one that runs a hatcheck that has gone. A link to a file that's gone, which a shell may find first, a shell
 function `cl()` or `cx()` in `~/.zshrc` or `~/.bashrc`, which wins over the command, and one of
 the seven commands that isn't on your `PATH` at all are named too. The exit status is 1 when there's something to fix and 0 otherwise, and `--json` prints what
 it found as data. What it says about the agents is for you to act on: Claude Code's `claude doctor`

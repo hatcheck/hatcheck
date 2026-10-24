@@ -330,7 +330,7 @@ class FakeHome:
 
     def env(self):
         env = {k: v for k, v in os.environ.items()
-               if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
+               if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "DSH_HOME", "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
                and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "HATCHECK_"))}
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
                    PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"),
@@ -677,3 +677,109 @@ def _zcode_session(self, root, cwd, sid, title, minutes_ago=5, parent=None, task
 
 FakeHome.zcode_root = _zcode_root
 FakeHome.zcode_session = _zcode_session
+
+
+# DeepSeek Harness (dsh): v4 session logs as dsh 0.2.1-rc.2 writes them.
+
+DSH_COMPRESSED_ID = "d54a1f70-3b2c-4f0e-9a8b-7c6d5e4f3a2b"
+# Two independent frames from zstd 1.5.7's ZSTD_compress at level 3: the v4 header for
+# session-d54a1f70..., then its events (including "Compressed DSH session" and "Decoded the
+# second frame"). Embedding them keeps zstd executables and Python packages out of the tests.
+DSH_ZSTD_FRAMES = (
+    "KLUv/SCbDQQAgsgcHlCFWAekogD2MF2ggRZZIV5VR1p7rv3H5+DGzCI6DIGA7wHKZ73+hG2crN/9fBBOVIVVwzCdyIii02rLLe1wCrK44xka6CH4GZ3MIDCR7E0F0SlGgYv6kkxFhEnUcvKArKnSxom9eYWTE06z+/XznwVkgAMAhBRC9LlF29IE",
+    "KLUv/WDgAeUJAEaRNCFAi6oDe3m1IkT3GjrVyJaOSR/vEucReU2/oZUiFcPw6ZorACkALACPUTk5GnypiGzUByG0YAgsikWCoViSz7T1QcmTq4+PoFTPIOS1cfIjw7ohl5GBS3nCKmdwveF0vAvfR/K+74PLZ7LXJF+ygQtrPnZQuiFZrWI+Zi/MyYldd1eEO4PMtGSpA+dUBIIeyTq5w6fA0SBwYixu2yIOc0KmH2yqV4VdNYc5IY9kRl2u+pxRMqKwB9eVybOmAGX0UfGrTzaL0EDAPrXaVJUBJL/GPyogYKIhdOkBDzKyQl6HQlCIwSBFAM8NEh+A/75NoraA9jZkS4A6AkNL6Iy72wtyIvzua1PbAu0oZoBpJYkcijqdDWdcWkYIe6ADbBPwOidbMv2ZbNu/PDkKCMoHkXJo1WDf4VUTkaM=",
+)
+
+
+def _dsh_home(self, name="default", path=None):
+    """A DSH home (~/.dsh or ~/.dsh-NAME), or a custom home for DSH_HOME, with sessions/."""
+    path = path or os.path.join(self.home, ".dsh" if name == "default" else ".dsh-" + name)
+    os.makedirs(os.path.join(path, "sessions"), exist_ok=True)
+    return path
+
+
+def _dsh_session(self, home, cwd, sid, title, minutes_ago=5, origin="cli", compact=False,
+                 model="deepseek-reasoner", prompt=None):
+    """A raw v4 DSH log: direct and injected user messages, an assistant's reasoning, text and
+    tool call, the tool result and final reply, then superseded and current title/model records.
+    With compact, a compact checkpoint replaces the first two surface events."""
+    when = NOW - minutes_ago * 60
+    start = when - 60
+    ms = lambda t: int(t * 1000)  # noqa: E731
+    full = "session-" + sid
+    header = {"type": "session", "version": 4, "id": full, "createdAt": ms(start), "cwd": cwd,
+              "origin": origin, "isSeeded": False}
+
+    def event(seq, kind, data):
+        return {"type": kind, "seq": seq, "time": ms(start + seq), "surfaceOp": "append", "data": data}
+
+    def message(mid, role, kind, content, **extra):
+        return dict({"role": role, "id": mid, "source": {"kind": kind}, "content": content}, **extra)
+
+    text = lambda value: [{"type": "text", "text": value}]  # noqa: E731
+    rows = [
+        header,
+        event(0, "user/message", message("u1", "user", "user", text(prompt or title))),
+        event(1, "user/message", message("u2", "user", "runtime-context", text("INJECTED RUNTIME CONTEXT"))),
+        event(2, "assistant/message", {"turn": 1, "step": 1, "message": {
+            "role": "assistant", "id": "a1", "source": {"kind": "model", "provider": "deepseek", "model": "deepseek-previous"},
+            "content": [{"type": "reasoning", "text": "kept to itself"}, text("I'll inspect it.")[0],
+                        {"type": "tool-call", "id": "c1", "name": "read_file",
+                         "arguments": json.dumps({"path": "src/main.rs"})}]}, "stream": []}),
+        event(3, "tool/result", {"turn": 1, "step": 1, "message": message(
+            "t1", "tool", "tool", text("fn main() {}\n"), toolCallId="c1")}),
+        event(4, "assistant/message", {"turn": 1, "step": 2, "message": {
+            "role": "assistant", "id": "a2", "source": {"kind": "model", "provider": "deepseek", "model": "deepseek-previous"},
+            "content": text("Done: " + title)}, "stream": []}),
+        {"type": "session/title", "seq": 5, "time": ms(start + 5),
+         "data": {"title": "Draft: " + title, "messageSeqs": [0], "source": {"kind": "fallback"}}},
+        {"type": "request/context", "seq": 6, "time": ms(start + 6),
+         "data": {"provider": "deepseek", "model": "deepseek-old"}},
+        {"type": "session/title", "seq": 7, "time": ms(start + 7),
+         "data": {"title": title, "messageSeqs": [0], "source": {"kind": "generated"}}},
+        {"type": "model/selection", "seq": 8, "time": ms(start + 8), "data": {"model": model}},
+    ]
+    if compact:
+        rows.append({"type": "user/message", "seq": 9, "time": ms(start + 9),
+                     "surfaceOp": {"op": "replace", "startSeq": 0, "endSeq": 1}, "sourceEventSeqs": [0, 1],
+                     "data": message("u3", "user", "compact-checkpoint", text("Compacted checkpoint: " + title))})
+    project = re.sub(r"[^A-Za-z0-9_.-]+", "-", cwd).strip("-") or "project"
+    path = os.path.join(home, "sessions", project, full, "session.v4.jsonl")
+    write(path, "\n".join(rec(**row) for row in rows) + "\n", mtime=when)
+    return path
+
+
+def _dsh_compressed_session(self, home, minutes_ago=5):
+    """The two embedded frames above, as one session.v4.jsonl.zstd with a header and events."""
+    folder = os.path.join(home, "sessions", "compressed", "session-" + DSH_COMPRESSED_ID)
+    path = os.path.join(folder, "session.v4.jsonl.zstd")
+    os.makedirs(folder, exist_ok=True)
+    with open(path, "wb") as fh:
+        for frame in DSH_ZSTD_FRAMES:
+            fh.write(base64.b64decode(frame))
+    when = NOW - minutes_ago * 60
+    os.utime(path, (when, when))
+    return path
+
+
+class DshOpen:
+    """Hold the flock dsh holds on session.lock while a session is open. Not on Windows."""
+
+    def __init__(self, log):
+        self.path = os.path.join(os.path.dirname(log), "session.lock")
+
+    def __enter__(self):
+        write(self.path, "")
+        self.fh = open(self.path, "r+")
+        if not WINDOWS:
+            import fcntl
+            fcntl.flock(self.fh, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *_):
+        self.fh.close()
+
+
+FakeHome.dsh_home = _dsh_home
+FakeHome.dsh_session = _dsh_session
+FakeHome.dsh_compressed_session = _dsh_compressed_session

@@ -1477,6 +1477,24 @@ pub fn load_zcode_accounts(roots: &[String]) -> Vec<Entry> {
 pub const ZCODE_NO_USAGE: &str =
     "zcode has no usage command; see z.ai/manage-apikey/subscription for the plan";
 
+/// DSH homes, one account each: listed with why there's no reading; no credential is read.
+pub fn load_dsh_accounts(homes: &[String]) -> Vec<Entry> {
+    homes
+        .iter()
+        .map(|home| Entry {
+            agent: Agent::Dsh,
+            profiles: vec![home.clone()],
+            email: Value::Null,
+            account: Value::Null,
+            cache: Value::Null,
+            login: Value::Null,
+        })
+        .collect()
+}
+
+/// Why a DSH home has no reading: dsh 0.2.1-rc.2 has no plan-usage command or endpoint.
+pub const DSH_NO_USAGE: &str = "dsh has no plan-usage command or endpoint (0.2.1-rc.2)";
+
 fn fetch_kimi_usage(login: &Value, url: &str) -> (Option<Value>, Option<String>) {
     fetch_json(
         url,
@@ -1588,8 +1606,8 @@ pub fn account_plan(entry: &Entry, usage: Option<&Value>) -> String {
         Agent::Claude => plan_text(&entry.account),
         Agent::Agy => crate::agy::plan_text(usage),
         Agent::Kimi => crate::kimi::plan_text(),
-        // zcode has no usage command (docs/proposals/kimi-zcode.md): the plan is the agent.
-        Agent::Zcode => entry.agent.speaker().to_string(),
+        // zcode and dsh have no usage command: the plan is the agent.
+        Agent::Zcode | Agent::Dsh => entry.agent.speaker().to_string(),
     }
 }
 
@@ -1601,11 +1619,11 @@ fn fetch_usage(entry: &Entry, cached: bool) -> Usage {
         Agent::Agy => agy_account_usage(entry, cached),
         Agent::Kimi => kimi_account_usage(entry, cached),
         Agent::Zcode => (None, None, Some(ZCODE_NO_USAGE.into())),
+        Agent::Dsh => (None, None, Some(DSH_NO_USAGE.into())),
     }
 }
 
-/// The accounts behind profiles, codex_homes, agy_roots, kimi_homes and zcode_roots with their
-/// usage, fetched in parallel.
+/// The accounts behind every agent's profiles, homes and data folders, with usage in parallel.
 pub fn load_usage(
     profiles: &[String],
     cached: bool,
@@ -1613,12 +1631,14 @@ pub fn load_usage(
     agy_roots: &[String],
     kimi_homes: &[String],
     zcode_roots: &[String],
+    dsh_homes: &[String],
 ) -> Vec<(Entry, Usage)> {
     let mut entries = load_accounts(profiles);
     entries.extend(load_codex_accounts(codex_homes));
     entries.extend(load_agy_accounts(agy_roots));
     entries.extend(load_kimi_accounts(kimi_homes));
     entries.extend(load_zcode_accounts(zcode_roots));
+    entries.extend(load_dsh_accounts(dsh_homes));
     // In a terminal, a line on stderr says what the wait is for, and goes when it's over.
     let note = if cached {
         None
@@ -1663,7 +1683,7 @@ fn will_ask(entry: &Entry, now: f64) -> bool {
                 })
         }
         Agent::Kimi => token_good(),
-        Agent::Zcode => false,
+        Agent::Zcode | Agent::Dsh => false,
     }
 }
 
@@ -1855,7 +1875,7 @@ pub fn account_lines(
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode's folder is listed with why zcode gives none.")
+    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode and DeepSeek Harness (~/.dsh*) are listed with why they give none.")
         .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
         .flag(&["-e", "--email"], "email", "show each account's email address (hidden by default)")
         .flag(&["--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
@@ -1874,6 +1894,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &paths::find_agy_roots(),
             &paths::find_kimi_homes(),
             &paths::find_zcode_roots(),
+            &paths::find_dsh_homes(),
         ),
         now,
     );

@@ -11,6 +11,7 @@ use crate::agent::Agent;
 use crate::agy;
 use crate::args::{Count, Parser, Takes};
 use crate::conv::{self, add_turn, Conversation, Turn};
+use crate::dsh;
 use crate::facts::{self, Summary};
 use crate::find::place;
 use crate::kimi;
@@ -304,6 +305,7 @@ fn count_prompts(lines: &[&[u8]], agent: Agent) -> usize {
             })
             .count(),
         Agent::Agy | Agent::Zcode => 0, // SQLite, never compared line by line
+        Agent::Dsh => 0,                // compressed generations, never compared line by line
         Agent::Kimi => records_of(lines)
             .filter(|r| s(get(r, "type")) == Some("turn.prompt"))
             .count(),
@@ -697,8 +699,7 @@ fn size_text(n: u64) -> String {
 }
 
 /// Start the agent on the session in its new profile, from the folder it ran in. For agy and
-/// zcode, sid is the file the conversation was written to, which the agent starts a new
-/// conversation on.
+/// zcode, sid is the import file. DSH's official web UI opens its session history instead.
 fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
     let name = agent.program();
     let Some(program) = ospath::which(name) else {
@@ -713,6 +714,7 @@ fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
         Agent::Agy => cmd.args(["--add-dir", &conv::imports_dir(), "-i", &agy::prompt(sid)]),
         Agent::Kimi => cmd.args(["--session", &Agent::Kimi.full_id(sid)]),
         Agent::Zcode => cmd.args(["--attach", sid, "--mode", "plan", "-p", &zcode::prompt()]),
+        Agent::Dsh => cmd.arg("web"),
     };
     let default = paths::default_folder(agent);
     match agent.variable() {
@@ -1483,6 +1485,7 @@ fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
             &paths::find_agy_roots(),
             &paths::find_kimi_homes(),
             &paths::find_zcode_roots(),
+            &paths::find_dsh_homes(),
         );
         let accounts = crate::best::ranked_for(agent, &loaded, now);
         let mine: Vec<usize> = copies
@@ -2658,6 +2661,16 @@ fn convert(
                 show(source)
             )
         })?,
+        Agent::Dsh => {
+            if dsh::session_open(&path) {
+                return Err(format!(
+                    "DeepSeek Harness session {id8} is open in dsh; close it first, so it stops changing"
+                ));
+            }
+            dsh::read_conversation(source, sid).map_err(|e| {
+                format!("dsh's session {id8} in {} can't be read: {e}", show(source))
+            })?
+        }
     };
     if conv.turns.is_empty() {
         return Err(format!(
@@ -2685,6 +2698,11 @@ fn convert(
                     let id = uuid4();
                     conv::write_import(&conv, &turns, &id).map(|path| (id, path))
                 }
+                Agent::Dsh => {
+                    return Err(
+                        "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
+                    )
+                }
             }
             .map_err(io)?,
         );
@@ -2701,6 +2719,11 @@ fn convert(
         Agent::Kimi => paths::kimi_resume_command(target, &shown_id, false),
         Agent::Agy => agy::start_command(target, &file, false),
         Agent::Zcode => zcode::start_command(target, &file, false),
+        Agent::Dsh => {
+            return Err(
+                "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
+            )
+        }
     };
     set(
         report,
@@ -2920,6 +2943,11 @@ fn find_sessions(sources: &[(Agent, String)], prefix: &str) -> Vec<((Agent, Stri
                     add((Agent::Zcode, row.id), folder, path);
                 }
             }
+            Agent::Dsh => {
+                for x in dsh::sessions_starting_with(folder, prefix) {
+                    add((Agent::Dsh, x.id), folder, x.dir);
+                }
+            }
         }
     }
     found
@@ -3036,6 +3064,11 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             a.session
         ));
     }
+    if target_agent == Agent::Dsh {
+        return Err(
+            "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
+        );
+    }
     if !ospath::isdir(&target) {
         match target_agent {
             Agent::Codex => {
@@ -3067,6 +3100,12 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             Agent::Zcode => {
                 return Err(format!(
                     "{} isn't a ZCode data folder. Run zcode once to sign in",
+                    show(&target)
+                ));
+            }
+            Agent::Dsh => {
+                return Err(format!(
+                    "{} isn't a DeepSeek Harness home. Run dsh web there once to sign in",
                     show(&target)
                 ));
             }
@@ -3145,6 +3184,12 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
                 py::head(&sid, 8)
             ))
         }
+        Agent::Dsh => {
+            return Err(format!(
+                "DeepSeek Harness's session logs and workspace state aren't safe for hatcheck to copy; convert session {} for another agent instead",
+                py::head(&sid, 8)
+            ))
+        }
     };
     Ok(Done {
         session: resume_sid,
@@ -3155,9 +3200,9 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
+    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode or DeepSeek Harness session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh (not a supported target), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
         // Still taken, so scripts that pass them run: what --no-keep asked for is the default
@@ -3196,9 +3241,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 /// hatcheck fork SESSION PROFILE ...: bring a session into another profile as a new one, with its
 /// own ID, and keep the original; for the other agent, convert it, as move does.
 pub fn fork_main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI or ZCode session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
+    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode or DeepSeek Harness session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh (not a supported target), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")
         .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");

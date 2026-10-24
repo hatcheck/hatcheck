@@ -13,7 +13,7 @@ use crate::times;
 use crate::widths::truncate;
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Carry on the newest session started from this folder, or the one named, in this terminal: shows which, and asks first. hatcheck open opens a new terminal window instead.")
+    let parser = Parser::new(prog, "Carry on the newest session started from this folder, or the one named, in this terminal: shows which, and asks first. For DeepSeek Harness, opens dsh web and its session history instead. hatcheck open opens a new terminal window.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has a copy")
         .flag(&["-y", "--yes"], "yes", "don't ask")
@@ -69,10 +69,13 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     }
     let title = truncate(if s.title.is_empty() { "?" } else { &s.title }, 60);
     let here = paths::shell_path(&cwd);
+    let opening = s.agent == crate::agent::Agent::Dsh;
     if args.flag("yes") {
-        out::heading(&format!(
-            "Resuming session {id8} \"{title}\" here, in {here}:"
-        ));
+        out::heading(&if opening {
+            format!("Opening DeepSeek Harness for session {id8} \"{title}\" here, in {here}; choose it in DSH's web UI:")
+        } else {
+            format!("Resuming session {id8} \"{title}\" here, in {here}:")
+        });
         out::command(&format!("  {command}"));
         return open_cmd::run_here(&cwd, &command);
     }
@@ -96,7 +99,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     if let Some(bound) = bound {
         out::warn(&format!("folder bound to {}", paths::shell_path(&bound)));
     }
-    let answer = read_answer(&format!("Resume it here, in {here}? [Y/n] "));
+    let answer = read_answer(&if opening {
+        format!("Open DSH's web UI here, in {here}, and choose the session there? [Y/n] ")
+    } else {
+        format!("Resume it here, in {here}? [Y/n] ")
+    });
     if answer.is_none() {
         out::println("");
     }
