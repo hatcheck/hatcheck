@@ -413,18 +413,43 @@ pub fn index_remove(home: &str, id: &str) -> std::io::Result<()> {
     std::fs::rename(&tmp, &path)
 }
 
-/// Whether a home's index lists a session.
-pub fn indexed(home: &str, id: &str) -> bool {
+/// The lines a home's index has for a session: (its folder, its working directory) each.
+fn index_lines(home: &str, id: &str) -> Vec<(String, String)> {
     let full = Agent::Kimi.full_id(id);
-    std::fs::read_to_string(ospath::join(home, INDEX))
-        .map(|t| {
-            t.lines().any(|line| {
-                serde_json::from_str::<Value>(line)
-                    .ok()
-                    .is_some_and(|e| s(get(&e, "sessionId")) == Some(full.as_str()))
-            })
+    let text = std::fs::read_to_string(ospath::join(home, INDEX)).unwrap_or_default();
+    text.lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|e| s(get(e, "sessionId")) == Some(full.as_str()))
+        .map(|e| {
+            (
+                py::str_of(get(&e, "sessionDir")),
+                py::str_of(get(&e, "workDir")),
+            )
         })
-        .unwrap_or(false)
+        .collect()
+}
+
+/// The folder a home's index lists a session at, when it has one line for it.
+pub fn indexed_at(home: &str, id: &str) -> Option<String> {
+    match index_lines(home, id).as_slice() {
+        [(dir, _)] => Some(dir.clone()),
+        _ => None,
+    }
+}
+
+/// Make a home's index list a session at dir, from cwd: as it is when it has just that line,
+/// else with whatever lines it has for the session, naming another folder or the same twice,
+/// taken out and the right one added. kimi resumes a session through its line, so a wrong one
+/// loses it.
+pub fn index_put(home: &str, id: &str, dir: &str, cwd: &str) -> std::io::Result<()> {
+    let lines = index_lines(home, id);
+    if lines.len() == 1 && lines[0] == (dir.to_string(), cwd.to_string()) {
+        return Ok(());
+    }
+    if !lines.is_empty() {
+        index_remove(home, id)?;
+    }
+    index_add(home, id, dir, cwd)
 }
 
 /// state.json for a session folder: as the original's, with the ID and the paths into the

@@ -146,6 +146,25 @@ class MoveSession(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("is open in pid %d (idle)" % os.getpid(), out)
 
+    def test_refuses_a_session_open_where_it_would_go(self):
+        code, out = self.h.run(SCRIPT, S1[:8], "b", "--keep")
+        self.assertEqual(code, 0, out)
+        copy = self.copy_of(self.b) + ".jsonl"
+        with open(self.transcript, "a", encoding="utf-8") as fh:  # it went on here, so the copy is older
+            fh.write(rec(type="user", timestamp=iso(NOW - 60), message={"role": "user", "content": "More"},
+                         cwd=self.cwd, sessionId=S1) + "\n")
+        with open(copy, "rb") as fh:
+            before = fh.read()
+        self.h.register_open(self.b, S1)  # and the older copy is open there
+        for dry in ((), ("--dry-run",)):
+            code, out = self.h.run(SCRIPT, S1[:8], "b", *dry)
+            self.assertEqual(code, 1, out)
+            self.assertIn("Session 11111111 is open in pid %d (idle) in %s, where it would go; quit it first"
+                          % (os.getpid(), self.h.shown(self.b)), out)
+        with open(copy, "rb") as fh:
+            self.assertEqual(fh.read(), before)
+        self.assertTrue(os.path.isfile(self.transcript))
+
     def test_refuses_to_overwrite_a_different_copy(self):
         other = self.h.session(self.b, self.cwd, S1, "Something else with the same ID")
         with open(other, "rb") as fh:

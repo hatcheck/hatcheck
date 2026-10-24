@@ -6,7 +6,7 @@ import os
 import re
 import unittest
 
-from helpers import NOW, FakeHome, iso, rec, write
+from helpers import NOW, WINDOWS, FakeHome, iso, rec, write
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"  # in code/api, with a data folder and an index entry
 B = "bbbbbbbb-0000-4000-8000-000000000002"  # in code/api/sub: comes along too
@@ -35,7 +35,7 @@ class Relocate(unittest.TestCase):
         write(os.path.join(self.data, "tool-results", "out.txt"), "big output\n", mtime=NOW - 600)
         self.project = os.path.dirname(self.a)
         write(os.path.join(self.project, "memory", "MEMORY.md"), "# Memory\n", mtime=NOW - 600)
-        write(os.path.join(self.project, "sessions-index.json"), json.dumps({"version": 1, "entries": [
+        write(os.path.join(self.project, "sessions-index.json"), json.dumps({"version": 1, "originalPath": self.api, "entries": [
             {"sessionId": A, "fullPath": self.a, "projectPath": self.api, "messageCount": 2, "created": iso(NOW - 700),
              "modified": iso(NOW - 600), "gitBranch": "main", "isSidechain": False}]}), mtime=NOW - 600)
         self.b = h.session(self.work, self.sub, B, "In the sub folder", 20)
@@ -87,8 +87,10 @@ class Relocate(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(new_project, A, "tool-results", "out.txt")))
         self.assertTrue(os.path.isfile(os.path.join(new_project, "memory", "MEMORY.md")))
         with open(os.path.join(new_project, "sessions-index.json"), encoding="utf-8") as fh:
-            entry = json.load(fh)["entries"][0]
+            index = json.load(fh)
+        entry = index["entries"][0]
         self.assertEqual((entry["fullPath"], entry["projectPath"], entry["messageCount"]), (new_a, self.api2, 2))
+        self.assertEqual(index["originalPath"], self.api2)
         # Every line that named the folder now names the new one, and nothing else changed.
         self.assertEqual(set(self.cwds(new_a)), {self.api2})
         with open(new_a, "rb") as fh:
@@ -163,6 +165,63 @@ class Relocate(unittest.TestCase):
         code, out = self.h.run(SCRIPT, self.api, self.api2)
         self.assertEqual(code, 1, out)
         self.assertIn("is already filed under %s too" % self.h.shown(self.api2), out)
+
+    def into_an_existing_project(self):
+        """The new folder's project folder in the work profile, there already with its memory, so
+        the sessions are moved into it one by one."""
+        there = os.path.join(self.work, "projects", encoded(self.api2))
+        write(os.path.join(there, "memory", "MEMORY.md"), "# The new folder's memory\n", mtime=NOW - 600)
+        return there
+
+    def test_a_data_folder_in_the_way_is_refused(self):
+        there = self.into_an_existing_project()
+        write(os.path.join(there, A, "stale.txt"), "a folder in the way\n", mtime=NOW - 600)
+        code, out = self.h.run(SCRIPT, self.api, self.api2)
+        self.assertEqual(code, 1, out)
+        self.assertIn("Nothing was moved:", out)
+        self.assertIn("Claude Code session aaaaaaaa's subagent and tool-output folder is already filed under %s too; "
+                      "remove one copy first" % self.h.shown(self.api2), out)
+        self.assertTrue(os.path.isfile(self.a))
+        self.assertTrue(os.path.isfile(os.path.join(self.data, "tool-results", "out.txt")))
+
+    @unittest.skipIf(WINDOWS, "a folder that can't be moved")
+    def test_a_session_that_cannot_move_is_put_back(self):
+        self.into_an_existing_project()
+        os.chmod(self.data, 0o555)  # a folder without write permission can't be moved into another
+        self.addCleanup(lambda: os.path.isdir(self.data) and os.chmod(self.data, 0o755))  # so it can be cleaned up
+        code, out = self.h.run(SCRIPT, self.api, self.api2)
+        self.assertEqual(code, 1, out)
+        self.assertIn("run the same command again to go on", out)
+        with open(self.a, "rb") as fh:  # the transcript went back, as it was
+            self.assertEqual(fh.read(), self.a_bytes)
+        os.chmod(self.data, 0o755)
+        code, out = self.h.run(SCRIPT, self.api, self.api2)  # so running it again takes it along
+        self.assertEqual(code, 0, out)
+        moved = self.moved(self.work, self.api2, A)
+        self.assertEqual(set(self.cwds(moved)), {self.api2})
+        self.assertTrue(os.path.isfile(os.path.join(moved[:-len(".jsonl")], "tool-results", "out.txt")))
+
+    def test_the_index_comes_into_a_project_without_one(self):
+        there = self.into_an_existing_project()
+        code, out = self.h.run(SCRIPT, self.api, self.api2)
+        self.assertEqual(code, 0, out)
+        with open(os.path.join(there, "sessions-index.json"), encoding="utf-8") as fh:
+            index = json.load(fh)
+        self.assertEqual([(e["sessionId"], e["fullPath"], e["projectPath"]) for e in index["entries"]],
+                         [(A, self.moved(self.work, self.api2, A), self.api2)])
+        self.assertEqual(index["originalPath"], self.api2)
+        with open(os.path.join(self.project, "sessions-index.json"), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh)["entries"], [])
+
+    def test_an_index_that_does_not_read_is_left_alone(self):
+        there = self.into_an_existing_project()
+        write(os.path.join(there, "sessions-index.json"), "{not json", mtime=NOW - 600)
+        code, out = self.h.run(SCRIPT, self.api, self.api2)
+        self.assertEqual(code, 0, out)
+        with open(os.path.join(there, "sessions-index.json"), encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), "{not json")
+        with open(os.path.join(self.project, "sessions-index.json"), encoding="utf-8") as fh:
+            self.assertEqual([e["sessionId"] for e in json.load(fh)["entries"]], [A])  # kept there, not lost
 
     def test_folders_that_cannot_be(self):
         code, out = self.h.run(SCRIPT, self.api, os.path.join(self.h.home, "nowhere"))

@@ -27,6 +27,8 @@ const SETTLE: f64 = 60.0;
 /// Claude Code keeps a project folder's name to this many characters.
 const NAME_MOST: usize = 200;
 const TMP: &str = ".hatcheck-relocate-tmp";
+/// Claude Code's index of a project folder's sessions.
+const INDEX: &str = "sessions-index.json";
 
 /// A stop with a message: exit code 1.
 type Stop = String;
@@ -389,6 +391,14 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
                 ));
                 continue;
             }
+            // Its data folder couldn't be moved in after the transcript; checked first, so neither moves.
+            if m.data.as_ref().is_some_and(|(_, to)| ospath::lexists(to)) {
+                why.push(format!(
+                    "{name}'s subagent and tool-output folder is already filed under {} too; remove one copy first",
+                    paths::shell_path(&m.cwd_to)
+                ));
+                continue;
+            }
             if ospath::basename(&ospath::dirname(&m.to)).chars().count() > NAME_MOST {
                 why.push(format!(
                     "{}'s name is too long for Claude Code's project folders",
@@ -469,7 +479,7 @@ fn rewrite(m: &Move, check: bool) -> Result<usize, Stop> {
 /// Claude Code's sessions-index.json in a project folder: its entries, with the index's other
 /// fields, or None when there's none (or it doesn't read).
 fn read_index(dir: &str) -> Option<(Map<String, Value>, Vec<Value>)> {
-    let text = fs::read_to_string(ospath::join(dir, "sessions-index.json")).ok()?;
+    let text = fs::read_to_string(ospath::join(dir, INDEX)).ok()?;
     let Value::Object(mut root) = serde_json::from_str::<Value>(&text).ok()? else {
         return None;
     };
@@ -483,7 +493,7 @@ fn read_index(dir: &str) -> Option<(Map<String, Value>, Vec<Value>)> {
 fn write_index(dir: &str, root: Map<String, Value>, entries: Vec<Value>) -> Result<(), Stop> {
     let mut root = root;
     root.insert("entries".into(), Value::Array(entries));
-    let path = ospath::join(dir, "sessions-index.json");
+    let path = ospath::join(dir, INDEX);
     let tmp = format!("{path}{TMP}");
     fs::write(&tmp, py::dumps(&Value::Object(root)) + "\n")
         .and_then(|()| fs::rename(&tmp, &path))
@@ -506,9 +516,86 @@ fn moved_entry(entry: &Value, m: &Move) -> Value {
     e
 }
 
+/// An index's other fields as they are after the move: originalPath, the folder its project
+/// folder is for, moved along.
+fn moved_root(mut root: Map<String, Value>, plan: &Plan) -> Map<String, Value> {
+    if let Some(to) = root
+        .get("originalPath")
+        .and_then(Value::as_str)
+        .and_then(|p| mapped(p, &plan.old, &plan.new))
+    {
+        root.insert("originalPath".into(), Value::String(to));
+    }
+    root
+}
+
+/// Move one session into its new project folder: the transcript, its data folder, and the
+/// folder its lines name. A step that fails puts back what was moved, so the session is as it
+/// was and running the command again takes it along.
+fn move_session(m: &Move) -> Result<(), Stop> {
+    let moved = |e: std::io::Error, what: &str| format!("couldn't move {what}: {e}");
+    fs::rename(&m.from, &m.to).map_err(|e| moved(e, &paths::shell_path(&m.from)))?;
+    if let Some((from, to)) = &m.data {
+        if let Err(e) = fs::rename(from, to) {
+            let _ = fs::rename(&m.to, &m.from);
+            return Err(moved(e, &paths::shell_path(from)));
+        }
+    }
+    if let Err(stop) = rewrite(m, false) {
+        let _ = fs::remove_file(format!("{}{TMP}", m.to));
+        if let Some((from, to)) = &m.data {
+            let _ = fs::rename(to, from);
+        }
+        let _ = fs::rename(&m.to, &m.from);
+        return Err(stop);
+    }
+    Ok(())
+}
+
+/// The moved sessions' entries, from the old project folder's index into the new one's, which
+/// is made when there's none and loses no entry of its own: only once it has them does the old
+/// one lose them, so none is lost. A new index that doesn't read is left as it is, and so is
+/// the old one.
+fn move_index_entries(project: &Project, moves: &[&Move], plan: &Plan) -> Result<(), Stop> {
+    let Some((root, entries)) = read_index(&project.from) else {
+        return Ok(());
+    };
+    let moving = |entry: &Value| {
+        let id = s(get(entry, "sessionId")).unwrap_or("");
+        moves.iter().find(|m| m.id == id).copied()
+    };
+    let (gone, kept): (Vec<Value>, Vec<Value>) =
+        entries.into_iter().partition(|e| moving(e).is_some());
+    if gone.is_empty() {
+        return Ok(());
+    }
+    let arriving: Vec<Value> = gone
+        .iter()
+        .filter_map(|e| moving(e).map(|m| moved_entry(e, m)))
+        .collect();
+    let ids: Vec<String> = arriving
+        .iter()
+        .filter_map(|e| s(get(e, "sessionId")).map(String::from))
+        .collect();
+    let (there_root, there) = match read_index(&project.to) {
+        Some((there_root, mut there)) => {
+            there.retain(|e| s(get(e, "sessionId")).is_none_or(|id| !ids.iter().any(|i| i == id)));
+            there.extend(arriving);
+            (there_root, there)
+        }
+        None if !ospath::lexists(&ospath::join(&project.to, INDEX)) => {
+            (moved_root(root.clone(), plan), arriving)
+        }
+        None => return Ok(()),
+    };
+    write_index(&project.to, there_root, there)?;
+    write_index(&project.from, root, kept)
+}
+
 /// Bring the sessions along: the project folders renamed or their sessions moved, the lines
 /// rewritten, the indexes updated, the binding moved. Stops at the first error, leaving what
-/// was done; running it again picks up the rest.
+/// was done, with a session moved on its own either moved whole or put back; running it again
+/// picks up the rest.
 fn carry_out(plan: &Plan) -> Result<(), Stop> {
     let moved = |e: std::io::Error, what: &str| format!("couldn't move {what}: {e}");
     for project in &plan.projects {
@@ -527,37 +614,18 @@ fn carry_out(plan: &Plan) -> Result<(), Stop> {
                             .map_or_else(|| entry.clone(), |m| moved_entry(entry, m))
                     })
                     .collect();
-                write_index(&project.to, root, entries)?;
+                write_index(&project.to, moved_root(root, plan), entries)?;
+            }
+            for m in moves {
+                rewrite(m, false)?;
             }
         } else {
             fs::create_dir_all(&project.to)
                 .map_err(|e| moved(e, &paths::shell_path(&project.to)))?;
             for m in &moves {
-                fs::rename(&m.from, &m.to).map_err(|e| moved(e, &paths::shell_path(&m.from)))?;
-                if let Some((from, to)) = &m.data {
-                    fs::rename(from, to).map_err(|e| moved(e, &paths::shell_path(from)))?;
-                }
+                move_session(m)?;
             }
-            if let Some((root, entries)) = read_index(&project.from) {
-                let (gone, kept): (Vec<Value>, Vec<Value>) =
-                    entries.into_iter().partition(|entry| {
-                        let id = s(get(entry, "sessionId")).unwrap_or("");
-                        moves.iter().any(|m| m.id == id)
-                    });
-                write_index(&project.from, root, kept)?;
-                if let Some((root, mut there)) = read_index(&project.to) {
-                    for entry in &gone {
-                        let id = s(get(entry, "sessionId")).unwrap_or("");
-                        if let Some(m) = moves.iter().find(|m| m.id == id) {
-                            there.push(moved_entry(entry, m));
-                        }
-                    }
-                    write_index(&project.to, root, there)?;
-                }
-            }
-        }
-        for m in moves {
-            rewrite(m, false)?;
+            move_index_entries(project, &moves, plan)?;
         }
     }
     for m in plan.moves.iter().filter(|m| m.agent == Agent::Codex) {
@@ -621,7 +689,7 @@ fn describe(plan: &Plan, dry_run: bool, undo: &str) {
                         .map(|o| {
                             if o == "memory" {
                                 "memory".to_string()
-                            } else if o == "sessions-index.json" {
+                            } else if o == INDEX {
                                 "index".to_string()
                             } else {
                                 o.clone()

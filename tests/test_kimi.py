@@ -184,6 +184,21 @@ class KimiMoves(unittest.TestCase):
         k = next(s for s in json.loads(out)["sessions"] if s["id"] == K)
         self.assertEqual(k["profile"], self.work)
 
+    def test_a_wrong_line_for_it_in_the_index_there_is_put_right(self):
+        # A line left for the session in the other home's index, naming a folder that's gone: kimi
+        # resumes through it, so it must name the copy before the original is deleted.
+        gone = os.path.join(self.work, "sessions", "wd_gone_000000000000", "session_" + K)
+        index = os.path.join(self.work, "session_index.jsonl")
+        line = lambda d, w: json.dumps({"sessionId": "session_" + K, "sessionDir": d, "workDir": w},  # noqa: E731
+                                       separators=(",", ":"))
+        other = json.dumps({"sessionId": "session_other", "sessionDir": "/x", "workDir": "/y"}, separators=(",", ":"))
+        write(index, line(gone, "/nowhere") + "\n" + other + "\n")
+        code, out = self.h.run("move", K[:8], "kimi:work")
+        self.assertEqual(code, 0, out)
+        self.assertEqual([(e["sessionId"], e.get("sessionDir")) for e in jsonl(index)],
+                         [("session_other", "/x"), ("session_" + K, self.copy)])
+        self.assertFalse(os.path.exists(self.folder))
+
     def test_a_bare_name_means_the_kimi_home_when_there_is_one(self):
         code, out = self.h.run("move", K[:8], "work")  # ~/.kimi-code-work exists, ~/.claude-work doesn't
         self.assertEqual(code, 0, out)

@@ -268,6 +268,28 @@ class Moves(unittest.TestCase):
         code, out = self.h.run(MOVE, X[:13], "work")
         self.assertEqual(code, 0, out)
 
+    @unittest.skipIf(WINDOWS, "Codex's session lock is checked on macOS and Linux")
+    def test_refuses_a_codex_session_open_where_it_would_go(self):
+        import fcntl
+        code, out = self.h.run(MOVE, X[:13], "same", "--keep")
+        self.assertEqual(code, 0, out)
+        copy, = self.h_files(self.same)
+        with open(self.rollout, "a", encoding="utf-8") as fh:  # it went on here, so the copy is older
+            fh.write(rec(timestamp=iso(NOW - 60), type="event_msg", payload={"type": "user_message", "message": "More"}) + "\n")
+        with open(copy, "rb") as fh:
+            before = fh.read()
+        lock = os.path.join(self.same, "thread-writer-locks", X + ".lock")
+        write(lock, "")
+        fd = os.open(lock, os.O_RDWR)
+        self.addCleanup(os.close, fd)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # the older copy is open in a codex there
+        code, out = self.h.run(MOVE, X[:13], "same")
+        self.assertEqual(code, 1, out)
+        self.assertIn("is open in codex in %s, where it would go; quit it first" % self.h.shown(self.same), out)
+        with open(copy, "rb") as fh:
+            self.assertEqual(fh.read(), before)
+        self.assertTrue(os.path.isfile(self.rollout))
+
 
 
 

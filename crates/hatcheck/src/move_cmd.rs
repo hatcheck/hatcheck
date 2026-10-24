@@ -767,14 +767,25 @@ fn lock_codex_session(home: &str, sid: &str) -> std::io::Result<Lock> {
     })
 }
 
-/// The lock on a Codex session, or the stop that says Codex has it open.
-fn lock_or_stop(home: &str, sid: &str) -> Result<Lock, Stop> {
+/// The lock on a Codex session, or the stop that says Codex has it open: in the home it's
+/// taken from, or with there, the one it would go to.
+fn lock_or_stop(home: &str, sid: &str, there: bool) -> Result<Lock, Stop> {
     match lock_codex_session(home, sid).map_err(|e| e.to_string())? {
         Lock::Held => Err(format!(
-            "Codex session {} is open in codex; quit it first, so it stops changing",
-            py::head(sid, 8)
+            "Codex session {} is open in codex{}; quit it first, so it stops changing",
+            py::head(sid, 8),
+            where_it_would_go(home, there)
         )),
         free => Ok(free),
+    }
+}
+
+/// " in ~/.claude-b, where it would go" for the profile or home a session is going to.
+fn where_it_would_go(place: &str, there: bool) -> String {
+    if there {
+        format!(" in {}, where it would go", paths::shell_path(place))
+    } else {
+        String::new()
     }
 }
 
@@ -872,23 +883,64 @@ fn all_transcripts(profile: &str) -> Vec<String> {
 
 /// The conversation's turns as the new agent should get them: a note about where they came
 /// from first, the oldest turns after the first left out past BUDGET, alternating between you
-/// and the assistant, ending on a reply. Also how many turns were left out.
-fn fit(conv: &Conversation) -> (Vec<Turn>, usize) {
+/// and the assistant, ending on a reply. Also how many turns were left out, and whether the
+/// start of the newest was too.
+fn fit(conv: &Conversation) -> (Vec<Turn>, usize, bool) {
     fit_within(conv, BUDGET)
 }
 
-fn fit_within(conv: &Conversation, budget: usize) -> (Vec<Turn>, usize) {
+/// The newest turn cut to room characters, its latest parts kept: what it ended on is where the
+/// conversation carries on. When even its last part is too long, that part, cut.
+fn fit_turn((role, texts, when): &Turn, room: usize) -> Turn {
+    let mut kept: Vec<String> = Vec::new();
+    let mut used = 0;
+    for text in texts.iter().rev() {
+        used += text.chars().count();
+        if used > room {
+            break;
+        }
+        kept.push(text.clone());
+    }
+    if kept.is_empty() {
+        kept.push(conv::clip(
+            texts.last().map_or("", String::as_str),
+            (usize::MAX, room),
+        ));
+    }
+    kept.reverse();
+    let left = texts.len() - kept.len();
+    if left > 0 {
+        kept.insert(
+            0,
+            format!(
+                "[{left} earlier part{} of this turn left out here, to fit the context window.]",
+                if left != 1 { "s" } else { "" }
+            ),
+        );
+    }
+    (role.clone(), kept, when.clone())
+}
+
+fn fit_within(conv: &Conversation, budget: usize) -> (Vec<Turn>, usize, bool) {
     let mut turns: Vec<Turn> = conv.turns.clone();
     let sizes: Vec<usize> = turns
         .iter()
         .map(|(_, texts, _)| texts.iter().map(|t| t.chars().count()).sum())
         .collect();
     let mut dropped = 0;
+    let mut cut = false;
     if sizes.iter().sum::<usize>() > budget && turns.len() > 2 {
-        let (mut start, mut total) = (turns.len(), sizes[0]);
+        // The first turn and the newest stay whatever their size, the newest cut when it's too
+        // long alone: without it, the conversation wouldn't carry on from where it ended.
+        let last = turns.len() - 1;
+        let (mut start, mut total) = (last, sizes[0] + sizes[last]);
         while start > 1 && total + sizes[start - 1] <= budget {
             start -= 1;
             total += sizes[start];
+        }
+        if sizes[0] + sizes[last] > budget {
+            turns[last] = fit_turn(&turns[last], budget.saturating_sub(sizes[0]));
+            cut = true;
         }
         dropped = start - 1;
         let gap: Turn = (
@@ -933,7 +985,7 @@ fn fit_within(conv: &Conversation, budget: usize) -> (Vec<Turn>, usize) {
             &when,
         );
     }
-    (merged, dropped)
+    (merged, dropped, cut)
 }
 
 fn write_lines(path: &str, lines: &[String]) -> std::io::Result<()> {
@@ -1581,19 +1633,22 @@ fn opt(v: Option<String>) -> Value {
     v.map_or(Value::Null, Value::String)
 }
 
-fn open_refusal(source: &str, sid: &str) -> Option<Stop> {
-    let live = sessions::open_sessions(&[source.to_string()]);
-    let entry = live.get(&(ospath::realpath(source), sid.to_string()))?;
+/// The stop for a Claude Code session open in a profile: the one it's taken from, or with
+/// there, the one it would go to, whose copy would be written over while it's open.
+fn open_refusal(profile: &str, sid: &str, there: bool) -> Option<Stop> {
+    let live = sessions::open_sessions(&[profile.to_string()]);
+    let entry = live.get(&(ospath::realpath(profile), sid.to_string()))?;
     let status = get(entry, "status");
     Some(format!(
-        "Session {} is open in pid {}{}; quit it first, so it stops changing",
+        "Session {} is open in pid {}{}{}; quit it first, so it stops changing",
         py::head(sid, 8),
         py::str_of(get(entry, "pid")),
         if truthy(status) {
             format!(" ({})", py::str_of(status))
         } else {
             String::new()
-        }
+        },
+        where_it_would_go(profile, there)
     ))
 }
 
@@ -1618,7 +1673,11 @@ fn move_claude(
 ) -> Result<(String, Option<String>), Stop> {
     let show = paths::shell_path;
     let io = |e: std::io::Error| e.to_string();
-    if let Some(stop) = open_refusal(source, sid) {
+    if let Some(stop) = open_refusal(source, sid, false) {
+        return Err(stop);
+    }
+    // A fork gets a new ID; a move or a copy would write over the copy there.
+    if let Some(stop) = (!a.fork).then(|| open_refusal(target, sid, true)).flatten() {
         return Err(stop);
     }
     let new_sid = if a.fork { uuid4() } else { sid.to_string() };
@@ -2093,7 +2152,15 @@ fn copy_codex(
     let ids = a.fork.then(|| (sid.to_string(), new_sid.clone()));
     let ids = ids.as_ref();
     let id8 = py::head(sid, 8);
-    let lock = lock_or_stop(source, sid)?;
+    // Both copies held still while one is written over the other: a fork's is a new ID.
+    let lock = (
+        lock_or_stop(source, sid, false)?,
+        if a.fork {
+            None
+        } else {
+            Some(lock_or_stop(target, sid, true)?)
+        },
+    );
     let title = info.as_ref().map(|i| i.title.clone());
     let cwd = info.as_ref().and_then(|i| i.cwd.clone());
     let state = item_standing(&src, &dst, &[]).map_err(io)?;
@@ -2445,8 +2512,13 @@ fn copy_kimi(
                     .join("\n")
             ));
         }
-        if !kimi::indexed(target, &new_sid) {
-            kimi::index_add(target, &new_sid, &dst, cwd.as_deref().unwrap_or("")).map_err(io)?;
+        // kimi resumes it through its line there, so that's checked too before anything goes.
+        kimi::index_put(target, &new_sid, &dst, cwd.as_deref().unwrap_or("")).map_err(io)?;
+        if kimi::indexed_at(target, &new_sid).as_deref() != Some(dst.as_str()) {
+            return Err(format!(
+                "The index in {} doesn't list the copy, so nothing was deleted",
+                show(target)
+            ));
         }
         if !a.keep {
             fs::remove_dir_all(&src).map_err(io)?;
@@ -2554,7 +2626,7 @@ fn convert(
     let id8 = py::head(sid, 8);
     let conv = match agent {
         Agent::Codex => {
-            let lock = lock_or_stop(source, sid)?;
+            let lock = lock_or_stop(source, sid, false)?;
             let conv = conv::read_codex(&path, source).map_err(io)?;
             drop(lock);
             conv
@@ -2593,7 +2665,7 @@ fn convert(
             agent.name()
         ));
     }
-    let (turns, dropped) = fit(&conv);
+    let (turns, dropped, newest_cut) = fit(&conv);
     let cwd = conv
         .cwd
         .clone()
@@ -2648,6 +2720,7 @@ fn convert(
             ("tool_calls", json!(conv.calls)),
             ("left_out", json!(conv.left_out)),
             ("turns_dropped", json!(dropped)),
+            ("newest_turn_cut", json!(newest_cut)),
             ("resume", json!(resume)),
         ],
     );
@@ -2701,8 +2774,13 @@ fn convert(
     ));
     if dropped > 0 {
         out::println(&format!(
-            "  {} the oldest {dropped} turns after the first are left out, to fit the context window",
-            paint.muted(&format!("{:<26}", "too long"))
+            "  {} the oldest {dropped} turns after the first are left out{}, to fit the context window",
+            paint.muted(&format!("{:<26}", "too long")),
+            if newest_cut {
+                ", and the start of the newest"
+            } else {
+                ""
+            }
         ));
     }
     if let Some((sid_new, path_new)) = &written {
@@ -3027,7 +3105,7 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
     let (resume_sid, cwd) = match agent {
         _ if converting => {
             if agent == Agent::Claude {
-                if let Some(stop) = open_refusal(&source, &sid) {
+                if let Some(stop) = open_refusal(&source, &sid, false) {
                     return Err(stop);
                 }
             }
@@ -3308,8 +3386,8 @@ mod tests {
             reasoning: "Codex's reasoning",
             left_out: "",
         };
-        let (fitted, dropped) = fit_within(&conv, 4500);
-        assert_eq!(dropped, 6);
+        let (fitted, dropped, cut) = fit_within(&conv, 4500);
+        assert_eq!((dropped, cut), (6, false));
         assert_eq!(
             fitted.iter().map(|t| t.0.as_str()).collect::<Vec<_>>(),
             ["user", "assistant", "user", "assistant"]
@@ -3322,6 +3400,58 @@ mod tests {
         );
         assert!(fitted[1].1.concat().contains("7 x"));
         assert!(fitted.last().unwrap().1.last().unwrap().starts_with("9 x"));
+    }
+
+    #[test]
+    fn the_newest_turn_stays_when_it_alone_is_too_long() {
+        let when = json!("2026-10-17T21:58:36.500Z");
+        let conv = |newest: Vec<String>| {
+            let mut turns: Vec<Turn> = (0..5)
+                .map(|n| {
+                    (
+                        if n % 2 == 0 { "user" } else { "assistant" }.to_string(),
+                        vec![format!("{n} {}", "x".repeat(1000))],
+                        when.clone(),
+                    )
+                })
+                .collect();
+            turns.push(("assistant".into(), newest, when.clone()));
+            Conversation {
+                agent: Agent::Codex,
+                id: "019f0000-aaaa-7000-8000-000000000001".into(),
+                cwd: Some("/w".into()),
+                model: Value::Null,
+                turns,
+                calls: 0,
+                title: None,
+                started: when.clone(),
+                branch: Value::Null,
+                reasoning: "Codex's reasoning",
+                left_out: "",
+            }
+        };
+        // Twenty tool calls and the answer, together far past the budget: the latest of them kept.
+        let mut parts: Vec<String> = (0..20)
+            .map(|n| format!("call {n} {}", "y".repeat(500)))
+            .collect();
+        parts.push("the final answer".into());
+        let fitted = fit_within(&conv(parts), 4500);
+        assert_eq!((fitted.1, fitted.2), (4, true));
+        let newest = &fitted.0.last().unwrap().1;
+        assert_eq!(newest.last().unwrap(), "the final answer");
+        assert_eq!(
+            newest[0],
+            "[14 earlier parts of this turn left out here, to fit the context window.]"
+        );
+        assert!(newest[1].starts_with("call 14 "));
+        // One part alone too long: cut to fit.
+        let fitted = fit_within(&conv(vec!["z".repeat(10_000)]), 4500);
+        let newest = fitted.0.last().unwrap().1.concat();
+        assert!(
+            newest.starts_with("zzz") && newest.chars().count() < 3600,
+            "{}",
+            newest.len()
+        );
     }
 
     #[test]

@@ -170,6 +170,20 @@ only a check at the deletion covers them all.
   folder. `own_folder` in `desktop.rs`.
 - Seen 1× (2026-10-24).
 
+**A change that writes over a copy checks that copy too.** `hatcheck move` refused a session open
+where it was, and wrote over an older copy of it open where it was going.
+- Evidence: 2026-10-24; `open_refusal` and `lock_or_stop` in `move_cmd.rs` take the profile or
+  home the session goes to as well.
+- Seen 1× (2026-10-24).
+
+**A change made in steps puts back its own steps when one fails, so the run again that its error
+suggests finds everything it left.** `hatcheck relocate` moved a transcript, failed to move its
+data folder onto one already there, and said to run it again; the transcript, moved but still
+naming the old folder, was then where neither that run nor the undo command looked.
+- Evidence: 2026-10-24, reproduced in a throwaway home; `move_session` in `relocate.rs`, with a
+  check before anything moves for the data folder too.
+- Seen 1× (2026-10-24).
+
 ## What hatcheck prints
 
 **A printed command is quoted for the shell that will run it, and a flag is never quoted.**

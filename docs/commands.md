@@ -247,8 +247,9 @@ Resume it now in ~/.claude-a? [y/N]
   file snapshots and the plan file, keeping their timestamps, and checks every copied file before it
   deletes anything. Paths in the conversation that point at those files are changed to point at the
   copies, except inside Claude's thinking, whose signatures would stop matching.
-- A session that's open in a terminal is refused: quit it first, so it stops changing.
-  `hatcheck` marks those `● open`.
+- A session that's open in a terminal is refused: quit it first, so it stops changing. So is a
+  move or copy onto a copy that's open in the profile it would go to, which would be written over
+  while it's open (a fork has a new ID, and goes ahead). `hatcheck` marks those `● open`.
 - `hatcheck move`, with nothing, moves the newest session started from this folder to the best
   account of its agent now, the one [`hatcheck best`](#hatcheck-best-which-account-to-use-now)
   picks: the first with room in its ranking, other than the session's own. It says where the
@@ -362,6 +363,8 @@ Resume it now in ~/.claude-a? [y/N]
   images, plans, goals, `/rewind` snapshots and subagent transcripts.
 - The whole conversation before a compaction is carried over, not its summary. Past about 100,000
   tokens the oldest turns after the first are left out, so it fits the new agent's context window.
+  The newest turn is always kept, so the session carries on from where it ended; one too long on
+  its own keeps its latest parts.
 - Converted sessions were tested by resuming them with the real `claude` (2.1.301) and `codex`
   (0.155.1), which sent the whole converted history to the model and carried on in the same
   session. Codex's resume picker lists them by their Claude Code title.
@@ -557,7 +560,9 @@ Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
 - Sessions that ran in the folder, or in a folder under it, come along. Each profile's project
   folder is renamed to the new name when every session in it moves, so its `memory/` and
   `sessions-index.json` come with it, the index's paths updated; when some stay, the sessions are
-  moved into the new project folder one by one, with their subagent and tool-output folders. In
+  moved into the new project folder one by one, with their subagent and tool-output folders and
+  their index entries, which go into the new folder's index (made when there's none) before they
+  leave the old one's. A session that can't be moved whole is put back as it was. In
   each transcript the lines' top-level `cwd` is rewritten to the new folder, and nothing else:
   what was said about the old path stays as it was. A Codex session, filed by date, stays where
   it is, with the folder in its `session_meta` and `turn_context` lines rewritten, so `codex
@@ -568,7 +573,8 @@ Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
   conversation that ran in the folder: agy keeps the folder inside its database, which stays as it
   was.
 - It refuses, and changes nothing, when a session is open, was written in the last minute, is a
-  link rather than a file, is already filed under the new folder, or has a line naming the folder
+  link rather than a file, is already filed under the new folder (its subagent and tool-output
+  folder included), or has a line naming the folder
   that isn't JSON; and when NEW doesn't exist, is OLD, or is inside OLD. `--dry-run` shows what
   would move. Running it the other way round, `hatcheck relocate NEW OLD`, undoes it, byte for
   byte.
