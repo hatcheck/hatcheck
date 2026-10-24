@@ -244,6 +244,13 @@ impl Shell {
         }
     }
 
+    /// The same, but with commands in PowerShell's words: for a terminal that runs PowerShell
+    /// whatever this shell is.
+    pub fn for_powershell(mut self) -> Shell {
+        self.powershell = true;
+        self
+    }
+
     fn sep(&self) -> &'static str {
         if self.windows {
             "\\"
@@ -515,7 +522,7 @@ pub fn resume_command(
     full: bool,
     provider: Option<&str>,
 ) -> String {
-    claude_command(profile, &format!("--resume {session_id}"), full, provider)
+    Shell::here().session_command(Agent::Claude, profile, session_id, full, provider)
 }
 
 pub fn codex_command(home_dir: &str, tail: &str, full: bool) -> String {
@@ -523,57 +530,36 @@ pub fn codex_command(home_dir: &str, tail: &str, full: bool) -> String {
 }
 
 pub fn codex_resume_command(home_dir: &str, session_id: &str, full: bool) -> String {
-    codex_command(home_dir, &format!("resume {session_id}"), full)
+    Shell::here().session_command(Agent::Codex, home_dir, session_id, full, None)
 }
 
 pub fn agy_command(root: &str, tail: &str, full: bool) -> String {
     Shell::here().agy_command(root, tail, full)
 }
 
-/// agy --conversation <id> for one of agy's own; for the app's, which agy doesn't resume but
-/// imports from its /resume picker, plain agy.
 pub fn agy_resume_command(root: &str, session_id: &str, full: bool) -> String {
-    if crate::agy::is_app_root(root) {
-        return agy_command(root, "", full);
-    }
-    agy_command(root, &format!("--conversation {session_id}"), full)
+    Shell::here().session_command(Agent::Agy, root, session_id, full, None)
 }
 
 pub fn kimi_command(home_dir: &str, tail: &str, full: bool) -> String {
     Shell::here().kimi_command(home_dir, tail, full)
 }
 
-/// kimi --session session_<id>: the whole ID, as kimi names it.
 pub fn kimi_resume_command(home_dir: &str, session_id: &str, full: bool) -> String {
-    kimi_command(
-        home_dir,
-        &format!("--session {}", Agent::Kimi.full_id(session_id)),
-        full,
-    )
+    Shell::here().session_command(Agent::Kimi, home_dir, session_id, full, None)
 }
 
 pub fn zcode_command(root: &str, tail: &str, full: bool) -> String {
     Shell::here().zcode_command(root, tail, full)
 }
 
-/// zcode --resume sess_<id>: the whole ID, as zcode names it.
 pub fn zcode_resume_command(root: &str, session_id: &str, full: bool) -> String {
-    zcode_command(
-        root,
-        &format!("--resume {}", Agent::Zcode.full_id(session_id)),
-        full,
-    )
+    Shell::here().session_command(Agent::Zcode, root, session_id, full, None)
 }
 
 /// The command that starts an agent with a profile, home or data folder.
 pub fn start_command(agent: Agent, profile: &str, full: bool) -> String {
-    match agent {
-        Agent::Codex => codex_command(profile, "", full),
-        Agent::Claude => claude_command(profile, "", full, None),
-        Agent::Agy => agy_command(profile, "", full),
-        Agent::Kimi => kimi_command(profile, "", full),
-        Agent::Zcode => zcode_command(profile, "", full),
-    }
+    Shell::here().start_command(agent, profile, full)
 }
 
 /// The command that resumes a session of an agent in a profile, home or data folder.
@@ -584,12 +570,50 @@ pub fn session_command(
     full: bool,
     provider: Option<&str>,
 ) -> String {
-    match agent {
-        Agent::Claude => resume_command(profile, session_id, full, provider),
-        Agent::Codex => codex_resume_command(profile, session_id, full),
-        Agent::Agy => agy_resume_command(profile, session_id, full),
-        Agent::Kimi => kimi_resume_command(profile, session_id, full),
-        Agent::Zcode => zcode_resume_command(profile, session_id, full),
+    Shell::here().session_command(agent, profile, session_id, full, provider)
+}
+
+impl Shell {
+    /// The command that starts an agent with a profile, home or data folder.
+    pub fn start_command(&self, agent: Agent, profile: &str, full: bool) -> String {
+        match agent {
+            Agent::Codex => self.codex_command(profile, "", full),
+            Agent::Claude => self.claude_command(profile, "", full, None),
+            Agent::Agy => self.agy_command(profile, "", full),
+            Agent::Kimi => self.kimi_command(profile, "", full),
+            Agent::Zcode => self.zcode_command(profile, "", full),
+        }
+    }
+
+    /// The command that resumes a session of an agent in a profile, home or data folder: agy's
+    /// app's sessions with plain agy, which imports them from its /resume picker, and kimi's and
+    /// zcode's by their whole IDs, as they name them.
+    pub fn session_command(
+        &self,
+        agent: Agent,
+        profile: &str,
+        session_id: &str,
+        full: bool,
+        provider: Option<&str>,
+    ) -> String {
+        match agent {
+            Agent::Claude => {
+                self.claude_command(profile, &format!("--resume {session_id}"), full, provider)
+            }
+            Agent::Codex => self.codex_command(profile, &format!("resume {session_id}"), full),
+            Agent::Agy if crate::agy::is_app_root(profile) => self.agy_command(profile, "", full),
+            Agent::Agy => self.agy_command(profile, &format!("--conversation {session_id}"), full),
+            Agent::Kimi => self.kimi_command(
+                profile,
+                &format!("--session {}", Agent::Kimi.full_id(session_id)),
+                full,
+            ),
+            Agent::Zcode => self.zcode_command(
+                profile,
+                &format!("--resume {}", Agent::Zcode.full_id(session_id)),
+                full,
+            ),
+        }
     }
 }
 
@@ -799,6 +823,25 @@ mod tests {
         assert_eq!(
             resume("C:\\Users\\me\\.claude-work", true, Some("k")),
             format!("$env:CLAUDE_CONFIG_DIR=\"$HOME\\.claude-work\"; claude-k --resume {ID}; $env:CLAUDE_CONFIG_DIR=$null")
+        );
+    }
+
+    #[test]
+    fn a_terminal_that_runs_powershell_gets_its_words() {
+        // From Git Bash, the command printed is sh's; the one wt or powershell runs is PowerShell's.
+        let (bash, ps) = (windows(false), windows(false).for_powershell());
+        let profile = "C:\\Users\\me\\.claude-work";
+        assert_eq!(
+            bash.session_command(Agent::Claude, profile, ID, true, None),
+            format!("CLAUDE_CONFIG_DIR=~/.claude-work claude --resume {ID}")
+        );
+        assert_eq!(
+            ps.session_command(Agent::Claude, profile, ID, true, None),
+            format!("$env:CLAUDE_CONFIG_DIR=\"$HOME\\.claude-work\"; claude --resume {ID}; $env:CLAUDE_CONFIG_DIR=$null")
+        );
+        assert_eq!(
+            ps.start_command(Agent::Codex, "C:\\Users\\me\\.codex-work", true),
+            "$env:CODEX_HOME=\"$HOME\\.codex-work\"; codex; $env:CODEX_HOME=$null"
         );
     }
 

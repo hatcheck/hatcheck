@@ -143,7 +143,40 @@ pub(crate) fn refuse_if_open(s: &Summary) -> Result<(), String> {
 /// The command that resumes it, as the session list prints it: the full form when cl or cx
 /// isn't on the PATH, so a new terminal can run it either way.
 pub fn resume_line(s: &Summary, full: bool) -> String {
-    sessions::session_command(s, full || !launcher_on_path(s.agent))
+    resume_line_in(&paths::Shell::here(), s, full)
+}
+
+fn resume_line_in(shell: &paths::Shell, s: &Summary, full: bool) -> String {
+    sessions::session_command_in(shell, s, full || !launcher_on_path(s.agent))
+}
+
+/// How commands are written for a terminal: as for this shell, but in PowerShell's words on
+/// Windows for a terminal that runs PowerShell (wt, powershell), whatever this shell is: from
+/// Git Bash, CLAUDE_CONFIG_DIR=... claude means nothing to PowerShell.
+fn shell_for(terminal: &str) -> paths::Shell {
+    let shell = paths::Shell::here();
+    if ospath::WINDOWS && runs_powershell(terminal) {
+        shell.for_powershell()
+    } else {
+        shell
+    }
+}
+
+/// A terminal's name as terminal_argv knows it: Terminal.app is terminal, wt.exe is wt.
+fn terminal_key(name: &str) -> String {
+    let mut key = ospath::basename(name).to_lowercase();
+    if key.ends_with(".app") || key.ends_with(".exe") {
+        key.truncate(key.len() - 4);
+    }
+    key
+}
+
+/// Whether a terminal runs the command it's given with PowerShell.
+fn runs_powershell(terminal: &str) -> bool {
+    matches!(
+        terminal_key(terminal).as_str(),
+        "wt" | "powershell" | "pwsh"
+    )
 }
 
 /// Whether the agent's launcher (cl, cx) is on the PATH, so a printed command may use it.
@@ -203,10 +236,7 @@ pub fn pick_terminal(choice: Option<&str>) -> Option<String> {
 /// the work to the terminal and returns, so its exit code tells whether that worked. A shell
 /// stays open in the folder afterwards.
 pub fn terminal_argv(name: &str, cwd: &str, command: &str, shell: &str) -> (Vec<String>, bool) {
-    let mut key = ospath::basename(name).to_lowercase();
-    if key.ends_with(".app") || key.ends_with(".exe") {
-        key.truncate(key.len() - 4);
-    }
+    let key = terminal_key(name);
     let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<String>>();
     let here = format!("cd {} && {command}", paths::sh_quote(cwd));
     match key.as_str() {
@@ -480,10 +510,14 @@ pub(crate) fn run_here(cwd: &str, command: &str) -> i32 {
 /// agent.
 fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&str>) -> i32 {
     let (agent, folder) = find::place(profile);
-    let mut command = paths::start_command(agent, &folder, full || !launcher_on_path(agent));
-    if matches!(agent, Agent::Codex | Agent::Kimi) {
-        command += " login";
-    }
+    let line = |shell: &paths::Shell| {
+        let mut command = shell.start_command(agent, &folder, full || !launcher_on_path(agent));
+        if matches!(agent, Agent::Codex | Agent::Kimi) {
+            command += " login";
+        }
+        command
+    };
+    let command = line(&paths::Shell::here());
     let cwd = paths::home();
     if print {
         out::println(&format!("cd {}", paths::shell_path(&cwd)));
@@ -501,9 +535,10 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
         return run_here(&cwd, &command);
     }
     let terminal = pick_terminal(terminal);
-    let why = match &terminal {
-        Some(t) => open_terminal(t, &cwd, &command),
-        None => Some("no terminal found; set HATCHECK_TERMINAL".into()),
+    let launched = terminal.as_deref().map(|t| line(&shell_for(t)));
+    let why = match (&terminal, &launched) {
+        (Some(t), Some(launched)) => open_terminal(t, &cwd, launched),
+        _ => Some("no terminal found; set HATCHECK_TERMINAL".into()),
     };
     if let Some(why) = why {
         let command = out::Paint::stderr().command(&format!("  {command}"));
@@ -516,7 +551,7 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
         paths::shell_path(&folder),
         ospath::basename(terminal.as_deref().unwrap_or(""))
     ));
-    out::command(&format!("  {command}"));
+    out::command(&format!("  {}", launched.unwrap_or(command)));
     0
 }
 
@@ -591,9 +626,12 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         return run_here(&cwd, &command);
     }
     let terminal = pick_terminal(args.value("terminal"));
-    let why = match &terminal {
-        Some(t) => open_terminal(t, &cwd, &command),
-        None => Some("no terminal found; set HATCHECK_TERMINAL".into()),
+    let launched = terminal
+        .as_deref()
+        .map(|t| resume_line_in(&shell_for(t), &s, full));
+    let why = match (&terminal, &launched) {
+        (Some(t), Some(launched)) => open_terminal(t, &cwd, launched),
+        _ => Some("no terminal found; set HATCHECK_TERMINAL".into()),
     };
     if let Some(why) = why {
         let paint = out::Paint::stderr();
@@ -608,13 +646,23 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         ospath::basename(terminal.as_deref().unwrap_or("")),
         paths::shell_path(&cwd)
     ));
-    out::command(&format!("  {command}"));
+    out::command(&format!("  {}", launched.unwrap_or(command)));
     0
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminals_that_run_powershell() {
+        for name in ["wt", "wt.exe", "powershell.exe", "pwsh"] {
+            assert!(runs_powershell(name), "{name}");
+        }
+        for name in ["terminal", "Terminal.app", "iterm", "wezterm", "xterm"] {
+            assert!(!runs_powershell(name), "{name}");
+        }
+    }
 
     #[test]
     fn terminal_commands() {

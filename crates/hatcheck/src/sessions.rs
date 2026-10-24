@@ -150,7 +150,12 @@ fn open_in(holder: &str) -> Value {
 
 /// The command that resumes a listed session, Claude Code's or Codex's.
 pub fn session_command(s: &Summary, full: bool) -> String {
-    paths::session_command(
+    session_command_in(&paths::Shell::here(), s, full)
+}
+
+/// The same, in the words of a given shell.
+pub fn session_command_in(shell: &paths::Shell, s: &Summary, full: bool) -> String {
+    shell.session_command(
         s.agent,
         &s.profile,
         &s.id,
