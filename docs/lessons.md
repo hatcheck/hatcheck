@@ -158,6 +158,18 @@ saved is shown as `?`, not as 100% or 0%; usage that couldn't be fetched is show
 its age and the reason, never as fresh.
 - Evidence: `percent_left` returning `None` in `usage.rs`; `why` on every cached account.
 
+## What hatcheck changes
+
+**A folder is deleted only once it's checked, where it's deleted, to be one of hatcheck's own.**
+An instance's data folder is `~/.claude-instances/NAME`, so the name `..` made it the home
+folder, and `hatcheck desktop remove --data` emptied that. The name was checked when the launcher
+was made, but a launcher records any folder, and the old script's take theirs from a config file:
+only a check at the deletion covers them all.
+- Evidence: 2026-10-24, reproduced in a throwaway home: `hatcheck desktop new .. X`, then
+  `remove .. --data`, deleted everything in the home folder and said it had removed the data
+  folder. `own_folder` in `desktop.rs`.
+- Seen 1× (2026-10-24).
+
 ## What hatcheck prints
 
 **A printed command is quoted for the shell that will run it, and a flag is never quoted.**

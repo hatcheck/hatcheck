@@ -12,6 +12,8 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 
 ### Fixed
 
+- **`hatcheck desktop remove --data` could empty the home folder.** `hatcheck desktop new` took `.` and `..` as instance names, whose data folders are `~/.claude-instances` itself and the home folder, and `remove --data` then deleted what was in them. Those names are refused now, and `--data` deletes a data folder only when it's a folder of its own in `~/.claude-instances`, removing nothing otherwise; a launcher 0.5.0 made for `.` or `..` goes without `--data`.
+- **A Claude Desktop instance's launcher never starts a second process on its folder**, which comes up signed out. Clicked while the instance ran without a window (closed with ⌘W), it started one; now it asks the running one for a window, or says to click its icon in the Dock, and two launches at once start one process. A launcher made by 0.5.0 gets this with `hatcheck desktop new NAME DISPLAY --replace`.
 - **`hatcheck relocate`'s undo command** names the folders with `~`, as every command hatcheck prints does: `hatcheck relocate ~/code/api2 ~/code/api`, where it printed each path in full. `--json`'s `undo` keeps them in full, as every path there is.
 
 ## 0.5.0 - 2026-10-22

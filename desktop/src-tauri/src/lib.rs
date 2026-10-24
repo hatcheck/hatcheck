@@ -52,11 +52,12 @@ fn engine_path() -> PathBuf {
 }
 
 /// The engine, set up as every call runs it: no colours, UTF-8, the login shell's PATH and,
-/// on Windows, no console window.
+/// on Windows, no console window. The PATH is waited for while it's still being read: an engine
+/// started without it would keep the bare one for as long as it's kept running.
 fn engine_command() -> Command {
     let mut cmd = Command::new(engine_path());
     cmd.env("NO_COLOR", "1").env("PYTHONIOENCODING", "utf-8"); // UTF-8 for a Python hatcheck on the PATH
-    if let Some(Some(path)) = LOGIN_PATH.get() {
+    if let Some(path) = LOGIN_PATH.get_or_init(login_path) {
         cmd.env("PATH", path);
     }
     #[cfg(windows)]
@@ -334,7 +335,7 @@ fn toggle_popover(app: &AppHandle, rect: tauri::Rect) {
 }
 
 pub fn run() {
-    // Read the login shell's PATH in the background; the first engine run waits at most for it.
+    // Read the login shell's PATH in the background; an engine run before it's read waits for it.
     std::thread::spawn(|| {
         LOGIN_PATH.get_or_init(login_path);
     });

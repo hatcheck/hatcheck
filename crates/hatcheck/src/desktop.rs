@@ -25,13 +25,15 @@ CLAUDE_APP=%(claude_app)s
 
 # Process IDs of Claude Desktop's processes on this data folder: its main process, or with
 # "window", its windows (Electron's renderer helpers, which get the folder on their command
-# line too). An empty DATA_DIR means Claude's built-in folder: the processes with no folder.
+# line too); with "any", every instance's main process. An empty DATA_DIR means Claude's
+# built-in folder: the processes with no folder.
 processes() {
     ps -axww -o pid=,args= | awk -v app="$CLAUDE_APP/Contents/MacOS/" -v dir="$DATA_DIR" -v want="$1" '
         function has(line, option) {
             return index(line, option " ") > 0 || substr(line, length(line) - length(option) + 1) == option
         }
         index($0, app) == 0 { next }
+        want == "any" { if (index($0, "--type=") == 0) print $1; next }
         dir != "" && !has($0, "--user-data-dir=" dir) { next }
         dir == "" && index($0, "--user-data-dir=") > 0 { next }
         want == "main" && index($0, "--type=") > 0 { next }
@@ -39,12 +41,32 @@ processes() {
         { print $1 }'
 }
 
+# One launch at a time: two at once would both find no process and both start one. mkdir makes
+# the lock or fails, at once; one left behind by a launcher that was stopped is waited out.
+LOCK="${TMPDIR:-/tmp}/hatcheck-claude-%(name)s.lock"
+tries=0
+until mkdir "$LOCK" 2>/dev/null; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 50 ] || break
+    sleep 0.2
+done
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+
+# Start Claude Desktop on this folder, keeping the lock until its process is listed, so a
+# launch meanwhile brings it forward instead of starting another.
 start() {
     if [ -n "$DATA_DIR" ]; then
         mkdir -p "$DATA_DIR" || exit 1
-        exec open -n -a "$CLAUDE_APP" --args --user-data-dir="$DATA_DIR"
+        open -n -a "$CLAUDE_APP" --args --user-data-dir="$DATA_DIR" || exit 1
+    else
+        open -n -a "$CLAUDE_APP" || exit 1
     fi
-    exec open -n -a "$CLAUDE_APP"
+    tries=0
+    while [ -z "$(processes main)" ] && [ "$tries" -lt 50 ]; do
+        tries=$((tries + 1))
+        sleep 0.2
+    done
+    exit 0
 }
 
 main=$(processes main | head -n 1)
@@ -52,12 +74,20 @@ main=$(processes main | head -n 1)
 # To macOS every instance is the same app, so it's picked out by its process ID. The first time,
 # macOS asks to let this launcher control System Events.
 osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $main) to true" >/dev/null 2>&1
-# Closed with Cmd-W, the window is gone but the process lives on. Coming forward usually brings
-# the window back; when it hasn't after a moment, start a fresh one. The windowless process is
-# left alone: it may be in the middle of a reply.
+# Closed with Cmd-W, the window is gone but the process lives on, and coming forward usually
+# brings the window back. When it hasn't after a moment, it's asked for one: open -a without -n
+# does that and never starts a process, but with other instances running it could ask any of
+# them, so then a note says to click this one's own Dock icon. The windowless process is never
+# quit: it may be in the middle of a reply.
 if [ -z "$(processes window)" ]; then
     sleep 1.5
-    [ -n "$(processes window)" ] || start
+    if [ -z "$(processes window)" ]; then
+        if processes any | grep -qvx "$main"; then
+            osascript -e 'display notification "It is running without a window: click its icon in the Dock to open one." with title "Claude Desktop instance %(name)s"' >/dev/null 2>&1
+        else
+            open -a "$CLAUDE_APP"
+        fi
+    fi
 fi
 exit 0
 "#;
@@ -412,6 +442,12 @@ pub fn make_instance(
             py::repr(&json!(name))
         ));
     }
+    if name == "." || name == ".." {
+        return Err(
+            "The name can't be '.' or '..': the instance's data folder is ~/.claude-instances/NAME"
+                .into(),
+        );
+    }
     if display.is_empty() || display.contains('/') || display.starts_with('.') {
         return Err(format!(
             "The display name can't be empty, start with a dot or hold a slash: not {}",
@@ -510,15 +546,27 @@ pub fn make_instance(
     })
 }
 
+/// Whether dir is a folder of its own in instances, the only kind of data folder remove --data
+/// deletes. A launcher can name any folder: one hatcheck 0.5.0 made for the name .. had the
+/// home folder, and the old script's take their name from a config.sh.
+fn own_folder(dir: &str, instances: &str) -> bool {
+    let (parent, name) = ospath::split(dir);
+    !matches!(name.as_str(), "" | "." | "..") && paths::same_folder(&parent, instances)
+}
+
 /// Delete an instance's launcher app, and with data its data folder: whether that went too.
-pub fn remove_instance(inst: &Instance, data: bool) -> std::io::Result<bool> {
-    fs::remove_dir_all(&inst.app)?;
-    if let Some(dir) = inst
-        .data_dir
-        .as_deref()
-        .filter(|d| data && ospath::isdir(d))
-    {
-        fs::remove_dir_all(dir)?;
+/// Nothing is deleted when data is asked for and the data folder isn't one of its own.
+pub fn remove_instance(inst: &Instance, data: bool) -> Result<bool, String> {
+    let dir = inst.data_dir.as_deref().filter(|_| data);
+    let instances = instances_dir();
+    if let Some(dir) = dir.filter(|d| !own_folder(d, &instances)) {
+        return Err(format!(
+            "Nothing was removed: its data folder, {dir}, isn't a folder of its own in {instances}, so --data won't delete it. Without --data, only the launcher is removed."
+        ));
+    }
+    fs::remove_dir_all(&inst.app).map_err(|e| e.to_string())?;
+    if let Some(dir) = dir.filter(|d| ospath::isdir(d)) {
+        fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
         return Ok(true);
     }
     Ok(false)
@@ -654,7 +702,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             };
             let data_gone = match remove_instance(&inst, sub_args.flag("data")) {
                 Ok(gone) => gone,
-                Err(e) => return out::fail(&e.to_string()),
+                Err(message) => return out::fail(&message),
             };
             out::success(&format!(
                 "Removed {}{}.",
@@ -668,7 +716,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             if let Some(dir) = inst
                 .data_dir
                 .as_deref()
-                .filter(|d| !data_gone && ospath::isdir(d))
+                .filter(|d| !data_gone && own_folder(d, &instances_dir()) && ospath::isdir(d))
             {
                 out::println(&format!(
                     "Its data folder, {dir}, is kept; --data deletes it too."
@@ -720,6 +768,26 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_folder_of_its_own_is_deleted() {
+        let root = if ospath::WINDOWS { "C:\\h" } else { "/h" };
+        let instances = ospath::join(root, ".claude-instances");
+        let at = |rest: &[&str]| ospath::join_all(&instances, rest);
+        assert!(own_folder(&at(&["a"]), &instances));
+        assert!(own_folder(&at(&[".x"]), &instances));
+        for not_own in [
+            at(&[".."]),
+            at(&["."]),
+            at(&["a", "b"]),
+            at(&["..", "x"]),
+            at(&["a", "..", ".."]),
+            instances.clone(),
+            root.to_string(),
+        ] {
+            assert!(!own_folder(&not_own, &instances), "{not_own}");
+        }
+    }
 
     #[test]
     fn hsv_round_trips_greys_and_primaries() {

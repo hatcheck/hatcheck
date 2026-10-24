@@ -16,6 +16,25 @@ from helpers import ENGINE, FakeHome, argv_of, write
 
 MAC = sys.platform == "darwin"
 
+# What a launcher runs, faked for its tests: ps lists the processes in $FAKE_STATE/ps; open -n
+# starts Claude Desktop on its folder after FAKE_LAUNCH_DELAY seconds, as a process with a window
+# added to that list; open and osascript log what they're asked; sleep hurries.
+FAKE_PS = '#!/bin/sh\n/bin/cat "$FAKE_STATE/ps" 2>/dev/null\nexit 0\n'
+FAKE_OSASCRIPT = '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$FAKE_STATE/osascript.log"\n'
+FAKE_SLEEP = '#!/bin/sh\nexec /bin/sleep 0.05\n'
+FAKE_OPEN = r'''#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_STATE/open.log"
+[ "$1" = "-n" ] || exit 0
+dir=""
+for arg in "$@"; do
+    case "$arg" in --user-data-dir=*) dir=" $arg" ;; esac
+done
+/bin/sleep "${FAKE_LAUNCH_DELAY:-0}"
+pid=$((1000 + $(/bin/cat "$FAKE_STATE/ps" 2>/dev/null | /usr/bin/wc -l)))
+printf '%s %s/Contents/MacOS/Claude%s\n' "$pid" "$FAKE_APP" "$dir" >> "$FAKE_STATE/ps"
+printf '%s %s/Contents/MacOS/Claude --type=renderer%s\n' "$((pid + 1))" "$FAKE_APP" "$dir" >> "$FAKE_STATE/ps"
+'''
+
 
 def write_png(path, size, rgba):
     """A PNG of one colour, RGBA, written by hand so the test needs no Pillow."""
@@ -159,6 +178,113 @@ class DesktopCommand(unittest.TestCase):
         with open(os.path.join(self.apps, "Claude Default.app", "Contents", "MacOS", "launch"), encoding="utf-8") as fh:
             self.assertIn('DATA_DIR=""', fh.read())
         self.assertIn("argument --hue: invalid float value: 'abc'", self.desktop("new", "x", "X", "--hue", "abc")[1])
+
+    @unittest.skipUnless(MAC, "macOS only")
+    def test_dot_names_are_refused(self):
+        for name in (".", ".."):
+            self.assertEqual(self.desktop("new", name, "Dots"),
+                             (1, "The name can't be '.' or '..': the instance's data folder is ~/.claude-instances/NAME\n"))
+        self.assertFalse(os.path.exists(os.path.join(self.apps, "Claude Dots.app")))
+
+    def made_by_0_5_0(self, name, display):
+        """A launcher as hatcheck 0.5.0 made one for a name it took then, such as '..': made for
+        another name, then given that one."""
+        code, out = self.desktop("new", "made", display)
+        self.assertEqual(code, 0, out)
+        app = os.path.join(self.apps, "Claude %s.app" % display)
+        info = os.path.join(app, "Contents", "Info.plist")
+        with open(info, "rb") as fh:
+            plist = plistlib.load(fh)
+        plist.update(HatcheckInstance=name, HatcheckDataDir=os.path.join(self.instances, name))
+        with open(info, "wb") as fh:
+            plistlib.dump(plist, fh)
+        return app
+
+    @unittest.skipUnless(MAC, "macOS only")
+    def test_remove_deletes_no_folder_outside_the_instances_folder(self):
+        # 0.5.0 took '..' and '.', whose data folders are the home folder and ~/.claude-instances:
+        # --data emptied them, once ~/.claude-instances existed.
+        other = os.path.join(self.instances, "other", "login")
+        write(other, "another instance's login\n")
+        precious = os.path.join(self.h.home, "precious.txt")
+        write(precious, "everything else in the home folder\n")
+        for name, display in (("..", "Up"), (".", "Here")):
+            app = self.made_by_0_5_0(name, display)
+            self.assertEqual(self.desktop("remove", name, "--data"), (1, (
+                "Nothing was removed: its data folder, %s, isn't a folder of its own in %s, so --data won't "
+                "delete it. Without --data, only the launcher is removed.\n") % (os.path.join(self.instances, name),
+                                                                                 self.instances)))
+            self.assertTrue(os.path.isdir(app))
+            self.assertTrue(os.path.isfile(precious) and os.path.isfile(other))
+            # Without --data: the launcher goes, and --data isn't suggested for that folder.
+            self.assertEqual(self.desktop("remove", name), (0, "✓ Removed %s.\n" % app))
+            self.assertFalse(os.path.exists(app))
+        self.assertTrue(os.path.isfile(precious) and os.path.isfile(other))
+
+    def launcher(self):
+        """The launcher of a new instance, work, and the environment to run it in against the
+        fakes above, with nothing else from /bin or /usr/bin on the PATH than the tools it needs,
+        so no real program is ever opened."""
+        self.assertEqual(self.desktop("new", "work", "Work")[0], 0)
+        fakes = os.path.join(self.h.root, "fakes")
+        for name, text in (("ps", FAKE_PS), ("open", FAKE_OPEN), ("osascript", FAKE_OSASCRIPT), ("sleep", FAKE_SLEEP)):
+            write(os.path.join(fakes, name), text)
+            os.chmod(os.path.join(fakes, name), 0o755)
+        for tool in ("/usr/bin/awk", "/usr/bin/head", "/usr/bin/grep", "/bin/mkdir", "/bin/rmdir"):
+            os.symlink(tool, os.path.join(fakes, os.path.basename(tool)))
+        self.state, self.tmp = os.path.join(self.h.root, "state"), os.path.join(self.h.root, "tmp")
+        os.makedirs(self.state)
+        os.makedirs(self.tmp)
+        launch = os.path.join(self.apps, "Claude Work.app", "Contents", "MacOS", "launch")
+        return launch, dict(HOME=self.h.home, PATH=fakes, FAKE_STATE=self.state, FAKE_APP=self.claude, TMPDIR=self.tmp)
+
+    def logged(self, name):
+        path = os.path.join(self.state, name + ".log")
+        if not os.path.exists(path):
+            return []
+        with open(path, encoding="utf-8") as fh:
+            return fh.read().splitlines()
+
+    def running(self, *lines):
+        write(os.path.join(self.state, "ps"), "".join(line + "\n" for line in lines))
+
+    @unittest.skipUnless(MAC, "macOS only")
+    def test_launcher_never_starts_a_second_process(self):
+        launch, env = self.launcher()
+        data = os.path.join(self.instances, "work")
+        claude = self.claude + "/Contents/MacOS/Claude"
+
+        def run():
+            p = subprocess.run(["/bin/sh", launch], env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+
+        run()  # not running: started on its folder
+        self.assertEqual(self.logged("open"), ["-n -a %s --args --user-data-dir=%s" % (self.claude, data)])
+        self.assertTrue(os.path.isdir(data))
+        self.assertEqual(os.listdir(self.tmp), [])  # the lock is let go
+        run()  # running with a window: brought forward by its process ID
+        self.assertEqual(len(self.logged("open")), 1)
+        self.assertIn("first process whose unix id is 1000", self.logged("osascript")[-1])
+        # Closed with Cmd-W, the only Claude Desktop running: asked for a window with open -a and
+        # no -n, which starts nothing.
+        self.running("1000 %s --user-data-dir=%s" % (claude, data))
+        run()
+        self.assertEqual(self.logged("open")[1:], ["-a %s" % self.claude])
+        # Beside another instance, which open -a could ask instead: a note, and nothing opened.
+        self.running("1000 %s --user-data-dir=%s" % (claude, data), "2000 %s --user-data-dir=%s-b" % (claude, data))
+        run()
+        self.assertEqual(len(self.logged("open")), 2)
+        self.assertIn("display notification", self.logged("osascript")[-1])
+
+    @unittest.skipUnless(MAC, "macOS only")
+    def test_two_launches_at_once_start_one_process(self):
+        launch, env = self.launcher()
+        env["FAKE_LAUNCH_DELAY"] = "0.5"  # the process is listed a moment after open -n
+        runs = [subprocess.Popen(["/bin/sh", launch], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                for _ in range(2)]
+        self.assertEqual([p.wait(timeout=60) for p in runs], [0, 0])
+        self.assertEqual([line for line in self.logged("open") if line.startswith("-n ")],
+                         ["-n -a %s --args --user-data-dir=%s" % (self.claude, os.path.join(self.instances, "work"))])
 
     @unittest.skipUnless(MAC and shutil.which("iconutil"), "needs macOS's iconutil")
     def test_recoloured_icon(self):

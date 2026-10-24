@@ -70,14 +70,17 @@ On each click it looks for Claude Desktop's main process on this instance's fold
 (for `default`: none at all) and no `--type=`, which marks Electron's helper processes.
 
 - **Not running:** it makes the data folder if needed and starts Claude Desktop with `open -n` and
-  that folder.
+  that folder. One launch runs at a time, through a lock in `$TMPDIR`, held until the new process
+  is listed, so two clicks at once start one process and the second brings it forward.
 - **Running:** it brings that process forward by its process ID, through System Events, since to
   macOS every instance is the same app and `open -a` or "activate" can't pick one. The first time,
   macOS asks to let the launcher control System Events; allow it once per launcher.
 - **Running without a window:** closing the window with ⌘W leaves the process alive. Coming forward
-  usually brings the window back; when no window (a `--type=renderer` process on the folder) has
-  appeared after a moment, the launcher starts a fresh one. It never quits the windowless process:
-  it may be in the middle of a reply.
+  usually brings the window back. When no window (a `--type=renderer` process on the folder) has
+  appeared after a moment and it's the only Claude Desktop running, the launcher asks it for one
+  with `open -a`, which never starts a process; beside other instances, which `open -a` could ask
+  instead, a notification says to click its own icon in the Dock. It never quits the windowless
+  process: it may be in the middle of a reply.
 
 The launcher never starts a second process on a folder that has one.
 
@@ -110,7 +113,10 @@ hatcheck desktop remove NAME [--data]              delete the launcher; --data d
 hatcheck desktop --json                            the list as data, for the app
 ```
 
-`NAME` is letters, digits, `.`, `_` and `-`. `DISPLAY` is what the launcher is called, as in
+`NAME` is letters, digits, `.`, `_` and `-`, other than `.` and `..`. `remove --data` deletes the
+data folder only when it's a folder of its own in `~/.claude-instances`, and otherwise removes
+nothing: a launcher made by 0.5.0 for `.` or `..` keeps its folder, `~/.claude-instances` itself
+or the home folder, and goes without `--data`. `DISPLAY` is what the launcher is called, as in
 `Claude A.app`. `--replace` rebuilds a launcher that exists, including one made by the
 `make-claude-instance.sh` script that `hatcheck desktop` replaced; such launchers are listed and
 opened as they are, since the launcher reads their `config.sh` for the instance's name.
