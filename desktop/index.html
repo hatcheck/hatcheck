@@ -29,6 +29,7 @@
           <option value="kimi">Kimi Code CLI</option>
           <option value="zcode">ZCode</option>
           <option value="dsh">DeepSeek Harness</option>
+          <option value="mcode">MiniMax Code</option>
         </select>
         <select id="filter-profile"><option value="">Every profile</option></select>
         <select id="filter-hours">
@@ -52,8 +53,8 @@
     </section>
 
     <section id="tab-profiles" class="tab-body" hidden>
-      <p class="lead">Each Claude Code profile (<code>~/.claude-NAME</code>) and Codex home (<code>~/.codex-NAME</code>) has its own
-        login. Signing in happens in Claude Code and Codex, in a terminal; Hatcheck never sees a password or token.</p>
+      <p class="lead">Each agent profile or home has its own login. Signing in happens in the agent, in a terminal
+        (or DSH's web UI); Hatcheck never sees a password or token.</p>
       <div id="profiles" class="profiles loading">Loading…</div>
       <h3>Add one</h3>
       <form id="add-profile" class="inline-form">
@@ -62,6 +63,7 @@
           <option value="codex">Codex home</option>
           <option value="kimi">Kimi home</option>
           <option value="dsh">DeepSeek Harness home</option>
+          <option value="mcode">MiniMax Code home</option>
         </select>
         <input id="add-name" placeholder="name, such as work" pattern="[A-Za-z0-9._-]+" required />
         <button type="submit">Sign in, in a terminal</button>
@@ -69,6 +71,10 @@
       <p class="note">DeepSeek Harness account homes are <code>~/.dsh</code> and <code>~/.dsh-NAME</code>, selected with
         <code>DSH_HOME</code>; Add one makes <code>dsh:NAME</code>. DSH's own profiles are plugin stacks, not Hatcheck account homes.
         DSH sign-in opens <code>dsh web</code>, so sign-in stays with DSH.</p>
+      <p class="note">MiniMax Code homes are <code>~/.minimax</code> and <code>~/.minimax-NAME</code>, selected with
+        <code>MINIMAX_DATA_DIR</code>; Add one makes <code>mcode:NAME</code>, and there is no Hatcheck mcode launcher.
+        <code>hatcheck open --login mcode[:NAME]</code> explicitly runs <code>mcode login</code>, so sign-in stays with MiniMax Code.
+        <code>~/.minimax-code</code> is the installer directory, not a profile named <code>code</code>.</p>
     </section>
 
     <section id="tab-desktop" class="tab-body" hidden>
@@ -112,10 +118,14 @@
       </div>
       <div class="about">
         <h3>About</h3>
-        <p><strong>Hatcheck</strong> <span id="about-version"></span>: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness accounts on one computer, each kept apart.
+        <p><strong>Hatcheck</strong> <span id="about-version"></span>: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and MiniMax Code accounts on one computer, each kept apart.
           A front end to the <code>hatcheck</code> command.</p>
-        <p class="note">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai or DeepSeek. Claude, Claude Code and
-          Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, and DeepSeek Harness is DeepSeek's.</p>
+        <p class="note">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek or MiniMax. Claude, Claude Code and
+          Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, DeepSeek Harness is DeepSeek's, and MiniMax and MiniMax Code are MiniMax's.</p>
+        <p class="note">MiniMax Code sessions resume directly with <code>mcode --session mvs_&lt;id&gt;</code>, using <code>MINIMAX_DATA_DIR</code> for a named or custom home.
+          Its store is read-only to Hatcheck: MiniMax Code isn't a Move or Fork target, sessions aren't copied between its homes, and nothing is converted into mcode.
+          Plans shows <strong>no data</strong>: mcode plan quota isn't wired into hatcheck (0.6.13). Data homes are <code>~/.minimax</code> and <code>~/.minimax-NAME</code>;
+          <code>~/.minimax-code</code> is the installer directory, not a profile named <code>code</code>.</p>
         <p class="note">It shows what each plan has left and helps you pick an account you may use for the work at hand; it never
           switches accounts by itself.</p>
       </div>

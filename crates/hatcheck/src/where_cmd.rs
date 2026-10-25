@@ -1,6 +1,7 @@
 //! hatcheck where SESSION [--json]: find a session by its ID, or the start of it. Reports
 //! each agent's transcript or readable store and any session-owned data folder; for DSH, the
-//! selected v4 log and its session directory. Exits 1 when nothing matches. --json prints copies as data.
+//! selected v4 log and its session directory, for mcode the active messages.jsonl and session
+//! directory. Exits 1 when nothing matches. --json prints copies as data.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -94,6 +95,11 @@ pub fn find(prefix: &str) -> Vec<String> {
             found.push(x.dir);
         }
     }
+    for home in paths::find_mcode_homes() {
+        for x in crate::mcode::sessions_starting_with(&home, prefix) {
+            found.push(x.dir);
+        }
+    }
     found
 }
 
@@ -150,13 +156,21 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
             );
         }
     }
+    for home in paths::find_mcode_homes() {
+        for x in crate::mcode::sessions_starting_with(&home, prefix) {
+            copies.push(
+                json!({"agent": Agent::Mcode.key(), "id": x.row.id, "profile": home, "file": x.messages,
+                               "data_folder": x.dir, "archived": x.row.archived}),
+            );
+        }
+    }
     json!({"version": 1, "query": prefix, "sessions": copies})
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode or DeepSeek Harness session by its ID, or the start of it.",
+        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness or MiniMax Code session by its ID, or the start of it.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
     .flag(&["--json"], "json", "print the matches as JSON");

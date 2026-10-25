@@ -9,7 +9,7 @@
 //! usage comes from agy's own /usage, run headless. A session converted for agy is written as
 //! a file for agy to read, since nothing hatcheck could write is a conversation agy would
 //! resume. docs/agents.md's `Antigravity CLI` section says what is read, and that it was checked
-//! against agy 1.4.2.
+//! against agy 1.4.2 and again 1.4.7.
 
 use crate::agent::Agent;
 use crate::conv::{Conversation, Turn};
@@ -214,6 +214,19 @@ const COLUMNS: &str = "conversation_id, title, preview, step_count, last_modifie
                        last_user_input_time, workspace_uris, app_data_dir, \
                        parent_conversation_id, nesting_depth, agent_name";
 
+/// A conversation's folders with the one it was started from first. The command hatcheck prints
+/// for a converted session adds hatcheck's imports folder with --add-dir, which agy 1.4.7 lists
+/// before the folder it was started from, so that one goes last.
+fn started_in_first(mut folders: Vec<String>, imports: &str) -> Vec<String> {
+    if folders.len() > 1 {
+        if let Some(i) = folders.iter().position(|f| paths::same_folder(f, imports)) {
+            let added = folders.remove(i);
+            folders.push(added);
+        }
+    }
+    folders
+}
+
 fn row_of(r: &rusqlite::Row) -> rusqlite::Result<Row> {
     let v = |i: usize| r.get::<_, rusqlite::types::Value>(i);
     let when =
@@ -225,6 +238,7 @@ fn row_of(r: &rusqlite::Row) -> rusqlite::Result<Row> {
         .iter()
         .filter_map(|u| s(u).and_then(uri_path))
         .collect();
+    let workspaces = started_in_first(workspaces, &crate::conv::imports_dir());
     Ok(Row {
         id: text(v(0)?),
         title: text(v(1)?),
@@ -734,6 +748,17 @@ mod tests {
             Some("c134893c-20f5-48ea-bc9b-7f7c9271bc4e")
         );
         assert_eq!(file_id("/r/conversations/x.db"), None);
+    }
+
+    #[test]
+    fn the_folder_started_from_comes_before_the_imports_folder() {
+        // As agy 1.4.7 lists a conversation started with the command hatcheck prints for an import.
+        let (imports, api) = ("/c/hatcheck/imports", "/code/api");
+        let owned = |v: &[&str]| v.iter().map(|f| f.to_string()).collect::<Vec<_>>();
+        let order = |v: &[&str]| started_in_first(owned(v), imports);
+        assert_eq!(order(&[imports, api]), owned(&[api, imports]));
+        assert_eq!(order(&[imports]), owned(&[imports]));
+        assert_eq!(order(&[api]), owned(&[api]));
     }
 
     #[test]

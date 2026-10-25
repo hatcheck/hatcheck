@@ -342,6 +342,19 @@ fn plan(old: &str, new: &str) -> Plan {
             }
         }
     }
+    // MCode shares SQLite state and absolute manifest paths with related assets; neither is rewritten.
+    for home in paths::find_mcode_homes() {
+        for x in crate::mcode::sessions(&home) {
+            if mapped(&x.row.directory, old, new).is_some() {
+                plan.skips.push(Skip {
+                    agent: Agent::Mcode,
+                    profile: home.clone(),
+                    id: x.row.id.clone(),
+                    why: "keeps shared SQLite state and absolute manifest paths with related assets, which stay as they were".into(),
+                });
+            }
+        }
+    }
     let bindings = paths::load_bindings();
     plan.binding = bindings
         .keys()
@@ -376,7 +389,7 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
             }
             Agent::Agy => crate::agy::session_open(&m.profile, &m.id)
                 .then(|| crate::agy::holder(&m.profile).to_string()),
-            Agent::Kimi | Agent::Zcode | Agent::Dsh => None, // never moved: skipped in plan()
+            Agent::Kimi | Agent::Zcode | Agent::Dsh | Agent::Mcode => None, // never moved: skipped in plan()
         };
         if let Some(whom) = open {
             why.push(format!(
@@ -463,7 +476,9 @@ fn rewrite(m: &Move, check: bool) -> Result<usize, Stop> {
             {
                 record.get_mut("payload")
             }
-            Agent::Codex | Agent::Agy | Agent::Kimi | Agent::Zcode | Agent::Dsh => None,
+            Agent::Codex | Agent::Agy | Agent::Kimi | Agent::Zcode | Agent::Dsh | Agent::Mcode => {
+                None
+            }
         };
         let Some(Value::Object(fields)) = holder else {
             continue;

@@ -330,7 +330,8 @@ class FakeHome:
 
     def env(self):
         env = {k: v for k, v in os.environ.items()
-               if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "DSH_HOME", "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
+               if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "DSH_HOME", "MINIMAX_DATA_DIR", "MAVIS_DATA_DIR",
+                            "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
                and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "HATCHECK_"))}
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
                    PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"),
@@ -426,21 +427,23 @@ def _agy_root(self, app=False):
     return root
 
 
-def _agy_session(self, root, cwd, cid, title, minutes_ago=5, app=None, parent="", steps=5, transcript=True):
+def _agy_session(self, root, cwd, cid, title, minutes_ago=5, app=None, parent="", steps=5, transcript=True,
+                 added=()):
     """A conversation as agy keeps one: its row in the index, its conversation file (which
     hatcheck never reads), and the transcript agy writes beside it: your prompt, a reply with a
     tool call, the tool's output, a checkpoint of agy's own, and the final reply. `app` is the
-    app_data_dir the row names: the folder's own by default, antigravity-cli or antigravity."""
+    app_data_dir the row names: the folder's own by default, antigravity-cli or antigravity.
+    `added` are folders added with --add-dir, which agy 1.4.7 lists before the one it started in."""
     import sqlite3
     app = app or os.path.basename(root)
     when = NOW - minutes_ago * 60
     start = when - 60
-    uri = "file://" + ("/" + cwd.replace("\\", "/") if WINDOWS else cwd)
+    uris = ["file://" + ("/" + f.replace("\\", "/") if WINDOWS else f) for f in list(added) + [cwd]]
     db = sqlite3.connect(os.path.join(root, "conversation_summaries.db"))
     db.execute("INSERT INTO conversation_summaries (conversation_id, title, preview, step_count, last_modified_time, "
                "last_user_input_time, workspace_uris, app_data_dir, parent_conversation_id, nesting_depth) "
                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-               (cid, title, title + "...", steps, agy_stamp(when), agy_stamp(start), json.dumps([uri]), app, parent,
+               (cid, title, title + "...", steps, agy_stamp(when), agy_stamp(start), json.dumps(uris), app, parent,
                 1 if parent else 0))
     db.commit()
     db.close()
@@ -783,3 +786,120 @@ class DshOpen:
 FakeHome.dsh_home = _dsh_home
 FakeHome.dsh_session = _dsh_session
 FakeHome.dsh_compressed_session = _dsh_compressed_session
+
+
+# MiniMax Code (mcode): the v3 session catalog and canonical v2 histories as mcode 0.6.13
+# writes them. The store is only a fixture: tests never run mcode or initialize its runtime.
+
+MCODE_SCHEMA = [
+    "CREATE TABLE local_runtime_sessions (session_id text primary key, columnar_version integer not null, "
+    "title text not null default '', workspace_dir text not null default '', created_at_ms integer not null, "
+    "updated_at_ms integer not null, archived integer not null default 0, visibility text not null default 'visible', "
+    "session_kind text not null default 'conversation', session_type text not null default 'main', "
+    "purpose text not null default '', agent_name text not null default 'mavis', parent_session_id text, "
+    "extra_data_json text not null default '{}', history_relative_dir text not null default '')",
+    "CREATE TABLE local_runtime_session_locks (session_id text primary key, expires_at_ms integer not null)",
+]
+
+
+def mcode_db(home):
+    return os.path.join(home, "v2", "sqlite", "runtime-state.sqlite")
+
+
+def mcode_record(message_id, message, turn_id="turn-1", **fields):
+    """One canonical messages.jsonl envelope; unrelated envelope fields stay in the fixture."""
+    return dict({"message_id": message_id, "turn_id": turn_id, "message": message}, **fields)
+
+
+def _mcode_home(self, name="default", path=None):
+    """A current mcode data home, ~/.minimax[-NAME] or an explicit override, with an empty v3 store."""
+    import sqlite3
+    path = path or os.path.join(self.home, ".minimax" if name == "default" else ".minimax-" + name)
+    os.makedirs(os.path.join(path, "v2", "sqlite"), exist_ok=True)
+    os.makedirs(os.path.join(path, "v2", "sessions"), exist_ok=True)
+    db = sqlite3.connect(mcode_db(path))
+    for statement in MCODE_SCHEMA:
+        db.execute(statement)
+    db.commit()
+    db.close()
+    return path
+
+
+def _mcode_session(self, home, cwd, sid, title, minutes_ago=5, model="minimax/MiniMax-M3.1-Flash",
+                   archived=False, visibility="visible", kind="conversation", session_type="main", purpose="",
+                   agent_name="mavis", parent=None, history=None, fallback=None, columnar_version=3, extra=(),
+                   empty=False):
+    """A catalog row, its manifest and active canonical history. `fallback` leaves the catalog's
+    history_relative_dir empty and puts the history at its UTC-derived name (`derived`) or at a
+    different name only its manifest can find (`manifest`). `empty` makes a valid zero-turn history.
+    Returns messages.jsonl; its parent is the session directory."""
+    import sqlite3
+    when = NOW - minutes_ago * 60
+    created_ms = int((when - 60) * 1000)
+    updated_ms = int(when * 1000)
+    full = "mvs_" + sid
+    encoded = base64.urlsafe_b64encode(full.encode("utf-8")).decode("ascii").rstrip("=")
+    created = datetime.fromtimestamp(created_ms / 1000, timezone.utc)
+    stamp = created.strftime("%Y/%m/%d/%H-%M-%S-") + "%03d" % (created.microsecond // 1000)
+    derived = stamp + "-session_" + encoded
+    relative = history or derived
+    if fallback == "manifest":
+        relative = stamp.rsplit("/", 1)[0] + "/manifest-session_" + encoded
+    directory = os.path.join(home, "v2", "sessions", *relative.split("/"))
+    messages = os.path.join(directory, "messages.jsonl")
+    manifest = {"schemaVersion": 1, "sessionId": full, "createdAtMs": created_ms,
+                "messagesPath": messages, "workspaceDir": cwd}
+    write(os.path.join(directory, "manifest.json"), json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    start = created_ms + 1
+
+    def text(value):
+        return [{"type": "text", "text": value}]
+
+    rows = [
+        mcode_record("msg-u1", {"role": "user", "content": text(title), "timestamp": start},
+                     turn_config={"system_prompt": "MCODE TURN CONFIG IS NOT A PROMPT"}),
+        mcode_record("msg-a1", dict({
+            "role": "assistant",
+            "content": [{"type": "thinking", "thinking": "MCODE REASONING", "thinkingSignature": "MCODE SIGNATURE"},
+                        text("I'll inspect it.")[0],
+                        {"type": "toolCall", "id": "call-1", "name": "read_file",
+                         "arguments": json.dumps({"path": "src/main.rs"})}],
+            "timestamp": start + 1,
+        }, **({"model": model} if model else {}))),
+        mcode_record("msg-t1", {"role": "toolResult", "toolCallId": "call-1", "toolName": "read_file",
+                                "content": text("fn main() {}\n"), "timestamp": start + 2}),
+        mcode_record("msg-hidden", {"role": "hidden", "content": text("HIDDEN MCODE RECORD")}),
+        mcode_record("msg-custom", {"role": "custom", "content": text("CUSTOM MCODE RECORD")}),
+        mcode_record("msg-plugin", {"role": "plugin", "content": text("PLUGIN MCODE RECORD")}),
+        mcode_record("msg-artifact", {"role": "history_artifact", "content": text("OLD MCODE HISTORY ARTIFACT")}),
+    ] + list(extra) + [
+        mcode_record("msg-a2", {"role": "assistant", "content": text("Done: " + title), "timestamp": updated_ms}),
+    ]
+    write(messages, "" if empty else "\n".join(rec(**row) for row in rows) + "\n", mtime=when)
+    write(os.path.join(directory, "display.jsonl"), rec(role="user", text="DISPLAY ROW FALLBACK") + "\n")
+    write(os.path.join(directory, "messages.previous.jsonl"), "OLD MCODE SNAPSHOT\n")
+    db = sqlite3.connect(mcode_db(home))
+    db.execute("INSERT INTO local_runtime_sessions (session_id, columnar_version, title, workspace_dir, created_at_ms, "
+               "updated_at_ms, archived, visibility, session_kind, session_type, purpose, agent_name, "
+               "parent_session_id, extra_data_json, history_relative_dir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+               (full, columnar_version, title, cwd, created_ms, updated_ms, int(archived), visibility, kind,
+                session_type, purpose, agent_name, parent and "mvs_" + parent,
+                json.dumps({"effectiveModel": model} if model else {}), "" if fallback else relative))
+    db.commit()
+    db.close()
+    return messages
+
+
+def _mcode_lease(self, home, sid, expires):
+    """A writer lease whose expiry is an epoch time in seconds, active or stale as the test chooses."""
+    import sqlite3
+    db = sqlite3.connect(mcode_db(home))
+    db.execute("INSERT OR REPLACE INTO local_runtime_session_locks (session_id, expires_at_ms) VALUES (?, ?)",
+               ("mvs_" + sid, int(expires * 1000)))
+    db.commit()
+    db.close()
+
+
+FakeHome.mcode_home = _mcode_home
+FakeHome.mcode_session = _mcode_session
+FakeHome.mcode_lease = _mcode_lease

@@ -10,7 +10,7 @@ needs no Python. Nothing about the agents' files is reimplemented here; the app 
 the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --json`, `hatcheck move
 --json`, `hatcheck desktop --json`), and Resume runs `hatcheck open`, which opens your terminal.
 
-*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai or DeepSeek.*
+*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek or MiniMax.*
 
 ## What it does
 
@@ -28,9 +28,8 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
     Resume, Copy and **Move**: pick a profile, see the dry run (`hatcheck move --dry-run --json`,
     or `hatcheck fork` for a new session that keeps the original), then do it, and resume it there.
   - *Plans:* every account's limits.
-  - *Profiles:* every profile, Codex home and Kimi home, and **Sign in** or **Add one**, which
-    opens `cl <name>`, `cx <name> login` or `ck <name> login` in a terminal (`hatcheck open
-    --login`), so the login stays with the agent.
+  - *Profiles:* every profile or home, and **Sign in** or **Add one**, which runs the agent's own
+    sign-in through `hatcheck open --login`, so the login stays with the agent.
   - *Desktop* (macOS): the Claude Desktop instances, and **Make one** with its own colour
     (`hatcheck desktop new`), and remove them.
   - *Settings:* live usage, how often to refresh, notifications, which terminal Resume opens, and
@@ -45,6 +44,16 @@ For a DSH session, **Open DeepSeek Harness** in the main window or **Open DSH** 
 the session's recorded working directory. Choose the session there; Hatcheck doesn't deep-link or
 resume the selected ID directly.
 
+MiniMax Code homes are `~/.minimax` and `~/.minimax-NAME`, selected with `MINIMAX_DATA_DIR`; **Add
+one** makes `mcode:NAME`, and there is no Hatcheck mcode launcher. `hatcheck open --login
+mcode[:NAME]` explicitly runs `mcode login`, keeping sign-in with MiniMax Code. `~/.minimax-code` is
+the installer directory, not a profile named `code`.
+
+For a MiniMax Code session, **Resume** opens a terminal in the recorded folder and runs
+`mcode --session mvs_<id>` directly, with `MINIMAX_DATA_DIR` for a named or custom home. Hatcheck
+never writes MiniMax Code's store: mcode isn't offered as a Move or Fork target, sessions aren't
+copied between MiniMax Code homes, and nothing is converted into mcode.
+
 ## Rules it keeps
 
 - **No credentials.** It never asks for, stores, refreshes or passes on a login.
@@ -54,7 +63,8 @@ resume the selected ID directly.
   saves the answer, asks ChatGPT's and Kimi's usage endpoints for each Codex and Kimi home with its
   saved token, read and never refreshed, and runs agy's own `/usage` once `agy models` has said
   it's signed in. DeepSeek Harness has no plan-quota command or endpoint, so Plans shows **no data**
-  for its homes.
+  for its homes. For MiniMax Code, Plans shows a normal **no data** account with the reason "mcode
+  plan quota isn't wired into hatcheck (0.6.13)"; no MiniMax usage request is made.
 - **No automatic switching** between accounts.
 
 ## Build and test it

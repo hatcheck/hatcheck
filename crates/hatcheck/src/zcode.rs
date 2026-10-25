@@ -6,7 +6,8 @@
 //! files, and v2/ the desktop app's own files, with the login, which hatcheck never reads.
 //! Nothing marks a session open. hatcheck reads the database and never writes it: a session
 //! converted for zcode is written as a file zcode is started on. docs/agents.md's `ZCode`
-//! section says what is read, and that it was checked against ZCode 0.16.9.
+//! section says what is read, and that it was checked against ZCode 0.16.9 and compared with
+//! 0.17.0, which keeps a deleted session's row and marks it.
 
 use crate::agent::Agent;
 use crate::conv::{self, Conversation, Turn};
@@ -134,14 +135,28 @@ fn row_of(r: &rusqlite::Row) -> rusqlite::Result<Row> {
 }
 
 /// Every session of your own in the database, the newest change first: the rows with no
-/// parent, which leaves out the sessions ZCode runs itself (subagents); none when the database
-/// can't be read.
+/// parent, which leaves out the sessions ZCode runs itself (subagents), and none ZCode has
+/// deleted; none when the database can't be read.
 pub fn rows(root: &str) -> Vec<Row> {
     let Ok(db) = open(root) else {
         return Vec::new();
     };
+    // ZCode 0.17.0 deletes a session by setting time_deleted, a column older databases lack,
+    // and keeps the row; its own lists leave those out.
+    let soft_delete = db
+        .query_row(
+            "SELECT count(*) FROM pragma_table_info('session') WHERE name = 'time_deleted'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .is_ok_and(|n| n > 0);
+    let kept = if soft_delete {
+        " AND time_deleted IS NULL"
+    } else {
+        ""
+    };
     let Ok(mut query) = db.prepare(&format!(
-        "SELECT {COLUMNS} FROM session WHERE parent_id IS NULL OR parent_id = '' \
+        "SELECT {COLUMNS} FROM session WHERE (parent_id IS NULL OR parent_id = ''){kept} \
          ORDER BY time_updated DESC, id"
     )) else {
         return Vec::new();

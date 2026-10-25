@@ -13,20 +13,22 @@ pub enum Agent {
     Kimi,
     Zcode,
     Dsh,
+    Mcode,
 }
 
 impl Agent {
     /// Every agent, in the order the commands list them.
-    pub const ALL: [Agent; 6] = [
+    pub const ALL: [Agent; 7] = [
         Agent::Claude,
         Agent::Codex,
         Agent::Agy,
         Agent::Kimi,
         Agent::Zcode,
         Agent::Dsh,
+        Agent::Mcode,
     ];
     /// Their keys, for an argument that takes one.
-    pub const KEYS: [&'static str; 6] = ["claude", "codex", "agy", "kimi", "zcode", "dsh"];
+    pub const KEYS: [&'static str; 7] = ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode"];
 
     /// The word --json, a PROFILE argument and the folder bindings use for it.
     pub fn key(self) -> &'static str {
@@ -37,6 +39,7 @@ impl Agent {
             Agent::Kimi => "kimi",
             Agent::Zcode => "zcode",
             Agent::Dsh => "dsh",
+            Agent::Mcode => "mcode",
         }
     }
 
@@ -53,6 +56,7 @@ impl Agent {
             Agent::Kimi => "Kimi Code CLI",
             Agent::Zcode => "ZCode",
             Agent::Dsh => "DeepSeek Harness",
+            Agent::Mcode => "MiniMax Code",
         }
     }
 
@@ -61,6 +65,7 @@ impl Agent {
         match self {
             Agent::Agy => "Antigravity",
             Agent::Kimi => "Kimi Code",
+            Agent::Mcode => "MiniMax",
             other => other.name(),
         }
     }
@@ -74,13 +79,14 @@ impl Agent {
             Agent::Kimi => "Kimi",
             Agent::Zcode => "ZCode",
             Agent::Dsh => "DeepSeek",
+            Agent::Mcode => "MiniMax",
         }
     }
 
     /// The start of the agent's profile folders in the home folder: a profile is ~/<base>-NAME,
-    /// and ~/<base> is where plain claude, codex, kimi or dsh looks. Antigravity CLI keeps everything
-    /// under ~/.gemini/antigravity-cli, and ZCode under ~/.zcode, which only HOME moves, so a
-    /// profile of either would be a home folder of its own, ~/.agy-NAME or ~/.zcode-NAME; none
+    /// and ~/<base> is where plain claude, codex, kimi, dsh or mcode looks. Antigravity CLI keeps
+    /// everything under ~/.gemini/antigravity-cli, and ZCode under ~/.zcode, which only HOME moves,
+    /// so a profile of either would be a home folder of its own, ~/.agy-NAME or ~/.zcode-NAME; none
     /// is made yet (see paths::profile_folder).
     pub fn base(self) -> &'static str {
         match self {
@@ -90,6 +96,7 @@ impl Agent {
             Agent::Kimi => ".kimi-code",
             Agent::Zcode => ".zcode",
             Agent::Dsh => ".dsh",
+            Agent::Mcode => ".minimax",
         }
     }
 
@@ -100,12 +107,13 @@ impl Agent {
             Agent::Codex => Some("CODEX_HOME"),
             Agent::Kimi => Some("KIMI_CODE_HOME"),
             Agent::Dsh => Some("DSH_HOME"),
+            Agent::Mcode => Some("MINIMAX_DATA_DIR"),
             Agent::Agy | Agent::Zcode => None,
         }
     }
 
     /// Whether the agent keeps one folder per account that hatcheck names ~/<base>-NAME, so a
-    /// bare NAME can mean one of its profiles: Claude Code's, Codex's, Kimi's and DSH's.
+    /// bare NAME can mean one of its profiles: Claude Code's, Codex's, Kimi's, DSH's and mcode's.
     pub fn has_profiles(self) -> bool {
         self.variable().is_some()
     }
@@ -119,27 +127,29 @@ impl Agent {
             Agent::Kimi => "kimi",
             Agent::Zcode => "zcode",
             Agent::Dsh => "dsh",
+            Agent::Mcode => "mcode",
         }
     }
 
-    /// The launcher that runs it with a profile; Antigravity CLI, ZCode and DSH have none.
+    /// The launcher that runs it with a profile; Antigravity CLI, ZCode, DSH and mcode have none.
     pub fn launcher(self) -> Option<&'static str> {
         match self {
             Agent::Claude => Some("cl"),
             Agent::Codex => Some("cx"),
             Agent::Kimi => Some("ck"),
-            Agent::Agy | Agent::Zcode | Agent::Dsh => None,
+            Agent::Agy | Agent::Zcode | Agent::Dsh | Agent::Mcode => None,
         }
     }
 
     /// The agent's own prefix on its session IDs, which hatcheck leaves off when it names a
     /// session and puts back in the agent's commands and files: Kimi's session_<uuid>, ZCode's
-    /// sess_<uuid> and DSH's session-<uuid>.
+    /// sess_<uuid>, DSH's session-<uuid> and mcode's mvs_<id>.
     pub fn id_prefix(self) -> &'static str {
         match self {
             Agent::Kimi => "session_",
             Agent::Zcode => "sess_",
             Agent::Dsh => "session-",
+            Agent::Mcode => "mvs_",
             Agent::Claude | Agent::Codex | Agent::Agy => "",
         }
     }
@@ -166,7 +176,7 @@ impl Agent {
     }
 }
 
-/// Sorted by key, as the names sorted as text: agy, claude, codex, dsh, kimi, zcode.
+/// Sorted by key, as the names sorted as text: agy, claude, codex, dsh, kimi, mcode, zcode.
 impl Ord for Agent {
     fn cmp(&self, other: &Self) -> Ordering {
         self.key().cmp(other.key())
@@ -192,7 +202,10 @@ mod tests {
         assert_eq!(Agent::from_key("x"), None);
         assert!(Agent::Agy < Agent::Claude && Agent::Claude < Agent::Codex);
         assert!(
-            Agent::Codex < Agent::Dsh && Agent::Dsh < Agent::Kimi && Agent::Kimi < Agent::Zcode
+            Agent::Codex < Agent::Dsh
+                && Agent::Dsh < Agent::Kimi
+                && Agent::Kimi < Agent::Mcode
+                && Agent::Mcode < Agent::Zcode
         );
     }
 
@@ -207,6 +220,8 @@ mod tests {
         assert_eq!(Agent::Dsh.bare_id(&format!("session-{id}")), id);
         assert_eq!(Agent::Dsh.full_id(id), format!("session-{id}"));
         assert_eq!(Agent::Dsh.bare_id("session"), "");
+        assert_eq!(Agent::Mcode.bare_id("mvs_abc123"), "abc123");
+        assert_eq!(Agent::Mcode.full_id("abc123"), "mvs_abc123");
         assert_eq!(Agent::Claude.bare_id("session_x"), "session_x");
         assert_eq!(Agent::Codex.full_id(id), id);
     }

@@ -172,7 +172,7 @@ class DesktopCommand(unittest.TestCase):
             self.assertEqual(self.desktop("new", *args), (1, message + "\n"))
         missing = os.path.join(self.apps, "Nope.app")
         self.assertEqual(self.desktop("new", "x", "X", claude=missing),
-                         (1, "Claude Desktop isn't at %s; install it from https://claude.ai/download\n" % missing))
+                         (1, "Claude Desktop isn't at %s; install it from https://claude.com/download\n" % missing))
         code, out = self.desktop("new", "default", "Default")
         self.assertIn("It runs Claude's built-in data folder", out)
         with open(os.path.join(self.apps, "Claude Default.app", "Contents", "MacOS", "launch"), encoding="utf-8") as fh:

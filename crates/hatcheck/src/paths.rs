@@ -116,6 +116,11 @@ pub fn find_dsh_homes() -> Vec<String> {
     crate::dsh::find_homes()
 }
 
+/// Every current mcode home with a v2 store (see mcode.rs).
+pub fn find_mcode_homes() -> Vec<String> {
+    crate::mcode::find_homes()
+}
+
 /// Every profile, home and data folder of every agent, as (agent, folder).
 pub fn find_all() -> Vec<(Agent, String)> {
     let mut all: Vec<(Agent, String)> = find_profiles()
@@ -127,11 +132,12 @@ pub fn find_all() -> Vec<(Agent, String)> {
     all.extend(find_kimi_homes().into_iter().map(|h| (Agent::Kimi, h)));
     all.extend(find_zcode_roots().into_iter().map(|r| (Agent::Zcode, r)));
     all.extend(find_dsh_homes().into_iter().map(|h| (Agent::Dsh, h)));
+    all.extend(find_mcode_homes().into_iter().map(|h| (Agent::Mcode, h)));
     all
 }
 
 /// The folder an agent uses when no profile is named: ~/.claude, ~/.codex,
-/// ~/.gemini/antigravity-cli, ~/.kimi-code, ~/.zcode or ~/.dsh.
+/// ~/.gemini/antigravity-cli, ~/.kimi-code, ~/.zcode, ~/.dsh or ~/.minimax.
 pub fn default_folder(agent: Agent) -> String {
     match agent {
         Agent::Agy => crate::agy::default_root(),
@@ -513,6 +519,26 @@ impl Shell {
         }
         format!("DSH_HOME={} dsh{tail}", self.shell_path(home_dir))
     }
+
+    /// The command that runs mcode with a data home, then tail: mcode for ~/.minimax,
+    /// MINIMAX_DATA_DIR elsewhere.
+    pub fn mcode_command(&self, home_dir: &str, tail: &str, _full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        if self.is_default(home_dir, Agent::Mcode.base()) {
+            return format!("mcode{tail}");
+        }
+        if self.powershell {
+            return format!(
+                "$env:MINIMAX_DATA_DIR={}; mcode{tail}; $env:MINIMAX_DATA_DIR=$null",
+                self.ps_dir(home_dir)
+            );
+        }
+        format!("MINIMAX_DATA_DIR={} mcode{tail}", self.shell_path(home_dir))
+    }
 }
 
 /// A word for the shell commands are printed for: PowerShell's quoting there, else sh's.
@@ -608,6 +634,7 @@ impl Shell {
             Agent::Kimi => self.kimi_command(profile, "", full),
             Agent::Zcode => self.zcode_command(profile, "", full),
             Agent::Dsh => self.dsh_command(profile, "web", full),
+            Agent::Mcode => self.mcode_command(profile, "", full),
         }
     }
 
@@ -639,6 +666,11 @@ impl Shell {
                 full,
             ),
             Agent::Dsh => self.dsh_command(profile, "web", full),
+            Agent::Mcode => self.mcode_command(
+                profile,
+                &format!("--session {}", Agent::Mcode.full_id(session_id)),
+                full,
+            ),
         }
     }
 }
@@ -1025,6 +1057,22 @@ mod tests {
         assert_eq!(
             windows(false).dsh_command("C:\\Users\\me\\.dsh-work", "web", false),
             "DSH_HOME=~/.dsh-work dsh web"
+        );
+        assert_eq!(
+            s.mcode_command("/home/me/.minimax", "--session mvs_1", false),
+            "mcode --session mvs_1"
+        );
+        assert_eq!(
+            s.mcode_command("/home/me/.minimax-work", "--session mvs_1", false),
+            "MINIMAX_DATA_DIR=~/.minimax-work mcode --session mvs_1"
+        );
+        assert_eq!(
+            w.mcode_command("C:\\Users\\me\\.minimax-work", "--session mvs_1", false),
+            "$env:MINIMAX_DATA_DIR=\"$HOME\\.minimax-work\"; mcode --session mvs_1; $env:MINIMAX_DATA_DIR=$null"
+        );
+        assert_eq!(
+            windows(false).mcode_command("C:\\Users\\me\\.minimax-work", "--session mvs_1", false),
+            "MINIMAX_DATA_DIR=~/.minimax-work mcode --session mvs_1"
         );
     }
 

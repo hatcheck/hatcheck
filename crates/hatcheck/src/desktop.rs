@@ -457,7 +457,7 @@ pub fn make_instance(
     let claude = claude_app();
     if !ospath::isdir(&claude) {
         return Err(format!(
-            "Claude Desktop isn't at {claude}; install it from https://claude.ai/download"
+            "Claude Desktop isn't at {claude}; install it from https://claude.com/download"
         ));
     }
     let apps = apps_dir();

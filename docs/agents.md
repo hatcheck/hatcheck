@@ -1,9 +1,55 @@
 # The agents and their launchers
 
-How Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness keep their
-profiles, homes and folders, and the launchers that run them with one: `cl`, `cx`, `ck`, and
-`claude-z` and `claude-k` for Claude Code on Z.ai and Kimi. The commands are in
-[commands.md](commands.md), and installing in [install.md](install.md).
+How Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and MiniMax Code
+keep their profiles, homes and folders, and the launchers that run them with one: `cl`, `cx`, `ck`,
+and `claude-z` and `claude-k` for Claude Code on Z.ai and Kimi. The commands are in
+[commands.md](commands.md), and installing hatcheck in [install.md](install.md).
+
+## Getting the agents
+
+hatcheck installs none of them: each comes from its maker. Their own installers, as of 2026-10-24:
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash                # Claude Code: claude
+curl -fsSL https://chatgpt.com/codex/install.sh | sh          # Codex: codex
+curl -fsSL https://antigravity.google/cli/install.sh | bash   # Antigravity CLI: agy
+curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash  # Kimi Code CLI: kimi
+npm install -g @deepseek-ai/dsh                               # DeepSeek Harness: dsh (needs Node.js)
+curl -fsSL https://filecdn.minimax.chat/public/install.sh | bash # MiniMax Code: mcode
+```
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://claude.ai/install.ps1 | iex
+powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+irm https://antigravity.google/cli/install.ps1 | iex
+irm https://code.kimi.com/kimi-code/install.ps1 | iex
+npm install -g @deepseek-ai/dsh
+irm https://filecdn.minimax.chat/public/install.ps1 | iex
+```
+
+- Homebrew on macOS has the first three: `brew install --cask claude-code codex antigravity-cli`.
+- ZCode has no installer for its CLI, which comes inside the ZCode app: see [ZCode](#zcode-zcode).
+- DeepSeek runs DSH with `npx @deepseek-ai/dsh web`; installed with npm, it's the `dsh` command
+  hatcheck's open commands run.
+- MiniMax Code's own installer puts `mcode` at `~/.minimax-code/bin/mcode`. That install folder is
+  distinct from its data home: see [MiniMax Code](#minimax-code-mcode).
+- `hatcheck doctor` then lists each agent on your `PATH`, its version and which copy runs.
+
+The desktop apps:
+
+| App | Platforms | Download |
+|---|---|---|
+| Claude Desktop, with Claude Code in it | macOS, Windows, Linux (beta) | [claude.com/download](https://claude.com/download) |
+| ChatGPT, which now includes the Codex app | macOS, Windows, Linux (preview) | [learn.chatgpt.com/docs/app](https://learn.chatgpt.com/docs/app) |
+| Antigravity | macOS, Windows, Linux | [antigravity.google/download](https://antigravity.google/download) |
+| Kimi Code Desktop | macOS, Windows, Linux | [Kimi Code's quick start](https://www.kimi.com/code/docs/en/kimi-code-desktop/getting-started.html) |
+| ZCode | macOS, Windows, Linux (beta) | [zcode.z.ai](https://zcode.z.ai/en) |
+| DeepSeek Harness | macOS (Apple silicon), Windows | [deepseek.com/harness](https://deepseek.com/harness) |
+| MiniMax Code | macOS, Windows | [agent.minimax.io/download](https://agent.minimax.io/download) |
+
+Homebrew on macOS has four of them: `brew install --cask claude chatgpt antigravity zcode`.
 
 ## `cl`: run Claude Code with a profile
 
@@ -46,12 +92,16 @@ cx b exec "run the tests"         # any codex command works
 [Antigravity CLI](https://antigravity.google/docs/cli/) keeps its conversations, settings and login
 under `~/.gemini/antigravity-cli`, and nothing but `HOME` points it anywhere else, so hatcheck reads
 that one folder, and there are no `agy` profiles or a launcher for them yet (see
-[Roadmap](../README.md#roadmap)). What it reads, checked against agy 1.4.2:
+[Roadmap](../README.md#roadmap)). What it reads, checked against agy 1.4.7 on 2026-10-24 (first
+against 1.4.2):
 
 - `conversation_summaries.db`, agy's index of its conversations: each one's title, folder and
   times, and whether it's the Antigravity app's or one agy ran itself. `hatcheck` lists the CLI's
   own from it, marked `agy`, with `agy --conversation <id>` to resume each; those agy ran itself
-  aren't listed.
+  aren't listed. A conversation's folder is the first it lists, except that agy 1.4.7 lists a
+  folder added with `--add-dir` first: hatcheck's imports folder, which the command printed for a
+  converted session adds, is passed over, so that conversation is filed under the folder it was
+  started from.
 - The Antigravity app keeps its own conversations the same way, beside agy's in
   `~/.gemini/antigravity`, and each index mentions some of the other's, so each conversation is
   read from the folder it belongs to. The app's are hidden unless you pass `--all`, like
@@ -80,11 +130,11 @@ that one folder, and there are no `agy` profiles or a launcher for them yet (see
   again, as cached with its age and `asked at most once in 5m`, and agy is asked after that.
   One hatcheck asks agy at a time, with a lock in that folder: two `/usage` runs at once made
   Google's quota service answer the second with a 503 after a minute, so a second hatcheck
-  waits for the first and takes its reading the same way. agy 1.4.3 answers with each group's
-  limits as `buckets`, each with a `window` (`5h` or `weekly`), a `remaining_fraction` and a
-  `reset_time`, which hatcheck shows as one row per bucket with the window's length; the
-  `windows` and `models` of 1.4.2's answer are
-  still read. Checked against the answer agy 1.4.3 gave on 2026-10-20.
+  waits for the first and takes its reading the same way. agy 1.4.3 and later answer with each
+  group's limits as `buckets`, each with a `window` (`5h` or `weekly`), a `remaining_fraction` and
+  a `reset_time`, which hatcheck shows as one row per bucket with the window's length; the
+  `windows` and `models` of 1.4.2's answer are still read. Checked against the answers agy 1.4.3
+  gave on 2026-10-20 and 1.4.7 on 2026-10-24.
 - A session converted for agy can't be written into its store, so `hatcheck move <id> agy` writes
   the conversation as a file in `imports` in hatcheck's cache folder and prints the command that
   starts agy on it: see [With Antigravity CLI](commands.md#with-antigravity-cli).
@@ -119,7 +169,9 @@ ck b -p "run the tests"           # any kimi option or command works
 ## Kimi Code CLI (`kimi`)
 
 hatcheck reads every `~/.kimi-code*` folder that has a `sessions/` folder. What it reads and
-writes, checked against kimi 2.2.0:
+writes, checked against kimi 2.3.1 on 2026-10-24 (first against 2.2.0). kimi 2.3.1 writes protocol
+1.5 in its wires and still resumes the 1.0 wire hatcheck writes, and it prints `kimi -r` to
+resume, beside `--session`, which hatcheck prints:
 
 - `sessions/wd_<name>_<hash>/session_<uuid>/`: one folder per session, under a key kimi makes from
   the folder the session ran in (its name, and the first 12 hex digits of the SHA-256 of its path).
@@ -163,10 +215,14 @@ writes, checked against kimi 2.2.0:
 shared with the ZCode desktop app, and nothing but `HOME` moves it (`ZCODE_STORAGE_DIR` and
 `ZCODE_DATA_BASE_DIR` move other parts of `~/.zcode`), so hatcheck reads that one folder, and there
 are no ZCode profiles or a launcher for them (see [Roadmap](../README.md#roadmap)). What it
-reads, checked against ZCode 0.16.9:
+reads, checked against ZCode 0.16.9, the CLI in the ZCode 3.15.3 app. The CLI in ZCode 3.16.3,
+0.17.0, was compared with it on 2026-10-24 without being run, so as not to move the shared
+database on: it adds the soft delete below and a table of its own, and takes the same flags.
 
 - The database's `session` rows: the ID (`sess_<uuid>`), the folder the session ran in, its title
-  and times, and whether ZCode ran it itself (a subagent), which aren't listed. Its `message` and
+  and times, and whether ZCode ran it itself (a subagent), which aren't listed. ZCode 0.17.0 keeps
+  the row of a session you delete, with `time_deleted` set, and hatcheck leaves it out as ZCode's
+  own lists do. Its `message` and
   `part` rows hold the conversation: text, each tool call with its input and output, and ZCode's
   reasoning, which is left out. hatcheck opens the database read-only and never writes it:
   [the proposal](proposals/kimi-zcode.md#writing-into-zcodes-database-the-risk) says why.
@@ -238,6 +294,72 @@ What hatcheck reads, checked against dsh 0.2.1-rc.2:
   prints `default`, `NAME` or the bound path. An agent-only binding command with no PROFILE keeps
   the existing DSH binding unless `--dsh` replaces it. No hook is added for DSH.
 
+## MiniMax Code (`mcode`)
+
+MiniMax Code keeps its current data home at `~/.minimax`, with named homes at `~/.minimax-NAME`.
+`MINIMAX_DATA_DIR` and `MAVIS_DATA_DIR` are both trimmed; a nonempty `MINIMAX_DATA_DIR` selects the
+home first, with `MAVIS_DATA_DIR` as its fallback. `mcode` and `mcode:NAME` name the default and
+named homes in profile arguments. There is no hatcheck mcode launcher or installer alias, and no
+`mcode --profile` is invented. `~/.minimax-code` is the installer, not a data home named `code`;
+legacy `.mavis` data isn't merged or migrated.
+
+What hatcheck reads is checked against the 0.6.5 source preview. The installed CLI is separate:
+`~/.minimax-code/bin/mcode` is 0.6.13, and its `--help` verifies direct `mcode --session mvs_<id>`
+resume and `mcode login`. That 0.6.13 copy isn't on this shell's `PATH`; doctor remains PATH-based
+(see [`hatcheck doctor`](install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents)).
+
+- `v2/sqlite/runtime-state.sqlite` is opened read-only, with no runtime initialization or migrations
+  and no writes to the store. Only `local_runtime_sessions` rows with `columnar_version=3` are read.
+  They supply the `mvs_<32 hex>` session ID, `workspace_dir`, `title`, `created_at_ms` and
+  `updated_at_ms`, `archived`, `visibility`, `session_kind` and `session_type`, `purpose`,
+  `agent_name`, `parent_session_id`, `history_relative_dir`, and `effectiveModel` in
+  `extra_data_json`. `record_json` isn't used.
+- The active canonical history is `messages.jsonl` in a session directory under `v2/sessions`. A
+  nonempty `history_relative_dir` must have four safe parts with POSIX `/` separators on Windows
+  too. With none, hatcheck tries the directory derived in UTC from the created time and session ID,
+  then the manifest fallback. A fallback manifest must have `schemaVersion=1` and match the row's
+  full `sessionId` and `createdAtMs`; more than one match is ambiguous, not a choice to make
+  arbitrarily. Linked session directories, manifests and history files, and paths outside the
+  session root, aren't accepted. Absolute paths recorded in a manifest aren't trusted.
+- The list takes the catalog's metadata, while `show` and conversions take only that canonical
+  history. An empty canonical file can coexist with a catalog title and separate display metadata:
+  the session is still listed from the catalog, but `show` reports zero turns. Display rows are
+  never merged to invent history.
+- The conversation understands direct user text, assistant text, `toolCall` and `toolResult`, and
+  `compactionSummary`. `turn_config`, `history_artifact`, previous generations, reasoning and
+  signatures, hidden, custom and plugin records, UI-only notices, tool-output artifacts and
+  subagent sessions are left out.
+- An ordinary branch isn't a subagent merely because it has a parent or branch session type.
+  Explicit `session_kind=task`, purposes starting `local-task:`, `local-background-task:` or
+  `team-plan:`, and agent names `explore`, `worker` and `verifier` are subagents. The `peek`, `cron`
+  and `channel` kinds, and `visibility=hidden`, are internal.
+- `local_runtime_session_locks.expires_at_ms` decides whether a writer is active. An unexpired lease
+  marks the session busy and blocks a duplicate open or a conversion; an expired one is stale.
+  Unknown lock state is treated as busy, never as proof that the writer has died. An idle session
+  merely selected in the TUI has no durable marker and can't be detected. This lease check is the
+  same on every platform, without DSH's platform-specific lock handling.
+- Resume is direct: exactly `mcode --session mvs_<id>`, or
+  `MINIMAX_DATA_DIR=… mcode --session mvs_<id>` for a named or custom home. PowerShell clears the
+  variable afterwards: `$env:MINIMAX_DATA_DIR=…; mcode --session mvs_<id>;
+  $env:MINIMAX_DATA_DIR=$null`. `open` and `resume` use these commands, not a DSH-style picker or a
+  headless import. `hatcheck open --login mcode[:NAME]` runs `mcode login` in the selected home.
+- `hatcheck usage` lists one no-data account per mcode home, with the reason exactly
+  `mcode plan quota isn't wired into hatcheck (0.6.13)`. MiniMax Code has a quota client, but
+  hatcheck doesn't call it: no mcode auth or provider configuration is read, no mcode usage request
+  is made, and no new network request class is added. `best` doesn't count this unknown usage as
+  room.
+- `move` and `fork` convert mcode sessions out to existing writable targets, always keeping the
+  original. mcode is never a target, and same-agent copies are refused: shared SQLite state,
+  manifest paths and session assets aren't safe for hatcheck to copy. `mcode exec --file` isn't a
+  lossless import and isn't used.
+- `relocate` lists affected mcode sessions as skipped: shared SQLite state and absolute manifest
+  paths with related assets stay as they were. `--dry-run` changes nothing.
+- `hatcheck bind default` binds `~/.minimax` along with the rest only when its actual v2 store
+  exists; `bind NAME` does the same for `~/.minimax-NAME`. `--mcode NAME`, `--mcode default` or
+  `--mcode PATH` picks one explicitly and requires that store. `bind --which mcode` prints
+  `default`, `NAME` or the bound path. An agent-only binding command with no PROFILE keeps the
+  existing mcode binding unless `--mcode` replaces it. No hook is added for mcode.
+
 ## `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
 
 `claude-z` and `claude-k` start Claude Code on [Z.ai](https://z.ai)'s GLM models or
@@ -257,9 +379,16 @@ cl a --resume <session-id>          # …and later back on its account's Claude 
   It saves them in `~/.config/claude-z/config` or `~/.config/claude-k/config` (`%APPDATA%\claude-z\config`
   on Windows), the files the [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup
   made with those works as is. `hatcheck provider` shows what's set up.
-- Models: on Z.ai `glm-5.3[1m]` (the default, with `glm-5.3-flash` for quick tasks), `glm-5.3-flash`
-  or `glm-4.7`; on Kimi `k3[1m]` (the default), `k3`, `kimi-for-coding` or
-  `kimi-for-coding-highspeed`. `[1m]` turns on the 1M-token context window.
+- Models, as each provider's Claude Code guide and model list had them on 2026-10-24: on Z.ai
+  `glm-5.3[1m]` (the default, with `glm-5.3-flash[1m]` for quick tasks) or `glm-5.3-flash[1m]`;
+  on Kimi `k3.1-pro[1m]` (K3.1 Pro, the default), `k3.1-pro`, `k3.1-pro-highspeed`, `k3[1m]`,
+  `k3`, `kimi-for-coding` (K2.8 Preview) or `kimi-for-coding-highspeed` (K2.7 Code Highspeed).
+  `[1m]` turns on the 1M-token context window, which Kimi gives Pro and Allegretto plans and up;
+  the others run with 256k. A model saved earlier, such as `glm-4.7`, is used as it is. Each was
+  run through Claude Code 2.1.310, which sends K3.1 Pro the thinking it requires.
+- Kimi is reached at `https://api.kimi.ai/coding/`, the address of Kimi's English guide; a key that
+  works at `https://api.kimi.com/coding/`, the Chinese guide's, worked at both on 2026-10-24.
+  `CK_BASE_URL` in the config names another address.
 - The key reaches Claude Code as `ANTHROPIC_AUTH_TOKEN`, which it always uses ahead of the profile's
   claude.ai login and never asks about, and `ANTHROPIC_API_KEY` is cleared. Claude Code asks once per
   profile whether to use an `ANTHROPIC_API_KEY`, with No preselected, and after a No it sends the

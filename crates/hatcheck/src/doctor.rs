@@ -354,6 +354,7 @@ fn agent_origin(agent: Agent, f: &Found) -> &'static str {
         }
         Agent::Kimi if lower.contains("/.kimi-code/bin/") => "the Kimi Code installer",
         Agent::Zcode if lower.contains("zcode") && lower.contains(".app/") => "the ZCode app",
+        Agent::Mcode if lower.contains("/.minimax-code/") => "the MiniMax Code installer",
         _ => "",
     }
 }

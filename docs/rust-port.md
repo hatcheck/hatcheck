@@ -65,17 +65,18 @@ colour to human-facing output; the JSON and raw-output compatibility described h
 | `open_cmd.rs`, `show.rs` | the session picker and the terminals; a session's conversation | `open.py`, `show.py` |
 | `find.rs` | a session's copies, the newest one in a folder, and `place` (`--from`, `--login`) | `sessions.py`, `move.py` |
 | `move_cmd.rs` | moves and copies, updates, forks (`hatcheck fork`) and conversions, and the copy chooser | `move.py` |
-| `agent.rs` | the agents, Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness, as one enum the commands match on | new in the Rust version |
+| `agent.rs` | the agents, Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and MiniMax Code, as one enum the commands match on | new in the Rust version |
 | `doctor.rs` | `hatcheck doctor`: every copy of hatcheck and the agents on the PATH, and the hooks | new in the Rust version |
 | `agy.rs` | Antigravity CLI: its conversation index and transcripts, its lock, its /usage run headless, and a conversation written for it to read | new in the Rust version |
 | `dsh.rs` | DeepSeek Harness: its homes, current v4 logs and conversation surface, and its POSIX session lock | new in the Rust version |
+| `mcode.rs` | MiniMax Code: its data homes, the read-only SQLite catalog's v3 rows, active canonical history and expiring writer leases | new in the Rust version |
 | `relocate.rs` | `hatcheck relocate`: a moved project folder's sessions brought along | new in the Rust version |
 | `conv.rs` | a session as a conversation, for `show` and `move` | `move.py` |
 | `launch.rs`, `src/bin/` | `cl`, `cx`, `ck`, `claude-z` and `claude-k`, each also a binary of its own | `launch.py`, `cl`, `cx` |
 | `desktop.rs` | Claude Desktop instances, their launchers and recoloured icons | `desktop.py` |
 | `serve.rs` | `hatcheck serve`, the desktop app's line-by-line JSON protocol | `cli.py` |
 | `best.rs`, `bind.rs`, `provider.rs` | `best`; `bind`, `unbind` and the hook; `provider` | `best.py`, `bind.py`, `provider.py` |
-| `paths.rs` | profiles, Codex, Kimi and DSH homes, quoting, the resume and DSH web commands, folder bindings | `sessions.py` |
+| `paths.rs` | profiles and Codex, Kimi, DSH and mcode homes; quoting, resume and DSH web commands; folder bindings | `sessions.py` |
 | `args.rs`, `py.rs`, `times.rs`, `ospath.rs`, `widths.rs`, `out.rs` | the Python behaviour above | |
 
 The workspace is the repo's `Cargo.toml`. The desktop app (`desktop/src-tauri`) stays out of it: it

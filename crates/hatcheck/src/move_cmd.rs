@@ -306,6 +306,7 @@ fn count_prompts(lines: &[&[u8]], agent: Agent) -> usize {
             .count(),
         Agent::Agy | Agent::Zcode => 0, // SQLite, never compared line by line
         Agent::Dsh => 0,                // compressed generations, never compared line by line
+        Agent::Mcode => 0,              // SQLite, never compared line by line
         Agent::Kimi => records_of(lines)
             .filter(|r| s(get(r, "type")) == Some("turn.prompt"))
             .count(),
@@ -715,6 +716,7 @@ fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
         Agent::Kimi => cmd.args(["--session", &Agent::Kimi.full_id(sid)]),
         Agent::Zcode => cmd.args(["--attach", sid, "--mode", "plan", "-p", &zcode::prompt()]),
         Agent::Dsh => cmd.arg("web"),
+        Agent::Mcode => cmd.args(["--session", &Agent::Mcode.full_id(sid)]),
     };
     let default = paths::default_folder(agent);
     match agent.variable() {
@@ -1486,6 +1488,7 @@ fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
             &paths::find_kimi_homes(),
             &paths::find_zcode_roots(),
             &paths::find_dsh_homes(),
+            &paths::find_mcode_homes(),
         );
         let accounts = crate::best::ranked_for(agent, &loaded, now);
         let mine: Vec<usize> = copies
@@ -2671,6 +2674,19 @@ fn convert(
                 format!("dsh's session {id8} in {} can't be read: {e}", show(source))
             })?
         }
+        Agent::Mcode => {
+            if crate::mcode::session_open(source, sid) {
+                return Err(format!(
+                    "MiniMax Code session {id8} is open or has an active writer; close it or let that work finish first"
+                ));
+            }
+            crate::mcode::read_conversation(source, sid).map_err(|e| {
+                format!(
+                    "mcode's session {id8} in {} can't be read: {e}",
+                    show(source)
+                )
+            })?
+        }
     };
     if conv.turns.is_empty() {
         return Err(format!(
@@ -2703,6 +2719,11 @@ fn convert(
                         "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
                     )
                 }
+                Agent::Mcode => {
+                    return Err(
+                        "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
+                    )
+                }
             }
             .map_err(io)?,
         );
@@ -2722,6 +2743,11 @@ fn convert(
         Agent::Dsh => {
             return Err(
                 "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
+            )
+        }
+        Agent::Mcode => {
+            return Err(
+                "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
             )
         }
     };
@@ -2948,6 +2974,11 @@ fn find_sessions(sources: &[(Agent, String)], prefix: &str) -> Vec<((Agent, Stri
                     add((Agent::Dsh, x.id), folder, x.dir);
                 }
             }
+            Agent::Mcode => {
+                for x in crate::mcode::sessions_starting_with(folder, prefix) {
+                    add((Agent::Mcode, x.row.id), folder, x.dir);
+                }
+            }
         }
     }
     found
@@ -3069,6 +3100,11 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
         );
     }
+    if target_agent == Agent::Mcode {
+        return Err(
+            "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
+        );
+    }
     if !ospath::isdir(&target) {
         match target_agent {
             Agent::Codex => {
@@ -3106,6 +3142,12 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             Agent::Dsh => {
                 return Err(format!(
                     "{} isn't a DeepSeek Harness home. Run dsh web there once to sign in",
+                    show(&target)
+                ));
+            }
+            Agent::Mcode => {
+                return Err(format!(
+                    "{} isn't a MiniMax Code data home. Sign in there first, e.g. with: mcode login",
                     show(&target)
                 ));
             }
@@ -3190,6 +3232,12 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
                 py::head(&sid, 8)
             ))
         }
+        Agent::Mcode => {
+            return Err(format!(
+                "MiniMax Code's shared SQLite state, manifest paths and session assets aren't safe for hatcheck to copy; convert session {} for another agent instead",
+                py::head(&sid, 8)
+            ))
+        }
     };
     Ok(Done {
         session: resume_sid,
@@ -3200,9 +3248,9 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode or DeepSeek Harness session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
+    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness or MiniMax Code session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh (not a supported target), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh or mcode for ~/.minimax (not supported targets), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
         // Still taken, so scripts that pass them run: what --no-keep asked for is the default
@@ -3241,9 +3289,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 /// hatcheck fork SESSION PROFILE ...: bring a session into another profile as a new one, with its
 /// own ID, and keep the original; for the other agent, convert it, as move does.
 pub fn fork_main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode or DeepSeek Harness session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
+    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness or MiniMax Code session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh (not a supported target), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh or mcode for ~/.minimax (not supported targets), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")
         .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");

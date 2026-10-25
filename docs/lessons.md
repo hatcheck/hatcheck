@@ -162,6 +162,14 @@ profiles are `web`, `headless`, `acp`, `sdk` and `sdk-minimal`.
   `dsh --help` and `dsh --profile headless --help` exited.
 - Seen 1× (2026-10-24).
 
+**Catalog and display metadata aren't canonical history.** A catalog can list a session and supply
+its title and times, but `show` and conversions read only the active canonical history. An empty
+canonical file stays an empty conversation; display rows are never merged to invent one.
+- Evidence: 2026-10-24, a real MiniMax Code session had an empty active `messages.jsonl` while its
+  display data held a user message. `summary` and `conversation` in `mcode.rs` keep the catalog and
+  canonical history separate.
+- Seen 1× (2026-10-24).
+
 **A failed read means unknown, never empty.** A snapshot's limit that has reset since it was
 saved is shown as `?`, not as 100% or 0%; usage that couldn't be fetched is shown as cached with
 its age and the reason, never as fresh.
@@ -169,6 +177,17 @@ its age and the reason, never as fresh.
   2026-10-24: `rank` in `best.rs` took a body with no limits it could read for an account with
   room, so `hatcheck best` recommended it; it's `NO_DATA` now.
 - Seen 2× (2026-10-24).
+
+**An agent's new version is checked when it comes out, not when something breaks.** The tests
+read fixtures shaped like the versions they were written against, so they pass whatever an agent
+changes; only a session the new version wrote, read by hatcheck, shows the change. Run
+[maintenance.md](maintenance.md) every week or two.
+- Evidence: 2026-10-24, the first such run: agy 1.4.7 lists a folder added with `--add-dir` before
+  the one a conversation started in, so the conversation hatcheck's own import command starts was
+  filed under hatcheck's cache folder; ZCode 3.16.3's CLI (0.17.0) keeps a deleted session's row,
+  which hatcheck would have listed again; Kimi's `kimi-for-coding` had become K2.8 Preview while
+  `claude-k` still called it K2.7 Code. `started_in_first` in `agy.rs`, `rows` in `zcode.rs`.
+- Seen 1× (2026-10-24).
 
 ## What hatcheck changes
 

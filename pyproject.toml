@@ -8,7 +8,7 @@ build-backend = "maturin"
 [project]
 name = "hatcheck"
 dynamic = ["version"]
-description = "Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness accounts on one computer, each kept apart: recent sessions, plan usage, resume or open commands and moves across them."
+description = "Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and MiniMax Code accounts on one computer, each kept apart: recent sessions, plan usage, resume or open commands and moves across them."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

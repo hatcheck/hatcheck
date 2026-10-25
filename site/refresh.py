@@ -11,8 +11,8 @@ wrapped as in an 80-column terminal.
 index.html: each block between <!-- sample:NAME --> and <!-- /sample:NAME --> becomes a command
 run in a demo home made with tests/helpers.py, never your profiles: `list` is `hatcheck` in a
 folder with sessions from every agent, `best` is `hatcheck best` there, and `relocate` is
-`hatcheck relocate` once ~/code/web, with sessions in two profiles, a Codex home, a Kimi home and
-a DSH home, is renamed ~/code/site; the demo home's path reads /Users/me wherever it's printed in full, as
+`hatcheck relocate` once ~/code/web, with sessions in two profiles, a Codex home, a Kimi home, a DSH home and
+an mcode home, is renamed ~/code/site; the demo home's path reads /Users/me wherever it's printed in full, as
 in the project folders' names. They
 run on a
 pseudo-terminal with 256 colours, so the output is coloured as in a terminal; its colour codes
@@ -53,7 +53,7 @@ def help_text(name):
 def demo_home():
     """A home with sessions from every agent in ~/code/api: two Claude Code profiles with usage a
     fake claude answers, a Codex home with limits in its session, and Antigravity CLI's folder, a
-    Kimi home, ZCode's folder and a DSH home with no usage, as when their agents aren't on the PATH. The
+    Kimi home, ZCode's folder, a DSH home and an mcode home with no usage, as when their agents aren't on the PATH. The
     snapshots are shaped as Claude Code saves them: a session limit and a Fable one for the team
     plan, a session limit and the week's for the Pro plan. ~/.claude-a is the Pro one, nearly out
     for the week, with the newest session, and ~/.claude-b the team one, so hatcheck best has
@@ -102,6 +102,8 @@ def demo_home():
     h.zcode_session(zcode, api, "1fb068a4-b6d4-4a9f-b2d3-6e428e094fbe", "Tidy the uploader's error handling", 200)
     dsh = h.dsh_home()
     h.dsh_session(dsh, api, "d54e0009-0000-4000-8000-000000000009", "Trace the missing webhook", 240)
+    mcode = h.mcode_home()
+    h.mcode_session(mcode, api, "c54e0009000040008000000000000009", "Review the retry backoff", 280)
     path = h.fake_claude() + os.pathsep + "/bin" + os.pathsep + "/usr/bin"
     env = dict(h.env(), PATH=path, TERM="xterm-256color", COLUMNS="150")
     env.pop("NO_COLOR", None)
@@ -230,8 +232,8 @@ def sample(name, home):
 
 def relocate_sample(h, env):
     """A project folder renamed, and hatcheck relocate bringing its sessions along: two in the
-    b profile, one in a, one in Codex, and one in Kimi and one in DSH, which stay; the folder is
-    bound to b, so the binding moves too."""
+    b profile, one in a, one in Codex, and one in Kimi, one in DSH and one in mcode, which stay;
+    the folder is bound to b, so the binding moves too."""
     profile_b, profile_a = os.path.join(h.home, ".claude-b"), os.path.join(h.home, ".claude-a")
     web = h.folder("code", "web")
     h.session(profile_b, web, "5a1e2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b", "Move the checkout page to the new API", 300)
@@ -240,6 +242,7 @@ def relocate_sample(h, env):
     h.codex_session(os.path.join(h.home, ".codex"), web, "019a8c1e-aaaa-7b21-9c4e-2f1a0b9c8d7e", "Speed up the build", 180)
     h.kimi_session(os.path.join(h.home, ".kimi-code"), web, "8d4b5e6f-7081-4293-9dae-2f3a4b5c6d7e", "Write the store's README", 150)
     h.dsh_session(os.path.join(h.home, ".dsh"), web, "d54e0010-0000-4000-8000-000000000010", "Check the webhook log", 140)
+    h.mcode_session(os.path.join(h.home, ".minimax"), web, "c54e0010000040008000000000000010", "Check the retry log", 140)
     subprocess.run([BINARY, "bind", "b"], cwd=web, env=env, capture_output=True, check=True)
     site = os.path.join(h.home, "code", "site")
     os.rename(web, site)

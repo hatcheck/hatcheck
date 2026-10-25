@@ -43,6 +43,19 @@ class ZcodeSessions(unittest.TestCase):
         self.assertNotIn(S, out)  # one zcode ran itself is never listed
         self.assertIn(self.h.shown(self.root) + " (1)", out)
 
+    def test_a_session_zcode_deleted_is_gone(self):
+        # ZCode 0.17.0 keeps a deleted session's row, marked in a column it adds to the table.
+        db = sqlite3.connect(self.db)
+        db.execute("alter table session add column time_deleted integer")
+        db.execute("update session set time_deleted = 1792881000000 where id = ?", ("sess_" + Z,))
+        db.commit()
+        db.close()
+        code, out = self.h.run("sessions", "--no-usage")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(Z, out)
+        code, out = self.h.run("where", Z[:8])
+        self.assertEqual(code, 1, out)
+
     def test_json(self):
         code, out = self.h.run("sessions", "--json", "--no-usage")
         self.assertEqual(code, 0, out)

@@ -48,12 +48,12 @@ class Provider(unittest.TestCase):
     def test_kimi(self):
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_MODEL=""\n')
         env = self.env("k")
-        self.assertEqual(env["ANTHROPIC_BASE_URL"], "https://api.kimi.com/coding/")
+        self.assertEqual(env["ANTHROPIC_BASE_URL"], "https://api.kimi.ai/coding/")
         self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], "kimi-test-key")  # never ANTHROPIC_API_KEY
         self.assertIsNone(env["ANTHROPIC_API_KEY"])
         for name in ("ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
                      "CLAUDE_CODE_SUBAGENT_MODEL"):
-            self.assertEqual(env[name], "k3[1m]")
+            self.assertEqual(env[name], "k3.1-pro[1m]")
         self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "1048576")
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_MODEL="k3"\nCK_MAX_TOKENS="32000"\n'
                                     'CK_BASE_URL="https://api.moonshot.ai/anthropic"\n')
@@ -96,8 +96,8 @@ class Provider(unittest.TestCase):
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
         self.assertEqual(text, '# mine\nCZ_API_KEY="new-zai-key"\nCZ_PERMISSION_MODE="acceptEdits"\n'
-                               'CZ_MODEL_OPUS="glm-5.3-flash"\nCZ_MODEL_SONNET="glm-5.3-flash"\n'
-                               'CZ_MODEL_HAIKU="glm-5.3-flash"\nCZ_MAX_TOKENS="64000"\n')
+                               'CZ_MODEL_OPUS="glm-5.3-flash[1m]"\nCZ_MODEL_SONNET="glm-5.3-flash[1m]"\n'
+                               'CZ_MODEL_HAIKU="glm-5.3-flash[1m]"\nCZ_MAX_TOKENS="64000"\n')
         if not WINDOWS:
             self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
 
@@ -110,7 +110,7 @@ class Provider(unittest.TestCase):
 
     def test_setup_asks_again_after_a_bad_answer(self):
         path = self.h.provider_config("k", 'CK_API_KEY="old"\nCK_MAX_TOKENS="1000"\n')
-        code, out = self.setup_with("k", "has space\nkimi-new\n9\n3\nlots\n-\n")
+        code, out = self.setup_with("k", "has space\nkimi-new\n9\n6\nlots\n-\n")
         self.assertEqual(code, 0, out)
         self.assertIn("paste just the key", out)
         self.assertIn("Type a number from the list", out)

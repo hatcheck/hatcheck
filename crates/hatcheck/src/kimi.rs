@@ -6,7 +6,7 @@
 //! with a wire per subagent beside it; session_index.jsonl at the root, one line per session with
 //! absolute paths, which `kimi --session` resolves a session through; and credentials/, which
 //! hatcheck never reads. Nothing marks a session open. docs/agents.md's `Kimi Code CLI` section
-//! says what is read and written, and that it was checked against kimi 2.2.0.
+//! says what is read and written, and that it was checked against kimi 2.2.0 and again 2.3.1.
 
 use crate::agent::Agent;
 use crate::conv::{self, Conversation, Turn};

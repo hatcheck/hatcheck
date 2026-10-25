@@ -12,7 +12,8 @@ use serde_json::Value;
 /// (agent, folder) for a PROFILE argument: NAME for ~/.claude-NAME, default or claude for
 /// ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME (claude:NAME spells out a Claude
 /// Code one), agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for
-/// ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, or a path.
+/// ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, mcode for
+/// ~/.minimax and mcode:NAME for ~/.minimax-NAME, or a path.
 pub fn place(spec: &str) -> (Agent, String) {
     if spec == "default" {
         return (Agent::Claude, paths::default_folder(Agent::Claude));
@@ -37,6 +38,7 @@ pub fn place(spec: &str) -> (Agent, String) {
         let zcode = ospath::basename(&path) == Agent::Zcode.base() || crate::zcode::is_root(&path);
         let kimi = crate::kimi::is_home(&path);
         let dsh = crate::dsh::is_home(&path);
+        let mcode = crate::mcode::is_home(&path);
         let codex = ospath::basename(&path).starts_with(".codex")
             || (ospath::isdir(&ospath::join(&path, "sessions"))
                 && !ospath::isdir(&ospath::join(&path, "projects")));
@@ -48,6 +50,8 @@ pub fn place(spec: &str) -> (Agent, String) {
             Agent::Kimi
         } else if dsh {
             Agent::Dsh
+        } else if mcode {
+            Agent::Mcode
         } else if codex {
             Agent::Codex
         } else {
@@ -130,6 +134,11 @@ pub fn session_copies(prefix: &str) -> Vec<Copies> {
     for home in paths::find_dsh_homes() {
         for x in crate::dsh::sessions_starting_with(&home, prefix) {
             add((Agent::Dsh, x.id), (home.clone(), x.dir));
+        }
+    }
+    for home in paths::find_mcode_homes() {
+        for x in crate::mcode::sessions_starting_with(&home, prefix) {
+            add((Agent::Mcode, x.row.id), (home.clone(), x.dir));
         }
     }
     found
@@ -248,6 +257,16 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
             }
         }
     }
+    for home in paths::find_mcode_homes() {
+        for x in crate::mcode::sessions(&home) {
+            if paths::same_folder(&x.row.directory, &here) {
+                let summary = crate::mcode::summary(&home, &x);
+                if better(&summary, &best) {
+                    best = Some(summary);
+                }
+            }
+        }
+    }
     facts::save_cache();
     best
 }
@@ -326,5 +345,10 @@ mod tests {
         assert_eq!(place("dsh"), (Agent::Dsh, format!("{home}/.dsh")));
         assert_eq!(place("dsh:work"), (Agent::Dsh, format!("{home}/.dsh-work")));
         assert_eq!(place("/srv/.dsh-a").0, Agent::Dsh);
+        assert_eq!(place("mcode"), (Agent::Mcode, format!("{home}/.minimax")));
+        assert_eq!(
+            place("mcode:work"),
+            (Agent::Mcode, format!("{home}/.minimax-work"))
+        );
     }
 }

@@ -131,6 +131,21 @@ class AgySessions(unittest.TestCase):
         code, out = h.run("fork", A[:8], "agy", "--json")  # a fork of one is the same conversion
         self.assertEqual(json.loads(out)["target_agent"], "agy")
 
+    def test_one_started_on_an_import_is_filed_under_its_folder(self):
+        # The printed command adds hatcheck's imports folder with --add-dir, which agy 1.4.7
+        # lists first among the conversation's folders; it ran in the session's folder.
+        h = self.h
+        code, out = h.run("move", A[:8], "agy", "--json")
+        imports = os.path.dirname(json.loads(out)["file"])
+        started = "5cfa9396-6f85-45ec-91f2-82a298494bd2"
+        h.agy_session(self.root, self.api, started, "Analyze Imported Conversation File", 1, added=[imports])
+        code, out = h.run("sessions", "--json", "--no-usage")
+        self.assertEqual(code, 0, out)
+        s = next(s for s in json.loads(out)["sessions"] if s["id"] == started)
+        self.assertEqual(s["cwd"], self.api)
+        code, out = h.run("open", started[:8], "--print")
+        self.assertEqual(out.splitlines(), ["cd " + h.shown(self.api), "agy --conversation " + started])
+
 
 USAGE_ARGS = ["-p", "/usage", "--output-format", "json"]  # what hatcheck runs agy with for a reading
 

@@ -1,6 +1,6 @@
 [package]
 name = "hatcheck"
-description = "Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness accounts on one computer, each kept apart"
+description = "Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and MiniMax Code accounts on one computer, each kept apart"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

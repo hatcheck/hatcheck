@@ -39,11 +39,10 @@ fn subcommands_named(word: &str) -> Vec<&'static str> {
         .collect()
 }
 
-const HELP: &str =
-    "hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek
-Harness accounts on one computer, each kept apart. Lists recent sessions with
-the command that resumes each one or opens DSH's session history, what's left
-of each plan, and carries sessions between accounts and agents.
+const HELP: &str = "hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
+Harness and MiniMax Code accounts on one computer, each kept apart. Lists recent
+sessions with the command that resumes each one or opens DSH's session history,
+what's left of each plan, and carries sessions between accounts and agents.
 
 Usage:
     hatcheck [sessions] [HOURS] ...    recent sessions in every profile and home, with

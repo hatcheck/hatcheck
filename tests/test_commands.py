@@ -93,8 +93,8 @@ class Commands(unittest.TestCase):
         code, out = self.cl("-k", "work", "--resume", ID, extra_env={"ANTHROPIC_API_KEY": "sk-ant-from-the-shell"})
         self.assertEqual(code, 0, out)
         for line in ("args=--resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
-                     "ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", "ANTHROPIC_AUTH_TOKEN=kimi-test-key",
-                     "ANTHROPIC_API_KEY=unset", "ANTHROPIC_MODEL=k3[1m]"):
+                     "ANTHROPIC_BASE_URL=https://api.kimi.ai/coding/", "ANTHROPIC_AUTH_TOKEN=kimi-test-key",
+                     "ANTHROPIC_API_KEY=unset", "ANTHROPIC_MODEL=k3.1-pro[1m]"):
             self.assertIn(line, out)
 
     def test_cx_runs_codex_with_the_home(self):
@@ -308,7 +308,7 @@ class Commands(unittest.TestCase):
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "hat.cmd"), "--help"])
             self.assertIn("hat is the short name for hatcheck.", out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-k.cmd"), "--version"])
-            self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
+            self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.ai/coding/", out)
             self.assertIn("args=--version", out)
             write(os.path.join(target, "claude-where.cmd"), old)  # removed on uninstall too
             code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target, "-Uninstall"])
@@ -342,7 +342,7 @@ class Commands(unittest.TestCase):
             code, out = self.run_command([os.path.join(target, "hat"), "--help"])
             self.assertIn("hat is the short name for hatcheck.", out)
             code, out = self.run_command([os.path.join(target, "claude-k"), "--version"])
-            self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
+            self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.ai/coding/", out)
             code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target, "--uninstall"])
             self.assertEqual(os.listdir(target), [], out)
             code, out = self.run_command(["bash", os.path.join(REPO, "install.sh"), "--bin", target])
@@ -408,7 +408,7 @@ class AsNames(Commands):
         self.assertIn("CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"), out)
         code, out = self.run_command([os.path.join(links, "claude-k"), "--version"])
         self.assertEqual(code, 0, out)
-        self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.com/coding/", out)
+        self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.ai/coding/", out)
         code, out = self.run_command([os.path.join(links, "ck"), "work", "--version"])
         self.assertEqual(code, 0, out)
         self.assertIn("KIMI_CODE_HOME=" + os.path.join(self.h.home, ".kimi-code-work"), out)

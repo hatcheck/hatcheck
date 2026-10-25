@@ -27,24 +27,41 @@ pub const PROVIDERS: [Provider; 2] = [
         key: "k",
         name: "Kimi",
         prefix: "CK_",
-        url: "https://api.kimi.com/coding/",
+        url: "https://api.kimi.ai/coding/",
         key_from: "the Kimi Code Console, https://www.kimi.com/code (Create API Key)",
         models: &["MODEL"],
+        // As Kimi's model list names them (checked 2026-10-24); a plan below Pro or
+        // Allegretto gets 256k of the 1M models.
         choices: &[
             (
+                "k3.1-pro[1m]",
+                "K3.1 Pro, 1M context (Pro or Allegretto plan and up)",
+                &["k3.1-pro[1m]"],
+            ),
+            (
+                "k3.1-pro",
+                "K3.1 Pro, 256k context (Plus or Moderato and up)",
+                &["k3.1-pro"],
+            ),
+            (
+                "k3.1-pro-highspeed",
+                "K3.1 Pro, 2-3x faster, 256k context (Pro or Allegretto and up)",
+                &["k3.1-pro-highspeed"],
+            ),
+            (
                 "k3[1m]",
-                "K3, 1M context (Allegretto plan and up)",
+                "K3, 1M context (Pro or Allegretto plan and up)",
                 &["k3[1m]"],
             ),
-            ("k3", "K3, 256k context (Moderato and up)", &["k3"]),
+            ("k3", "K3, 256k context (Plus or Moderato and up)", &["k3"]),
             (
                 "kimi-for-coding",
-                "K2.7 Code, 256k context (all plans)",
+                "K2.8 Preview, 256k context (every coding plan)",
                 &["kimi-for-coding"],
             ),
             (
                 "kimi-for-coding-highspeed",
-                "K2.7 Code, faster output (Allegretto and up)",
+                "K2.7 Code Highspeed, faster output (Pro or Allegretto and up)",
                 &["kimi-for-coding-highspeed"],
             ),
         ],
@@ -56,21 +73,21 @@ pub const PROVIDERS: [Provider; 2] = [
         url: "https://api.z.ai/api/anthropic",
         key_from: "https://z.ai/manage-apikey/apikey-list",
         models: &["MODEL_OPUS", "MODEL_SONNET", "MODEL_HAIKU"],
+        // As Z.ai's Claude Code guide pairs them (checked 2026-10-24).
         choices: &[
             (
                 "glm-5.3[1m]",
-                "flagship, 1M context, with glm-5.3-flash for quick tasks",
-                &["glm-5.3[1m]", "glm-5.3[1m]", "glm-5.3-flash"],
+                "flagship, 1M context, with glm-5.3-flash[1m] for quick tasks",
+                &["glm-5.3[1m]", "glm-5.3[1m]", "glm-5.3-flash[1m]"],
             ),
             (
-                "glm-5.3-flash",
-                "fast, multimodal, cheapest",
-                &["glm-5.3-flash", "glm-5.3-flash", "glm-5.3-flash"],
-            ),
-            (
-                "glm-4.7",
-                "fast, good at code",
-                &["glm-4.7", "glm-4.7", "glm-4.7"],
+                "glm-5.3-flash[1m]",
+                "fast, multimodal, cheapest, 1M context",
+                &[
+                    "glm-5.3-flash[1m]",
+                    "glm-5.3-flash[1m]",
+                    "glm-5.3-flash[1m]",
+                ],
             ),
         ],
     },

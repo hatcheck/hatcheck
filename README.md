@@ -10,13 +10,15 @@
 Several Claude accounts on one computer, each kept apart: isolated Claude Desktop instances on
 macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume commands across all
 of them. OpenAI's Codex CLI and Moonshot's Kimi Code CLI get the same treatment, Google's
-Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them, and DeepSeek Harness (`dsh`)
-joins them read-only. Sessions can be carried between the other five and out of DSH.
+Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them, and DeepSeek Harness (`dsh`) and
+MiniMax Code (`mcode`) join as read-only agents. Sessions can be carried between the original five
+and out of DSH and mcode.
 
 *Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI,
-Z.ai or DeepSeek. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and
-ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is
-Moonshot AI's, ZCode and GLM are Z.ai's, and DeepSeek Harness is DeepSeek's.*
+Z.ai, DeepSeek or MiniMax. Claude, Claude Code and Claude Desktop are trademarks of Anthropic;
+Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC;
+Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, DeepSeek Harness is DeepSeek's and MiniMax Code
+is MiniMax's.*
 
 On macOS, `hatcheck desktop` runs **one Claude Desktop per account, side by side**: each with its
 own data folder and login, and a launcher in a colour you pick, which brings the running one
@@ -27,13 +29,13 @@ Running Claude Desktop with its own `--user-data-dir` is
 ([write-up](https://philippstracker.com/multiple-claude-instances/)); hatcheck adds the colours and
 the launchers.
 
-It also has **command-line tools for all six agents**, for keeping one profile per account:
+It also has **command-line tools for all seven agents**, for keeping one profile per account:
 `cl`, `cx` and `ck` run Claude Code, Codex and Kimi Code CLI with a profile, and `hatcheck` lists
 the recent sessions in all of them, with the command that resumes each one or opens DSH's session
 history, and what's left of each plan. The rest
 of the commands find, show, carry and convert sessions between the accounts and the agents, tie
 folders to accounts, and check how everything is installed: see
-[the tour](#claude-code-codex-antigravity-cli-kimi-code-cli-zcode-and-deepseek-harness) below, and
+[the tour](#claude-code-codex-antigravity-cli-kimi-code-cli-zcode-deepseek-harness-and-minimax-code) below, and
 [docs/commands.md](docs/commands.md) for each command as it is.
 
 **Not a gateway.** Hatcheck is never between an agent and its model. It rewrites no agent's
@@ -45,8 +47,8 @@ knowing which one each session ran on. See [Rules it keeps](#rules-it-keeps).
 
 |                                 | macOS | Linux | Windows |
 |---------------------------------|:-----:|:-----:|:-------:|
-| Claude Desktop instances        |  yes  | no official Desktop app | [planned](#roadmap) |
-| Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness tools |  yes  |  yes  |   yes   |
+| Claude Desktop instances        |  yes  | [untried](#roadmap): Claude Desktop for Linux is in beta | [planned](#roadmap) |
+| Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and MiniMax Code tools |  yes  |  yes  |   yes   |
 
 ---
 
@@ -75,7 +77,7 @@ the launcher does, and how to copy a login you already have into an instance.
 
 ---
 
-## Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness
+## Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and MiniMax Code
 
 Claude Code (the `claude` CLI) keeps its settings, history and session transcripts in `~/.claude`
 (plus `~/.claude.json`), and its login in the macOS Keychain, or on Linux and Windows in
@@ -94,6 +96,10 @@ DeepSeek Harness keeps sessions under `~/.dsh`, moved whole by `DSH_HOME`, so ha
 `~/.dsh`, `~/.dsh-NAME` and the variable's folder. DSH's own profiles are plugin stacks, not these
 account homes, and there is no hatcheck DSH launcher: its command is the official `dsh web`, whose
 session history you choose the session in. See [DeepSeek Harness](docs/agents.md#deepseek-harness-dsh).
+MiniMax Code's current data home is `~/.minimax`, selected by `MINIMAX_DATA_DIR`, or by
+`MAVIS_DATA_DIR` when that's unset; `~/.minimax-code` is the installer, not a profile. Hatcheck
+reads its v2 SQLite catalog and canonical JSONL, and sessions resume directly with
+`mcode --session mvs_<id>`. See [MiniMax Code](docs/agents.md#minimax-code-mcode).
 
 ### Install
 
@@ -118,7 +124,8 @@ from a tag such as `v0.2.0`, has them and the binaries for each platform, and Py
 binaries as wheels. The release builds start after 0.1.0, which is the Python version.
 
 From a clone, on Windows, switching between installs or removing one, and `hatcheck doctor`,
-which lists every copy on your `PATH`: [docs/install.md](docs/install.md).
+which lists every copy on your `PATH`: [docs/install.md](docs/install.md). hatcheck installs no
+agent: [docs/agents.md](docs/agents.md#getting-the-agents) has each one's installer and app.
 
 ### The commands
 
@@ -132,15 +139,15 @@ Each is documented as it is, with its options and what it prints, in
 | [`cx a resume <id>`](docs/agents.md#cx-run-codex-with-a-home-per-account) | Codex with `~/.codex-a` |
 | [`ck a --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-a` |
 | [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day, in every profile, home and folder, each with its resume or open command and what's left of its plan |
-| [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable; DSH homes say why there's no reading |
+| [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable; DSH homes say why there's no reading, and mcode's quota isn't wired |
 | [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | the best account now, with its limits, and the `move` command that carries the newest session started here to it; `--wait` sleeps until one has room |
 | [`hatcheck where SESSION`](docs/commands.md#hatcheck-where-find-a-session) | where a session's files are |
 | [`hatcheck open SESSION`](docs/commands.md#hatcheck-open-resume-a-session-in-a-new-terminal) | resume it in a new terminal, or open DSH's session history in its folder |
 | [`hatcheck resume`](docs/commands.md#hatcheck-resume-carry-on-the-newest-session-here) | carry on the newest session started from this folder, or open DSH's session history, after asking; `hat r` for short |
 | `hatcheck show SESSION` | its conversation, read-only |
-| [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent (out of DSH, not into it) |
+| [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent (out of DSH and mcode, not into them) |
 | [`hatcheck fork SESSION PROFILE`](docs/commands.md#hatcheck-fork-a-session-as-a-new-one-in-another-profile) | bring it in there as a new session, keeping the original |
-| [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's stay as they are |
+| [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's and mcode's stay as they are |
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
 | [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest |
 | [`hatcheck desktop`](#claude-desktop-instances-macos) | Claude Desktop instances on macOS |
@@ -152,7 +159,9 @@ from its one folder, with what its `/usage` reports; [Kimi Code CLI](docs/agents
 sessions are listed, shown, converted and moved between its homes, and [ZCode](docs/agents.md#zcode-zcode)'s
 are listed, shown and converted from its database. [DeepSeek Harness](docs/agents.md#deepseek-harness-dsh)
 sessions are listed and shown from raw or compressed v4 logs and converted out, never written;
-`dsh web` opens its session history. [`claude-z` and `claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
+`dsh web` opens its session history. [MiniMax Code](docs/agents.md#minimax-code-mcode) sessions
+are listed and shown from its v2 catalog and canonical JSONL and converted out, never written;
+`mcode --session mvs_<id>` resumes them directly. [`claude-z` and `claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
 run Claude Code on Z.ai's or Kimi's models in any profile.
 
 
@@ -180,14 +189,15 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   usage endpoint, the one kimi's own `/usage` asks, as it is, and never refreshed
   ([`kimi.rs`](crates/hatcheck/src/kimi.rs), `read_login`; `usage.rs`, `fetch_kimi_usage`). For
   ZCode and DeepSeek Harness it reads none, and reads no usage: neither has a plan-usage command
-  or endpoint hatcheck can use.
+  or endpoint hatcheck can use. MiniMax Code reads no auth or provider config, and its plan quota
+  isn't wired into hatcheck yet.
 - **Nothing leaves your computer** except those usage requests: Claude Code's to Anthropic, one
   to ChatGPT per Codex account, one to Kimi per Kimi home, and agy's own `/usage` to Google, with
   the model list agy fetches first to say it's signed in. `CODEX_USAGE_URL` in `usage.rs` and
   `DEFAULT_USAGE_URL` and `GLOBAL_USAGE_URL` in `kimi.rs` are the only addresses the binary itself
-  calls; DSH adds none. `--cached` and `--no-usage` make none. The Z.ai and Kimi endpoints in
-  [`provider.rs`](crates/hatcheck/src/provider.rs) are handed to Claude Code, which calls them
-  only when you run `cl -z` or `cl -k`.
+  calls; DSH and mcode add none. `--cached` and `--no-usage` make none. The Z.ai and Kimi
+  endpoints in [`provider.rs`](crates/hatcheck/src/provider.rs) are handed to Claude Code, which
+  calls them only when you run `cl -z` or `cl -k`.
 - **No automatic switching** between accounts. `hatcheck best` ranks and prints commands, and
   nothing in the binary starts, moves or switches a session on its own
   ([`best.rs`](crates/hatcheck/src/best.rs): advice only, `--wait` sleeps and then prints).
@@ -201,8 +211,10 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   writes nothing ([`move_cmd.rs`](crates/hatcheck/src/move_cmd.rs),
   [`relocate.rs`](crates/hatcheck/src/relocate.rs)). A Kimi session's line in kimi's index goes
   with its folder ([`kimi.rs`](crates/hatcheck/src/kimi.rs), `index_add` and `index_remove`),
-  ZCode's database is only ever read ([`zcode.rs`](crates/hatcheck/src/zcode.rs), `open`), and
-  DSH's session logs and workspace state are only ever read ([`dsh.rs`](crates/hatcheck/src/dsh.rs)).
+  ZCode's database is only ever read ([`zcode.rs`](crates/hatcheck/src/zcode.rs), `open`), DSH's
+  session logs and workspace state are only ever read ([`dsh.rs`](crates/hatcheck/src/dsh.rs)),
+  and mcode's catalog, canonical history and assets are only ever read
+  ([`mcode.rs`](crates/hatcheck/src/mcode.rs)).
 
 Function names rather than line numbers, since lines move; `git grep` finds them.
 
@@ -228,9 +240,10 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 
 - **`crates/hatcheck/`**: hatcheck in Rust, the commands and the launchers. Its `src/` has a file per
   subcommand (`sessions.rs`, `usage.rs`, `move_cmd.rs`, `open_cmd.rs`, `desktop.rs` and the rest),
-  `launch.rs` for `cl`, `cx`, `ck`, `claude-z` and `claude-k`, `agy.rs`, `kimi.rs`, `zcode.rs` and
-  `dsh.rs` for what it reads and writes of Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek
-  Harness, `doctor.rs` for `hatcheck doctor`, and `src/bin/` for those binaries and `hat`.
+  `launch.rs` for `cl`, `cx`, `ck`, `claude-z` and `claude-k`, `agy.rs`, `kimi.rs`, `zcode.rs`,
+  `dsh.rs` and `mcode.rs` for what it reads and writes of Antigravity CLI, Kimi Code CLI, ZCode,
+  DeepSeek Harness and MiniMax Code, `doctor.rs` for `hatcheck doctor`, and `src/bin/` for those
+  binaries and `hat`.
   Its own README is the crate's page on crates.io. It was ported from a Python version with the
   same output; see [docs/rust-port.md](docs/rust-port.md).
 - **`CHANGELOG.md`**: what changed in each release of the CLI; a release's notes on GitHub are its
@@ -265,7 +278,9 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   separate `--user-data-dir` per account should work. A Windows version would create a shortcut per
   instance with its own icon, and a launcher that brings a running instance forward instead of
   opening a duplicate. It needs testing on a Windows machine first.
-- **Linux.** There's no official Claude Desktop for Linux, so only the CLI tools apply there.
+- **Claude Desktop instances on Linux.** Claude Desktop for Linux is in beta, for Ubuntu and
+  Debian. Whether its own `--user-data-dir` keeps an instance apart there, as on macOS, hasn't been
+  tried; until it has, only the CLI tools apply on Linux.
 - **Antigravity CLI profiles.** agy keeps one login per home folder, so a second account needs a
   home folder of its own (`HOME=~/.agy-a agy`), which every command the agent runs would see
   too. Whether hatcheck should make such folders, and a launcher for them, is still open; until
@@ -281,6 +296,11 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   command, conversion into DSH needs a supported importer, and plan usage needs a documented
   quota API. Until then hatcheck opens `dsh web` and its session history, converts only out, and
   never writes DSH's store. Sessions before v4 aren't read; later ones need their own reader.
+- **MiniMax Code.** Conversion into mcode needs a supported importer rather than a model turn on
+  an attached file, and plan quota needs a no-refresh design and maintainer approval before the
+  regional endpoint is used. Until then hatcheck reads the v2 store, converts only out, and shows
+  no quota data. An idle selected TUI has no durable marker, so only an active writer lease blocks
+  opening and conversion.
 - **Releases:** the CLI is on GitHub, the Homebrew tap, PyPI and crates.io from 0.2.0
   ([CHANGELOG.md](CHANGELOG.md)). Next are winget, then the app's installers, once its release
   workflow has its signing and updater secrets (`desktop.yml` lists them).

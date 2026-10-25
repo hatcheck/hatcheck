@@ -366,7 +366,7 @@ impl Found {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes, ZCode sessions from ~/.zcode and DeepSeek Harness sessions across all ~/.dsh* homes, with the command that resumes each one or opens DSH's session history.")
+    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes, ZCode sessions from ~/.zcode, DeepSeek Harness sessions across all ~/.dsh* homes and MiniMax Code sessions across all ~/.minimax* homes and the homes MINIMAX_DATA_DIR and MAVIS_DATA_DIR select, with the command that resumes each one or opens DSH's session history.")
         .positional("hours", Count::Optional, &format!("how far back to look (default {DEFAULT_HOURS}); accepts 36, 1.5, 12h or 3d"))
         .option(&["-n", "--per-folder"], "per_folder", "N", "show only the newest N sessions per folder (default: all)")
         .flag(&["--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, and the Antigravity app's conversations")
@@ -612,6 +612,31 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             found.put(key, (session.when, true, session.size), session, false);
         }
     }
+    let mcode_homes = paths::find_mcode_homes();
+    for home in &mcode_homes {
+        for x in crate::mcode::sessions(home) {
+            let mut session = crate::mcode::summary(home, &x);
+            if session.entrypoint_text() == "subagent" {
+                continue;
+            }
+            let is_open = crate::mcode::session_open(home, &x.row.id);
+            if !session.has_messages && !is_open {
+                empty += 1;
+                continue;
+            }
+            if session.when < cutoff && !is_open {
+                continue;
+            }
+            session.open = is_open.then(|| open_in(Agent::Mcode.program()));
+            let key = format!(
+                "{}\u{0}{}\u{0}{}",
+                Agent::Mcode.key(),
+                ospath::realpath(home),
+                session.id
+            );
+            found.put(key, (session.when, true, session.size), session, false);
+        }
+    }
     facts::save_cache();
 
     let mut shown: Vec<Summary> = Vec::new();
@@ -662,6 +687,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .chain(&kimi_homes)
         .chain(&zcode_roots)
         .chain(&dsh_homes)
+        .chain(&mcode_homes)
         .map(|p| (p.clone(), 0))
         .collect();
     for s in &shown {
@@ -741,6 +767,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .filter(|h| used.contains(h))
         .cloned()
         .collect();
+    let used_mcode: Vec<String> = mcode_homes
+        .iter()
+        .filter(|h| used.contains(h))
+        .cloned()
+        .collect();
     let loaded: Vec<(Entry, Usage)> = if use_usage {
         usage::load_usage(
             &used_profiles,
@@ -750,6 +781,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &used_kimi,
             &used_zcode,
             &used_dsh,
+            &used_mcode,
         )
     } else {
         Vec::new()
@@ -843,6 +875,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         (Agent::Kimi, &kimi_homes),
         (Agent::Zcode, &zcode_roots),
         (Agent::Dsh, &dsh_homes),
+        (Agent::Mcode, &mcode_homes),
     ] {
         if !folders.is_empty() {
             present.push(agent);
@@ -999,6 +1032,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .chain(&used_kimi)
         .chain(&used_zcode)
         .chain(&used_dsh)
+        .chain(&used_mcode)
     {
         let Some((_, (usage, saved_at, why))) = results.iter().find(|(r, _)| r == pr) else {
             continue;

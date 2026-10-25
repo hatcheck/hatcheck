@@ -1,8 +1,8 @@
 # The commands
 
 What each `hatcheck` command does, as it is, with its options; the agents and their launchers
-(`cl`, `cx`, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, `claude-z` and `claude-k`)
-are in [agents.md](agents.md), and installing, switching and `hatcheck doctor` in
+(`cl`, `cx`, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, `claude-z` and
+`claude-k`) are in [agents.md](agents.md), and installing, switching and `hatcheck doctor` in
 [install.md](install.md). The [README](../README.md) has the short tour.
 
 ## `hatcheck where`: find a session
@@ -31,6 +31,11 @@ is its directory, `~/.dsh/sessions/<project>/<id>`; with `--json`, `file` is the
 `session.v4.jsonl[.zstd]` log and `data_folder` is that directory. A conventional `session-<uuid>`
 is shown without `session-`, and a pasted full ID works. To open it, run `dsh web` from its recorded
 folder and choose it in DSH's session history; a named or custom home uses `DSH_HOME=… dsh web`.
+A MiniMax Code session's text result is its session directory under `~/.minimax/v2/sessions`; with
+`--json`, `file` is its active canonical `messages.jsonl`, `data_folder` is that session directory
+and `archived` comes from its catalog row. Its 32-hex ID can be pasted with `mvs_`. Resume it
+directly with `mcode --session mvs_<id>`; a named or custom home uses
+`MINIMAX_DATA_DIR=… mcode --session mvs_<id>`.
 
 ## `hatcheck`: what to resume
 
@@ -52,10 +57,12 @@ and a pipe never gets them. `--json` and raw output (`--print`, `where`, `bind -
 Lists the Claude Code sessions from every `~/.claude*` profile, the Codex sessions from every
 `~/.codex*` home, the Kimi Code CLI sessions from every `~/.kimi-code*` home and the DeepSeek
 Harness sessions from every `~/.dsh*` home and the home `DSH_HOME` names, with Antigravity CLI's
-and ZCode's from their folders, that were active in the last 24 hours or are still open, grouped by
-folder and newest first. Run from a folder that has sessions, it lists just that folder's
-(`--all-folders` lists them all). Each one comes with the command that resumes it (for DSH, opens
-its web session history) and what's left of that profile's plan:
+and ZCode's from their folders. MiniMax Code sessions come from every `~/.minimax` or
+`~/.minimax-NAME` home with a current v2 store, and the home `MINIMAX_DATA_DIR` or `MAVIS_DATA_DIR`
+selects. Sessions listed were active in the last 24 hours or are still open, grouped by folder and
+newest first. Run from a folder that has sessions, it lists just that folder's (`--all-folders`
+lists them all). Each one comes with the command that resumes it (for DSH, opens its web session
+history) and what's left of that profile's plan:
 
 ```
 $ hatcheck
@@ -82,13 +89,15 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 ```
 
 - Run the folder's `cd` line, then the session's command. The command's program, `cl`, `claude`,
-  `cx`, `codex`, `agy`, `kimi`, `zcode` or `dsh`, is in cyan: that word says which agent the session
-  belongs to. The branch after the title is the one the session ran on, as the agent wrote it down.
-  Sessions still open are marked `● open`, so you don't resume one twice: Claude Code's say the
-  process, from the registry Claude Code keeps; Codex's and agy's, which hold a lock on a session
-  they have open, say the agent. A DSH session's held POSIX `session.lock` says `dsh`; a stale lock
-  file doesn't count, and Windows' named semaphore isn't detected. An open session is listed even
-  when its last message is older than the window.
+  `cx`, `codex`, `agy`, `kimi`, `zcode`, `dsh` or `mcode`, is in cyan: that word says which agent
+  the session belongs to. The branch after the title is the one the session ran on, as the agent
+  wrote it down. Sessions still open are marked `● open`, so you don't resume one twice: Claude
+  Code's say the process, from the registry Claude Code keeps; Codex's and agy's, which hold a lock
+  on a session they have open, say the agent. A DSH session's held POSIX `session.lock` says `dsh`;
+  a stale lock file doesn't count, and Windows' named semaphore isn't detected. An mcode session's
+  unexpired writer lease says `mcode`; an expired lease is stale, and unknown lock state is treated
+  as busy rather than as proof the writer died. An open session is listed even when its last message
+  is older than the window.
 - The comment after each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
   (`week`) and per-model weekly limits such as `Fable`, which are named in violet, with their bar
   drawn in it, so they stand apart from `week`. Each one has the % left and a bar of it, then `↻`, a bar of the time left until
@@ -106,8 +115,8 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   its comment is still the profile's Claude plan.
 - Codex sessions resume with `codex resume <id>`, or `cx <name> resume <id>` for a `~/.codex-<name>`
   home. Their comment shows the ChatGPT plan's Codex limits (see `hatcheck usage` below). Sessions
-  from the Codex app, its IDE extension and `codex exec` are hidden like Desktop ones, and Codex's
-  own approval reviews aren't listed.
+  from the Codex app (now part of the ChatGPT desktop app), its IDE extension and `codex exec` are
+  hidden like Desktop ones, and Codex's own approval reviews aren't listed.
 - Antigravity CLI sessions resume with `agy --conversation <id>`, and have no branch after the
   title, since agy writes none down. Their comment shows what agy's `/usage` reports. The
   Antigravity app's conversations, read from the app's own folder, are hidden like Desktop ones,
@@ -122,6 +131,12 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   custom home. With the `cd` line, that opens the official web UI and session history in the
   recorded folder; choose the session there, since the selected ID isn't passed. There is no DSH
   launcher. DSH sessions have no branch or usage comment, and subagent sessions aren't listed.
+- MiniMax Code sessions resume directly with `mcode --session mvs_<id>`, or
+  `MINIMAX_DATA_DIR=… mcode --session mvs_<id>` for a named or custom home. There is no mcode
+  launcher, branch or usage comment. The v3 catalog supplies the title, workspace and times; a
+  session with an empty canonical `messages.jsonl` can still be listed from that catalog but has
+  zero turns, and display rows are never merged into it. Subagent sessions aren't listed; an idle
+  session merely selected in the TUI isn't detectable as open.
 - Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
   `setopt interactivecomments`).
 - Usage is fetched live: Claude Code's `/usage` is run once per account, in its profile, and the
@@ -141,7 +156,7 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 |--------------|-------------------------------------------------------------------------------|
 | `HOURS`      | how far back to look (default 24); takes `36`, `1.5`, `12h` or `3d`           |
 | `-n N`       | show only the newest N sessions per folder and count the rest                 |
-| `--all`      | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec` and the Antigravity app |
+| `--all`      | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec`, the Antigravity app and MiniMax Code's internal, non-subagent sessions |
 | `--all-folders` | list every folder, even when run from one that has sessions                |
 | `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, `CODEX_HOME=… codex …` instead of `cx`, and `KIMI_CODE_HOME=… kimi …` instead of `ck` |
 | `--cached`   | take usage from Claude Code's and Codex's saved snapshots and hatcheck's last readings of agy's `/usage` and Kimi's usage, without calling the APIs |
@@ -207,12 +222,16 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   needs kimi to have run in the last quarter of an hour; otherwise, as when the request fails,
   hatcheck's last reading is shown with its age, since kimi saves none. Kimi sends no severity, so
   a limit turns yellow from 75% used and red from 90%. Checked against kimi 2.2.0 and the answer
-  its endpoint gave on 2026-10-20.
+  its endpoint gave on 2026-10-20, and again with kimi 2.3.1 on 2026-10-24.
 - ZCode's folder is listed with no data and why: zcode has no usage command and asks no usage
   endpoint (ZCode 0.16.9); Z.ai shows the plan's usage at z.ai/manage-apikey/subscription.
 - Each DeepSeek Harness home is listed as its own no-data account, with agent `dsh` and plan
   `DeepSeek`: `dsh has no plan-usage command or endpoint (0.2.1-rc.2)`. No DSH credentials are
   read and no DSH usage request is made.
+- Each MiniMax Code home is listed as its own no-data account, with agent `mcode` and plan
+  `MiniMax`: `mcode plan quota isn't wired into hatcheck (0.6.13)`. MiniMax Code has a quota
+  client, but hatcheck doesn't call it. No mcode authentication or provider configuration is read,
+  no mcode usage request is made, and no new network request class is added.
 - Codex homes show their ChatGPT plan's Codex limits: the 5-hour and weekly windows (a free plan has
   one 30-day window instead), then limits for single models such as `GPT-5.3-Codex-Spark`, named in
   violet like `Fable`. The access token in the home's `auth.json` is sent as it is to the endpoint
@@ -221,13 +240,13 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   severity, so a limit turns yellow from 75% used and red from 90%. Homes signed in to the same
   account are shown together.
 - Antigravity CLI's folder shows the limits agy's own `/usage` reports, one row per model group
-  and window (agy 1.4.3 names a 5-hour and a weekly one per group), named in violet like
-  per-model limits, under `Antigravity` and the plan tier agy names. When agy isn't signed in,
-  the row says so, with the last reading and its age, and nothing is run that would start agy's
-  sign-in. agy is the slowest to ask, two requests to Google taking five seconds or more, so a
-  reading from the last five minutes is shown again instead, as `cached <1m ago (asked at most
-  once in 5m)`; `--cached` shows it at any age, and once it's five minutes old agy is asked
-  again. One hatcheck asks agy at a time: a second run while another is asking, as when the
+  and window (agy 1.4.3 and later, to 1.4.7, name a 5-hour and a weekly one per group), named in
+  violet like per-model limits, under `Antigravity` and the plan tier agy names. When agy isn't
+  signed in, the row says so, with the last reading and its age, and nothing is run that would
+  start agy's sign-in. agy is the slowest to ask, two requests to Google taking five seconds or
+  more, so a reading from the last five minutes is shown again instead, as `cached <1m ago (asked
+  at most once in 5m)`; `--cached` shows it at any age, and once it's five minutes old agy is
+  asked again. One hatcheck asks agy at a time: a second run while another is asking, as when the
   desktop app's engine and the CLI coincide, waits for it and takes its reading the same way. See
   [Antigravity CLI](agents.md#antigravity-cli-agy) for how it's run and what's kept.
 - `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
@@ -323,7 +342,7 @@ Or delete the copy in ~/.claude first, to replace it:
 ```
 
 A round trip and a copy that went on in both profiles were tested with the real `claude`
-(2.1.301).
+(2.1.301), and a fork moved to another profile and resumed there with 2.1.310.
 
 When more than one profile has the session, you're asked which copy to take. The one used last
 comes first and is the default, and each other one says how it stands to it:
@@ -377,9 +396,10 @@ Resume it now in ~/.claude-a? [y/N]
   tokens the oldest turns after the first are left out, so it fits the new agent's context window.
   The newest turn is always kept, so the session carries on from where it ended; one too long on
   its own keeps its latest parts.
-- Converted sessions were tested by resuming them with the real `claude` (2.1.301) and `codex`
-  (0.155.1), which sent the whole converted history to the model and carried on in the same
-  session. Codex's resume picker lists them by their Claude Code title.
+- Converted sessions were tested by resuming them with the real `claude` and `codex`, first 2.1.301
+  and 0.155.1, and again 2.1.310 and 0.164.0 on 2026-10-24: each sent the whole converted history
+  to the model, answered a question about it, and carried on in the same session. Codex's resume
+  picker lists them by their Claude Code title (0.155.1).
 - Codex can import Claude Code sessions itself (`/import` in Codex), but only from `~/.claude` and
   the last 30 days. Claude Code's `claude import codex` brings over Codex's instructions, agents and
   hooks, not sessions.
@@ -410,9 +430,10 @@ Resume it with:
   added to the workspace so agy may read the file, and a first prompt that has it read the
   conversation and carry on. The session exists once agy starts, so `--json` reports
   `"new_session": null` and the `file`. The original stays, as after every conversion.
-- Checked against the real `agy` (1.4.2): `hatcheck show` reads its transcripts, and a Claude Code
-  session converted this way was read from the imports folder and summarised correctly by agy in
-  print mode.
+- Checked against the real `agy`, 1.4.2 and then 1.4.7 on 2026-10-24: `hatcheck show` reads its
+  transcripts, and a Claude Code session converted this way was read from the imports folder by
+  agy in print mode, which answered from it. agy 1.4.7 lists the imports folder first among the
+  conversation's folders; hatcheck files the conversation under the session's folder all the same.
 
 ### With Kimi Code CLI
 
@@ -445,9 +466,10 @@ Resume it with:
   from and the turn's end, and its line in the index. kimi binds its model and profile when its
   terminal UI opens the session, so resume it with the printed `kimi --session …`; asked in print
   mode (`-p`) before the UI has opened the session once, kimi 2.2.0 says no model is set.
-- Checked against the real `kimi` (2.2.0): a Claude Code session converted this way was opened in
-  kimi's terminal UI, which showed the conversation and answered a question about it from the
-  history. kimi validates each event of a session it resumes against a schema, which these pass.
+- Checked against the real `kimi`, 2.2.0 and then 2.3.1 on 2026-10-24: a Claude Code session
+  converted this way was opened in kimi's terminal UI, which showed the conversation, and answered
+  a question about it from the history (2.3.1 in print mode, once the UI had opened it). kimi
+  validates each event of a session it resumes against a schema, which these pass.
 - Nothing marks a Kimi session open, so `move` can't refuse one that is: quit kimi first.
 
 ### With ZCode
@@ -500,10 +522,28 @@ target; name the target agent explicitly when needed.
 - A DSH session whose POSIX `session.lock` is held is refused, so it stops changing first. A stale
   lock file isn't open; Windows' named semaphore isn't detected.
 
+### With MiniMax Code
+
+`mcode` is `~/.minimax` and `mcode:<name>` is `~/.minimax-<name>` as a source or `--from`. A bare
+`NAME` follows an mcode session the way it follows a Codex or Kimi one, but an mcode home is never
+a supported target; name the target agent explicitly when needed.
+
+- `move` and `fork` convert an mcode session out to an existing target hatcheck can write, and the
+  original always stays. An mcode target is explicitly refused. Same-agent copies are unsupported
+  too: shared SQLite state, manifest paths and session assets aren't safe for hatcheck to copy,
+  and hatcheck never writes mcode's store.
+- The active canonical history supplies direct user text, assistant text, tool calls and results,
+  and compaction summaries. `turn_config`, `history_artifact`, previous generations, reasoning and
+  signatures, hidden, custom and plugin records, UI-only notices, tool-output artifacts and
+  subagent sessions are left out; display rows aren't merged in.
+- A session with an unexpired writer lease is refused; an expired lease is stale, and unknown lock
+  state is treated as busy rather than as proof the writer died.
+- `mcode exec --file` isn't a lossless import and isn't used to convert into mcode.
+
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder. One word alone that names a profile or home that exists, and starts no session's ID, is `PROFILE` (`hatcheck move NAME`), with the session the newest started from this folder; a word that is both is asked for more |
-| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, or a path; `dsh` and `dsh:NAME` name DSH homes for `--from` and are refused as targets; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
+| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, or a path; `dsh`, `dsh:NAME`, `mcode` and `mcode:NAME` name those homes for `--from` and are refused as targets; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
 | `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
@@ -558,9 +598,9 @@ Resume it now in ~/.claude? [y/N]
   always stays where it was. A plan file already there stays too, since the copy there uses it.
 - To another agent, or to a Codex home on another account, it converts the session, as `move`
   does: a converted session is always a new one, and for agy and zcode a file the agent starts one
-  on. A DSH session can only be converted out to another agent; DSH targets and copies between DSH
-  homes are refused, as for `move`.
-- Resuming a fork was tested with the real `claude` (2.1.301).
+  on. DSH and mcode sessions can only be converted out to another agent; their targets and copies
+  between homes of the same agent are refused, as for `move`.
+- Resuming a fork was tested with the real `claude`, 2.1.301 and again 2.1.310.
 
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
@@ -605,6 +645,8 @@ Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
   was.
 - An affected DSH session is listed as skipped: its header's cwd and project key are immutable, and
   its workspace state stays as it was. Hatcheck doesn't rewrite its log or workspace.
+- An affected mcode session is listed as skipped too: its shared SQLite state and absolute manifest
+  paths with related assets stay as they were. `--dry-run` changes nothing.
 - It refuses, and changes nothing, when a session is open, was written in the last minute, is a
   link rather than a file, is already filed under the new folder (its subagent and tool-output
   folder included), or has a line naming the folder
@@ -626,24 +668,32 @@ cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 ```
 
 - It finds the session by its ID or the start of it, in every Claude Code profile, Codex home,
-  Kimi home and DeepSeek Harness home, including `DSH_HOME`, and in Antigravity CLI's and ZCode's
-  folders. When more than one profile has a copy, it takes the one used last; `--from <profile>`
-  picks one.
+  Kimi home, DeepSeek Harness home and MiniMax Code home, including `DSH_HOME`, `MINIMAX_DATA_DIR`
+  and `MAVIS_DATA_DIR`, and in Antigravity CLI's and ZCode's folders. When more than one profile has
+  a copy, it takes the one used last; `--from <profile>` picks one.
 - The command is the one `hatcheck` prints: `cl` or `claude`, `cx` or `codex`, `agy --conversation`,
-  `ck` or `kimi --session`, `zcode --resume`, `dsh web`, and `cl -z`/`cl -k` for a session whose
-  last reply came from Z.ai or Kimi. Without `cl`, `cx` or `ck` on the `PATH` it's the full form
-  (`CLAUDE_CONFIG_DIR=… claude …`), as `--full` gives.
+  `ck` or `kimi --session`, `zcode --resume`, `dsh web`, `mcode --session`, and `cl -z`/`cl -k` for
+  a session whose last reply came from Z.ai or Kimi. Without `cl`, `cx` or `ck` on the `PATH` it's
+  the full form (`CLAUDE_CONFIG_DIR=… claude …`), as `--full` gives.
 - For DSH, the default home uses `dsh web`; a named or custom home uses `DSH_HOME=… dsh web`, or
   `$env:DSH_HOME=…; dsh web; $env:DSH_HOME=$null` in PowerShell. From the session's recorded folder
   this opens the official web UI and its session history: choose the session there. It doesn't
   deep-link or resume the selected ID. `open --print` prints the `cd` and web commands without
   starting them.
+- For MiniMax Code, resume is exactly `mcode --session mvs_<id>`. A named or custom home uses
+  `MINIMAX_DATA_DIR=… mcode --session mvs_<id>`, or `$env:MINIMAX_DATA_DIR=…; mcode --session
+  mvs_<id>; $env:MINIMAX_DATA_DIR=$null` in PowerShell. This is a direct resume, not a DSH-style
+  picker or headless import; `open --print` prints the `cd` and resume commands without starting
+  them.
 - `open --login dsh` or `open --login dsh:NAME` explicitly opens a terminal running `dsh web` for
   sign-in instead of resuming, so sign-in stays with DSH; hatcheck doesn't invent a `dsh login`
-  command.
+  command. `open --login mcode` or `open --login mcode:NAME` runs `mcode login` in the selected
+  home, with `MINIMAX_DATA_DIR` set for a named or custom one.
 - A session that's open in a terminal is refused, so it isn't resumed twice. A DSH session whose
   POSIX `session.lock` is held is refused too; a stale lock file isn't open, and Windows' named
-  semaphore isn't detected.
+  semaphore isn't detected. An mcode session with an unexpired writer lease is refused; an expired
+  lease is stale, and unknown lock state is treated as busy rather than as proof the writer died.
+  An idle session merely selected in mcode's TUI isn't detectable.
 - The terminal:
   - **macOS:** Terminal, or the one `hatcheck` runs in when that's iTerm2, Ghostty or WezTerm. Terminal
     and iTerm2 are driven with AppleScript, which macOS asks you to allow once.
@@ -681,10 +731,15 @@ cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
   `resume` asks you to open DSH's web UI in the recorded folder and choose the session in its
   history; it doesn't deep-link or resume the selected ID. `resume --print` prints just the `cd`
   and web commands.
+- For an mcode session, `resume` uses the same direct `mcode --session mvs_<id>` as `open`, with
+  `MINIMAX_DATA_DIR` and PowerShell clearing for a named or custom home. `resume --print` prints
+  just the `cd` and direct resume commands.
 - The command runs in this terminal, in the session's folder, in hatcheck's place, as
   `hatcheck open --here` runs it; `hatcheck open` opens a new terminal window instead.
 - A session that's open in a terminal is refused, so it isn't resumed twice. A held POSIX DSH
-  `session.lock` is refused too; Windows' named semaphore isn't detected.
+  `session.lock` is refused too; Windows' named semaphore isn't detected. An unexpired mcode writer
+  lease is refused, an expired lease is stale, and unknown lock state is busy rather than proof the
+  writer died.
 
 ## `hatcheck show`: a session's conversation
 
@@ -710,13 +765,20 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
 - Read-only: your messages and the replies, with each tool call as a block of text with its input
   and the start of its output, as a conversion carries them (see
   [`hatcheck move`](#hatcheck-move-carry-on-a-session-with-another-profile)). A Codex session, an
-  Antigravity conversation, a Kimi session, a ZCode session or a DeepSeek Harness session is shown
-  the same way, from its own file, log or rows.
+  Antigravity conversation, a Kimi session, a ZCode session, a DeepSeek Harness session or a MiniMax
+  Code session is shown the same way, from its own file, log or rows.
 - A DSH session comes from the selected current v4 log, raw JSONL or concatenated Zstandard
   frames; an unsupported or corrupt newest generation isn't passed over for an older one. Its
   current surface supplies direct `source.kind=user` prompts, assistant text and tool calls, tool
   results and compact checkpoints, with replacements applied. Runtime or injected context,
   reasoning, images and files, replaced history and subagent sessions are left out.
+- An mcode session comes from its active canonical `messages.jsonl`, resolved as
+  [MiniMax Code](agents.md#minimax-code-mcode) describes. Direct user text, assistant text,
+  `toolCall` and `toolResult`, and `compactionSummary` are understood. `turn_config`,
+  `history_artifact`, previous generations, reasoning and signatures, hidden, custom and plugin
+  records, UI-only notices, tool-output artifacts and subagent sessions are left out. An empty
+  canonical file shows zero turns even when catalog or display metadata has content; display rows
+  aren't merged into the timeline.
 - `--last N` shows only the last N turns, `--from PROFILE` picks the copy to read when several
   profiles have one, and `--json` prints the turns as data.
 
@@ -769,22 +831,22 @@ No room yet; waiting for ~/.claude-a until Tue 12:00pm (in 2d14h)…
   98% behind those; then those out of Fable, or out of the weekly limit for all models, the soonest
   back on top; then accounts without a Fable limit, by the limit with the least left. Codex homes,
   Kimi homes and Antigravity CLI's folder are ranked by the limit with the least left. DeepSeek
-  Harness homes have no usage data: they sort after accounts with data and are never offered as
-  another agent's best.
+  Harness and MiniMax Code homes have no usage data: they sort after accounts with data and are
+  never offered as another agent's best.
 - An account has room when every limit it needs has some left: its Fable limit and every limit
   that isn't per model, so a used-up 5-hour limit leaves none until it resets, which `--wait`
   waits for; for Antigravity CLI, whose limits are all per model, every one. Usage that's missing,
-  or that hatcheck can't read, is never room, so a DSH home never counts as having room.
+  or that hatcheck can't read, is never room, so DSH and mcode homes never count as having room.
 - A line's Fable part ends with the account's pace: what's left, divided by the hours until it
   resets, so what the account can spend per hour without running out before the reset. `0.5%/h`
   with 31% left means about 62 hours to go. An account without a Fable limit shows the pace of its
   tightest limit instead.
 - `--wait` sleeps until an account has room, then answers as above: any account of the session's
   agent (Claude Code's, without a session); `--wait NAME` (or `default`, `codex`, `codex:NAME`,
-  `kimi`, `kimi:NAME`, `dsh`, `dsh:NAME`) that one profile or home. It sleeps until the soonest
-  reset the numbers name, says so on stderr, then looks again; when nothing says when an account
-  will have room, as with DSH's no-data accounts, it stops with an error instead of polling. For a
-  script: `hatcheck best --wait a && cl a`.
+  `kimi`, `kimi:NAME`, `dsh`, `dsh:NAME`, `mcode`, `mcode:NAME`) that one profile or home. It
+  sleeps until the soonest reset the numbers name, says so on stderr, then looks again; when nothing
+  says when an account will have room, as with DSH's and mcode's no-data accounts, it stops with an
+  error instead of polling. For a script: `hatcheck best --wait a && cl a`.
 - The numbers are the ones `hatcheck usage` shows, live when it can be, with a snapshot's age
   otherwise; `--cached` skips the APIs.
 - **Advice only.** It runs when you ask, prints commands, and never starts, moves or switches
@@ -813,15 +875,19 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
   (`%APPDATA%\hatcheck\bindings.json` on Windows), not in the repo, so profile names don't end up in
   git. The deepest bound folder wins, and folders are compared once symlinks are resolved.
 - `default` binds `~/.claude`, `~/.codex` and `~/.dsh`, plus `~/.gemini/antigravity-cli`,
-  `~/.kimi-code` and `~/.zcode` when agy, kimi and zcode have sessions there. The Codex, Kimi and
-  DSH homes are the ones named like the profile when there are any; `--codex <name>`,
-  `--kimi <name>` and `--dsh <name>` pick others, and one of those options alone binds just that
-  home. `--agy default`, `--zcode default` and `--dsh default` bind just those folders.
+  `~/.kimi-code` and `~/.zcode` when agy, kimi and zcode have sessions there, and `~/.minimax` when
+  its actual v2 store exists. The Codex, Kimi, DSH and mcode homes are the ones named like the
+  profile when there are any; a named mcode home is included only with its actual v2 store.
+  `--codex <name>`, `--kimi <name>`, `--dsh <name>` and `--mcode <name>` pick others, and one of
+  those options alone binds just that home. `--agy default`, `--zcode default`, `--dsh default` and
+  `--mcode default` bind just those folders. `--mcode NAME`, `--mcode default` or `--mcode PATH`
+  requires the actual v2 store; `~/.minimax-code` is the installer, not a profile named `code`.
 - `cl`, `cx` and `ck` use the binding when no profile name is given: `cl --resume <id>`, `cl`,
   `cx resume <id>`, `ck --session <id>`. A name given still wins, and outside bound folders
   nothing changes.
-- `bind --which dsh` prints `default`, `NAME` or the bound path. An agent-only binding command
-  with no PROFILE keeps the existing DSH binding unless `--dsh` replaces it.
+- `bind --which dsh` and `bind --which mcode` print `default`, `NAME` or the bound path. An
+  agent-only binding command with no PROFILE keeps the existing DSH or mcode binding unless `--dsh`
+  or `--mcode` replaces it.
 - `hatcheck` marks sessions that ran in a bound folder under another profile:
   `⚠ folder bound to ~/.claude-a`.
 - `--hook` adds a `SessionStart` hook, `hatcheck bind --check`, to every profile's `settings.json`
@@ -831,7 +897,7 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
   and run cl a here instead.` For a resumed session it gives the `hatcheck move` command instead.
   The hook runs the `hatcheck` that `--hook` found on your `PATH`, by its path. Run `--hook` again
   after installing hatcheck another way, and it points the hooks at the new one. No hook is added
-  for kimi, zcode or DSH.
+  for kimi, zcode, DSH or mcode.
   - **Claude Code:** tested with the real `claude` (2.1.301). It shows the warning in the interactive
     UI; `claude -p` doesn't display it.
   - **Codex:** Codex runs a new hook only once you trust it with `/hooks` in `codex`, once per home.
@@ -904,13 +970,16 @@ $ hatcheck --json
   `--no-usage`). `hatcheck usage --json` gives every account, in its Fable order, with `sorted_by`.
 - **Stable:** absolute paths rather than `~`, times in UTC (ISO 8601), no colours. `version` goes up
   only when a field changes meaning or goes away; new fields can appear at any time. `agent` is
-  `claude`, `codex`, `agy`, `kimi`, `zcode` or `dsh`; a Kimi or ZCode session's `id` is the UUID
-  after the agent's own `session_` or `sess_`, which `resume` puts back. A conventional DSH
+  `claude`, `codex`, `agy`, `kimi`, `zcode`, `dsh` or `mcode`; a Kimi or ZCode session's `id` is the
+  UUID after the agent's own `session_` or `sess_`, which `resume` puts back. A conventional DSH
   `session-<uuid>` also has the bare UUID as its `id`, but its `resume` is `dsh web` without the ID.
+  An mcode session's `id` is the 32 hex digits after `mvs_`, and `resume` puts the prefix back.
 - `open` is `null`, or what a session is open in: Claude Code's with the process's `pid` and `status`,
   Codex's and agy's with `pid` and `status` `null`, since only a lock says they're open. DSH's are
   the same on POSIX, from a held `session.lock`; a stale file doesn't count, and Windows' named
-  semaphore isn't detected. Kimi's and ZCode's are never marked open, since nothing marks one.
+  semaphore isn't detected. Mcode's likewise have `pid` and `status` `null`, from an unexpired
+  writer lease; an expired lease is stale and unknown lock state is busy. Kimi's and ZCode's are
+  never marked open, since nothing marks one.
 - `left_percent` is `null` for a snapshot's limit that has reset since it was saved. `pace` is what's
   left per hour until the reset (`left_percent` over the hours to go, at least one), `null` without
   a reset ahead. `fable` is `{"left": true, "resets_at": …}`, `{"left": false, "back_at": …}`, or

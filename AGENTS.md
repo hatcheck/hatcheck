@@ -1,7 +1,7 @@
 # Notes for coding agents
 
-Hatcheck keeps Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and DeepSeek Harness
-accounts on one computer apart: `crates/hatcheck` is the whole CLI (and the engine the desktop app in `desktop/`
+Hatcheck keeps Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and
+MiniMax Code accounts on one computer apart: `crates/hatcheck` is the whole CLI (and the engine the desktop app in `desktop/`
 runs), `tests/` holds the command tests, and `docs/commands.md`, `docs/agents.md` and
 `docs/install.md` document every command, agent and way of installing as it is. Read
 [docs/lessons.md](docs/lessons.md) before changing code: what earlier work got wrong, and the rule
@@ -35,6 +35,10 @@ The desktop app has its own checks, which CI runs: `npm run build` in `desktop/`
 the pages) and `cargo check` in `desktop/src-tauri`. To try the app, `npm run demo` builds it and
 runs it against a demo home made with `tests/helpers.py`, never against your profiles; the
 commands are in [desktop/README.md](desktop/README.md#build-and-test-it).
+
+The tests can't see an agent's new version: every week or two, and before a release,
+[docs/maintenance.md](docs/maintenance.md) checks the newest version of each agent, its install
+commands and apps, and the providers' models, starting with `python3 scripts/upstream.py`.
 
 ## Conventions
 

@@ -6,7 +6,7 @@ let homeDir = "";
 /** The home folder, for printing paths as ~/...; guessed from the paths the engine gives. */
 export function learnHome(paths: string[]) {
   for (const p of paths) {
-    const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)[/\\]\.(claude|codex|dsh|gemini|kimi-code|zcode)/);
+    const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)[/\\]\.(claude|codex|dsh|gemini|kimi-code|minimax|zcode)/);
     if (m) {
       homeDir = m[1];
       return;
@@ -21,7 +21,7 @@ export function tilde(path: string | null | undefined): string {
   return homeDir && path.startsWith(homeDir) ? "~" + path.slice(homeDir.length) : path;
 }
 
-/** A profile's short name: default, work, codex, codex:work, agy, kimi, kimi:work, zcode, dsh, dsh:work, or its path. */
+/** A profile's short name, or its path when it isn't a conventional home. */
 export function profileName(path: string): string {
   const base = path.split(/[/\\]/).pop() || path;
   if (base === ".claude") return "default";
@@ -30,20 +30,24 @@ export function profileName(path: string): string {
   if (base === ".kimi-code") return "kimi";
   if (base === ".zcode") return "zcode";
   if (base === ".dsh") return "dsh";
+  if (base === ".minimax") return "mcode";
+  if (base === ".minimax-code") return tilde(path);
   if (base.startsWith(".claude-")) return base.slice(".claude-".length);
   if (base.startsWith(".codex-")) return "codex:" + base.slice(".codex-".length);
   if (base.startsWith(".kimi-code-")) return "kimi:" + base.slice(".kimi-code-".length);
   if (base.startsWith(".dsh-")) return "dsh:" + base.slice(".dsh-".length);
+  if (base.startsWith(".minimax-")) return "mcode:" + base.slice(".minimax-".length);
   return tilde(path);
 }
 
-/** The agent's short name; the long form spells out Claude Code, Antigravity CLI, Kimi Code CLI and DeepSeek Harness. */
+/** The agent's short name; the long form spells out CLI, Code and Harness names. */
 export function agentName(agent: Agent, long = false): string {
   if (agent === "codex") return "Codex";
   if (agent === "agy") return long ? "Antigravity CLI" : "Antigravity";
   if (agent === "kimi") return long ? "Kimi Code CLI" : "Kimi";
   if (agent === "zcode") return "ZCode";
   if (agent === "dsh") return long ? "DeepSeek Harness" : "DeepSeek";
+  if (agent === "mcode") return long ? "MiniMax Code" : "MiniMax";
   return long ? "Claude Code" : "Claude";
 }
 

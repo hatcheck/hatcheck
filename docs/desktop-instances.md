@@ -140,7 +140,8 @@ folder can run to many GB, and can be deleted from the copy, since it downloads 
 ## Limits
 
 - macOS only. Claude Desktop on Windows is an Electron app too, so the same idea should work with a
-  shortcut per instance; it hasn't been done here.
+  shortcut per instance; it hasn't been done here. Claude Desktop for Linux is in beta, for Ubuntu
+  and Debian, and hasn't been tried with a data folder of its own.
 - The instances share the one Claude Desktop install, so they update together, and a running
   instance can't carry its launcher's colour.
 - Each instance keeps its own settings and MCP servers; nothing is shared between them unless you
