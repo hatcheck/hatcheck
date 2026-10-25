@@ -54,11 +54,13 @@ def dead_pid():
     return p.pid
 
 
-def resume_command(h, home, session=None):
-    tail = " --resume " + session if session else ""
+def qwen_words(h, home):
+    """What hatcheck prints before and after `qwen <tail>` to run qwen with a home: nothing for
+    ~/.qwen, QWEN_HOME= before it in sh, and in PowerShell's words the variable set before and
+    cleared after, so a longer tail sits between them."""
     default = os.path.join(h.home, ".qwen")
     if os.path.realpath(home) == os.path.realpath(default):
-        return "qwen" + tail
+        return "", ""
     if WINDOWS:
         prefix = h.home + os.sep
         if home.startswith(prefix):
@@ -69,9 +71,14 @@ def resume_command(h, home, session=None):
                 folder = "'%s'" % home.replace("'", "''")
         else:
             folder = "'%s'" % home.replace("'", "''")
-        return "$env:QWEN_HOME=%s; qwen%s; $env:QWEN_HOME=$null" % (folder, tail)
+        return "$env:QWEN_HOME=%s; " % folder, "; $env:QWEN_HOME=$null"
     shown = h.shown(home) if os.path.commonpath([h.home, home]) == h.home else home
-    return "QWEN_HOME=%s qwen%s" % (shown, tail)
+    return "QWEN_HOME=%s " % shown, ""
+
+
+def resume_command(h, home, session=None):
+    before, after = qwen_words(h, home)
+    return before + "qwen" + (" --resume " + session if session else "") + after
 
 
 class QwenSessions(unittest.TestCase):
@@ -454,8 +461,11 @@ class QwenConversion(unittest.TestCase):
                       'Qwen Code in ' % (A[:8], self.h.shown(self.claude)), out)
         self.assertIn("so the session starts when qwen reads the file.", out)
         self.assertIn("Then start it with:", out)
-        self.assertIn(resume_command(self.h, work) + " --add-dir ", out)
-        self.assertIn("<new id>.md", out)
+        # The start command: in PowerShell's words the variable is set before it and cleared after.
+        before, after = qwen_words(self.h, work)
+        line = next(l for l in out.splitlines() if "qwen --add-dir " in l)
+        self.assertTrue(line.startswith("  %sqwen --add-dir " % before) and line.endswith(after), line)
+        self.assertIn("<new id>.md", line)
         self.assertEqual(tree_bytes(work), work_before)
 
     def test_a_brief_hands_over_the_task_and_the_last_turns(self):
