@@ -87,10 +87,29 @@ Every probe leaves something in a real home. Look for what changed since the mar
   the `user-history/` file of what you typed in its UI.
 - agy: the conversation stays: it lives in agy's own database, which hatcheck never writes; delete
   it from the Antigravity app if you want it gone.
-- mcode: the session mcode made, in its catalog and `v2/sessions/`, with `sessions/mvs_<id>/`, a
-  `background-tasks/bg_…` folder and its observability logs: delete the session from mcode's own
-  session browser (`mcode --session`), since hatcheck never edits its SQLite; the rest is mcode's
-  housekeeping.
+- mcode: nothing of mcode's deletes a session for you. Its session browser (`mcode --session`)
+  archives one (`Archive session?`, "History stays available under Archived"), its in-session tool
+  refuses (`Deleting a session is reserved for the user`), and the deletion in its code (0.6.13) is
+  reached only through the desktop app's service. So take the probe's session out by hand, the way
+  that code does, with no mcode running and a copy of `v2/sqlite/runtime-state.sqlite` (with its
+  `-wal` and `-shm`) taken first. In one transaction, its rows by `session_id` in these
+  `local_runtime_` tables: `queue_items`, `queue_row_migrations`, `queues`, `session_assets`,
+  `session_asset_index_state`, `token_usage`, `message_rows`, `message_row_migrations`, `messages`,
+  `pi_history_file_migrations`, `pi_history_rows`, `pi_history_row_migrations`,
+  `ledger_watermarks`, `session_projection_watermarks`, `turn_diffs`, `turn_diff_journal` (its
+  trigger clears `turn_diff_retention_queue`), `turn_diff_rewind_operations`,
+  `communication_messages` (`from_session` and `to_session`), `query_view_states`,
+  `turn_ingress_client_requests`, `turn_ingress_sequences` (by the session's `turn_id`s in
+  `turn_ingress`), `turn_ingress`, `session_agent_state`, `sessions_fts` (by the `fts_rowid` in
+  `session_fts_keys`), `session_fts_keys` and `sessions`; then what the probe alone made, its
+  `background_tasks` row (`owner_session_id`) and its `projects` row for the probe folder, once no
+  session names it. Its files: the session's folder under `v2/sessions/<date>/`,
+  `sessions/mvs_<id>/permission.json`, the `background-tasks/bg_…` folder,
+  `v2/observability/logs/sessions/mvs_<id>/`, the run's `v2/observability/mcode/…-<pid>.jsonl`,
+  its lease in `v2/runtime-owner-leases/` and its socket in `run/` if the run was killed, and its
+  empty folder in `v2/mcode/drafts/`. `mcode acp`, sent `initialize` and `session/list` over
+  stdin and nothing else, then shows what mcode lists. The shared `runtime-<hour>.log`, the events
+  file and the migration receipts are mcode's housekeeping, left alone.
 - qwen: the probe folder's `projects/<folder>` (its chats, `meta.json`, `extract-cursor.json` and
   `memory/`), the session's lines in `usage/token-usage-<month>.jsonl` and `usage_record.jsonl`,
   `tmp/<sha256 of the folder>` and `file-history/<session>` when the UI ran, and the registry
@@ -111,9 +130,68 @@ Every probe leaves something in a real home. Look for what changed since the mar
 - **CHANGELOG.md** for what users notice, and [lessons.md](lessons.md) when something had broken.
 - Add a line below.
 
+## Releasing the CLI
+
+Steps 1 to 4 run first. A release is then a commit and a tag on it, in that order: the three
+workflows a tag starts check the tag against the version in `Cargo.toml` and refuse one that
+doesn't match, so a tag pushed before the release commit releases nothing. (`v0.6.0` went up on a
+0.5.0 commit on 2026-10-25: all three refused, nothing was published, and the tag was deleted and
+pushed again on the release commit.) The desktop app is released on its own, from `desktop-v*`
+tags ([desktop/README.md](../desktop/README.md#releases)).
+
+1. **The checks**, on `main` with CI green for its last push on all three platforms (`gh run list
+   --branch main --limit 3`): `cargo fmt -p hatcheck -- --check`, `cargo clippy -p hatcheck
+   --all-targets -- -D warnings`, `cargo test -p hatcheck`, `python3 -m unittest discover -s
+   tests`, `cargo publish -p hatcheck --dry-run --locked --allow-dirty` (what crates.io will get
+   packages and builds) and `cargo check` in `desktop/src-tauri`.
+2. **The release commit**, `chore: release X.Y.Z, with its notes in CHANGELOG.md`, whose body says
+   what was run: the version in `Cargo.toml` (`[workspace.package]`, which the crate and the PyPI
+   package take) and `Cargo.lock`; in `packaging/winget/cli/`, `PackageVersion` in all three
+   manifests and the `InstallerUrl` and `ReleaseNotesUrl` for `vX.Y.Z`, with `InstallerSha256`
+   left as the last release's until the new zip exists; in `CHANGELOG.md`, `## Unreleased` renamed
+   `## X.Y.Z - YYYY-MM-DD`, with a paragraph under it saying what the release is, one line per
+   paragraph and bullet, since the section becomes the release's notes on GitHub, where a line
+   break shows. `tests/test_packaging.py` pins the versions and the URL together, and
+   `target/debug/hatcheck --version` prints the new one.
+3. **The tag**, annotated, on that commit and pushed with it:
+
+   ```sh
+   git tag -a vX.Y.Z -m "hatcheck X.Y.Z: what it brings, in a line"
+   git push origin main vX.Y.Z
+   ```
+
+   Three workflows run on it, each on its own. **Release** (`v-release.yml`, written by cargo-dist
+   from `dist-workspace.toml`) builds the seven commands for the six targets, the shell and
+   PowerShell installers and the Homebrew formula, pushes the formula to `hatcheck/homebrew-tap`
+   and makes the GitHub release, with the changelog section as its notes. **PyPI** (`release.yml`)
+   builds a wheel for each of five platforms and the sdist, and publishes them through PyPI's
+   trusted publisher. **crates.io** (`crates.yml`) runs `cargo publish -p hatcheck --locked`
+   through crates.io's. `gh run list --limit 5` watches them and `gh run view <id> --log-failed`
+   reads a failure; a failed one runs again without a new tag, `gh run rerun <id>` for Release and
+   `gh workflow run release.yml -f tag=vX.Y.Z` for PyPI, the same with `crates.yml` for crates.io.
+   The release is out when the GitHub release has an archive and its `.sha256` for each target,
+   the two installers, `hatcheck.rb`, `sha256.sum` and `dist-manifest.json`, the version is on
+   [pypi.org/project/hatcheck](https://pypi.org/project/hatcheck/) and
+   [crates.io/crates/hatcheck](https://crates.io/crates/hatcheck), and the tap's formula names it.
+4. **After it**, each commit's body saying what was run:
+   - `chore: give the CLI's winget manifest X.Y.Z's zip SHA-256`: download
+     `hatcheck-x86_64-pc-windows-msvc.zip` and its `.sha256` from the release, check that
+     `shasum -a 256` of the zip gives the published hash and `unzip -l` lists the seven `.exe`
+     files at its top, put the hash in `InstallerSha256` (upper case, as the earlier ones), and
+     run `python3 -m unittest discover -s tests -p test_packaging.py`. The manifests are ready for
+     a winget submission, which hasn't been made yet.
+   - `docs: bring the site up to X.Y.Z`: `cargo build --release && python3 site/refresh.py`
+     rewrites the site's help blocks and samples from the release binary; read the diff, then
+     `site/deploy.sh` ships it.
+   - A correction to the notes on GitHub goes in `CHANGELOG.md` first, then
+     `gh release edit vX.Y.Z --notes-file <file>` with the section's text.
+   - `cargo binstall hatcheck --no-track --install-path <empty folder>` fetches the release's
+     archive for this machine and unpacks the seven commands: the crate's `binstall` metadata still
+     matches what cargo-dist packed.
+
 ## Runs
 
 | Date | Checked against | Found |
 |---|---|---|
 | 2026-10-24 | Claude Code 2.1.310, Codex 0.164.0, agy 1.4.7, kimi 2.3.1, ZCode 0.16.9 (and 0.17.0 compared), dsh 0.2.1-rc.2, qwen 0.26.0 (added, both ways) | agy 1.4.7 lists `--add-dir` folders first, filing an imported conversation under hatcheck's cache; ZCode 0.17.0 keeps deleted sessions' rows; Kimi's K3.1 Pro and English address, and `kimi-for-coding` renamed K2.8 Preview; Z.ai pairs `glm-5.3-flash[1m]`; the Codex app is part of ChatGPT; Claude Desktop has a Linux beta; qwen 0.26.1 is out on npm while Homebrew has 0.26.0 |
-| 2026-10-25 | mcode 0.6.13 (added as a target, as a file) | mcode's terminal UI starts on the prompt and reads the file outside the workspace without a question in its Auto mode; a pseudo-terminal probe that answered words in its status bar sent keys mcode took as messages, eight turns of `y` |
+| 2026-10-25 | mcode 0.6.13 (added as a target, as a file) | mcode's terminal UI starts on the prompt and reads the file outside the workspace without a question in its Auto mode; a pseudo-terminal probe that answered words in its status bar sent keys mcode took as messages, eight turns of `y`; mcode's session browser archives and nothing of mcode's deletes, so the probe's session was taken out by hand, following mcode's own deletion |

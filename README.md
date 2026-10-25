@@ -270,7 +270,8 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   Its own README is the crate's page on crates.io. It was ported from a Python version with the
   same output; see [docs/rust-port.md](docs/rust-port.md).
 - **`CHANGELOG.md`**: what changed in each release of the CLI; a release's notes on GitHub are its
-  section there.
+  section there, and [docs/maintenance.md](docs/maintenance.md#releasing-the-cli) has the steps of
+  a release.
 - **`install.sh`** / **`install.ps1`**: build the commands from a clone and put them on your `PATH`
   (`~/.local/bin` by default).
 - **`pyproject.toml`**: the PyPI package, the binaries as wheels built with maturin.

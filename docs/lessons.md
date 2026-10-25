@@ -112,6 +112,18 @@ what it merely sees.
   `hatcheck show`.
 - Seen 1× (2026-10-25).
 
+**A cleanup step is written down once it has been done, naming what it took out.** The step that
+said to delete a probe's session from mcode's own session browser was written before anyone had:
+the browser archives a session (`Archive session?`, "History stays available under Archived") and
+nothing of mcode's deletes one, its in-session tool answering that deleting is reserved for the
+user, in the app. The session was taken out by hand, following the deletion in mcode's own code,
+which [maintenance.md](maintenance.md#3-clean-up) now lists table by table.
+- Evidence: 2026-10-25, mcode 0.6.13: `renderArchiveConfirmation` in its launcher, the tool's
+  `SESSION_DELETE_NOT_ALLOWED`, and `deleteSession` in its runtime, reached by the desktop
+  service; the probe's rows in fifteen tables and its files, removed with a copy taken first, and
+  `mcode acp`'s `session/list` showing the two sessions left.
+- Seen 1× (2026-10-25).
+
 **A session written for an agent follows what the agent's own importer writes, not what the agent
 writes live.** kimi validates each event of a session it resumes against a schema and folds the
 model's view from its `context.*` records; a wire built from the events kimi writes as it runs
@@ -280,3 +292,12 @@ that several runs use at once writes a file per run.
 is trusted, and a tag is not a release until its files exist.
 - Evidence: 6403cbc "fix: build the ARM Linux wheel on ARM, and let the PyPI workflow run for
   a tag".
+
+**A tag goes on the release commit, after it exists.** The three workflows a `vX.Y.Z` tag starts
+check the tag against the version in `Cargo.toml` and refuse one that doesn't match, so a tag
+pushed first releases nothing and has to be deleted and pushed again. The steps are in
+[maintenance.md](maintenance.md#releasing-the-cli); until they were, they lived in a conversation.
+- Evidence: 2026-10-25, `v0.6.0` on a commit whose `Cargo.toml` said 0.5.0: "The tag is v0.6.0 but
+  the version is 0.5.0" from the PyPI and crates.io workflows, and Release found no package at that
+  version; nothing was published.
+- Seen 1× (2026-10-25).

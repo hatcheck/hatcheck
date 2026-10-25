@@ -121,7 +121,8 @@ can't do safely, and a command can end its process, which only the engine should
 
 A release needs PyPI's trusted publisher to name this repo, `release.yml` and the `pypi`
 environment, and a `HOMEBREW_TAP_TOKEN` secret that can write to `hatcheck/homebrew-tap`, for the
-formula. Its version is the one in `Cargo.toml`, which the CLI's winget manifests follow.
+formula. Its version is the one in `Cargo.toml`, which the CLI's winget manifests follow. The
+steps are in [maintenance.md](maintenance.md#releasing-the-cli).
 
 ## Running the checks
 
