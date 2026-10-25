@@ -4,7 +4,9 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
-## Unreleased
+## 0.6.0 - 2026-10-25
+
+DeepSeek Harness (`dsh`), MiniMax Code (`mcode`) and Qwen Code (`qwen`) join the agents, read-only: their sessions are listed, found, shown and converted for the other agents, and a session of another agent is converted into a file qwen is started on. `hatcheck move --brief` and `fork --brief` hand over a brief in place of the whole conversation when a session goes to another agent, and `hatcheck show --brief` shows it. Command output shares one style; `claude-k` runs on Kimi's K3.1 Pro at Kimi's English address, and `claude-z` offers `glm-5.3-flash[1m]`. Among the fixes: `hatcheck desktop remove --data` could empty the home folder, `move` wrote over a copy open where the session was going, `relocate` could leave a session half moved, and `best` picked an account with one limit used up.
 
 ### Added
 
