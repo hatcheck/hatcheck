@@ -103,6 +103,15 @@ cost a model turn and left a conversation in the agent's store.
   conversation `cd859a98` in the maintainer's agy folder, left for them to delete.
 - Seen 1× (2026-10-19).
 
+**A pseudo-terminal probe sends an agent nothing it hasn't asked for.** A probe that typed `y`
+whenever a word like `allow` or `trust` appeared in the output answered mcode's status bar, and each
+`y` became a message, a model turn each; the terminal UI had asked nothing, and had read the file
+in its Auto mode without a question. The probe quits with the agent's own keys and sends nothing on
+what it merely sees.
+- Evidence: 2026-10-25, mcode 0.6.13: eight `y` turns in the session the probe made, read back by
+  `hatcheck show`.
+- Seen 1× (2026-10-25).
+
 **A session written for an agent follows what the agent's own importer writes, not what the agent
 writes live.** kimi validates each event of a session it resumes against a schema and folds the
 model's view from its `context.*` records; a wire built from the events kimi writes as it runs

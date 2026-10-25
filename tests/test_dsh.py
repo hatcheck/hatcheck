@@ -20,7 +20,10 @@ R = "d54e0008-0000-4000-8000-000000000008"
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 TITLE = "Fix the uploader with dsh"
 NO_USAGE = "dsh has no plan-usage command or endpoint (0.2.1-rc.2)"
-READ_ONLY = "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target"
+COPY_REFUSED = ("DeepSeek Harness's session logs and workspace state aren't safe for hatcheck to copy; convert "
+                "session %s for another agent instead" % D[:8])
+PROMPT = ("Read %s, a conversation imported from another coding agent, and carry it on from where it ended. "
+          "Check first whether its last action completed, and if it did, do not repeat it.")
 
 
 def read_bytes(path):
@@ -42,6 +45,14 @@ def custom_command(path):
     if WINDOWS:
         return "$env:DSH_HOME='%s'; dsh web; $env:DSH_HOME=$null" % path.replace("'", "''")
     return "DSH_HOME=%s dsh web" % path
+
+
+def named_command(h, home):
+    """`dsh web` with a named home, as hatcheck prints it on this system."""
+    if WINDOWS:
+        rest = home[len(h.home + os.sep):]
+        return '$env:DSH_HOME="$HOME\\%s"; dsh web; $env:DSH_HOME=$null' % rest
+    return "DSH_HOME=%s dsh web" % h.shown(home)
 
 
 class DshSessions(unittest.TestCase):
@@ -295,20 +306,47 @@ class DshConversion(unittest.TestCase):
                 self.assertEqual(tree_bytes(self.home), original)
                 self.assertEqual(tree_bytes(self.claude), before)
 
-    def test_dsh_targets_and_same_agent_copies_are_refused_without_changes(self):
-        source = self.h.session(self.claude, self.api, A, "A Claude Code session")
-        source_bytes = read_bytes(source)
+    def test_same_agent_copies_are_refused_without_changes(self):
         work = self.h.dsh_home("work")
         before, target_before = tree_bytes(self.home), tree_bytes(work)
         for command in ("move", "fork"):
-            for sid in (A, D):
-                with self.subTest(command=command, source=sid):
-                    code, out = self.h.run(command, sid[:8], "dsh:work")
-                    self.assertEqual(code, 1, out)
-                    self.assertIn(READ_ONLY, out)
-                    self.assertEqual(tree_bytes(self.home), before)
-                    self.assertEqual(tree_bytes(work), target_before)
-                    self.assertEqual(read_bytes(source), source_bytes)
+            with self.subTest(command=command):
+                code, out = self.h.run(command, D[:8], "dsh:work")
+                self.assertEqual(code, 1, out)
+                self.assertIn(COPY_REFUSED, out)
+                self.assertEqual(tree_bytes(self.home), before)
+                self.assertEqual(tree_bytes(work), target_before)
+
+    def test_a_claude_code_session_converted_for_dsh_is_a_file_with_a_prompt_to_paste(self):
+        source = self.h.session(self.claude, self.api, A, "A Claude Code session")
+        source_bytes = read_bytes(source)
+        work = self.h.dsh_home("work")
+        before, work_before = tree_bytes(self.home), tree_bytes(work)
+        code, out = self.h.run("move", A[:8], "dsh:work", "--json")
+        self.assertEqual(code, 0, out)
+        d = json.loads(out)
+        self.assertEqual((d["action"], d["agent"], d["target_agent"], d["new_session"], d["target"], d["resume"]),
+                         ("convert", "claude", "dsh", None, work, named_command(self.h, work)))
+        self.assertTrue(d["file"].endswith(".md") and os.path.exists(d["file"]), d["file"])
+        self.assertEqual(d["paste"], PROMPT % d["file"])  # dsh web takes no first prompt: this is pasted
+        with open(d["file"], encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertTrue(text.startswith("# Conversation imported from Claude Code session " + A), text[:80])
+        self.assertIn("A Claude Code session", text)
+        self.assertEqual(read_bytes(source), source_bytes)  # the original stays
+        self.assertEqual((tree_bytes(self.home), tree_bytes(work)), (before, work_before))  # no DSH store is written
+        code, out = self.h.run("fork", A[:8], "dsh", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn('Would convert Claude Code session %s "A Claude Code session" from %s into a conversation for '
+                      'DeepSeek Harness in ' % (A[:8], self.h.shown(self.claude)), out)
+        self.assertIn("so the session starts when you paste the prompt into its web UI.", out)
+        lines = out.splitlines()
+        self.assertIn("Then open DSH with:", lines)
+        self.assertEqual(lines[lines.index("Then open DSH with:") + 2], "  dsh web")
+        self.assertIn("and paste into its web UI:", lines)
+        paste = lines[lines.index("and paste into its web UI:") + 1]
+        self.assertTrue(paste.startswith("  Read ") and "<new id>.md, a conversation imported" in paste, paste)
+        self.assertEqual(tree_bytes(self.home), before)
 
 
 class DshRelocate(unittest.TestCase):

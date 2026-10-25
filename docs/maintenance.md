@@ -56,6 +56,10 @@ that ask for one word, so nothing of yours is sent anywhere, and an account of y
   then quit) and asked in print mode; `fork <id> agy`, then the printed `agy --add-dir … ` with `-p`
   and the question in place of `-i`. The agy conversation that makes is also the check that
   hatcheck reads agy's newest version: it's listed in the probe folder, and `show` reads it.
+  `fork <id> mcode`, then the printed `mcode '…'` in its terminal UI on a pseudo-terminal, with
+  the question added to the prompt, quit with its own keys and killed afterwards, and sent nothing
+  else: a key sent on a word in its output becomes a message. `hatcheck show` of the session mcode
+  made reads its reply. DSH's handover is a prompt pasted into its web UI, and isn't probed.
 - **Between profiles:** `hatcheck move` and `fork` a Claude Code session to another profile with
   room, and resume it there.
 - **Usage:** `hatcheck usage --json`: every signed-in account reads `live`, with its limits.
@@ -83,6 +87,10 @@ Every probe leaves something in a real home. Look for what changed since the mar
   the `user-history/` file of what you typed in its UI.
 - agy: the conversation stays: it lives in agy's own database, which hatcheck never writes; delete
   it from the Antigravity app if you want it gone.
+- mcode: the session mcode made, in its catalog and `v2/sessions/`, with `sessions/mvs_<id>/`, a
+  `background-tasks/bg_…` folder and its observability logs: delete the session from mcode's own
+  session browser (`mcode --session`), since hatcheck never edits its SQLite; the rest is mcode's
+  housekeeping.
 - qwen: the probe folder's `projects/<folder>` (its chats, `meta.json`, `extract-cursor.json` and
   `memory/`), the session's lines in `usage/token-usage-<month>.jsonl` and `usage_record.jsonl`,
   `tmp/<sha256 of the folder>` and `file-history/<session>` when the UI ran, and the registry
@@ -108,3 +116,4 @@ Every probe leaves something in a real home. Look for what changed since the mar
 | Date | Checked against | Found |
 |---|---|---|
 | 2026-10-24 | Claude Code 2.1.310, Codex 0.164.0, agy 1.4.7, kimi 2.3.1, ZCode 0.16.9 (and 0.17.0 compared), dsh 0.2.1-rc.2, qwen 0.26.0 (added, both ways) | agy 1.4.7 lists `--add-dir` folders first, filing an imported conversation under hatcheck's cache; ZCode 0.17.0 keeps deleted sessions' rows; Kimi's K3.1 Pro and English address, and `kimi-for-coding` renamed K2.8 Preview; Z.ai pairs `glm-5.3-flash[1m]`; the Codex app is part of ChatGPT; Claude Desktop has a Linux beta; qwen 0.26.1 is out on npm while Homebrew has 0.26.0 |
+| 2026-10-25 | mcode 0.6.13 (added as a target, as a file) | mcode's terminal UI starts on the prompt and reads the file outside the workspace without a question in its Auto mode; a pseudo-terminal probe that answered words in its status bar sent keys mcode took as messages, eight turns of `y` |

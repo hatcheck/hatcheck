@@ -12,7 +12,7 @@ macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume
 of them. OpenAI's Codex CLI and Moonshot's Kimi Code CLI get the same treatment, Google's
 Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them, and DeepSeek Harness (`dsh`),
 MiniMax Code (`mcode`) and Qwen Code (`qwen`) join as read-only agents. Sessions can be carried
-between the original five and Qwen Code, and out of DSH and mcode.
+between all eight, as a file the agent is started on for those without an importer.
 
 *Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI,
 Z.ai, DeepSeek, MiniMax or Alibaba Cloud. Claude, Claude Code and Claude Desktop are trademarks of
@@ -113,6 +113,8 @@ One binary per platform, with no Python needed. Each of these installs `hatcheck
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
 uv tool install hatcheck            # or: pipx install hatcheck
+cargo binstall hatcheck             # the release binaries, with cargo-binstall
+cargo install hatcheck              # or build them from crates.io
 ```
 
 On Windows, in PowerShell:
@@ -148,7 +150,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck open SESSION`](docs/commands.md#hatcheck-open-resume-a-session-in-a-new-terminal) | resume it in a new terminal, or open DSH's session history in its folder |
 | [`hatcheck resume`](docs/commands.md#hatcheck-resume-carry-on-the-newest-session-here) | carry on the newest session started from this folder, or open DSH's session history, after asking; `hat r` for short |
 | `hatcheck show SESSION` | its conversation, read-only |
-| [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent (out of DSH and mcode, not into them); `--brief` hands over a brief in place of the whole conversation |
+| [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent; `--brief` hands over a brief in place of the whole conversation |
 | [`hatcheck fork SESSION PROFILE`](docs/commands.md#hatcheck-fork-a-session-as-a-new-one-in-another-profile) | bring it in there as a new session, keeping the original |
 | [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's, mcode's and qwen's stay as they are |
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
@@ -319,13 +321,12 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   Z.ai documents the import its desktop app uses or adds a `zcode import` command, hatcheck should
   use that ([the proposal](docs/proposals/kimi-zcode.md) has the reasoning).
 - **DeepSeek Harness.** A direct per-session open needs an official web deep link or resume
-  command, conversion into DSH needs a supported importer, and plan usage needs a documented
-  quota API. Until then hatcheck opens `dsh web` and its session history, converts only out, and
-  never writes DSH's store. Sessions before v4 aren't read; later ones need their own reader.
-- **MiniMax Code.** Conversion into mcode needs a supported importer rather than a model turn on
-  an attached file, and plan quota needs a no-refresh design and maintainer approval before the
-  regional endpoint is used. Until then hatcheck reads the v2 store, converts only out, and shows
-  no quota data. An idle selected TUI has no durable marker, so only an active writer lease blocks
+  command, a handover in one step needs a first prompt `dsh web` doesn't take, and plan usage needs
+  a documented quota API. Until then hatcheck opens `dsh web` and its session history, prints the
+  prompt to paste for a converted session, and never writes DSH's store. Sessions before v4 aren't read; later ones need their own reader.
+- **MiniMax Code.** A converted session is a file mcode's terminal UI is started on, as agy's,
+  since mcode has no importer; plan quota needs a no-refresh design and maintainer approval before
+  the regional endpoint is used. Until then hatcheck reads the v2 store and shows no quota data. An idle selected TUI has no durable marker, so only an active writer lease blocks
   opening and conversion.
 - **Qwen Code.** A session converted for qwen is a file qwen is started on, as agy's and ZCode's
   are, since qwen has no importer (`qwen sessions` lists sessions and imports none); one written

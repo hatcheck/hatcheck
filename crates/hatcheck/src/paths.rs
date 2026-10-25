@@ -621,6 +621,10 @@ pub fn qwen_command(home_dir: &str, tail: &str, full: bool) -> String {
     Shell::here().qwen_command(home_dir, tail, full)
 }
 
+pub fn mcode_command(home_dir: &str, tail: &str, full: bool) -> String {
+    Shell::here().mcode_command(home_dir, tail, full)
+}
+
 pub fn kimi_command(home_dir: &str, tail: &str, full: bool) -> String {
     Shell::here().kimi_command(home_dir, tail, full)
 }

@@ -43,7 +43,8 @@ Hatcheck DSH launcher. **Sign in** runs `dsh web`, keeping sign-in with DSH.
 For a DSH session, **Open DeepSeek Harness** in the main window or **Open DSH** in the menu bar runs
 `dsh web` (with `DSH_HOME` for a nondefault home). That opens DSH's web UI and session history in
 the session's recorded working directory. Choose the session there; Hatcheck doesn't deep-link or
-resume the selected ID directly.
+resume the selected ID directly. A session moved or forked to DSH becomes a file, and the report
+shows `dsh web` with the prompt to paste into its web UI, which has DSH's agent read the file.
 
 MiniMax Code homes are `~/.minimax` and `~/.minimax-NAME`, selected with `MINIMAX_DATA_DIR`; **Add
 one** makes `mcode:NAME`, and there is no Hatcheck mcode launcher. `hatcheck open --login
@@ -52,8 +53,9 @@ the installer directory, not a profile named `code`.
 
 For a MiniMax Code session, **Resume** opens a terminal in the recorded folder and runs
 `mcode --session mvs_<id>` directly, with `MINIMAX_DATA_DIR` for a named or custom home. Hatcheck
-never writes MiniMax Code's store: mcode isn't offered as a Move or Fork target, sessions aren't
-copied between MiniMax Code homes, and nothing is converted into mcode.
+never writes MiniMax Code's store: a session moved or forked to MiniMax Code becomes a file mcode
+is started on, as with Antigravity CLI, ZCode and Qwen Code, and sessions aren't copied between
+MiniMax Code homes.
 
 Qwen Code homes are `~/.qwen` and `~/.qwen-NAME`, selected with `QWEN_HOME`; **Add one** makes
 `qwen:NAME`, and there is no Hatcheck qwen launcher. `hatcheck open --login qwen[:NAME]` starts

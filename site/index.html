@@ -89,7 +89,7 @@ hatcheck             # the sessions here from every profile, and what's left of 
       </div>
       <div class="card">
         <h3>Sessions that travel</h3>
-        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/formats.md#how-a-conversion-works">converts it</a> between Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode and Qwen Code, or converts it out of DeepSeek Harness or MiniMax Code; <code>--brief</code> hands over a brief in place of the whole conversation. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
+        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/formats.md#how-a-conversion-works">converts it</a> for any of the eight agents, as a file the agent is started on for those without an importer; <code>--brief</code> hands over a brief in place of the whole conversation. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
       </div>
       <div class="card">
         <h3>Claude Desktop, one per account</h3>
@@ -216,7 +216,9 @@ hat r               # carry on the newest session here, after asking</code></pre
     <p>macOS, Linux and Windows: one binary per platform, nothing else needed. It installs <code>hatcheck</code> and <code>hat</code>, <a href="#short">its short name</a>, with <code>cl</code>, <code>cx</code>, <code>ck</code>, <code>claude-z</code> and <code>claude-k</code>, but no agent: <a href="agents.html#get">get those from their makers</a>. Installed more than one way, <code>hatcheck doctor</code> says which copy runs and how to remove the rest.</p>
 <pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
-uv tool install hatcheck            # or: pipx install hatcheck</code></pre>
+uv tool install hatcheck            # or: pipx install hatcheck
+cargo binstall hatcheck             # the release binaries, with cargo-binstall
+cargo install hatcheck              # or build them from crates.io</code></pre>
     <p>On Windows, in PowerShell:</p>
 <pre><code>powershell -ExecutionPolicy Bypass -c "irm https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.ps1 | iex"</code></pre>
     <p>Or build it from a clone, with <a href="https://rustup.rs">Rust</a>; run <code>./install.sh</code> again after a <code>git pull</code>:</p>

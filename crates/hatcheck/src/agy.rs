@@ -702,7 +702,7 @@ pub fn read_snapshot(root: &str) -> Option<(Value, f64)> {
 
 /// The first prompt agy gets with an imported conversation: read the file, then go on.
 pub fn prompt(file: &str) -> String {
-    format!("Read {file}, a conversation imported from another coding agent, and carry it on from where it ended.")
+    crate::conv::handover_prompt(file)
 }
 
 /// The command that starts agy on an imported conversation, from the session's folder: the

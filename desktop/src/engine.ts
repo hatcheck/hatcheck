@@ -81,6 +81,7 @@ export type MoveReport = {
   left_out?: string;
   turns_dropped?: number;
   brief?: boolean;
+  paste?: string | null;
   cwd: string | null;
   resume: string;
 };

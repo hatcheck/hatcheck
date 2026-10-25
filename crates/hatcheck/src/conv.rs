@@ -99,6 +99,13 @@ pub fn import_path(id: &str) -> String {
     ospath::join(&imports_dir(), &format!("{id}.md"))
 }
 
+/// The prompt that starts an agent on an imported conversation: read the file, see whether its
+/// last action completed, and carry on. The check first is what Orca tells an agent carrying on
+/// after a restart: a handover ends mid-work, and the last action may already have been done.
+pub fn handover_prompt(file: &str) -> String {
+    format!("Read {file}, a conversation imported from another coding agent, and carry it on from where it ended. Check first whether its last action completed, and if it did, do not repeat it.")
+}
+
 /// Write the conversation as Markdown, each turn under who said it and when: the file.
 pub fn write_import(conv: &Conversation, turns: &[Turn], id: &str) -> std::io::Result<String> {
     let mut text = format!(
@@ -143,9 +150,10 @@ pub fn add_turn(turns: &mut Vec<Turn>, role: &str, text: &str, when: &Value) {
 }
 
 // A handover brief: what another agent gets in place of the whole conversation with
-// `hatcheck move --brief`, as Orca hands a task to a fresh agent with a bounded prompt built from
-// the old transcript. hatcheck runs no model, so the brief is made from what the conversation
-// says: its first prompt, the files and commands its tool calls named, and its last turns.
+// `hatcheck move --brief`. Orca, which resumes the provider's own session after a restart, sends
+// a fixed continuation and builds nothing from the transcript; an agent that can't resume the
+// session needs what the brief carries, made the same way every time and with no model run: the
+// conversation's first prompt, the files and commands its tool calls named, and its last turns.
 
 /// How much of a conversation's end a brief keeps: its last BRIEF_TURNS turns, within BRIEF_CHARS
 /// characters, the newest cut to fit when it alone is longer.

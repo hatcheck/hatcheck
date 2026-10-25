@@ -700,8 +700,9 @@ fn size_text(n: u64) -> String {
     }
 }
 
-/// Start the agent on the session in its new profile, from the folder it ran in. For agy, zcode
-/// and qwen, sid is the import file. DSH's official web UI opens its session history instead.
+/// Start the agent on the session in its new profile, from the folder it ran in. For agy, zcode,
+/// qwen, mcode and DSH, sid is the import file; DSH's web UI takes no first prompt, so the prompt
+/// to paste into it is printed before it opens.
 fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
     let name = agent.program();
     let Some(program) = ospath::which(name) else {
@@ -716,8 +717,12 @@ fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
         Agent::Agy => cmd.args(["--add-dir", &conv::imports_dir(), "-i", &agy::prompt(sid)]),
         Agent::Kimi => cmd.args(["--session", &Agent::Kimi.full_id(sid)]),
         Agent::Zcode => cmd.args(["--attach", sid, "--mode", "plan", "-p", &zcode::prompt()]),
-        Agent::Dsh => cmd.arg("web"),
-        Agent::Mcode => cmd.args(["--session", &Agent::Mcode.full_id(sid)]),
+        Agent::Dsh => {
+            out::println("Paste into DSH's web UI:");
+            out::command(&format!("  {}", dsh::prompt(sid)));
+            cmd.arg("web")
+        }
+        Agent::Mcode => cmd.arg(crate::mcode::prompt(sid)),
         Agent::Qwen => cmd.args([
             "--add-dir",
             &conv::imports_dir(),
@@ -913,7 +918,7 @@ fn import_note(conv: &Conversation) -> String {
         .filter(|m| !m.is_empty())
         .map_or(String::new(), |m| format!(" with {m}"));
     format!(
-        "[Imported from {} session {}, started {} in {}{model}. Its tool calls are shown as text, with their output shortened, and {} isn't included.]",
+        "[Imported from {} session {}, started {} in {}{model}. Its tool calls are shown as text, with their output shortened, and {} isn't included. Before carrying on, check whether its last action completed, and if it did, do not repeat it.]",
         conv.agent.name(),
         conv.id,
         started.as_deref().unwrap_or("?"),
@@ -2723,9 +2728,13 @@ fn convert(
         .clone()
         .filter(|c| !c.is_empty())
         .unwrap_or_else(paths::home);
-    // What was written: a new session's ID and file; for agy, zcode and qwen, an ID for the file
-    // the conversation was written to, which the agent starts a new conversation of its own on.
-    let to_file = matches!(target_agent, Agent::Agy | Agent::Zcode | Agent::Qwen);
+    // What was written: a new session's ID and file; for agy, zcode, qwen, mcode and DSH, an ID
+    // for the file the conversation was written to, which the agent starts a new conversation
+    // of its own on.
+    let to_file = matches!(
+        target_agent,
+        Agent::Agy | Agent::Zcode | Agent::Qwen | Agent::Mcode | Agent::Dsh
+    );
     let mut written: Option<(String, String)> = None;
     if !a.dry_run {
         written = Some(
@@ -2733,19 +2742,9 @@ fn convert(
                 Agent::Codex => write_codex(&conv, &turns, target, &cwd),
                 Agent::Claude => write_claude(&conv, &turns, target, &cwd),
                 Agent::Kimi => kimi::write_session(&conv, &turns, target, &cwd),
-                Agent::Agy | Agent::Zcode | Agent::Qwen => {
+                Agent::Agy | Agent::Zcode | Agent::Qwen | Agent::Mcode | Agent::Dsh => {
                     let id = uuid4();
                     conv::write_import(&conv, &turns, &id).map(|path| (id, path))
-                }
-                Agent::Dsh => {
-                    return Err(
-                        "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
-                    )
-                }
-                Agent::Mcode => {
-                    return Err(
-                        "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
-                    )
                 }
             }
             .map_err(io)?,
@@ -2764,16 +2763,14 @@ fn convert(
         Agent::Agy => agy::start_command(target, &file, false),
         Agent::Zcode => zcode::start_command(target, &file, false),
         Agent::Qwen => crate::qwen::start_command(target, &file, false),
-        Agent::Dsh => {
-            return Err(
-                "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
-            )
-        }
-        Agent::Mcode => {
-            return Err(
-                "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
-            )
-        }
+        Agent::Mcode => crate::mcode::start_command(target, &file, false),
+        Agent::Dsh => paths::start_command(Agent::Dsh, target, false),
+    };
+    // DSH's web UI takes no first prompt: what to paste into it, once it's open.
+    let paste = if target_agent == Agent::Dsh {
+        json!(dsh::prompt(&file))
+    } else {
+        Value::Null
     };
     set(
         report,
@@ -2796,10 +2793,11 @@ fn convert(
             ("turns_dropped", json!(dropped)),
             ("newest_turn_cut", json!(newest_cut)),
             ("resume", json!(resume)),
+            ("paste", paste),
         ],
     );
     let into = match target_agent {
-        Agent::Agy | Agent::Zcode | Agent::Qwen => format!(
+        Agent::Agy | Agent::Zcode | Agent::Qwen | Agent::Mcode | Agent::Dsh => format!(
             "into a conversation for {} in {}",
             target_agent.name(),
             show(&conv::imports_dir())
@@ -2902,17 +2900,21 @@ fn convert(
         Agent::Agy => out::println("Antigravity CLI keeps its conversations in a form hatcheck can't write, so the session starts when agy reads the file."),
         Agent::Zcode => out::println("ZCode keeps its sessions in a database hatcheck doesn't write, so the session starts when zcode reads the file."),
         Agent::Qwen => out::println("Qwen Code has no importer and hatcheck doesn't write its store, so the session starts when qwen reads the file."),
+        Agent::Mcode => out::println("MiniMax Code's store isn't one hatcheck writes, so the session starts when mcode reads the file."),
+        Agent::Dsh => out::println("DeepSeek Harness's store isn't one hatcheck writes, and dsh web takes no first prompt, so the session starts when you paste the prompt into its web UI."),
         _ => {}
     }
     out::println(&format!(
         "The original stays in {}, since a conversion leaves things out.",
         show(source)
     ));
-    out::heading(match (a.dry_run, to_file) {
-        (true, false) => "Then resume it with:",
-        (false, false) => "Resume it with:",
-        (true, true) => "Then start it with:",
-        (false, true) => "Start it with:",
+    out::heading(match (a.dry_run, to_file, target_agent == Agent::Dsh) {
+        (true, false, _) => "Then resume it with:",
+        (false, false, _) => "Resume it with:",
+        (true, true, false) => "Then start it with:",
+        (false, true, false) => "Start it with:",
+        (true, true, true) => "Then open DSH with:",
+        (false, true, true) => "Open DSH with:",
     });
     out::command(&format!("  cd {}", show(&cwd)));
     out::command(&format!("  {resume}"));
@@ -2920,7 +2922,12 @@ fn convert(
         out::println("Once it has answered, carry on in the terminal UI with:");
         out::command(&format!("  {}", paths::zcode_command(target, "-c", false)));
     }
-    // What to start, when asked to: the new session, or for agy, zcode and qwen the file.
+    if target_agent == Agent::Dsh {
+        out::println("and paste into its web UI:");
+        out::command(&format!("  {}", dsh::prompt(&file)));
+    }
+    // What to start, when asked to: the new session, or the file for agy, zcode, qwen, mcode
+    // and DSH.
     let handle = if to_file {
         written.as_ref().map(|w| w.1.clone())
     } else {
@@ -3145,16 +3152,6 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             show(&target),
             a.session
         ));
-    }
-    if target_agent == Agent::Dsh {
-        return Err(
-            "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
-        );
-    }
-    if target_agent == Agent::Mcode {
-        return Err(
-            "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
-        );
     }
     if !ospath::isdir(&target) {
         match target_agent {

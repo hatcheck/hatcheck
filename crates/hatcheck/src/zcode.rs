@@ -342,7 +342,7 @@ pub fn read_conversation(root: &str, id: &str) -> std::io::Result<Conversation> 
 /// where it left off; the next prompt, in the TUI, carries it on. zcode titles the session by
 /// its first words, so they say what it is.
 pub fn prompt() -> String {
-    "Imported conversation: the attached file is a conversation imported from another coding agent. Read it, say in a few lines where it left off, and wait: the next prompt carries it on.".into()
+    "Imported conversation: the attached file is a conversation imported from another coding agent. Read it, say in a few lines where it left off and whether its last action completed, and wait: the next prompt carries it on.".into()
 }
 
 /// The command that starts zcode on an imported conversation, from the session's folder: one

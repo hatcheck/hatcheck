@@ -21,7 +21,10 @@ R = "e000000000000000000000000000000002"
 TITLE = "Fix the uploader with MiniMax Code"
 MODEL = "minimax/MiniMax-M3.1-Flash"
 NO_USAGE = "mcode plan quota isn't wired into hatcheck (0.6.13)"
-READ_ONLY = "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target"
+COPY_REFUSED = ("MiniMax Code's shared SQLite state, manifest paths and session assets aren't safe for hatcheck to "
+                "copy; convert session %s for another agent instead" % M[:8])
+PROMPT = ("Read %s, a conversation imported from another coding agent, and carry it on from where it ended. "
+          "Check first whether its last action completed, and if it did, do not repeat it.")
 OPEN = "MiniMax Code session %s is open or has an active writer; close it or let that work finish first" % M[:8]
 
 
@@ -44,11 +47,13 @@ def tree_bytes(root):
     return found
 
 
-def resume_command(h, home, session=None):
-    tail = " --session mvs_" + session if session else ""
+def mcode_words(h, home):
+    """What hatcheck prints before and after `mcode <tail>` to run mcode with a data home: nothing
+    for ~/.minimax, MINIMAX_DATA_DIR= before it in sh, and in PowerShell's words the variable set
+    before and cleared after, so a longer tail sits between them."""
     default = os.path.join(h.home, ".minimax")
     if os.path.realpath(home) == os.path.realpath(default):
-        return "mcode" + tail
+        return "", ""
     if WINDOWS:
         prefix = h.home + os.sep
         if home.startswith(prefix):
@@ -59,9 +64,14 @@ def resume_command(h, home, session=None):
                 folder = "'%s'" % home.replace("'", "''")
         else:
             folder = "'%s'" % home.replace("'", "''")
-        return "$env:MINIMAX_DATA_DIR=%s; mcode%s; $env:MINIMAX_DATA_DIR=$null" % (folder, tail)
+        return "$env:MINIMAX_DATA_DIR=%s; " % folder, "; $env:MINIMAX_DATA_DIR=$null"
     shown = h.shown(home) if os.path.commonpath([h.home, home]) == h.home else home
-    return "MINIMAX_DATA_DIR=%s mcode%s" % (shown, tail)
+    return "MINIMAX_DATA_DIR=%s " % shown, ""
+
+
+def resume_command(h, home, session=None):
+    before, after = mcode_words(h, home)
+    return before + "mcode" + (" --session mvs_" + session if session else "") + after
 
 
 class McodeSessions(unittest.TestCase):
@@ -565,22 +575,47 @@ class McodeConversion(unittest.TestCase):
                     self.assertEqual(tree_bytes(self.home), original)
                     self.assertEqual(tree_bytes(self.claude), before)
 
-    def test_mcode_targets_and_same_agent_copies_are_refused_without_changes(self):
-        source = self.h.session(self.claude, self.api, A, "A Claude Code session")
-        source_bytes = read_bytes(source)
-        claude_before = tree_bytes(self.claude)
+    def test_same_agent_copies_are_refused_without_changes(self):
         work = self.h.mcode_home("work")
         before, target_before = tree_bytes(self.home), tree_bytes(work)
         for command in ("move", "fork"):
-            for session in (A, M):
-                with self.subTest(command=command, source=session):
-                    code, out = self.h.run(command, session[:8], "mcode:work")
-                    self.assertEqual(code, 1, out)
-                    self.assertIn(READ_ONLY, out)
-                    self.assertEqual(tree_bytes(self.home), before)
-                    self.assertEqual(tree_bytes(work), target_before)
-                    self.assertEqual(tree_bytes(self.claude), claude_before)
-                    self.assertEqual(read_bytes(source), source_bytes)
+            with self.subTest(command=command):
+                code, out = self.h.run(command, M[:8], "mcode:work")
+                self.assertEqual(code, 1, out)
+                self.assertIn(COPY_REFUSED, out)
+                self.assertEqual(tree_bytes(self.home), before)
+                self.assertEqual(tree_bytes(work), target_before)
+
+    def test_a_claude_code_session_converted_for_mcode_is_a_file_mcode_starts_on(self):
+        source = self.h.session(self.claude, self.api, A, "A Claude Code session")
+        source_bytes = read_bytes(source)
+        work = self.h.mcode_home("work")
+        before, work_before = tree_bytes(self.home), tree_bytes(work)
+        code, out = self.h.run("move", A[:8], "mcode", "--json")
+        self.assertEqual(code, 0, out)
+        d = json.loads(out)
+        self.assertEqual((d["action"], d["agent"], d["target_agent"], d["new_session"], d["target"], d["paste"]),
+                         ("convert", "claude", "mcode", None, self.home, None))
+        self.assertTrue(d["file"].endswith(".md") and os.path.exists(d["file"]), d["file"])
+        self.assertTrue(d["resume"].startswith("mcode "), d["resume"])  # the prompt is the task mcode starts on
+        self.assertIn(PROMPT % d["file"], d["resume"].replace("'\\''", "'").replace("''", "'"))
+        with open(d["file"], encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertTrue(text.startswith("# Conversation imported from Claude Code session " + A), text[:80])
+        self.assertIn("A Claude Code session", text)
+        self.assertEqual(read_bytes(source), source_bytes)  # the original stays
+        self.assertEqual(tree_bytes(self.home), before)  # and mcode's store isn't written
+        code, out = self.h.run("fork", A[:8], "mcode:work", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn('Would convert Claude Code session %s "A Claude Code session" from %s into a conversation for '
+                      'MiniMax Code in ' % (A[:8], self.h.shown(self.claude)), out)
+        self.assertIn("so the session starts when mcode reads the file.", out)
+        self.assertIn("Then start it with:", out)
+        # The start command: in PowerShell's words the variable is set before it and cleared after.
+        before_words, after_words = mcode_words(self.h, work)
+        line = next(l for l in out.splitlines() if "mcode " in l and "<new id>.md" in l)
+        self.assertTrue(line.startswith("  %smcode " % before_words) and line.endswith(after_words), line)
+        self.assertEqual(tree_bytes(work), work_before)
 
 
 class McodeRelocate(unittest.TestCase):

@@ -496,6 +496,16 @@ fn conversation(x: &Session) -> std::io::Result<Conversation> {
     })
 }
 
+// A conversation converted for DSH: written as a file (conv::write_import) for DSH's agent to
+// read, since hatcheck never writes DSH's store. `dsh web` takes no first prompt, so the prompt
+// is printed, to paste into the web UI once it's open. DSH's file sandbox confines writes to the
+// workspace and restricts no reads, so the agent can read the file where it is.
+
+/// The prompt to paste into DSH's web UI with an imported conversation.
+pub fn prompt(file: &str) -> String {
+    conv::handover_prompt(file)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

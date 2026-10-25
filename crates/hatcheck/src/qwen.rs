@@ -585,7 +585,7 @@ pub fn read_conversation(home: &str, id: &str) -> std::io::Result<Conversation> 
 
 /// The first prompt for a conversation converted for qwen: the file to read, and to carry on.
 pub fn prompt(file: &str) -> String {
-    format!("Read {file}, a conversation imported from another coding agent, and carry it on from where it ended.")
+    crate::conv::handover_prompt(file)
 }
 
 /// The command that starts qwen on an imported conversation, from the session's folder: the

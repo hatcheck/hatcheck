@@ -405,17 +405,20 @@ Resume it now in ~/.claude-a? [y/N]
 - Your messages and the replies come across as text, and each tool call as a block with its input
   and the start of its output, in the format Codex's own `/import` uses for Claude Code sessions
   (`[external_agent_tool_call: Bash] … [/external_agent_tool_call]`). A note at the start tells the
-  model where the session came from. Claude's thinking and Codex's reasoning are left out, and so are
+  model where the session came from, and to check whether its last action completed before
+  repeating it, as Orca's continuation after a restart tells an agent. Claude's thinking and
+  Codex's reasoning are left out, and so are
   images, plans, goals, `/rewind` snapshots and subagent transcripts.
 - The whole conversation before a compaction is carried over, not its summary. Past about 100,000
   tokens the oldest turns after the first are left out, so it fits the new agent's context window.
   The newest turn is always kept, so the session carries on from where it ended; one too long on
   its own keeps its latest parts.
-- `--brief` hands over a brief in place of the whole conversation, as Orca's hand-off to another
-  agent injects a bounded prompt built from the old transcript: after the note, the first prompt,
+- `--brief` hands over a brief in place of the whole conversation: after the note, the first prompt,
   the files and commands the tool calls named (from their `[external_agent_tool_call: …]` blocks),
   and the last six turns as they were, within 12,000 characters. hatcheck runs no model to make it,
-  so it's the same every time. Use it when the conversation is long and the new agent needs where
+  so it's the same every time, as Orca's continuation after a restart is: Orca resumes the
+  provider's own session and sends one fixed message, where a brief carries what an agent that
+  can't resume the session needs. Use it when the conversation is long and the new agent needs where
   it ended rather than how it got there; `hatcheck show --brief` shows what would be handed over,
   and `--json` reports `brief` and the turns it left out as `turns_dropped`. A move or copy
   between an agent's own profiles carries the session whole, and refuses `--brief`.
@@ -530,14 +533,20 @@ Resume it with:
 
 ### With DeepSeek Harness
 
-`dsh` is `~/.dsh` and `dsh:<name>` is `~/.dsh-<name>` as a source or `--from`. A bare `NAME`
-follows a DSH session the way it follows a Codex or Kimi one, but a DSH home is never a supported
-target; name the target agent explicitly when needed.
+`dsh` is `~/.dsh` and `dsh:<name>` is `~/.dsh-<name>`, as a place to convert to or `--from`. A
+bare `NAME` follows a DSH session the way it follows a Codex or Kimi one.
 
-- `move` and `fork` convert a DSH session out to an existing target hatcheck can write, and the
-  original always stays. A DSH target is explicitly refused. Copies between DSH homes are
-  unsupported too: the session logs and workspace state aren't safe for hatcheck to copy, and
-  hatcheck never writes DSH's store.
+- `move` and `fork` convert a DSH session out to any target, and the original always stays.
+  Copies between DSH homes are refused: the session logs and workspace state aren't safe for
+  hatcheck to copy, and hatcheck never writes DSH's store.
+- To DSH, the session is written as a Markdown file, `imports/<id>.md` in hatcheck's cache
+  folder, as for agy, since hatcheck never writes DSH's store. `dsh web` takes no first prompt, so
+  the command printed opens DSH's web UI from the session's folder (`dsh web`, with `DSH_HOME=…`
+  for another home), and the prompt to paste into it is printed after it: it has DSH's agent read
+  the file and carry on. `--json` has the prompt as `paste`, with `"new_session": null` and the
+  `file`. DSH's file sandbox confines writes to the workspace and restricts no reads (its
+  sandbox-policy source, 0.2.1-rc.2), so the agent can read the file where it is; the session
+  exists once it has. The paste itself isn't probed, being a prompt typed into a browser.
 - The current v4 surface is converted as a Codex session is: direct prompts, assistant text, tool
   calls and results, and compact checkpoints, with surface replacements applied. Runtime or
   injected context, reasoning, images and files, replaced history and subagent sessions are left
@@ -547,21 +556,31 @@ target; name the target agent explicitly when needed.
 
 ### With MiniMax Code
 
-`mcode` is `~/.minimax` and `mcode:<name>` is `~/.minimax-<name>` as a source or `--from`. A bare
-`NAME` follows an mcode session the way it follows a Codex or Kimi one, but an mcode home is never
-a supported target; name the target agent explicitly when needed.
+`mcode` is `~/.minimax` and `mcode:<name>` is `~/.minimax-<name>`, as a place to convert to or
+`--from`. A bare `NAME` follows an mcode session the way it follows a Codex or Kimi one.
 
-- `move` and `fork` convert an mcode session out to an existing target hatcheck can write, and the
-  original always stays. An mcode target is explicitly refused. Same-agent copies are unsupported
-  too: shared SQLite state, manifest paths and session assets aren't safe for hatcheck to copy,
-  and hatcheck never writes mcode's store.
+- `move` and `fork` convert an mcode session out to any target, and the original always stays.
+  Same-agent copies are refused: shared SQLite state, manifest paths and session assets aren't
+  safe for hatcheck to copy, and hatcheck never writes mcode's store.
+- To mcode, the session is written as a Markdown file, `imports/<id>.md` in hatcheck's cache
+  folder, as for agy, and the command printed starts mcode's terminal UI on it from the session's
+  folder, with the prompt as the task it starts on: `mcode '…'`, with `MINIMAX_DATA_DIR=…` for
+  another home. mcode reads the file with its own tool (its read guards refuse devices and
+  binaries, not a path outside the workspace), so the session exists once it has, with an ID of
+  mcode's own: `--json` reports `"new_session": null` and the `file`.
 - The active canonical history supplies direct user text, assistant text, tool calls and results,
   and compaction summaries. `turn_config`, `history_artifact`, previous generations, reasoning and
   signatures, hidden, custom and plugin records, UI-only notices, tool-output artifacts and
   subagent sessions are left out; display rows aren't merged in.
 - A session with an unexpired writer lease is refused; an expired lease is stale, and unknown lock
   state is treated as busy rather than as proof the writer died.
-- `mcode exec --file` isn't a lossless import and isn't used to convert into mcode.
+- `mcode exec --file` runs one prompt headless with a file attached, and isn't used: the terminal
+  UI takes the prompt itself and stays open for the next one.
+- Checked against the real `mcode` (0.6.13) on 2026-10-25: a Claude Code session forked for mcode
+  was started in its terminal UI with the printed command, which read the file from hatcheck's
+  cache folder with its own `read` tool, without a question in its Auto mode, answered from it and
+  said the last action was already complete; the session mcode made was then listed and shown by
+  `hatcheck`.
 
 ### With Qwen Code
 

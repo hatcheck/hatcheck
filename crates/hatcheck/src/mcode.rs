@@ -564,6 +564,22 @@ pub fn read_conversation(home: &str, id: &str) -> std::io::Result<Conversation> 
     conversation(&x)
 }
 
+// A conversation converted for mcode: written as a file for mcode to read (conv::write_import),
+// since mcode has no importer and hatcheck never writes its store.
+
+/// The first prompt mcode gets with an imported conversation: read the file, then go on.
+pub fn prompt(file: &str) -> String {
+    conv::handover_prompt(file)
+}
+
+/// The command that starts mcode on an imported conversation, from the session's folder: its
+/// terminal UI with the prompt as the task it starts on (`mcode [prompt]`), which reads the file
+/// with its own tool; mcode's read guards refuse devices and binaries, not a path outside the
+/// workspace. The session mcode makes is its own, with its own ID.
+pub fn start_command(home: &str, file: &str, full: bool) -> String {
+    paths::mcode_command(home, &paths::quote(&prompt(file)), full)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -291,9 +291,10 @@ What hatcheck reads, checked against dsh 0.2.1-rc.2:
 - `hatcheck usage` lists one no-data account per DSH home, with agent `dsh` and plan `DeepSeek`:
   `dsh has no plan-usage command or endpoint (0.2.1-rc.2)`. It reads no DSH credentials and makes
   no DSH usage request.
-- `move` and `fork` convert DSH sessions out to existing writable targets, always keeping the
-  original. A DSH target is refused, and so are copies between DSH homes: the logs and workspace
-  state aren't safe for hatcheck to copy. hatcheck never writes DSH's store or converts into it.
+- `move` and `fork` convert DSH sessions out, always keeping the original, and convert a session
+  of another agent for DSH as a file: `dsh web` is printed with the prompt to paste into its web
+  UI, which has the agent read the file. Copies between DSH homes are refused: the logs and
+  workspace state aren't safe for hatcheck to copy, and hatcheck never writes DSH's store.
 - `relocate` lists affected DSH sessions as skipped: the header's cwd and project key are
   immutable, and the workspace state stays as it was. `--dry-run` changes nothing.
 - `hatcheck bind default` binds `~/.dsh` along with the rest, `bind NAME` binds `~/.dsh-NAME` when
@@ -313,7 +314,9 @@ legacy `.mavis` data isn't merged or migrated.
 What hatcheck reads is checked against the 0.6.5 source preview. The installed CLI is separate:
 `~/.minimax-code/bin/mcode` is 0.6.13, and its `--help` verifies direct `mcode --session mvs_<id>`
 resume and `mcode login`. That 0.6.13 copy isn't on this shell's `PATH`; doctor remains PATH-based
-(see [`hatcheck doctor`](install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents)).
+(see [`hatcheck doctor`](install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents)). A
+session converted for mcode was read by that 0.6.13 on 2026-10-25, started on the file in its
+terminal UI with the command hatcheck prints.
 
 - `v2/sqlite/runtime-state.sqlite` is opened read-only, with no runtime initialization or migrations
   and no writes to the store. Only `local_runtime_sessions` rows with `columnar_version=3` are read.
@@ -355,10 +358,10 @@ resume and `mcode login`. That 0.6.13 copy isn't on this shell's `PATH`; doctor 
   hatcheck doesn't call it: no mcode auth or provider configuration is read, no mcode usage request
   is made, and no new network request class is added. `best` doesn't count this unknown usage as
   room.
-- `move` and `fork` convert mcode sessions out to existing writable targets, always keeping the
-  original. mcode is never a target, and same-agent copies are refused: shared SQLite state,
-  manifest paths and session assets aren't safe for hatcheck to copy. `mcode exec --file` isn't a
-  lossless import and isn't used.
+- `move` and `fork` convert mcode sessions out, always keeping the original, and convert a
+  session of another agent for mcode as a file its terminal UI is started on, with the prompt as
+  its task (`mcode '…'`). Same-agent copies are refused: shared SQLite state, manifest paths and
+  session assets aren't safe for hatcheck to copy, and hatcheck never writes mcode's store.
 - `relocate` lists affected mcode sessions as skipped: shared SQLite state and absolute manifest
   paths with related assets stay as they were. `--dry-run` changes nothing.
 - `hatcheck bind default` binds `~/.minimax` along with the rest only when its actual v2 store

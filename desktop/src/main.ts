@@ -138,7 +138,6 @@ type Destination = { value: string; label: string; agent: Account["agent"] };
 function destinations(s: Session): Destination[] {
   const out: Destination[] = [];
   for (const a of accounts) {
-    if (a.agent === "mcode") continue;
     const left = a.limits.filter((l) => l.left_percent !== null).map((l) => `${l.short} ${Math.round(l.left_percent!)}%`).join(", ");
     for (const p of a.profiles) {
       if (p === s.profile) continue;
@@ -163,9 +162,11 @@ function reportText(r: MoveReport): string {
       : r.turns_dropped ? ` The oldest ${r.turns_dropped} turns are left out to fit.` : ""}</p>` : "") +
     (r.new_session ? `<p class="note">New session: <span class="mono">${esc(r.new_session)}</span></p>` : "") +
     (r.deleted_original ? `<p class="note">${r.dry_run ? "Would delete" : "Deleted"} the original from ${esc(tilde(r.source))}.</p>` : "") +
-    (dsh
-      ? `<p class="note">Open DSH with <code>${esc(r.resume)}</code>, then choose the session in its web UI; the selected session isn't resumed directly.</p>`
-      : `<p class="note">Resume it with <code>${esc(r.resume)}</code></p>`);
+    (dsh && r.paste
+      ? `<p class="note">Open DSH with <code>${esc(r.resume)}</code>, then paste into its web UI: <code>${esc(r.paste)}</code></p>`
+      : dsh
+        ? `<p class="note">Open DSH with <code>${esc(r.resume)}</code>, then choose the session in its web UI; the selected session isn't resumed directly.</p>`
+        : `<p class="note">Resume it with <code>${esc(r.resume)}</code></p>`);
 }
 
 async function startMove(s: Session) {

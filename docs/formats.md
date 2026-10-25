@@ -57,16 +57,19 @@ MiniMax Code's compaction summaries are carried as text; DSH's compact checkpoin
 the events they replaced, as DSH shows them.
 
 **Fitting.** The turns are then fitted to the new agent: a note first, saying where the session
-came from, when and in which folder, with what model, and what isn't included; past about
+came from, when and in which folder, with what model, what isn't included, and to check whether
+its last action completed before repeating it; past about
 400,000 characters (about 100,000 tokens) the oldest turns after the first are left out, with a
 line saying how many; the newest turn is always kept, cut to its latest parts when it alone is
 too long; turns are merged so you and the assistant alternate; and the conversation ends on a
 reply, with `(The X session ended here.)` added when it ended on yours.
 
-**The brief.** `--brief` hands over a brief in place of the whole conversation, as Orca's hand-off
-to another agent injects a bounded prompt built from the old transcript: after the note, the
+**The brief.** `--brief` hands over a brief in place of the whole conversation: after the note, the
 first prompt, the files and commands the tool calls named, and the last six turns as they were,
-within 12,000 characters. hatcheck runs no model to make it. `hatcheck show --brief` shows it.
+within 12,000 characters. hatcheck runs no model to make it, so it's the same every time, as
+Orca's continuation after a restart is: Orca resumes the provider's own session and sends one
+fixed message, where a brief carries what an agent that can't resume the session needs.
+`hatcheck show --brief` shows it.
 
 **What a writer makes.**
 
@@ -78,12 +81,15 @@ within 12,000 characters. hatcheck runs no model to make it. `hatcheck show --br
 | Antigravity CLI | `imports/<id>.md` in hatcheck's cache folder: the conversation as Markdown, each turn under who said it and when | `agy --add-dir <imports> -i '…'`, which reads the file and carries on |
 | ZCode | the same Markdown file | `zcode --attach <file> --mode plan -p '…'`, then `zcode -c` |
 | Qwen Code | the same Markdown file | `qwen --add-dir <imports> -i '…'` |
-| DeepSeek Harness, MiniMax Code | nothing: they have no importer, and hatcheck never writes a store it can't follow | converted out only |
+| MiniMax Code | the same Markdown file | `mcode '…'`: its terminal UI, with the prompt as its task |
+| DeepSeek Harness | the same Markdown file | `dsh web`, then the prompt pasted into its web UI |
 
 Claude Code, Codex and Kimi get a session in their own format, which they resume as one of
-theirs. Antigravity CLI, ZCode and Qwen Code have no importer, so they get a file and a command
-that starts them on it: the session exists once the agent has read the file, with an ID of the
-agent's own, which is why `--json` reports `"new_session": null` and the `file` for those three.
+theirs. Antigravity CLI, ZCode, Qwen Code and MiniMax Code have no importer, so they get a file
+and a command that starts them on it, and DeepSeek Harness gets the file and a prompt to paste
+into its web UI, which takes no first prompt: the session exists once the agent has read the
+file, with an ID of the agent's own, which is why `--json` reports `"new_session": null` and the
+`file` for those five, and the prompt as `paste` for DSH.
 
 **What isn't a conversion.** A move or copy between an agent's own profiles carries the session
 whole: Claude Code's transcript, subagent folder, `/rewind` snapshots and plan, with the paths in

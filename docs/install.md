@@ -17,6 +17,8 @@ installer alias for either.
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
 uv tool install hatcheck            # or: pipx install hatcheck
+cargo binstall hatcheck             # the release binaries, with cargo-binstall
+cargo install hatcheck              # or build them from crates.io
 ```
 
 On Windows, in PowerShell:
