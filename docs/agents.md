@@ -54,7 +54,7 @@ The desktop apps:
 | ZCode | macOS, Windows, Linux (beta) | [zcode.z.ai](https://zcode.z.ai/en) |
 | DeepSeek Harness | macOS (Apple silicon), Windows | [deepseek.com/harness](https://deepseek.com/harness) |
 | Qwen Code Desktop | macOS, Windows, Linux | [GitHub releases, `desktop-latest`](https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) |
-| MiniMax Code | macOS, Windows | [agent.minimax.io/download](https://agent.minimax.io/download) |
+| MiniMax Code | macOS, Windows | [MiniMax Code's download guide](https://agent.minimax.io/docs/code/get-started/download) |
 
 Homebrew on macOS has four of them: `brew install --cask claude chatgpt antigravity zcode`.
 

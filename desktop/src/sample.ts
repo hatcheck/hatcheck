@@ -60,12 +60,17 @@ export function sample(args: string[]): string {
     cwd: `${H}/code/api`, model: "claude-fable-5-1", turns_total: 4, tool_calls: 1,
     left_out: "Claude's thinking, images, plans, /rewind snapshots and subagent transcripts", turns });
   if (first === "move" || first === "fork") {
-    const fork = first === "fork", keep = args.includes("--keep"), id = fork ? "5b1e0c4a-7d2f-4e6b-9a3c-8f1d2e3c4b5a" : args[1];
-    return JSON.stringify({ version: 1, dry_run: args.includes("--dry-run"), action: fork ? "fork" : keep ? "copy" : "move",
-      agent: "claude", session: args[1], source: `${H}/.claude-work`, target: `${H}/.claude-${args[2]}`, new_session: fork ? id : null,
+    // To the Codex home it's a conversion: a new Codex session, with --brief a brief in the conversation's place.
+    const fork = first === "fork", keep = args.includes("--keep"), convert = args[2] === "codex", brief = args.includes("--brief");
+    const id = convert ? "019a9d2c-3e4f-7a5b-8c6d-7e8f9a0b1c2d" : fork ? "5b1e0c4a-7d2f-4e6b-9a3c-8f1d2e3c4b5a" : args[1];
+    const common = { version: 1, dry_run: args.includes("--dry-run"), agent: "claude", session: args[1], source: `${H}/.claude-work`, cwd: `${H}/code/api` };
+    if (convert) return JSON.stringify({ ...common, action: "convert", target: `${H}/.codex`, target_agent: "codex", new_session: id,
+      prompts: 2, tool_calls: 1, left_out: "Claude's thinking, images, plans, /rewind snapshots and subagent transcripts",
+      brief, turns_dropped: 0, resume: `codex resume ${id}` });
+    return JSON.stringify({ ...common, action: fork ? "fork" : keep ? "copy" : "move", target: `${H}/.claude-${args[2]}`, new_session: fork ? id : null,
       deleted_original: !fork && !keep,
       items: [{ what: "transcript", from: "", to: "", state: "new", detail: "53.0 KB" }, { what: "/rewind file snapshots", from: "", to: "", state: "new", detail: "4 files" }],
-      cwd: `${H}/code/api`, resume: `cl ${args[2]} --resume ${id}` });
+      resume: `cl ${args[2]} --resume ${id}` });
   }
   if (first === "desktop" && args[1] === "--json") return JSON.stringify({ version: 1, instances: [
     { name: "work", display: "Work", app: "/Applications/Claude Work.app", data_dir: `${H}/.claude-instances/work`, running: true },

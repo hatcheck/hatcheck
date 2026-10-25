@@ -80,6 +80,7 @@ export type MoveReport = {
   tool_calls?: number;
   left_out?: string;
   turns_dropped?: number;
+  brief?: boolean;
   cwd: string | null;
   resume: string;
 };
@@ -130,10 +131,12 @@ export const conversation = (s: Session, last = 300) =>
 export const resume = (s: Session) => engine(["open", s.id, "--from", s.profile]);
 
 // A move, or with fork, hatcheck fork: a new session with its own ID, which always keeps the original.
-export function move(s: Session, to: string, how: { dryRun: boolean; keep?: boolean; fork?: boolean }) {
+// With brief, --brief: a conversion into another agent hands over a brief in place of the conversation.
+export function move(s: Session, to: string, how: { dryRun: boolean; keep?: boolean; fork?: boolean; brief?: boolean }) {
   const args = [how.fork ? "fork" : "move", s.id, to, "--from", s.profile, "--json"];
   if (how.dryRun) args.push("--dry-run");
   if (how.keep && !how.fork) args.push("--keep");
+  if (how.brief) args.push("--brief");
   return json<MoveReport>(args);
 }
 

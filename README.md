@@ -247,8 +247,9 @@ the Claude Desktop instances and notifies you when a limit runs low or resets.
 
 Its main window browses every session, with search, filters and a read-only preview of the
 conversation. From there you can resume or open a session, copy its command, or move or fork it to
-another profile after a dry run. The window also lists profiles and homes, signs in to a new one
-in a terminal, and makes Desktop instances.
+another profile after a dry run, handing over a brief in place of the whole conversation when it
+goes to another agent. The window also lists profiles and homes, signs in to a new one in a
+terminal, and makes Desktop instances.
 
 It ships the CLI inside itself, so it needs no Python. It never handles a login, and live usage is
 off until you turn it on. See [desktop/README.md](desktop/README.md) to build and test it, with

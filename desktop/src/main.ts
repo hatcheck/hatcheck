@@ -133,15 +133,17 @@ const closeDialog = () => {
   $("dialog").hidden = true;
 };
 
-function destinations(s: Session): { value: string; label: string }[] {
-  const out: { value: string; label: string }[] = [];
+type Destination = { value: string; label: string; agent: Account["agent"] };
+
+function destinations(s: Session): Destination[] {
+  const out: Destination[] = [];
   for (const a of accounts) {
     if (a.agent === "mcode") continue;
     const left = a.limits.filter((l) => l.left_percent !== null).map((l) => `${l.short} ${Math.round(l.left_percent!)}%`).join(", ");
     for (const p of a.profiles) {
       if (p === s.profile) continue;
       const name = profileName(p);
-      out.push({ value: name.startsWith("~") ? p : name, label: `${tilde(p)} (${agentName(a.agent, true)}, ${a.plan}${left ? ", " + left : ""})` });
+      out.push({ value: name.startsWith("~") ? p : name, label: `${tilde(p)} (${agentName(a.agent, true)}, ${a.plan}${left ? ", " + left : ""})`, agent: a.agent });
     }
   }
   return out;
@@ -156,7 +158,9 @@ function reportText(r: MoveReport): string {
   return `<p>${verb} ${esc(what)}, to ${esc(tilde(r.target))}.</p>` +
     (items ? `<table class="items"><tr><th>What</th><th>Size</th><th>There</th></tr>${items}</table>` : "") +
     (r.action === "convert" ? `<p class="note">${r.prompts} of your messages and ${r.tool_calls} tool calls come across as text; left out: ${esc(r.left_out)}.${
-      r.turns_dropped ? ` The oldest ${r.turns_dropped} turns are left out to fit.` : ""}</p>` : "") +
+      r.brief ? ` Handed over as a brief: the first prompt, the files and commands its tool calls named, and the last turns${
+        r.turns_dropped ? `, without the oldest ${r.turns_dropped}` : ""}.`
+      : r.turns_dropped ? ` The oldest ${r.turns_dropped} turns are left out to fit.` : ""}</p>` : "") +
     (r.new_session ? `<p class="note">New session: <span class="mono">${esc(r.new_session)}</span></p>` : "") +
     (r.deleted_original ? `<p class="note">${r.dry_run ? "Would delete" : "Deleted"} the original from ${esc(tilde(r.source))}.</p>` : "") +
     (dsh
@@ -169,9 +173,10 @@ async function startMove(s: Session) {
   const options = destinations(s);
   if (!options.length) return toast("There's no other profile or home to move it to.", "error");
   dialog(`Move "${s.title}"`,
-    `<label>To <select id="move-to">${options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("")}</select></label>
+    `<label>To <select id="move-to">${options.map((o) => `<option value="${esc(o.value)}" data-agent="${esc(o.agent)}">${esc(o.label)}</option>`).join("")}</select></label>
      <label class="check"><input id="move-keep" type="checkbox" /> Keep the original, which copies it instead</label>
      <label class="check"><input id="move-fork" type="checkbox" /> Fork it: a new session with its own ID, beside any copy there</label>
+     <label class="check"><input id="move-brief" type="checkbox" /> Hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and the last turns (to another agent only)</label>
      <div id="move-report" class="report"></div>`,
     [
       { label: "Cancel", kind: "ghost", run: closeDialog },
@@ -186,11 +191,21 @@ async function startMove(s: Session) {
     keep.checked = fork.checked || kept;
     keep.disabled = fork.checked;
   });
+  // A brief is only for a conversion into another agent: between an agent's own profiles the
+  // session goes whole, and hatcheck refuses --brief.
+  const to = $<HTMLSelectElement>("move-to"), brief = $<HTMLInputElement>("move-brief");
+  const fit = () => {
+    brief.disabled = to.selectedOptions[0]?.dataset.agent === s.agent;
+    if (brief.disabled) brief.checked = false;
+  };
+  to.addEventListener("change", fit);
+  fit();
 }
 
 async function runMove(s: Session, dryRun: boolean) {
   const to = $<HTMLSelectElement>("move-to").value;
-  const how = { dryRun, keep: $<HTMLInputElement>("move-keep").checked, fork: $<HTMLInputElement>("move-fork").checked };
+  const how = { dryRun, keep: $<HTMLInputElement>("move-keep").checked, fork: $<HTMLInputElement>("move-fork").checked,
+    brief: $<HTMLInputElement>("move-brief").checked };
   try {
     const report = await move(s, to, how);
     $("move-report").innerHTML = reportText(report);

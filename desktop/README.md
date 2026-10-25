@@ -26,7 +26,8 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
   - *Sessions:* every session of the last day to month, searchable by title and folder, filtered
     by agent and profile, with a read-only preview of the conversation (`hatcheck show`), and
     Resume, Copy and **Move**: pick a profile, see the dry run (`hatcheck move --dry-run --json`,
-    or `hatcheck fork` for a new session that keeps the original), then do it, and resume it there.
+    or `hatcheck fork` for a new session that keeps the original; to another agent's profile,
+    **Hand over a brief** passes `--brief`), then do it, and resume it there.
   - *Plans:* every account's limits.
   - *Profiles:* every profile or home, and **Sign in** or **Add one**, which runs the agent's own
     sign-in through `hatcheck open --login`, so the login stays with the agent.
