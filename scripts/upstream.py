@@ -1,20 +1,30 @@
 #!/usr/bin/env python3
 """What has changed upstream since the docs were last checked: the first step of
-docs/maintenance.md, run every week or two and before a release.
+docs/maintenance.md, run every week or two and before a release, and every Monday by
+.github/workflows/upstream.yml.
 
-    python3 scripts/upstream.py [--providers]
+    python3 scripts/upstream.py [--providers] [--findings FILE]
 
 1. The agents: each one's version installed here, its latest release, and the versions the docs
    say hatcheck was checked against.
-2. The desktop apps: each Homebrew cask's version, and any the cask marks deprecated.
+2. The desktop apps: each Homebrew cask's version, and any the cask marks deprecated, and the casks
+   the docs and site say to install, each of which must still be there.
 3. Every link in the README, docs/ and site/, and each install script the site gives: its status,
    and where it redirects now.
 4. With --providers: Kimi's and Z.ai's model lists, asked with the keys in claude-k's and
    claude-z's config files (sent only to those providers' own model-list endpoints, as claude-k
    and claude-z send them), beside the menus in crates/hatcheck/src/provider.rs.
 
+Last, what needs a look: a latest release that isn't a version the docs cite, or that couldn't be
+read; a cask the docs give that's deprecated or gone; a link that doesn't answer 200; and with
+--providers, a model of a menu its provider no longer lists. --findings FILE writes that as the
+text of an issue, or empties FILE when there's nothing, for the workflow's issue.
+
 It changes nothing and starts no agent: the installed versions come from each command's
---version (ZCode's from its app bundle, read as a file), and nothing else runs an agent."""
+--version (ZCode's from its app bundle, read as a file), and nothing else runs an agent. With
+GITHUB_TOKEN set, as in a workflow, it goes with the one request to GitHub's API."""
+import argparse
+import functools
 import glob
 import json
 import os
@@ -22,7 +32,6 @@ import plistlib
 import re
 import shutil
 import subprocess
-import sys
 import urllib.error
 import urllib.request
 
@@ -41,7 +50,7 @@ def fetch(url, headers=None, method="GET", timeout=20):
     except urllib.error.HTTPError as e:
         return e.code, url, b""
     except Exception as e:  # DNS, TLS, timeouts
-        return 0, url, str(e).encode()
+        return 0, url, str(getattr(e, "reason", e)).encode()
 
 
 def fetch_json(url, headers=None):
@@ -52,11 +61,17 @@ def fetch_json(url, headers=None):
         return None
 
 
+@functools.lru_cache(maxsize=None)
+def dist_tags(package):
+    """An npm package's tags, without the rest of what the registry knows of it."""
+    return fetch_json("https://registry.npmjs.org/-/package/%s/dist-tags" % package) or {}
+
+
 def npm(package, tag="latest"):
-    d = fetch_json("https://registry.npmjs.org/" + package.replace("/", "%2f"))
-    return (d or {}).get("dist-tags", {}).get(tag)
+    return dist_tags(package).get(tag)
 
 
+@functools.lru_cache(maxsize=None)
 def cask(name):
     """(version, deprecated) of a Homebrew cask, or (None, None)."""
     d = fetch_json("https://formulae.brew.sh/api/cask/%s.json" % name)
@@ -66,7 +81,10 @@ def cask(name):
 
 
 def github_release(repo):
-    for r in fetch_json("https://api.github.com/repos/%s/releases?per_page=20" % repo) or []:
+    # GitHub limits requests without a token, and a workflow's runners share their addresses.
+    token = os.environ.get("GITHUB_TOKEN")
+    headers = {"Authorization": "Bearer " + token} if token else None
+    for r in fetch_json("https://api.github.com/repos/%s/releases?per_page=20" % repo, headers) or []:
         if not r.get("prerelease") and not r.get("draft"):
             m = re.search(VERSION, r.get("tag_name", ""))
             return m.group(0) if m else r.get("tag_name")
@@ -102,8 +120,9 @@ def zcode_installed():
 
 
 def cited(names, own=None):
-    """The versions the docs give for an agent: those beside one of its names, and every match of
-    `own`, a pattern of the agent's own version numbers, for docs that name the agent elsewhere."""
+    """The versions the docs give for an agent, oldest first: those beside one of its names, and
+    every match of `own`, a pattern of the agent's own version numbers, for docs that name the
+    agent elsewhere."""
     parts = [r"(?:%s)[`'\s(]{1,4}(%s)" % ("|".join(re.escape(n) for n in names), VERSION)]
     if own:
         parts.append("(%s)" % own)
@@ -114,45 +133,59 @@ def cited(names, own=None):
         if os.path.exists(path):
             for m in pattern.finditer(open(path, encoding="utf-8").read()):
                 found.update(g for g in m.groups() if g)
-    return ", ".join(sorted(found, key=lambda v: [int(x) if x.isdigit() else x for x in re.split(r"[.-]", v)])) or "none"
+    return sorted(found, key=lambda v: [int(x) if x.isdigit() else x for x in re.split(r"[.-]", v)])
 
 
-# Each agent hatcheck reads: how this machine says which version it has, where its newest
-# release is announced, and how the docs name it beside a version.
+# Each agent hatcheck reads: how this machine says which version it has, its latest release and a
+# note on it (None where nothing announces its releases), and how the docs name it beside a version.
 AGENTS = [
     ("Claude Code", lambda: run_version(["claude", "--version"]),
-     lambda: "%s (stable %s)" % (npm("@anthropic-ai/claude-code"), npm("@anthropic-ai/claude-code", "stable")),
+     lambda: (npm("@anthropic-ai/claude-code"), "stable %s" % npm("@anthropic-ai/claude-code", "stable")),
      ["claude", "Claude Code"], r"\b2\.1\.\d{3}\b"),
-    ("Codex", lambda: run_version(["codex", "--version"]), lambda: npm("@openai/codex"), ["codex"],
+    ("Codex", lambda: run_version(["codex", "--version"]), lambda: (npm("@openai/codex"), None), ["codex"],
      r"\b0\.1\d\d\.\d+\b"),
-    ("Antigravity CLI", lambda: run_version(["agy", "--version"]), lambda: cask("antigravity-cli")[0], ["agy"]),
-    ("Kimi Code CLI", lambda: run_version(["kimi", "--version"]), lambda: github_release("MoonshotAI/kimi-code"),
-     ["kimi"]),
-    ("ZCode", zcode_installed, lambda: "app %s; its CLI's version is inside the app" % cask("zcode")[0], ["ZCode"]),
+    ("Antigravity CLI", lambda: run_version(["agy", "--version"]), lambda: (cask("antigravity-cli")[0], None),
+     ["agy"]),
+    ("Kimi Code CLI", lambda: run_version(["kimi", "--version"]),
+     lambda: (github_release("MoonshotAI/kimi-code"), None), ["kimi"]),
+    ("ZCode", zcode_installed, lambda: (cask("zcode")[0], "the app; its CLI's version is inside it"), ["ZCode"]),
     ("DeepSeek Harness", lambda: run_version(["dsh", "--version"]),
-     lambda: "%s (next %s)" % (npm("@deepseek-ai/dsh"), npm("@deepseek-ai/dsh", "next")), ["dsh"]),
+     lambda: (npm("@deepseek-ai/dsh"), "next %s" % npm("@deepseek-ai/dsh", "next")), ["dsh"]),
     # Its installer puts mcode in ~/.minimax-code/bin, which needn't be on the PATH.
     ("MiniMax Code", lambda: run_version([shutil.which("mcode") or os.path.expanduser("~/.minimax-code/bin/mcode"),
                                           "--version"]),
-     lambda: "? (no release feed: see its installer)", ["mcode", "MiniMax Code"], r"\b0\.6\.\d+\b"),
+     None, ["mcode", "MiniMax Code"], r"\b0\.6\.\d+\b"),
 ]
 
 APPS = [("Claude Desktop", "claude"), ("ChatGPT, with Codex", "chatgpt"), ("Codex app (old cask)", "codex-app"),
         ("Antigravity", "antigravity"), ("ZCode", "zcode")]
 
 
+def doc_files():
+    """The README, every page of docs/ and every page of the site."""
+    files = [os.path.join(REPO, "README.md")] + glob.glob(os.path.join(REPO, "docs", "**", "*.md"), recursive=True)
+    return files + glob.glob(os.path.join(REPO, "site", "*.html"))
+
+
 def links():
     """Every outside link in the README, docs and site, and the install scripts the site gives."""
     urls = set()
-    files = glob.glob(os.path.join(REPO, "docs", "**", "*.md"), recursive=True)
-    files += [os.path.join(REPO, "README.md")] + glob.glob(os.path.join(REPO, "site", "*.html"))
-    for path in files:
+    for path in doc_files():
         for url in re.findall(r"https?://[^\s)\"'<>`]+", open(path, encoding="utf-8").read()):
             url = url.rstrip(".,;:")
             if not re.search(r"github\.com/hatcheck/hatcheck|hatcheck\.dev|localhost|127\.0\.0\.1|example\.|api\.|backend-api|youtube",
                              url):
                 urls.add(url.replace("&amp;", "&"))
     return sorted(urls)
+
+
+def casks_named():
+    """The casks the docs and site say to install, from their `brew install --cask` lines."""
+    names = set()
+    for path in doc_files():
+        for m in re.finditer(r"brew install --cask ([\w@.\- ]+)", open(path, encoding="utf-8").read()):
+            names.update(m.group(1).split())
+    return sorted(names)
 
 
 def menus():
@@ -172,6 +205,8 @@ def config_key(provider):
 
 
 def providers():
+    """Print each provider's models beside its menu, and return the menu's models it no longer lists."""
+    gone = []
     for key, name, url in (("k", "Kimi", "https://api.kimi.ai/coding/v1/models"),
                            ("z", "Z.ai", "https://api.z.ai/api/anthropic/v1/models")):
         secret = config_key(key)
@@ -189,28 +224,84 @@ def providers():
         unlisted = [m for m in offered if m not in menu]
         print("    in claude-%s's menu but not offered: %s" % (key, ", ".join(missing) or "none"))
         print("    offered but not in the menu: %s" % (", ".join(unlisted) or "none"))
+        gone += ["claude-%s offers `%s`, which %s's model list no longer has." % (key, m, name) for m in missing]
+    return gone
+
+
+def issue_text(findings):
+    """What needs a look, as the text of the issue the weekly workflow keeps open."""
+    return ("`python3 scripts/upstream.py` found what the docs and site haven't caught up with:\n\n"
+            + "".join("- %s\n" % f for f in findings)
+            + "\nProbe what's new and update the code, docs and site as `docs/maintenance.md` says. The"
+            " weekly check rewrites this list while anything is outstanding, and closes the issue once"
+            " nothing is.\n")
 
 
 def main():
+    parser = argparse.ArgumentParser(description="What has changed upstream since the docs were last checked.")
+    parser.add_argument("--providers", action="store_true",
+                        help="also compare Kimi's and Z.ai's model lists with claude-k's and claude-z's menus")
+    parser.add_argument("--findings", metavar="FILE", help="write what needs a look to FILE, as an issue's text")
+    args = parser.parse_args()
+    findings = []
+
     print("The agents (installed here · latest · the docs cite):")
     for name, installed, latest, names, *own in AGENTS:
-        print("  %-17s %s · %s · %s" % (name, installed(), latest(), cited(names, *own)))
+        docs = cited(names, *own)
+        if latest is None:
+            newest, shown = None, "? (no release feed: see its installer)"
+        else:
+            newest, note = latest()
+            shown = (newest or "?") + (" (%s)" % note if note else "")
+        print("  %-17s %s · %s · %s" % (name, installed(), shown, ", ".join(docs) or "none"))
+        m = re.search(VERSION, newest or "")
+        version = m.group(0) if m else newest
+        if latest is not None and not version:
+            findings.append("%s's latest release couldn't be read." % name)
+        elif version and version not in docs:
+            findings.append("%s %s is out; the docs cite %s." % (name, version, ", ".join(docs) or "none"))
+
     print("\nDesktop apps (Homebrew cask version):")
     for name, cask_name in APPS:
         version, deprecated = cask(cask_name)
         print("  %-22s %s%s" % (name, version or "no cask", " · deprecated: " + deprecated if deprecated else ""))
+    stale = []
+    for name in casks_named():
+        version, deprecated = cask(name)
+        if not version:
+            stale.append("Homebrew's API didn't find the `%s` cask, which the docs give." % name)
+        elif deprecated:
+            stale.append("Homebrew's `%s` cask, which the docs give, is deprecated: %s." % (name, deprecated))
+    print("  The docs' brew install --cask lines name %s: %s" % (" ".join(casks_named()),
+                                                                 "see below" if stale else "each one current"))
+    findings += stale
+
     print("\nLinks and install scripts:")
     broken = 0
     for url in links():
-        status, final, _ = fetch(url)
+        status, final, body = fetch(url)
+        if status != 200:  # once more, for a failure that passes
+            status, final, body = fetch(url)
         moved = final.rstrip("/") != url.rstrip("/")
         if status != 200 or moved:
-            broken += status != 200
             print("  %s %s%s" % (status or "error", url, " -> " + final if moved else ""))
+        if status in (404, 410):
+            findings.append("%s is gone (%d)." % (url, status))
+        elif status != 200:
+            findings.append("%s answered %s." % (url, status or "nothing (`%s`)" % body.decode("utf-8", "replace")[:80]))
+        broken += status != 200
     print("  every other link answered 200" if broken == 0 else "  %d didn't answer 200" % broken)
-    if "--providers" in sys.argv[1:]:
+
+    if args.providers:
         print("\nProvider models (claude-k, claude-z):")
-        providers()
+        findings += providers()
+
+    print("\nWhat needs a look:" if findings else "\nNothing needs a look.")
+    for f in findings:
+        print("  - " + f)
+    if args.findings:
+        with open(args.findings, "w", encoding="utf-8") as fh:
+            fh.write(issue_text(findings) if findings else "")
 
 
 if __name__ == "__main__":

@@ -38,7 +38,8 @@ commands are in [desktop/README.md](desktop/README.md#build-and-test-it).
 
 The tests can't see an agent's new version: every week or two, and before a release,
 [docs/maintenance.md](docs/maintenance.md) checks the newest version of each agent, its install
-commands and apps, and the providers' models, starting with `python3 scripts/upstream.py`.
+commands and apps, and the providers' models, starting with `python3 scripts/upstream.py`, which
+`.github/workflows/upstream.yml` runs every Monday, keeping an issue open for what it finds.
 
 ## Conventions
 

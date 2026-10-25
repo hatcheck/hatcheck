@@ -263,7 +263,8 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 - **`docs/`**: [commands.md](docs/commands.md), [agents.md](docs/agents.md) and
   [install.md](docs/install.md), each command, agent and way of installing as it is;
   [desktop-instances.md](docs/desktop-instances.md) for the Desktop instances;
-  [rust-port.md](docs/rust-port.md) on the port from Python.
+  [rust-port.md](docs/rust-port.md) on the port from Python; [maintenance.md](docs/maintenance.md)
+  on checking each agent's newest version every week or two.
 - **`AGENTS.md`** and **`docs/lessons.md`**: notes for coding agents (`CLAUDE.md` imports them): how
   to build and check, the rules the code keeps, and what earlier work got wrong, with the rule that
   would have caught it.
@@ -271,6 +272,9 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   `python3 -m unittest discover -s tests`, which builds it with cargo first, and the crate's own
   tests with `cargo test -p hatcheck`. They never read your real profiles, Keychain or the network.
   GitHub Actions runs both on macOS, Linux and Windows (`.github/workflows/tests.yml`).
+- **`scripts/`**: `upstream.py`, the read-only first step of [maintenance.md](docs/maintenance.md),
+  which `.github/workflows/upstream.yml` runs every Monday, keeping an issue open for what it
+  finds; and `provider_probe.py`, which runs each `claude-k` and `claude-z` model once.
 
 ## Roadmap
 

@@ -17,8 +17,16 @@ installed here, the latest release and the versions the docs cite; each desktop 
 cask and whether it's deprecated; every link in the README, `docs/` and `site/` that doesn't
 answer 200 or now redirects, install scripts included; and, with `--providers`, Kimi's and Z.ai's
 model lists beside the menus of `claude-k` and `claude-z` (asked with the keys in their config
-files, sent only to those providers' model-list endpoints). An agent added to hatcheck gets a row
-in its `AGENTS`.
+files, sent only to those providers' model-list endpoints). It ends with what needs a look: a
+latest release that isn't a version the docs cite, a cask the docs say to install that's
+deprecated or gone, a link that doesn't answer 200, and a menu's model its provider no longer
+lists. An agent added to hatcheck gets a row in its `AGENTS`.
+
+Every Monday, [`upstream.yml`](../.github/workflows/upstream.yml) runs it on GitHub without
+`--providers`, so it sends no key and runs no model, and keeps one issue labelled `upstream` open
+while anything needs a look: rewritten when the list changes, closed once a run finds nothing.
+`gh workflow run upstream.yml` runs it at once. GitHub stops a public repository's schedules after
+60 days without activity; the Actions tab turns this one back on.
 
 Then read each maker's install page and each provider's Claude Code guide for what a list can't
 show: a renamed app, a new install command, a plan renamed, a model's context or a setting it

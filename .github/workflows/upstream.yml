@@ -1,0 +1,52 @@
+name: upstream
+
+# Every Monday, and by hand (gh workflow run upstream.yml): the first step of docs/maintenance.md.
+# scripts/upstream.py asks the npm registry, Homebrew and GitHub for each agent's latest release
+# and fetches every link and install script the docs and site give; it sends no key and runs no
+# model. What it finds that the docs haven't caught up with goes in one issue labelled upstream,
+# rewritten while anything is outstanding and closed once a run finds nothing.
+
+on:
+  schedule:
+    - cron: "17 13 * * 1" # Mondays at 13:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: upstream
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check each agent's latest release, the casks and the links
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/upstream.py --findings findings.md
+      - name: Open, rewrite or close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create upstream --color c5def5 --force \
+            --description "An agent, app or link has changed since the docs were checked"
+          issue=$(gh issue list --label upstream --state open --json number --jq '.[0].number // empty')
+          if [ -s findings.md ]; then
+            if [ -z "$issue" ]; then
+              gh issue create --label upstream --body-file findings.md \
+                --title "Agents, apps or links have changed since the docs were checked"
+            elif [ "$(gh issue view "$issue" --json body --jq .body)" != "$(cat findings.md)" ]; then
+              gh issue edit "$issue" --body-file findings.md
+              gh issue comment "$issue" --body "The list changed in [this run]($RUN_URL)."
+            fi
+          elif [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "Nothing needs a look as of [this run]($RUN_URL)."
+          fi
