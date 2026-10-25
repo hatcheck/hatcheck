@@ -31,7 +31,9 @@ while anything needs a look: rewritten when the list changes, closed once a run 
 Then read each maker's install page and each provider's Claude Code guide for what a list can't
 show: a renamed app, a new install command, a plan renamed, a model's context or a setting it
 needs. The addresses are in [agents.md](agents.md#getting-the-agents) and the `claude-z`,
-`claude-k` section.
+`claude-k` section. The makers' data-use pages the rules page links are among the links the
+script checks; what they say is for the reader, and hatcheck's pages never summarise it, since
+the terms differ by product, plan and region, and change.
 
 ## 2. Probe each new version
 
@@ -71,7 +73,9 @@ that ask for one word, so nothing of yours is sent anywhere, and an account of y
 Every probe leaves something in a real home. Look for what changed since the marker (`find <home>
 -newer <marker>`), and take out only what the probe made, after copying any shared file you edit:
 
-- Claude Code: the probe folder's `projects/<key>` folder in each profile used.
+- Claude Code: the probe folder's `projects/<key>` folder in each profile used, and the prompt's
+  line at the end of its `history.jsonl`; its other files that change (`.claude.json`, remote
+  settings, plugin sync) are its own housekeeping, left alone.
 - Codex: the probe's `sessions/YYYY/MM/DD/rollout-…-<id>.jsonl` files and their lines in
   `session_index.jsonl`.
 - Kimi: `sessions/wd_<probe>_<hash>/`, its sessions' lines in `session_index.jsonl`, its entry in
@@ -91,7 +95,8 @@ Every probe leaves something in a real home. Look for what changed since the mar
   helpers in `tests/helpers.py` take what each version writes).
 - **Docs:** each "checked against" names the version and date it was checked again, and only what
   was; dated evidence of a probe that wasn't run again stays as it was. Installers, apps, models
-  and plans in [agents.md](agents.md#getting-the-agents) and the `claude-z`, `claude-k` section.
+  and plans in [agents.md](agents.md#getting-the-agents) and the `claude-z`, `claude-k` section;
+  a changed format in [formats.md](formats.md) too.
 - **Site:** `site/agents.html`'s table and its install commands and app cards; at a release,
   `python3 site/refresh.py` for the help blocks and samples (it runs the release binary; for the
   current build, `python3 site/refresh.py "$PWD/target/debug/hatcheck"`, by absolute path).
@@ -102,4 +107,4 @@ Every probe leaves something in a real home. Look for what changed since the mar
 
 | Date | Checked against | Found |
 |---|---|---|
-| 2026-10-24 | Claude Code 2.1.310, Codex 0.164.0, agy 1.4.7, kimi 2.3.1, ZCode 0.16.9 (and 0.17.0 compared), dsh 0.2.1-rc.2, qwen 0.26.0 (added) | agy 1.4.7 lists `--add-dir` folders first, filing an imported conversation under hatcheck's cache; ZCode 0.17.0 keeps deleted sessions' rows; Kimi's K3.1 Pro and English address, and `kimi-for-coding` renamed K2.8 Preview; Z.ai pairs `glm-5.3-flash[1m]`; the Codex app is part of ChatGPT; Claude Desktop has a Linux beta; qwen 0.26.1 is out on npm while Homebrew has 0.26.0 |
+| 2026-10-24 | Claude Code 2.1.310, Codex 0.164.0, agy 1.4.7, kimi 2.3.1, ZCode 0.16.9 (and 0.17.0 compared), dsh 0.2.1-rc.2, qwen 0.26.0 (added, both ways) | agy 1.4.7 lists `--add-dir` folders first, filing an imported conversation under hatcheck's cache; ZCode 0.17.0 keeps deleted sessions' rows; Kimi's K3.1 Pro and English address, and `kimi-for-coding` renamed K2.8 Preview; Z.ai pairs `glm-5.3-flash[1m]`; the Codex app is part of ChatGPT; Claude Desktop has a Linux beta; qwen 0.26.1 is out on npm while Homebrew has 0.26.0 |

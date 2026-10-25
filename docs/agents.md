@@ -408,9 +408,16 @@ qwen 0.26.0:
   each session spent, not what a plan has left; hatcheck reads neither them nor `oauth_creds.json`,
   and makes no request.
 - `move` and `fork` convert qwen sessions out to existing writable targets, always keeping the
-  original. A qwen target is refused: qwen has no importer, so a transcript hatcheck wrote would be
-  one qwen never did. Copies between qwen homes are refused too, since a session's file history,
-  registry record and side state would have to go with it; hatcheck never writes qwen's store.
+  original. To qwen, nothing hatcheck could write is a session qwen would resume, since qwen has no
+  importer, so the session is written as a Markdown file, `imports/<id>.md` in hatcheck's cache
+  folder, and the command printed starts qwen on it from the session's folder:
+  `qwen --add-dir <the imports folder> -i '…'`, with `QWEN_HOME=…` for another home. The folder
+  is added to the workspace so qwen may read the file, and the first prompt has it read the
+  conversation and carry on; the session exists once qwen starts, so `--json` reports
+  `"new_session": null` and the `file`. Checked with qwen 0.26.0, which read a Claude Code session
+  forked for it as a brief and carried on from it. Copies between qwen homes are refused, since a
+  session's file history, registry record and side state would have to go with it; hatcheck never
+  writes qwen's store.
 - `relocate` lists affected qwen sessions as skipped: the transcript is filed under the folder's
   name and records the folder on every line, and both stay as they were. `--dry-run` changes
   nothing.

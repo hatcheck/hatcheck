@@ -9,7 +9,7 @@ import sys
 import unittest
 from unittest import mock
 
-from helpers import NOW, WINDOWS, FakeHome, qwen_project, rec, write
+from helpers import NOW, WINDOWS, FakeHome, iso, qwen_project, rec, write
 
 Q = "c6f30025-d241-4388-a849-acb3ea844c99"
 N = "d0000000-0000-4000-8000-000000000001"
@@ -417,22 +417,87 @@ class QwenConversion(unittest.TestCase):
                     self.assertEqual(tree_bytes(self.home), original)
                     self.assertEqual(tree_bytes(self.claude), before)
 
-    def test_qwen_targets_and_same_agent_copies_are_refused_without_changes(self):
-        source = self.h.session(self.claude, self.api, A, "A Claude Code session")
-        source_bytes = read_bytes(source)
-        claude_before = tree_bytes(self.claude)
+    def test_copies_between_qwen_homes_are_refused_without_changes(self):
         work = self.h.qwen_home("work")
         before, target_before = tree_bytes(self.home), tree_bytes(work)
         for command in ("move", "fork"):
-            for session in (A, Q):
-                with self.subTest(command=command, source=session):
-                    code, out = self.h.run(command, session[:8], "qwen:work")
-                    self.assertEqual(code, 1, out)
-                    self.assertIn(READ_ONLY, out)
-                    self.assertEqual(tree_bytes(self.home), before)
-                    self.assertEqual(tree_bytes(work), target_before)
-                    self.assertEqual(tree_bytes(self.claude), claude_before)
-                    self.assertEqual(read_bytes(source), source_bytes)
+            with self.subTest(command=command):
+                code, out = self.h.run(command, Q[:8], "qwen:work")
+                self.assertEqual(code, 1, out)
+                self.assertIn("aren't copied between its homes; convert session %s for another agent instead" % Q[:8], out)
+                self.assertEqual(tree_bytes(self.home), before)
+                self.assertEqual(tree_bytes(work), target_before)
+
+    def test_a_claude_code_session_converted_for_qwen_is_a_file_qwen_starts_on(self):
+        source = self.h.session(self.claude, self.api, A, "A Claude Code session")
+        source_bytes = read_bytes(source)
+        work = self.h.qwen_home("work")
+        before, work_before = tree_bytes(self.home), tree_bytes(work)
+        code, out = self.h.run("move", A[:8], "qwen", "--json")
+        self.assertEqual(code, 0, out)
+        d = json.loads(out)
+        self.assertEqual((d["action"], d["agent"], d["target_agent"], d["new_session"], d["target"], d["brief"]),
+                         ("convert", "claude", "qwen", None, self.home, False))
+        self.assertTrue(d["file"].endswith(".md") and os.path.exists(d["file"]), d["file"])
+        self.assertTrue(d["resume"].startswith("qwen --add-dir "), d["resume"])
+        self.assertIn(" -i ", d["resume"])
+        self.assertIn(d["file"], d["resume"])
+        with open(d["file"], encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertTrue(text.startswith("# Conversation imported from Claude Code session " + A), text[:80])
+        self.assertIn("A Claude Code session", text)
+        self.assertEqual(read_bytes(source), source_bytes)  # the original stays
+        self.assertEqual(tree_bytes(self.home), before)  # and qwen's store isn't written
+        code, out = self.h.run("fork", A[:8], "qwen:work", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn('Would convert Claude Code session %s "A Claude Code session" from %s into a conversation for '
+                      'Qwen Code in ' % (A[:8], self.h.shown(self.claude)), out)
+        self.assertIn("so the session starts when qwen reads the file.", out)
+        self.assertIn("Then start it with:", out)
+        self.assertIn(resume_command(self.h, work) + " --add-dir ", out)
+        self.assertIn("<new id>.md", out)
+        self.assertEqual(tree_bytes(work), work_before)
+
+    def test_a_brief_hands_over_the_task_and_the_last_turns(self):
+        base = {"cwd": self.api, "sessionId": A, "entrypoint": "cli", "gitBranch": "main"}
+        when = NOW - 5 * 60  # the fixture's own records are at when - 30 and when
+        extra = []
+        for n in range(2, 10):
+            extra.append(rec(type="user", timestamp=iso(when + 2 * n), message={"role": "user", "content": "Prompt %d" % n}, **base))
+            extra.append(rec(type="assistant", timestamp=iso(when + 2 * n + 1), message={"role": "assistant", "content": [
+                {"type": "text", "text": "Reply %d" % n},
+                {"type": "tool_use", "id": "t%d" % n, "name": "Edit", "input": {"file_path": "src/file%d.rs" % n}}]}, **base))
+        self.h.session(self.claude, self.api, A, "Prompt 1", extra=extra)
+        code, out = self.h.run("show", A[:8], "--brief", "--json")
+        self.assertEqual(code, 0, out)
+        shown = json.loads(out)
+        self.assertTrue(shown["brief"])
+        self.assertEqual(shown["turns_total"], 7)  # the brief, then the last six turns
+        self.assertTrue(shown["turns"][0]["text"].startswith("Handover brief for Claude Code session " + A), shown["turns"][0]["text"][:120])
+        self.assertIn("## The task\n\nPrompt 1", shown["turns"][0]["text"])
+        self.assertIn("- src/file9.rs", shown["turns"][0]["text"])
+        self.assertEqual(shown["turns"][1]["text"], "Prompt 7")
+        self.assertIn("Reply 9", shown["turns"][-1]["text"])
+
+        code, out = self.h.run("fork", A[:8], "qwen", "--brief", "--json")
+        self.assertEqual(code, 0, out)
+        d = json.loads(out)
+        self.assertEqual((d["brief"], d["turns_dropped"], d["newest_turn_cut"], d["prompts"], d["tool_calls"]),
+                         (True, 12, False, 9, 8))  # 18 turns, the last 6 carried
+        with open(d["file"], encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("Handover brief for Claude Code session " + A, text)
+        self.assertIn("## Files the tool calls named", text)
+        self.assertIn("Prompt 7", text)
+        self.assertNotIn("Reply 3", text)  # an early turn: summarised, not carried
+        code, out = self.h.run("fork", A[:8], "qwen", "--brief", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn("the first prompt, 8 files and 0 commands the tool calls named, and the last 6 of 18 turns", out)
+
+        self.h.profile("work")
+        code, out = self.h.run("move", A[:8], "work", "--brief")
+        self.assertEqual(code, 1, out)
+        self.assertIn("--brief hands over a brief in place of the conversation, which only a conversion into another agent takes", out)
 
 
 class QwenRelocate(unittest.TestCase):

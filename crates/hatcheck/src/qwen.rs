@@ -583,6 +583,27 @@ pub fn read_conversation(home: &str, id: &str) -> std::io::Result<Conversation> 
     conversation(&x)
 }
 
+/// The first prompt for a conversation converted for qwen: the file to read, and to carry on.
+pub fn prompt(file: &str) -> String {
+    format!("Read {file}, a conversation imported from another coding agent, and carry it on from where it ended.")
+}
+
+/// The command that starts qwen on an imported conversation, from the session's folder: the
+/// imports folder added to the workspace, so qwen may read the file, and a first prompt that
+/// has it carry on from there (-i keeps the terminal UI open afterwards). The session qwen
+/// makes is its own, with its own ID, so hatcheck writes nothing in qwen's store.
+pub fn start_command(home: &str, file: &str, full: bool) -> String {
+    paths::qwen_command(
+        home,
+        &format!(
+            "--add-dir {} -i {}",
+            paths::shell_path(&conv::imports_dir()),
+            paths::quote(&prompt(file))
+        ),
+        full,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

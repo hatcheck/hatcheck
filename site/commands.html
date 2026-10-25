@@ -166,7 +166,8 @@ options:
   --json      print the matches as JSON<!-- /help:where --></code></pre>
       </details>
       <details><summary><code>hatcheck show</code><span>or <code>hat s</code>: a session's conversation, read-only</span></summary>
-<pre><code><!-- help:show -->usage: hatcheck show [-h] [--from PROFILE] [--last N] [--json] session
+<pre><code><!-- help:show -->usage: hatcheck show [-h] [--from PROFILE] [--last N] [--brief] [--json]
+                     session
 
 Show a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
 Harness, MiniMax Code or Qwen Code session's conversation, read-only.
@@ -179,10 +180,14 @@ options:
   --from PROFILE  the profile or home to read it from, when more than one has
                   a copy
   --last N        only the last N turns
+  --brief         show the handover brief hatcheck move --brief hands over
+                  instead: the first prompt, the files and commands its tool
+                  calls named, and its last turns
   --json          print it as JSON<!-- /help:show --></code></pre>
       </details>
       <details><summary><code>hatcheck move</code><span>or <code>hat m</code>: move a session to another profile or home, or convert it for another agent</span></summary>
-<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--dry-run] [--json]
+<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--brief] [--dry-run]
+                     [--json]
                      [session] [profile]
 
 Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
@@ -200,10 +205,10 @@ positional arguments:
                   for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-
                   NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-
                   code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode,
-                  dsh for ~/.dsh, mcode for ~/.minimax or qwen for ~/.qwen
-                  (not supported targets), or a path (default: the best
-                  account of the session's agent now, as hatcheck best picks
-                  it)
+                  qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh
+                  or mcode for ~/.minimax (the last two: not supported
+                  targets), or a path (default: the best account of the
+                  session's agent now, as hatcheck best picks it)
 
 options:
   -h, --help      show this help message and exit
@@ -211,13 +216,16 @@ options:
                   it
   --keep          keep the original, which copies the session rather than
                   moving it (a converted session's original is always kept)
+  --brief         for a conversion into another agent, hand over a brief in
+                  place of the whole conversation: the first prompt, the files
+                  and commands its tool calls named, and its last turns
   --dry-run       show what would be moved, copied, converted and deleted, and
                   change nothing
   --json          say what was or would be done as JSON, and never ask to
                   resume it<!-- /help:move --></code></pre>
       </details>
       <details><summary><code>hatcheck fork</code><span>or <code>hat f</code>: fork a session into another profile or home, as a new session with its own ID</span></summary>
-<pre><code><!-- help:fork -->usage: hatcheck fork [-h] [--from PROFILE] [--dry-run] [--json]
+<pre><code><!-- help:fork -->usage: hatcheck fork [-h] [--from PROFILE] [--brief] [--dry-run] [--json]
                      [session] [profile]
 
 Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
@@ -236,15 +244,18 @@ positional arguments:
                   for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-
                   NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-
                   code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode,
-                  dsh for ~/.dsh, mcode for ~/.minimax or qwen for ~/.qwen
-                  (not supported targets), or a path (default: the best
-                  account of the session's agent now, as hatcheck best picks
-                  it)
+                  qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh
+                  or mcode for ~/.minimax (the last two: not supported
+                  targets), or a path (default: the best account of the
+                  session's agent now, as hatcheck best picks it)
 
 options:
   -h, --help      show this help message and exit
   --from PROFILE  the profile or home to take it from, when more than one has
                   it
+  --brief         for a conversion into another agent, hand over a brief in
+                  place of the whole conversation: the first prompt, the files
+                  and commands its tool calls named, and its last turns
   --dry-run       show what would be copied or converted, and change nothing
   --json          say what was or would be done as JSON, and never ask to
                   resume it<!-- /help:fork --></code></pre>

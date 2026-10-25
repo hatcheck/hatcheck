@@ -12,7 +12,7 @@ macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume
 of them. OpenAI's Codex CLI and Moonshot's Kimi Code CLI get the same treatment, Google's
 Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them, and DeepSeek Harness (`dsh`),
 MiniMax Code (`mcode`) and Qwen Code (`qwen`) join as read-only agents. Sessions can be carried
-between the original five and out of DSH, mcode and qwen.
+between the original five and Qwen Code, and out of DSH and mcode.
 
 *Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI,
 Z.ai, DeepSeek, MiniMax or Alibaba Cloud. Claude, Claude Code and Claude Desktop are trademarks of
@@ -148,7 +148,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck open SESSION`](docs/commands.md#hatcheck-open-resume-a-session-in-a-new-terminal) | resume it in a new terminal, or open DSH's session history in its folder |
 | [`hatcheck resume`](docs/commands.md#hatcheck-resume-carry-on-the-newest-session-here) | carry on the newest session started from this folder, or open DSH's session history, after asking; `hat r` for short |
 | `hatcheck show SESSION` | its conversation, read-only |
-| [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent (out of DSH, mcode and qwen, not into them) |
+| [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent (out of DSH and mcode, not into them); `--brief` hands over a brief in place of the whole conversation |
 | [`hatcheck fork SESSION PROFILE`](docs/commands.md#hatcheck-fork-a-session-as-a-new-one-in-another-profile) | bring it in there as a new session, keeping the original |
 | [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's, mcode's and qwen's stay as they are |
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
@@ -165,8 +165,9 @@ sessions are listed and shown from raw or compressed v4 logs and converted out, 
 `dsh web` opens its session history. [MiniMax Code](docs/agents.md#minimax-code-mcode) sessions
 are listed and shown from its v2 catalog and canonical JSONL and converted out, never written;
 `mcode --session mvs_<id>` resumes them directly. [Qwen Code](docs/agents.md#qwen-code-qwen)
-sessions are listed and shown from its transcripts and converted out, never written;
-`qwen --resume <id>` resumes them directly. [`claude-z` and `claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
+sessions are listed and shown from its transcripts and converted both ways, its store never
+written: a session converted for qwen is a file qwen is started on, and `qwen --resume <id>`
+resumes its own. [`claude-z` and `claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
 run Claude Code on Z.ai's or Kimi's models in any profile.
 
 
@@ -203,6 +204,19 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   calls; DSH, mcode and qwen add none. `--cached` and `--no-usage` make none. The Z.ai and Kimi
   endpoints in [`provider.rs`](crates/hatcheck/src/provider.rs) are handed to Claude Code, which
   calls them only when you run `cl -z` or `cl -k`.
+- **What the agents send is theirs to govern.** Hatcheck adds no data path of its own. What each
+  agent sends to its maker, and whether that is kept or used to train models, depends on the
+  maker's terms for your product and plan, which differ between them and change; check them for
+  each account you keep apart: [Claude Code](https://code.claude.com/docs/en/data-usage),
+  [Codex](https://help.openai.com/en/articles/11369540-openai-codex) (and
+  [the API](https://developers.openai.com/api/docs/guides/your-data)),
+  [Antigravity](https://antigravity.google/terms),
+  [Kimi](https://www.kimi.com/user/agreement/userPrivacy),
+  [Z.ai](https://docs.z.ai/legal-agreement/privacy-policy),
+  [DeepSeek](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html),
+  [MiniMax](https://chat.minimax.io/doc/privacy-policy.html) and
+  [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/support/tos-privacy/). Hatcheck
+  summarises none of them; [the weekly check](docs/maintenance.md) only keeps the links alive.
 - **No automatic switching** between accounts. `hatcheck best` ranks and prints commands, and
   nothing in the binary starts, moves or switches a session on its own
   ([`best.rs`](crates/hatcheck/src/best.rs): advice only, `--wait` sleeps and then prints).
@@ -269,7 +283,8 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 - **`docs/`**: [commands.md](docs/commands.md), [agents.md](docs/agents.md) and
   [install.md](docs/install.md), each command, agent and way of installing as it is;
   [desktop-instances.md](docs/desktop-instances.md) for the Desktop instances;
-  [rust-port.md](docs/rust-port.md) on the port from Python; [maintenance.md](docs/maintenance.md)
+  [rust-port.md](docs/rust-port.md) on the port from Python; [formats.md](docs/formats.md), each
+  agent's session format side by side and how a conversion works; [maintenance.md](docs/maintenance.md)
   on checking each agent's newest version every week or two.
 - **`AGENTS.md`** and **`docs/lessons.md`**: notes for coding agents (`CLAUDE.md` imports them): how
   to build and check, the rules the code keeps, and what earlier work got wrong, with the rule that
@@ -311,13 +326,13 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   regional endpoint is used. Until then hatcheck reads the v2 store, converts only out, and shows
   no quota data. An idle selected TUI has no durable marker, so only an active writer lease blocks
   opening and conversion.
-- **Qwen Code.** Conversion into qwen needs an importer qwen doesn't have (`qwen sessions` lists
-  sessions and imports none), so no session is written for it; moving a session between qwen homes
-  would copy its transcript, file history and side state, which hasn't been done; and plan usage
-  needs a command or endpoint qwen doesn't have (its `usage/` files count the tokens a session
-  spent, not what a plan has left). Until then hatcheck reads its transcripts, converts only out,
-  and shows no usage. `QWEN_RUNTIME_DIR`, which moves the session data alone and leaves the login
-  behind, isn't followed: only `QWEN_HOME`, which moves the home whole.
+- **Qwen Code.** A session converted for qwen is a file qwen is started on, as agy's and ZCode's
+  are, since qwen has no importer (`qwen sessions` lists sessions and imports none); one written
+  into its store would need one. Moving a session between qwen homes would copy its transcript,
+  file history and side state, which hasn't been done. Plan usage needs a command or endpoint qwen
+  doesn't have (its `usage/` files count the tokens a session spent, not what a plan has left).
+  `QWEN_RUNTIME_DIR`, which moves the session data alone and leaves the login behind, isn't
+  followed: only `QWEN_HOME`, which moves the home whole.
 - **Releases:** the CLI is on GitHub, the Homebrew tap, PyPI and crates.io from 0.2.0
   ([CHANGELOG.md](CHANGELOG.md)). Next are winget, then the app's installers, once its release
   workflow has its signing and updater secrets (`desktop.yml` lists them).

@@ -617,6 +617,10 @@ pub fn agy_resume_command(root: &str, session_id: &str, full: bool) -> String {
     Shell::here().session_command(Agent::Agy, root, session_id, full, None)
 }
 
+pub fn qwen_command(home_dir: &str, tail: &str, full: bool) -> String {
+    Shell::here().qwen_command(home_dir, tail, full)
+}
+
 pub fn kimi_command(home_dir: &str, tail: &str, full: bool) -> String {
     Shell::here().kimi_command(home_dir, tail, full)
 }

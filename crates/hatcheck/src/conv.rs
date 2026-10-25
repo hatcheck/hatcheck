@@ -142,6 +142,175 @@ pub fn add_turn(turns: &mut Vec<Turn>, role: &str, text: &str, when: &Value) {
     }
 }
 
+// A handover brief: what another agent gets in place of the whole conversation with
+// `hatcheck move --brief`, as Orca hands a task to a fresh agent with a bounded prompt built from
+// the old transcript. hatcheck runs no model, so the brief is made from what the conversation
+// says: its first prompt, the files and commands its tool calls named, and its last turns.
+
+/// How much of a conversation's end a brief keeps: its last BRIEF_TURNS turns, within BRIEF_CHARS
+/// characters, the newest cut to fit when it alone is longer.
+pub const BRIEF_TURNS: usize = 6;
+pub const BRIEF_CHARS: usize = 12_000;
+/// How many files and commands a brief lists at most.
+const BRIEF_FILES: usize = 40;
+const BRIEF_COMMANDS: usize = 20;
+
+/// The newest turn cut to room characters, its latest parts kept: what it ended on is where the
+/// conversation carries on. When even its last part is too long, that part, cut.
+pub fn cut_turn((role, texts, when): &Turn, room: usize) -> Turn {
+    let mut kept: Vec<String> = Vec::new();
+    let mut used = 0;
+    for text in texts.iter().rev() {
+        used += text.chars().count();
+        if used > room {
+            break;
+        }
+        kept.push(text.clone());
+    }
+    if kept.is_empty() {
+        kept.push(clip(
+            texts.last().map_or("", String::as_str),
+            (usize::MAX, room),
+        ));
+    }
+    kept.reverse();
+    let left = texts.len() - kept.len();
+    if left > 0 {
+        kept.insert(
+            0,
+            format!(
+                "[{left} earlier part{} of this turn left out here, to fit the context window.]",
+                if left != 1 { "s" } else { "" }
+            ),
+        );
+    }
+    (role.clone(), kept, when.clone())
+}
+
+/// The files and commands the conversation's tool calls named, each in the order first seen:
+/// the path-like and command fields of its `[external_agent_tool_call: …]` blocks.
+pub fn touched(turns: &[Turn]) -> (Vec<String>, Vec<String>) {
+    let (mut files, mut commands): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    let add = |list: &mut Vec<String>, value: &str| {
+        if !value.is_empty() && !list.iter().any(|v| v == value) {
+            list.push(value.to_string());
+        }
+    };
+    for (role, texts, _) in turns {
+        if role != "assistant" {
+            continue;
+        }
+        for text in texts {
+            let mut in_call = false;
+            for line in text.lines() {
+                if line.starts_with("[external_agent_tool_call: ") {
+                    in_call = true;
+                } else if line.starts_with("[/external_agent_tool_call]") {
+                    in_call = false;
+                } else if in_call {
+                    let Some((key, value)) = line.split_once(": ") else {
+                        continue;
+                    };
+                    match key {
+                        "path" | "file_path" | "filePath" | "notebook_path" | "target_file"
+                        | "file" | "absolute_path" => add(&mut files, value.trim()),
+                        "command" | "cmd" => add(&mut commands, py::head(value.trim(), 160)),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    (files, commands)
+}
+
+/// The last turns of a conversation, as a brief hands them over: the last BRIEF_TURNS within
+/// BRIEF_CHARS, the newest cut when it alone is longer. Also whether it was cut.
+pub fn brief_tail(conv: &Conversation) -> (Vec<Turn>, bool) {
+    let mut kept: Vec<Turn> = Vec::new();
+    let mut used = 0;
+    let mut cut = false;
+    for turn in conv.turns.iter().rev() {
+        let size: usize = turn.1.iter().map(|t| t.chars().count()).sum();
+        if kept.is_empty() && size > BRIEF_CHARS {
+            kept.push(cut_turn(turn, BRIEF_CHARS));
+            cut = true;
+            break;
+        }
+        if kept.len() >= BRIEF_TURNS || used + size > BRIEF_CHARS {
+            break;
+        }
+        kept.push(turn.clone());
+        used += size;
+    }
+    kept.reverse();
+    (kept, cut)
+}
+
+/// The text of a handover brief: what the session was about, what its tool calls touched, and
+/// that its last turns follow.
+pub fn brief_text(conv: &Conversation) -> String {
+    let prompts = conv.turns.iter().filter(|t| t.0 == "user").count();
+    let title = conv
+        .title
+        .as_deref()
+        .map(py::collapse)
+        .filter(|t| !t.is_empty())
+        .map_or(String::new(), |t| format!(" \"{t}\""));
+    let first = conv
+        .turns
+        .iter()
+        .find(|t| t.0 == "user")
+        .map(|t| t.1.join("\n\n"))
+        .unwrap_or_default();
+    let (files, commands) = touched(&conv.turns);
+    let (tail, _) = brief_tail(conv);
+    let listed = |items: &[String], most: usize, each: &dyn Fn(&str) -> String| {
+        let mut lines: Vec<String> = items.iter().take(most).map(|i| each(i)).collect();
+        if items.len() > most {
+            lines.push(format!("- … and {} more", items.len() - most));
+        }
+        lines.join("\n")
+    };
+    let mut text = format!(
+        "Handover brief for {} session {}{}: {prompts} of the user's messages and {} tool calls, of which the last {} turn{} follow{} as they were. The rest is summarised here without a model: the first prompt, and what the tool calls named.",
+        conv.agent.name(),
+        conv.id,
+        title,
+        conv.calls,
+        tail.len(),
+        if tail.len() == 1 { "" } else { "s" },
+        if tail.len() == 1 { "s" } else { "" },
+    );
+    text += &format!("\n\n## The task\n\n{}", clip(&first, (40, 2000)));
+    if !files.is_empty() {
+        text += &format!(
+            "\n\n## Files the tool calls named\n\n{}",
+            listed(&files, BRIEF_FILES, &|f| format!("- {f}"))
+        );
+    }
+    if !commands.is_empty() {
+        text += &format!(
+            "\n\n## Commands it ran\n\n{}",
+            listed(&commands, BRIEF_COMMANDS, &|c| format!("- `{c}`"))
+        );
+    }
+    text += "\n\n## Where it ended\n\nCarry on from the last turn, which follows; ask before redoing anything it says is done.";
+    text
+}
+
+/// The brief as turns: its text as the user's, then the last turns as they were.
+pub fn brief_turns(conv: &Conversation) -> Vec<Turn> {
+    let (tail, _) = brief_tail(conv);
+    let mut turns = vec![(
+        "user".to_string(),
+        vec![brief_text(conv)],
+        conv.started.clone(),
+    )];
+    turns.extend(tail);
+    turns
+}
+
 /// A name for a tool call: the value as Python's "%s" prints it.
 fn name_of(v: &Value, fallback: &str) -> String {
     if truthy(v) {
@@ -665,6 +834,76 @@ mod tests {
         assert_eq!(clip("abcdef", (5, 3)), "abc …");
         assert_eq!(clip("\n\nabc\n", (5, 100)), "abc");
         assert_eq!(clip("1\n2\n3\n4", (1, 100)), "1\n… (3 more lines)");
+    }
+
+    #[test]
+    fn a_brief_keeps_the_task_what_was_touched_and_the_last_turns() {
+        let mut turns: Vec<Turn> = Vec::new();
+        for n in 1..=8 {
+            add_turn(&mut turns, "user", &format!("Prompt {n}"), &Value::Null);
+            let call = call_text(
+                "Edit",
+                &[
+                    ("file_path".into(), Value::String(format!("src/file{n}.rs"))),
+                    (
+                        "command".into(),
+                        Value::String(format!("cargo test {n}\nmore")),
+                    ),
+                ],
+            );
+            add_turn(
+                &mut turns,
+                "assistant",
+                &format!("Reply {n}\n\n{call}"),
+                &Value::Null,
+            );
+        }
+        let conv = Conversation {
+            agent: Agent::Claude,
+            id: "abc".into(),
+            cwd: Some("/work".into()),
+            model: Value::Null,
+            turns,
+            calls: 8,
+            title: Some("Fix  the\nuploader".into()),
+            started: Value::Null,
+            branch: Value::Null,
+            reasoning: "",
+            left_out: "",
+        };
+        let (tail, cut) = brief_tail(&conv);
+        assert_eq!((tail.len(), cut), (BRIEF_TURNS, false));
+        assert_eq!(tail[0].1[0], "Prompt 6");
+        let (files, commands) = touched(&conv.turns);
+        assert_eq!(files.len(), 8);
+        assert_eq!(files[0], "src/file1.rs");
+        assert_eq!(commands[0], "cargo test 1"); // a command's first line
+        let text = brief_text(&conv);
+        assert!(text.starts_with("Handover brief for Claude Code session abc \"Fix the uploader\": 8 of the user's messages and 8 tool calls, of which the last 6 turns follow as they were."), "{text}");
+        assert!(text.contains("## The task\n\nPrompt 1"));
+        assert!(text.contains("- src/file8.rs"));
+        assert!(text.contains("- `cargo test 8`"));
+        assert!(!text.contains("more"));
+        let briefed = brief_turns(&conv);
+        assert_eq!(briefed.len(), BRIEF_TURNS + 1);
+        assert_eq!(briefed[0].0, "user");
+        assert!(briefed[BRIEF_TURNS].1[0].starts_with("Reply 8"));
+        // A newest turn longer than the budget is cut to its latest parts, alone.
+        let mut long = Conversation {
+            turns: Vec::new(),
+            ..conv
+        };
+        add_turn(&mut long.turns, "user", "Start", &Value::Null);
+        add_turn(
+            &mut long.turns,
+            "assistant",
+            &"x".repeat(BRIEF_CHARS),
+            &Value::Null,
+        );
+        add_turn(&mut long.turns, "assistant", "the end", &Value::Null);
+        let (tail, cut) = brief_tail(&long);
+        assert_eq!((tail.len(), cut), (1, true));
+        assert_eq!(tail[0].1.last().map(String::as_str), Some("the end"));
     }
 
     #[test]

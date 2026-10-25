@@ -411,6 +411,14 @@ Resume it now in ~/.claude-a? [y/N]
   tokens the oldest turns after the first are left out, so it fits the new agent's context window.
   The newest turn is always kept, so the session carries on from where it ended; one too long on
   its own keeps its latest parts.
+- `--brief` hands over a brief in place of the whole conversation, as Orca's hand-off to another
+  agent injects a bounded prompt built from the old transcript: after the note, the first prompt,
+  the files and commands the tool calls named (from their `[external_agent_tool_call: …]` blocks),
+  and the last six turns as they were, within 12,000 characters. hatcheck runs no model to make it,
+  so it's the same every time. Use it when the conversation is long and the new agent needs where
+  it ended rather than how it got there; `hatcheck show --brief` shows what would be handed over,
+  and `--json` reports `brief` and the turns it left out as `turns_dropped`. A move or copy
+  between an agent's own profiles carries the session whole, and refuses `--brief`.
 - Converted sessions were tested by resuming them with the real `claude` and `codex`, first 2.1.301
   and 0.155.1, and again 2.1.310 and 0.164.0 on 2026-10-24: each sent the whole converted history
   to the model, answered a question about it, and carried on in the same session. Codex's resume
@@ -557,26 +565,36 @@ a supported target; name the target agent explicitly when needed.
 
 ### With Qwen Code
 
-`qwen` is `~/.qwen` and `qwen:<name>` is `~/.qwen-<name>` as a source or `--from`. A bare `NAME`
-follows a qwen session the way it follows a Codex or Kimi one, but a qwen home is never a
-supported target; name the target agent explicitly when needed.
+`qwen` is `~/.qwen` and `qwen:<name>` is `~/.qwen-<name>`, as a place to convert to or `--from`. A
+bare `NAME` follows a qwen session the way it follows a Codex or Kimi one.
 
-- `move` and `fork` convert a qwen session out to an existing target hatcheck can write, and the
-  original always stays. A qwen target is refused, and so are copies between qwen homes: qwen has
-  no importer, and hatcheck never writes its store.
-- The transcript supplies the user's own messages, the replies' text and tool calls, and tool
-  results, along the `parentUuid` chain from the last message, as qwen resumes a rewound session.
-  Thoughts, messages qwen injected itself, subagents' sidechains and qwen's own records are left
-  out; images and files are marked.
+- From qwen, the transcript supplies the user's own messages, the replies' text and tool calls,
+  and tool results, along the `parentUuid` chain from the last message, as qwen resumes a rewound
+  session. Thoughts, messages qwen injected itself, subagents' sidechains and qwen's own records
+  are left out; images and files are marked.
+- To qwen, nothing hatcheck could write is a session qwen would resume, since qwen has no
+  importer, so the session is written as a Markdown file, `imports/<id>.md` in hatcheck's cache
+  folder, and the command printed starts qwen on it from the session's folder:
+  `qwen --add-dir <the imports folder> -i '…'`, with `QWEN_HOME=…` for another home. The folder
+  is added to the workspace so qwen may read the file, and the first prompt has it read the
+  conversation and carry on. The session exists once qwen starts, so `--json` reports
+  `"new_session": null` and the `file`. The original stays, as after every conversion.
+- Copies between qwen homes are refused: its transcripts, file history and registry stay as they
+  are, and hatcheck never writes qwen's store.
 - A session open in qwen, by its registry or its terminal UI's sidecar naming a running process,
-  is refused.
+  is refused as a source.
+- Checked against the real `qwen` (0.26.0) on 2026-10-24: a Claude Code session forked for qwen as
+  a brief was read from the imports folder by qwen in print mode, with its own `read_file` call,
+  which carried on from where it ended; the session qwen made was then listed and shown by
+  `hatcheck`.
 
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder. One word alone that names a profile or home that exists, and starts no session's ID, is `PROFILE` (`hatcheck move NAME`), with the session the newest started from this folder; a word that is both is asked for more |
-| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, or a path; `dsh`, `dsh:NAME`, `mcode`, `mcode:NAME`, `qwen` and `qwen:NAME` name those homes for `--from` and are refused as targets; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
+| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, `qwen` for `~/.qwen`, `qwen:NAME` for `~/.qwen-NAME`, or a path; `dsh`, `dsh:NAME`, `mcode` and `mcode:NAME` name those homes for `--from` and are refused as targets; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
+| `--brief`        | for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last six turns within 12,000 characters |
 | `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
 
 With nothing, `hatcheck move` (or `hat m`) moves the newest session started from this folder,
@@ -629,8 +647,9 @@ Resume it now in ~/.claude? [y/N]
   always stays where it was. A plan file already there stays too, since the copy there uses it.
 - To another agent, or to a Codex home on another account, it converts the session, as `move`
   does: a converted session is always a new one, and for agy and zcode a file the agent starts one
-  on. DSH, mcode and qwen sessions can only be converted out to another agent; their targets and
-  copies between homes of the same agent are refused, as for `move`.
+  on. DSH and mcode sessions can only be converted out to another agent, and their targets are
+  refused; copies between homes of the same agent are refused for DSH, mcode and qwen, as for
+  `move`. `--brief` hands over a brief in place of the conversation, as for `move`.
 - Resuming a fork was tested with the real `claude`, 2.1.301 and again 2.1.310.
 
 | Option           | What it does                                                                 |
@@ -638,6 +657,7 @@ Resume it now in ~/.claude? [y/N]
 | `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder, as for `move`, and one word alone that names a profile is `PROFILE`, as for `move` |
 | `PROFILE`        | where it goes, as for [`move`](#hatcheck-move-carry-on-a-session-with-another-profile); left out, the best account now, as for `move` |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it, as for `move` |
+| `--brief`        | for a conversion, hand over a brief in place of the whole conversation, as for `move` |
 | `--dry-run`      | show what would be copied or converted, and change nothing                   |
 
 ## `hatcheck relocate`: a project folder that moved
@@ -826,6 +846,9 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
   the user's own messages, the replies' text and tool calls, and tool results, along the
   `parentUuid` chain from the last message. Thoughts, messages qwen injected itself, subagents'
   sidechains and qwen's own records are left out; images and files are marked.
+- `--brief` shows the handover brief `hatcheck move --brief` would hand over in its place: the
+  first prompt, the files and commands the tool calls named, and the last six turns; `--json`
+  then says `"brief": true`, and `turns_total` counts the brief's turns.
 - `--last N` shows only the last N turns, `--from PROFILE` picks the copy to read when several
   profiles have one, and `--json` prints the turns as data.
 

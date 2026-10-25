@@ -58,9 +58,9 @@ Qwen Code homes are `~/.qwen` and `~/.qwen-NAME`, selected with `QWEN_HOME`; **A
 `qwen:NAME`, and there is no Hatcheck qwen launcher. `hatcheck open --login qwen[:NAME]` starts
 `qwen` in that home, where its own `/auth` signs in, so sign-in stays with Qwen Code. For a Qwen
 Code session, **Resume** opens a terminal in the recorded folder and runs `qwen --resume <id>`,
-with `QWEN_HOME` for a named or custom home. Hatcheck never writes Qwen Code's store: qwen isn't
-offered as a Move or Fork target, sessions aren't copied between its homes, and nothing is
-converted into qwen.
+with `QWEN_HOME` for a named or custom home. Hatcheck never writes Qwen Code's store: a session
+moved or forked to Qwen Code becomes a file qwen is started on, as with Antigravity CLI and ZCode,
+and sessions aren't copied between its homes.
 
 ## Rules it keeps
 

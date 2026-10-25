@@ -700,8 +700,8 @@ fn size_text(n: u64) -> String {
     }
 }
 
-/// Start the agent on the session in its new profile, from the folder it ran in. For agy and
-/// zcode, sid is the import file. DSH's official web UI opens its session history instead.
+/// Start the agent on the session in its new profile, from the folder it ran in. For agy, zcode
+/// and qwen, sid is the import file. DSH's official web UI opens its session history instead.
 fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
     let name = agent.program();
     let Some(program) = ospath::which(name) else {
@@ -718,7 +718,12 @@ fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
         Agent::Zcode => cmd.args(["--attach", sid, "--mode", "plan", "-p", &zcode::prompt()]),
         Agent::Dsh => cmd.arg("web"),
         Agent::Mcode => cmd.args(["--session", &Agent::Mcode.full_id(sid)]),
-        Agent::Qwen => cmd.args(["--resume", sid]),
+        Agent::Qwen => cmd.args([
+            "--add-dir",
+            &conv::imports_dir(),
+            "-i",
+            &crate::qwen::prompt(sid),
+        ]),
     };
     let default = paths::default_folder(agent);
     match agent.variable() {
@@ -895,36 +900,61 @@ fn fit(conv: &Conversation) -> (Vec<Turn>, usize, bool) {
     fit_within(conv, BUDGET)
 }
 
-/// The newest turn cut to room characters, its latest parts kept: what it ended on is where the
-/// conversation carries on. When even its last part is too long, that part, cut.
-fn fit_turn((role, texts, when): &Turn, room: usize) -> Turn {
-    let mut kept: Vec<String> = Vec::new();
-    let mut used = 0;
-    for text in texts.iter().rev() {
-        used += text.chars().count();
-        if used > room {
-            break;
+fn fit_turn(turn: &Turn, room: usize) -> Turn {
+    conv::cut_turn(turn, room)
+}
+
+/// The note that starts a converted conversation: where it came from, and what it leaves out.
+fn import_note(conv: &Conversation) -> String {
+    let started = s(&conv.started)
+        .map(|t| py::head(t, 16).replace('T', " "))
+        .filter(|t| !t.is_empty());
+    let model = s(&conv.model)
+        .filter(|m| !m.is_empty())
+        .map_or(String::new(), |m| format!(" with {m}"));
+    format!(
+        "[Imported from {} session {}, started {} in {}{model}. Its tool calls are shown as text, with their output shortened, and {} isn't included.]",
+        conv.agent.name(),
+        conv.id,
+        started.as_deref().unwrap_or("?"),
+        conv.cwd.as_deref().filter(|c| !c.is_empty()).unwrap_or("?"),
+        conv.reasoning
+    )
+}
+
+/// The turns as the new agent gets them: `first` ahead of them, merged into turns that alternate
+/// between you and the assistant, ending on a reply.
+fn finish(conv: &Conversation, turns: Vec<Turn>, first: Turn) -> Vec<Turn> {
+    let mut merged: Vec<Turn> = Vec::new();
+    for (role, texts, when) in std::iter::once(first).chain(turns) {
+        for text in texts {
+            add_turn(&mut merged, &role, &text, &when);
         }
-        kept.push(text.clone());
     }
-    if kept.is_empty() {
-        kept.push(conv::clip(
-            texts.last().map_or("", String::as_str),
-            (usize::MAX, room),
-        ));
-    }
-    kept.reverse();
-    let left = texts.len() - kept.len();
-    if left > 0 {
-        kept.insert(
-            0,
-            format!(
-                "[{left} earlier part{} of this turn left out here, to fit the context window.]",
-                if left != 1 { "s" } else { "" }
-            ),
+    if merged.last().is_some_and(|t| t.0 == "user") {
+        let when = merged.last().map(|t| t.2.clone()).unwrap_or(Value::Null);
+        add_turn(
+            &mut merged,
+            "assistant",
+            &format!("(The {} session ended here.)", conv.agent.name()),
+            &when,
         );
     }
-    (role.clone(), kept, when.clone())
+    merged
+}
+
+/// A handover brief in place of the conversation (--brief): the note and the brief's text as
+/// the first turn, then the last turns as they were. Also how many turns the brief leaves out,
+/// and whether the newest was cut.
+fn brief_fit(conv: &Conversation) -> (Vec<Turn>, usize, bool) {
+    let (tail, cut) = conv::brief_tail(conv);
+    let dropped = conv.turns.len() - tail.len();
+    let first: Turn = (
+        "user".into(),
+        vec![import_note(conv), conv::brief_text(conv)],
+        conv.started.clone(),
+    );
+    (finish(conv, tail, first), dropped, cut)
 }
 
 fn fit_within(conv: &Conversation, budget: usize) -> (Vec<Turn>, usize, bool) {
@@ -961,37 +991,8 @@ fn fit_within(conv: &Conversation, budget: usize) -> (Vec<Turn>, usize, bool) {
         kept.extend(turns[start..].iter().cloned());
         turns = kept;
     }
-    let started = s(&conv.started)
-        .map(|t| py::head(t, 16).replace('T', " "))
-        .filter(|t| !t.is_empty());
-    let model = s(&conv.model)
-        .filter(|m| !m.is_empty())
-        .map_or(String::new(), |m| format!(" with {m}"));
-    let note = format!(
-        "[Imported from {} session {}, started {} in {}{model}. Its tool calls are shown as text, with their output shortened, and {} isn't included.]",
-        conv.agent.name(),
-        conv.id,
-        started.as_deref().unwrap_or("?"),
-        conv.cwd.as_deref().filter(|c| !c.is_empty()).unwrap_or("?"),
-        conv.reasoning
-    );
-    let mut merged: Vec<Turn> = Vec::new();
-    let first: Turn = ("user".into(), vec![note], conv.started.clone());
-    for (role, texts, when) in std::iter::once(first).chain(turns) {
-        for text in texts {
-            add_turn(&mut merged, &role, &text, &when);
-        }
-    }
-    if merged.last().is_some_and(|t| t.0 == "user") {
-        let when = merged.last().map(|t| t.2.clone()).unwrap_or(Value::Null);
-        add_turn(
-            &mut merged,
-            "assistant",
-            &format!("(The {} session ended here.)", conv.agent.name()),
-            &when,
-        );
-    }
-    (merged, dropped, cut)
+    let first: Turn = ("user".into(), vec![import_note(conv)], conv.started.clone());
+    (finish(conv, turns, first), dropped, cut)
 }
 
 fn write_lines(path: &str, lines: &[String]) -> std::io::Result<()> {
@@ -1616,6 +1617,8 @@ struct Ask {
     source: Option<String>,
     keep: bool,
     fork: bool,
+    /// A conversion hands over a brief in place of the whole conversation.
+    brief: bool,
     dry_run: bool,
     json: bool,
 }
@@ -2710,15 +2713,19 @@ fn convert(
             agent.name()
         ));
     }
-    let (turns, dropped, newest_cut) = fit(&conv);
+    let (turns, dropped, newest_cut) = if a.brief {
+        brief_fit(&conv)
+    } else {
+        fit(&conv)
+    };
     let cwd = conv
         .cwd
         .clone()
         .filter(|c| !c.is_empty())
         .unwrap_or_else(paths::home);
-    // What was written: a new session's ID and file; for agy and zcode, an ID for the file the
-    // conversation was written to, which the agent starts a new conversation of its own on.
-    let to_file = matches!(target_agent, Agent::Agy | Agent::Zcode);
+    // What was written: a new session's ID and file; for agy, zcode and qwen, an ID for the file
+    // the conversation was written to, which the agent starts a new conversation of its own on.
+    let to_file = matches!(target_agent, Agent::Agy | Agent::Zcode | Agent::Qwen);
     let mut written: Option<(String, String)> = None;
     if !a.dry_run {
         written = Some(
@@ -2726,7 +2733,7 @@ fn convert(
                 Agent::Codex => write_codex(&conv, &turns, target, &cwd),
                 Agent::Claude => write_claude(&conv, &turns, target, &cwd),
                 Agent::Kimi => kimi::write_session(&conv, &turns, target, &cwd),
-                Agent::Agy | Agent::Zcode => {
+                Agent::Agy | Agent::Zcode | Agent::Qwen => {
                     let id = uuid4();
                     conv::write_import(&conv, &turns, &id).map(|path| (id, path))
                 }
@@ -2738,11 +2745,6 @@ fn convert(
                 Agent::Mcode => {
                     return Err(
                         "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
-                    )
-                }
-                Agent::Qwen => {
-                    return Err(
-                        "Qwen Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
                     )
                 }
             }
@@ -2761,6 +2763,7 @@ fn convert(
         Agent::Kimi => paths::kimi_resume_command(target, &shown_id, false),
         Agent::Agy => agy::start_command(target, &file, false),
         Agent::Zcode => zcode::start_command(target, &file, false),
+        Agent::Qwen => crate::qwen::start_command(target, &file, false),
         Agent::Dsh => {
             return Err(
                 "DeepSeek Harness's session store isn't one hatcheck can write; choose another agent as the target".into(),
@@ -2769,11 +2772,6 @@ fn convert(
         Agent::Mcode => {
             return Err(
                 "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
-            )
-        }
-        Agent::Qwen => {
-            return Err(
-                "Qwen Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
             )
         }
     };
@@ -2794,13 +2792,14 @@ fn convert(
             ("prompts", json!(prompts)),
             ("tool_calls", json!(conv.calls)),
             ("left_out", json!(conv.left_out)),
+            ("brief", json!(a.brief)),
             ("turns_dropped", json!(dropped)),
             ("newest_turn_cut", json!(newest_cut)),
             ("resume", json!(resume)),
         ],
     );
     let into = match target_agent {
-        Agent::Agy | Agent::Zcode => format!(
+        Agent::Agy | Agent::Zcode | Agent::Qwen => format!(
             "into a conversation for {} in {}",
             target_agent.name(),
             show(&conv::imports_dir())
@@ -2847,7 +2846,24 @@ fn convert(
         paint.muted(&format!("{:<26}", "left out")),
         conv.left_out
     ));
-    if dropped > 0 {
+    if a.brief {
+        let (files, commands) = conv::touched(&conv.turns);
+        out::println(&format!(
+            "  {} the first prompt, {} file{} and {} command{} the tool calls named, and the last {} of {} turns{}",
+            paint.muted(&format!("{:<26}", "brief")),
+            files.len(),
+            if files.len() == 1 { "" } else { "s" },
+            commands.len(),
+            if commands.len() == 1 { "" } else { "s" },
+            conv.turns.len() - dropped,
+            conv.turns.len(),
+            if newest_cut {
+                ", the newest cut to its latest parts"
+            } else {
+                ""
+            }
+        ));
+    } else if dropped > 0 {
         out::println(&format!(
             "  {} the oldest {dropped} turns after the first are left out{}, to fit the context window",
             paint.muted(&format!("{:<26}", "too long")),
@@ -2885,6 +2901,7 @@ fn convert(
     match target_agent {
         Agent::Agy => out::println("Antigravity CLI keeps its conversations in a form hatcheck can't write, so the session starts when agy reads the file."),
         Agent::Zcode => out::println("ZCode keeps its sessions in a database hatcheck doesn't write, so the session starts when zcode reads the file."),
+        Agent::Qwen => out::println("Qwen Code has no importer and hatcheck doesn't write its store, so the session starts when qwen reads the file."),
         _ => {}
     }
     out::println(&format!(
@@ -2903,7 +2920,7 @@ fn convert(
         out::println("Once it has answered, carry on in the terminal UI with:");
         out::command(&format!("  {}", paths::zcode_command(target, "-c", false)));
     }
-    // What to start, when asked to: the new session, or for agy and zcode the file.
+    // What to start, when asked to: the new session, or for agy, zcode and qwen the file.
     let handle = if to_file {
         written.as_ref().map(|w| w.1.clone())
     } else {
@@ -2925,6 +2942,9 @@ fn fork_command(prog: &str, a: &Ask) -> String {
     if let Some(source) = &a.source {
         words.push("--from".into());
         words.push(paths::quote(source));
+    }
+    if a.brief {
+        words.push("--brief".into());
     }
     if a.dry_run {
         words.push("--dry-run".into());
@@ -3136,11 +3156,6 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             "MiniMax Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
         );
     }
-    if target_agent == Agent::Qwen {
-        return Err(
-            "Qwen Code's session store isn't one hatcheck can write; choose another agent as the target".into(),
-        );
-    }
     if !ospath::isdir(&target) {
         match target_agent {
             Agent::Codex => {
@@ -3224,6 +3239,11 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
     }
     // A conversion leaves things out, so its original is always kept, moving or not.
     let converting = agent != target_agent || why.is_some();
+    if a.brief && !converting {
+        return Err(
+            "--brief hands over a brief in place of the conversation, which only a conversion into another agent takes; a move or copy carries the session whole".into(),
+        );
+    }
     let fork_cmd = fork_command(prog, a);
     let (resume_sid, cwd) = match agent {
         _ if converting => {
@@ -3298,9 +3318,10 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code or Qwen Code session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh, mcode for ~/.minimax or qwen for ~/.qwen (not supported targets), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh or mcode for ~/.minimax (the last two: not supported targets), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
+        .flag(&["--brief"], "brief", "for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last turns")
         // Still taken, so scripts that pass them run: what --no-keep asked for is the default
         // now, and --fork is hatcheck fork, which keeps the original as --fork always did.
         .hidden(&["--no-keep"], "no_keep", Takes::Nothing)
@@ -3321,6 +3342,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             .map(String::from),
         keep: fork || args.flag("keep"),
         fork,
+        brief: args.flag("brief"),
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
     };
@@ -3339,8 +3361,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 pub fn fork_main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code or Qwen Code session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh, mcode for ~/.minimax or qwen for ~/.qwen (not supported targets), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh or mcode for ~/.minimax (the last two: not supported targets), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
+        .flag(&["--brief"], "brief", "for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last turns")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")
         .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
     let args = match parser.parse(argv) {
@@ -3356,6 +3379,7 @@ pub fn fork_main(argv: &[String], prog: &str) -> i32 {
             .map(String::from),
         keep: true,
         fork: true,
+        brief: args.flag("brief"),
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
     };
@@ -3400,7 +3424,7 @@ fn answer(a: &Ask, prog: &str) -> i32 {
             if let (Some(sid), Some(cwd)) = (session, cwd) {
                 if !a.dry_run && ospath::isdir(&cwd) && interactive() {
                     let answer = read_answer(&match target_agent {
-                        Agent::Agy | Agent::Zcode => format!(
+                        Agent::Agy | Agent::Zcode | Agent::Qwen => format!(
                             "Start it now with {}, in {}? [y/N] ",
                             target_agent.program(),
                             paths::shell_path(&cwd)
@@ -3626,6 +3650,7 @@ mod tests {
             source: None,
             keep: false,
             fork: false,
+            brief: false,
             dry_run: false,
             json: false,
         };

@@ -25,6 +25,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         "the profile or home to read it from, when more than one has a copy",
     )
     .option(&["--last"], "last", "N", "only the last N turns")
+    .flag(&["--brief"], "brief", "show the handover brief hatcheck move --brief hands over instead: the first prompt, the files and commands its tool calls named, and its last turns")
     .flag(&["--json"], "json", "print it as JSON");
     let args = match parser.parse(argv) {
         Ok(a) => a,
@@ -64,12 +65,19 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Ok(c) => c,
         Err(e) => return out::fail(&e.to_string()),
     };
-    let total = conv.turns.len();
+    // With --brief, the handover brief's turns stand in for the conversation's.
+    let brief = args.flag("brief");
+    let shown: Vec<conv::Turn> = if brief {
+        conv::brief_turns(&conv)
+    } else {
+        conv.turns.clone()
+    };
+    let total = shown.len();
     // turns[-N:] as Python slices it: the last N, all of them for 0, and from N on for -N.
     let turns: &[conv::Turn] = match last.filter(|n| *n != 0) {
-        Some(n) if n > 0 => &conv.turns[total.saturating_sub(n as usize)..],
-        Some(n) => &conv.turns[((-n) as usize).min(total)..],
-        None => &conv.turns,
+        Some(n) if n > 0 => &shown[total.saturating_sub(n as usize)..],
+        Some(n) => &shown[((-n) as usize).min(total)..],
+        None => &shown,
     };
     if args.flag("json") {
         let title = if s.title.is_empty() {
@@ -81,6 +89,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         let data = json!({
             "version": 1, "agent": s.agent.key(), "id": s.id, "profile": ospath::abspath(&s.profile), "title": title,
             "cwd": cwd, "model": conv.model, "turns_total": total, "tool_calls": conv.calls, "left_out": conv.left_out,
+            "brief": brief,
             "turns": turns.iter().map(|(role, texts, when)| json!({"role": role, "text": texts.join("\n\n"), "time": when})).collect::<Vec<_>>(),
         });
         out::println(&py::dumps(&data));
@@ -95,9 +104,10 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     };
     let paint = out::Paint::new();
     out::heading(&format!(
-        "Session {} \"{title}\" in {}, {total} turns{some}:",
+        "Session {} \"{title}\" in {}, {total} turns{some}{}:",
         py::head(&s.id, 8),
-        paths::shell_path(&s.profile)
+        paths::shell_path(&s.profile),
+        if brief { " as a handover brief" } else { "" }
     ));
     for (role, texts, when) in turns {
         let name = match role.as_str() {

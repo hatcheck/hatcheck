@@ -175,8 +175,10 @@ def links():
     for path in doc_files():
         for url in re.findall(r"https?://[^\s)\"'<>`]+", open(path, encoding="utf-8").read()):
             url = url.rstrip(".,;:")
-            if not re.search(r"github\.com/hatcheck/hatcheck|hatcheck\.dev|localhost|127\.0\.0\.1|example\.|api\.|backend-api|youtube",
-                             url):
+            # help.openai.com answers 403 to some fetches that aren't a browser's (curl's, here), so its
+            # pages aren't checked, to keep the weekly check quiet rather than crying wolf.
+            if not re.search(r"github\.com/hatcheck/hatcheck|hatcheck\.dev|localhost|127\.0\.0\.1|example\.|api\.|backend-api|youtube"
+                             r"|help\.openai\.com", url):
                 urls.add(url.replace("&amp;", "&"))
     return sorted(urls)
 
