@@ -1,8 +1,8 @@
 # The agents and their launchers
 
-How Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and MiniMax Code
-keep their profiles, homes and folders, and the launchers that run them with one: `cl`, `cx`, `ck`,
-and `claude-z` and `claude-k` for Claude Code on Z.ai and Kimi. The commands are in
+How Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code and
+Qwen Code keep their profiles, homes and folders, and the launchers that run them with one: `cl`,
+`cx`, `ck`, and `claude-z` and `claude-k` for Claude Code on Z.ai and Kimi. The commands are in
 [commands.md](commands.md), and installing hatcheck in [install.md](install.md).
 
 ## Getting the agents
@@ -16,6 +16,7 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash   # Antigravity CLI:
 curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash  # Kimi Code CLI: kimi
 npm install -g @deepseek-ai/dsh                               # DeepSeek Harness: dsh (needs Node.js)
 curl -fsSL https://filecdn.minimax.chat/public/install.sh | bash # MiniMax Code: mcode
+curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash # Qwen Code: qwen
 ```
 
 On Windows, in PowerShell:
@@ -27,6 +28,7 @@ irm https://antigravity.google/cli/install.ps1 | iex
 irm https://code.kimi.com/kimi-code/install.ps1 | iex
 npm install -g @deepseek-ai/dsh
 irm https://filecdn.minimax.chat/public/install.ps1 | iex
+irm https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1 | iex
 ```
 
 - Homebrew on macOS has the first three: `brew install --cask claude-code codex antigravity-cli`.
@@ -35,6 +37,10 @@ irm https://filecdn.minimax.chat/public/install.ps1 | iex
   hatcheck's open commands run.
 - MiniMax Code's own installer puts `mcode` at `~/.minimax-code/bin/mcode`. That install folder is
   distinct from its data home: see [MiniMax Code](#minimax-code-mcode).
+- Qwen Code's installer puts the program in `~/.local/lib/qwen-code` with a `qwen` wrapper in
+  `~/.local/bin` (`%LOCALAPPDATA%\qwen-code\bin` on Windows); `npm install -g
+  @qwen-code/qwen-code@latest` and `brew install qwen-code` (a formula, not a cask) install it too.
+  Its home, `~/.qwen`, is separate: see [Qwen Code](#qwen-code-qwen).
 - `hatcheck doctor` then lists each agent on your `PATH`, its version and which copy runs.
 
 The desktop apps:
@@ -47,6 +53,7 @@ The desktop apps:
 | Kimi Code Desktop | macOS, Windows, Linux | [Kimi Code's quick start](https://www.kimi.com/code/docs/en/kimi-code-desktop/getting-started.html) |
 | ZCode | macOS, Windows, Linux (beta) | [zcode.z.ai](https://zcode.z.ai/en) |
 | DeepSeek Harness | macOS (Apple silicon), Windows | [deepseek.com/harness](https://deepseek.com/harness) |
+| Qwen Code Desktop | macOS, Windows, Linux | [GitHub releases, `desktop-latest`](https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) |
 | MiniMax Code | macOS, Windows | [agent.minimax.io/download](https://agent.minimax.io/download) |
 
 Homebrew on macOS has four of them: `brew install --cask claude chatgpt antigravity zcode`.
@@ -359,6 +366,59 @@ resume and `mcode login`. That 0.6.13 copy isn't on this shell's `PATH`; doctor 
   `--mcode PATH` picks one explicitly and requires that store. `bind --which mcode` prints
   `default`, `NAME` or the bound path. An agent-only binding command with no PROFILE keeps the
   existing mcode binding unless `--mcode` replaces it. No hook is added for mcode.
+
+## Qwen Code (`qwen`)
+
+[Qwen Code](https://github.com/QwenLM/qwen-code) keeps everything under `~/.qwen`, and `QWEN_HOME`
+moves that home whole: the settings, the login and each project's sessions. hatcheck discovers
+`~/.qwen`, every `~/.qwen-NAME` and the home `QWEN_HOME` names, when qwen has run there (its
+`installation_id`, or a project's chats); `qwen` and `qwen:NAME` name these in profile arguments.
+There is no hatcheck qwen launcher or installer alias. `QWEN_RUNTIME_DIR`, which moves the session
+data alone and leaves the login where it was, isn't followed. What hatcheck reads, checked against
+qwen 0.26.0:
+
+- `projects/<folder>/chats/<uuid>.jsonl`, where `<folder>` is the project folder's path with every
+  character that isn't a letter or digit made a dash (lowercased first on Windows), and
+  `chats/archive/` for the sessions qwen has archived. Each line is a record with `uuid`,
+  `parentUuid`, `type`, `timestamp`, `cwd` and `gitBranch`; a message carries a Gemini-style
+  `parts` list. The first record's `cwd` is the session's folder, the last record's time its
+  activity, and the title is qwen's own `custom_title` record (from `/rename`, or generated) when
+  there is one, else the first prompt, as `qwen sessions list` shows it. The model is the newest
+  reply's. A transcript with no records isn't a session.
+- `show` and conversions follow the `parentUuid` chain back from the last message, as qwen resumes
+  a rewound session, and take the user's own messages (`provenance` `real_user`), the replies'
+  text and `functionCall` parts, and tool results' `functionResponse` output. Parts marked
+  `thought`, messages qwen injected itself (another provenance), records marked `isSidechain`
+  (subagents' rounds) and qwen's system records are left out; images and files are marked.
+- A subagent's transcript has a `parent_session` record, or a `session_source` of `agent`,
+  `agent-host` or `side_task`; those stay out of the list. A `session_source` naming a channel, a
+  scheduled task, the daemon or another host lists under that name with `--all`.
+- `sessions/<pid>.json` is qwen's registry of the sessions running now, written at startup and
+  removed on exit, and `chats/<uuid>.runtime.json` the sidecar its terminal UI writes and never
+  removes. A session is open when either names it and the process is running (asked of `ps`, or
+  of the process on Windows); a record of a process that has gone isn't. An open session stays
+  listed past the time window, and `open` and `move` refuse it.
+- The resume command is `qwen --resume <id>`, run from the session's folder, where qwen looks it
+  up; a named or custom home uses `QWEN_HOME=… qwen --resume <id>` (in PowerShell,
+  `$env:QWEN_HOME=…; qwen --resume <id>; $env:QWEN_HOME=$null`). `hatcheck open --login
+  qwen[:NAME]` starts plain `qwen` in that home, where `/auth` picks the sign-in: qwen's `auth`
+  subcommand has been removed.
+- `hatcheck usage` lists one no-data account per qwen home, with agent `qwen` and plan `Qwen`:
+  `qwen has no plan-usage command or endpoint (0.26.0)`. qwen's `usage/` files count the tokens
+  each session spent, not what a plan has left; hatcheck reads neither them nor `oauth_creds.json`,
+  and makes no request.
+- `move` and `fork` convert qwen sessions out to existing writable targets, always keeping the
+  original. A qwen target is refused: qwen has no importer, so a transcript hatcheck wrote would be
+  one qwen never did. Copies between qwen homes are refused too, since a session's file history,
+  registry record and side state would have to go with it; hatcheck never writes qwen's store.
+- `relocate` lists affected qwen sessions as skipped: the transcript is filed under the folder's
+  name and records the folder on every line, and both stay as they were. `--dry-run` changes
+  nothing.
+- `hatcheck bind default` binds `~/.qwen` along with the rest when qwen has run there, `bind NAME`
+  binds `~/.qwen-NAME` when it has, and `--qwen NAME`, `--qwen default` or `--qwen PATH` picks one
+  explicitly. `bind --which qwen` prints `default`, `NAME` or the bound path. An agent-only
+  binding command with no PROFILE keeps the existing qwen binding unless `--qwen` replaces it. No
+  hook is added for qwen.
 
 ## `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
 

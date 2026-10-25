@@ -465,7 +465,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "The best account now, shown as hatcheck usage shows it, and the hatcheck move command that carries a session to it: the newest started from this folder, or --for's. Advice only: it never starts, moves or switches anything.")
         .option(&["--for"], "session", "SESSION", "the session to carry: its ID, or the start of it (default: the newest session started from this folder)")
         .flag(&["--cached"], "cached", "don't call the APIs; use the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
-        .maybe(&["--wait"], "wait", "PROFILE", "", "wait until an account has room, then answer: any account of the session's agent (Claude Code's, without a session), or PROFILE's (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME, dsh, dsh:NAME, mcode, mcode:NAME)");
+        .maybe(&["--wait"], "wait", "PROFILE", "", "wait until an account has room, then answer: any account of the session's agent (Claude Code's, without a session), or PROFILE's (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME, dsh, dsh:NAME, mcode, mcode:NAME, qwen, qwen:NAME)");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
@@ -514,6 +514,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &paths::find_zcode_roots(),
             &paths::find_dsh_homes(),
             &paths::find_mcode_homes(),
+            &paths::find_qwen_homes(),
         )
     };
     let mut now = times::now();

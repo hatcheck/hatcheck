@@ -97,6 +97,7 @@ h3 { font-size: 13px; margin: 18px 0 8px; }
 .agent.zcode { color: #6d28d9; background: rgba(139, 92, 246, 0.12); }
 .agent.dsh { color: #3554d1; background: rgba(77, 107, 254, 0.12); }
 .agent.mcode { color: #be123c; background: rgba(244, 63, 94, 0.12); }
+.agent.qwen { color: #0f766e; background: rgba(20, 184, 166, 0.13); }
 .tag { font-size: 11px; color: var(--muted); }
 .tag.live { color: var(--ok); }
 .tag.none { color: var(--low); }

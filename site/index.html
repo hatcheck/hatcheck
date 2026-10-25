@@ -11,13 +11,13 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <title>Hatcheck</title>
-  <meta name="description" content="Claude Code, Codex, Kimi Code CLI, DeepSeek Harness and MiniMax Code accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands across them.">
+  <meta name="description" content="Claude Code, Codex, Kimi Code CLI, DeepSeek Harness, MiniMax Code and Qwen Code accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands across them.">
   <link rel="canonical" href="https://hatcheck.dev/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hatcheck.dev/">
   <meta property="og:image" content="https://hatcheck.dev/og.png">
   <meta property="og:title" content="Hatcheck">
-  <meta property="og:description" content="Claude Code, Codex, Kimi Code CLI, DeepSeek Harness and MiniMax Code accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands across them.">
+  <meta property="og:description" content="Claude Code, Codex, Kimi Code CLI, DeepSeek Harness, MiniMax Code and Qwen Code accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands across them.">
 </head>
 <body>
   <nav class="top wrap" aria-label="Site">
@@ -42,10 +42,10 @@
       </svg>
       <div>
         <h1>Hatcheck</h1>
-        <p class="tagline">Claude Code, Codex, Kimi Code CLI, DeepSeek Harness and MiniMax Code accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands, with sessions carried between the original five and out of DSH and mcode.</p>
+        <p class="tagline">Claude Code, Codex, Kimi Code CLI, DeepSeek Harness, MiniMax Code and Qwen Code accounts on one computer, each kept apart, and Antigravity CLI and ZCode beside them: recent sessions, plan usage and resume or open commands, with sessions carried between the original five and out of DSH, mcode and qwen.</p>
       </div>
     </div>
-    <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek or MiniMax. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, DeepSeek Harness is DeepSeek's and MiniMax Code is MiniMax's.</p>
+    <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek, MiniMax or Alibaba Cloud. Claude, Claude Code and Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, DeepSeek Harness is DeepSeek's, MiniMax Code is MiniMax's and Qwen Code is Alibaba Cloud's.</p>
     <div class="buttons">
       <a class="button" href="#install">Install the CLI</a>
       <a class="button ghost" href="#start">Start a profile per account</a>
@@ -77,7 +77,7 @@ ck a login           # Kimi Code CLI with ~/.kimi-code-a
 cd ~/code/api
 hatcheck bind a      # in this repo, plain cl means cl a, and cx and ck the same
 hatcheck             # the sessions here from every profile, and what's left of each plan</code></pre>
-    <p>An existing <code>~/.claude</code> counts as a profile too (hatcheck calls it <code>default</code>), and plain <code>claude</code> keeps using it. Antigravity CLI and ZCode keep one login each, so hatcheck reads their one folder beside the profiles. DeepSeek Harness homes move with <code>DSH_HOME</code>, and MiniMax Code homes with <code>MINIMAX_DATA_DIR</code>, both read-only: <a href="agents.html">which agents, and how far</a>. The CLI comes first: <a href="#install">install it</a>, and <a href="agents.html#get">any agent you don't have yet</a>.</p>
+    <p>An existing <code>~/.claude</code> counts as a profile too (hatcheck calls it <code>default</code>), and plain <code>claude</code> keeps using it. Antigravity CLI and ZCode keep one login each, so hatcheck reads their one folder beside the profiles. DeepSeek Harness homes move with <code>DSH_HOME</code>, MiniMax Code homes with <code>MINIMAX_DATA_DIR</code> and Qwen Code homes with <code>QWEN_HOME</code>, all read-only: <a href="agents.html">which agents, and how far</a>. The CLI comes first: <a href="#install">install it</a>, and <a href="agents.html#get">any agent you don't have yet</a>.</p>
   </section>
 
   <section class="wrap">
@@ -89,7 +89,7 @@ hatcheck             # the sessions here from every profile, and what's left of 
       </div>
       <div class="card">
         <h3>Sessions that travel</h3>
-        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, converts it between Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode, or converts it out of DeepSeek Harness or MiniMax Code. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
+        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, converts it between Claude Code, Codex, Antigravity CLI, Kimi Code CLI and ZCode, or converts it out of DeepSeek Harness, MiniMax Code or Qwen Code. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
       </div>
       <div class="card">
         <h3>Claude Desktop, one per account</h3>
@@ -100,7 +100,7 @@ hatcheck             # the sessions here from every profile, and what's left of 
     <h3>In the terminal</h3>
     <p>Run in a folder, it lists that folder's sessions from every agent, newest first, each with the command that resumes it and what's left of its plan, as the terminal shows them:</p>
 <pre><code><!-- sample:list -->$ hatcheck
-<span class="b">🎩 Claude Code, Codex, Antigravity, Kimi Code, ZCode, DeepSeek Harness and MiniMax CLI sessions in this folder, active in the last 24h or open now</span><span class="d"> (newest first; % = plan left, ↻ = hours/days until reset)</span>
+<span class="b">🎩 Claude Code, Codex, Antigravity, Kimi Code, ZCode, DeepSeek Harness, MiniMax and Qwen CLI sessions in this folder, active in the last 24h or open now</span><span class="d"> (newest first; % = plan left, ↻ = hours/days until reset)</span>
 <span class="b c">cd ~/code/api</span>
   <span class="d">  4m</span>  <span class="b">Fix flaky login test</span><span class="d"> · </span><span class="d">main</span>
         <span class="c">cl</span> a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10           <span class="d">#</span> <span class="d">5h</span> <span class="y">20%</span> <span class="y">█░░░░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span class="d">week</span>   <span class="r">9%</span> <span class="r">▋░░░░░░</span> <span style="color:#d75f00">↻▉░░░░░░ 21h35m</span>
@@ -117,7 +117,9 @@ hatcheck             # the sessions here from every profile, and what's left of 
   <span class="d">  4h</span>  <span class="b">Trace the missing webhook</span>
         <span class="c">dsh</span> web                                                      <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  4h</span>  <span class="b">Review the retry backoff</span>
-        <span class="c">mcode</span> --session mvs_c54e0009000040008000000000000009         <span class="d">#</span> <span class="d">usage ?</span><!-- /sample:list --></code></pre>
+        <span class="c">mcode</span> --session mvs_c54e0009000040008000000000000009         <span class="d">#</span> <span class="d">usage ?</span>
+  <span class="d">  5h</span>  <span class="b">Document the export command</span><span class="d"> · </span><span class="d">main</span>
+        <span class="c">qwen</span> --resume 4b4c9dc9-2b3e-4449-a2d5-93c9c165469f           <span class="d">#</span> <span class="d">usage ?</span><!-- /sample:list --></code></pre>
 
     <h3>Every plan, at a glance</h3>
     <p>Each limit has two bars: what's left of it, then how much of its window is left before it resets. A per-model limit such as Fable, which team and Max plans have, is violet, so it stands apart from the weekly limit for all models that Pro plans have.</p>
@@ -131,8 +133,8 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
 <span class="b c">Best Claude Code account now: </span><span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
-  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 9:22pm (in 2h39m)</span>
-  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Wed 11:30pm (in 4d4h)</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 1:04am (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Thu 3:12am (in 4d4h)</span>
 Carry it there with:
 <span class="c">  hatcheck move b</span><span class="d">    (hatcheck fork b keeps the original)</span>
 <span class="d">Then:</span>
@@ -151,9 +153,10 @@ $ hatcheck relocate ~/code/web ~/code/site
 <span class="y">⚠ Left alone: Kimi Code CLI session 8d4b5e6f in ~/.kimi-code is filed under a hash of the folder, which stays as it was.</span>
 <span class="y">⚠ Left alone: DeepSeek Harness session d54e0010 in ~/.dsh keeps an immutable folder in its session header and workspace state, which stay as they were.</span>
 <span class="y">⚠ Left alone: MiniMax Code session c54e0010 in ~/.minimax keeps shared SQLite state and absolute manifest paths with related assets, which stay as they were.</span>
+<span class="y">⚠ Left alone: Qwen Code session 5c5d0e0e in ~/.qwen is filed under the folder's name and records it on every line, which stay as they were.</span>
 The folder binding of ~/code/web moved to ~/code/site.
 Resume them from ~/code/site. To undo: <span class="c">hatcheck relocate ~/code/site ~/code/web</span><!-- /sample:relocate --></code></pre>
-    <p>Only the folder each session records is rewritten; what the conversation says about the old path stays as it was. Antigravity CLI and ZCode keep the folder in their own databases, which hatcheck never writes, Kimi Code CLI files sessions under a hash of it, DSH keeps it in an immutable header and workspace state, and mcode keeps shared SQLite state and absolute manifest paths with related assets, so theirs stay as they are, and it says so. <code>--dry-run</code> shows what would move, a session that's open or still being written stops it before anything changes, and running it the other way round undoes it, byte for byte.</p>
+    <p>Only the folder each session records is rewritten; what the conversation says about the old path stays as it was. Antigravity CLI and ZCode keep the folder in their own databases, which hatcheck never writes, Kimi Code CLI files sessions under a hash of it, DSH keeps it in an immutable header and workspace state, mcode keeps shared SQLite state and absolute manifest paths with related assets, and qwen files the transcript under the folder's name and writes the folder on every line, so theirs stay as they are, and it says so. <code>--dry-run</code> shows what would move, a session that's open or still being written stops it before anything changes, and running it the other way round undoes it, byte for byte.</p>
   </section>
 
   <section class="wrap" id="short">

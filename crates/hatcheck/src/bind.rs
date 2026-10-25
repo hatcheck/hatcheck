@@ -358,6 +358,7 @@ fn bind(
     zcode: Option<&str>,
     dsh: Option<&str>,
     mcode: Option<&str>,
+    qwen: Option<&str>,
 ) -> i32 {
     let show = paths::shell_path;
     let folder = ospath::realpath(&ospath::expanduser(
@@ -535,6 +536,31 @@ fn bind(
         let path = paths::profile_folder(Agent::Mcode, spec);
         if crate::mcode::is_home(&path) {
             binding.insert(Agent::Mcode.key().into(), json!(spec));
+        }
+    }
+    // QWEN_HOME moves a whole home; a folder qwen has run in has its installation_id or chats.
+    if let Some(spec) = qwen {
+        let (name, path) = name_of(Agent::Qwen, spec);
+        if !crate::qwen::is_home(&path) || !ospath::isdir(&path) {
+            return out::fail(&format!(
+                "{} isn't a Qwen Code home. Sign in there first, e.g. with: {}",
+                show(&path),
+                paths::start_command(Agent::Qwen, &path, false)
+            ));
+        }
+        binding.insert(Agent::Qwen.key().into(), json!(name));
+    } else if profile.is_none() {
+        if let Some(name) = old.get(Agent::Qwen.key()) {
+            binding.insert(Agent::Qwen.key().into(), name.clone());
+        }
+    } else if profile == Some("default")
+        && crate::qwen::is_home(&paths::default_folder(Agent::Qwen))
+    {
+        binding.insert(Agent::Qwen.key().into(), json!("default"));
+    } else if let Some(spec) = profile.filter(|p| !p.contains('/') && !p.contains(ospath::SEP)) {
+        let path = paths::profile_folder(Agent::Qwen, spec);
+        if crate::qwen::is_home(&path) {
+            binding.insert(Agent::Qwen.key().into(), json!(spec));
         }
     }
     let binding = Value::Object(binding);
@@ -860,6 +886,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .option(&["--zcode"], "zcode", "FOLDER", "the ZCode folder to bind: default for ~/.zcode, or a path (default: that one, when PROFILE is default)")
         .option(&["--dsh"], "dsh", "HOME", "the DeepSeek Harness home to bind: NAME for ~/.dsh-NAME, default for ~/.dsh, or a path (default: the one named like PROFILE)")
         .option(&["--mcode"], "mcode", "HOME", "the MiniMax Code data home to bind: NAME for ~/.minimax-NAME, default for ~/.minimax, or a path (default: the one named like PROFILE)")
+        .option(&["--qwen"], "qwen", "HOME", "the Qwen Code home to bind: NAME for ~/.qwen-NAME, default for ~/.qwen, or a path (default: the one named like PROFILE)")
         .flag(&["--list"], "list", "list every bound folder")
         .flag(&["--hook"], "hook", "warn in Claude Code, Codex and agy when a session starts in a bound folder under another profile")
         .hidden_choice(&["--which"], "which", "claude", &Agent::KEYS)
@@ -888,6 +915,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let zcode = args.value("zcode").filter(|z| !z.is_empty());
     let dsh = args.value("dsh").filter(|d| !d.is_empty());
     let mcode = args.value("mcode").filter(|m| !m.is_empty());
+    let qwen = args.value("qwen").filter(|q| !q.is_empty());
     if profile.is_some()
         || codex.is_some()
         || agy.is_some()
@@ -895,6 +923,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         || zcode.is_some()
         || dsh.is_some()
         || mcode.is_some()
+        || qwen.is_some()
     {
         return bind(
             profile,
@@ -905,6 +934,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             zcode,
             dsh,
             mcode,
+            qwen,
         );
     }
     show_here()

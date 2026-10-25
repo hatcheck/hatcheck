@@ -6,7 +6,7 @@ let homeDir = "";
 /** The home folder, for printing paths as ~/...; guessed from the paths the engine gives. */
 export function learnHome(paths: string[]) {
   for (const p of paths) {
-    const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)[/\\]\.(claude|codex|dsh|gemini|kimi-code|minimax|zcode)/);
+    const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)[/\\]\.(claude|codex|dsh|gemini|kimi-code|minimax|qwen|zcode)/);
     if (m) {
       homeDir = m[1];
       return;
@@ -32,11 +32,13 @@ export function profileName(path: string): string {
   if (base === ".dsh") return "dsh";
   if (base === ".minimax") return "mcode";
   if (base === ".minimax-code") return tilde(path);
+  if (base === ".qwen") return "qwen";
   if (base.startsWith(".claude-")) return base.slice(".claude-".length);
   if (base.startsWith(".codex-")) return "codex:" + base.slice(".codex-".length);
   if (base.startsWith(".kimi-code-")) return "kimi:" + base.slice(".kimi-code-".length);
   if (base.startsWith(".dsh-")) return "dsh:" + base.slice(".dsh-".length);
   if (base.startsWith(".minimax-")) return "mcode:" + base.slice(".minimax-".length);
+  if (base.startsWith(".qwen-")) return "qwen:" + base.slice(".qwen-".length);
   return tilde(path);
 }
 
@@ -48,6 +50,7 @@ export function agentName(agent: Agent, long = false): string {
   if (agent === "zcode") return "ZCode";
   if (agent === "dsh") return long ? "DeepSeek Harness" : "DeepSeek";
   if (agent === "mcode") return long ? "MiniMax Code" : "MiniMax";
+  if (agent === "qwen") return long ? "Qwen Code" : "Qwen";
   return long ? "Claude Code" : "Claude";
 }
 

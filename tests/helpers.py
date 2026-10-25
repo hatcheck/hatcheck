@@ -331,7 +331,7 @@ class FakeHome:
     def env(self):
         env = {k: v for k, v in os.environ.items()
                if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "DSH_HOME", "MINIMAX_DATA_DIR", "MAVIS_DATA_DIR",
-                            "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
+                            "QWEN_HOME", "QWEN_RUNTIME_DIR", "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
                and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "HATCHECK_"))}
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
                    PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"),
@@ -903,3 +903,102 @@ def _mcode_lease(self, home, sid, expires):
 FakeHome.mcode_home = _mcode_home
 FakeHome.mcode_session = _mcode_session
 FakeHome.mcode_lease = _mcode_lease
+
+
+# Qwen Code (qwen): a home and transcripts as qwen 0.26.0 writes them, its registry of the
+# sessions running now and the sidecar its terminal UI writes. The tests never run qwen.
+
+def qwen_project(cwd):
+    """qwen's name for a project folder: lowercased on Windows, every other character a dash."""
+    return re.sub(r"[^A-Za-z0-9]", "-", cwd.lower() if WINDOWS else cwd)
+
+
+def qwen_uuid(n):
+    return "%08x-0000-4000-8000-%012x" % (n, n)
+
+
+def _qwen_home(self, name="default", path=None):
+    """A qwen home (~/.qwen or ~/.qwen-NAME), or a custom one for QWEN_HOME, with the
+    installation_id qwen writes on its first run and an empty projects/."""
+    path = path or os.path.join(self.home, ".qwen" if name == "default" else ".qwen-" + name)
+    os.makedirs(os.path.join(path, "projects"), exist_ok=True)
+    write(os.path.join(path, "installation_id"), "11111111-2222-4333-8444-555555555555")
+    return path
+
+
+def _qwen_session(self, home, cwd, sid, title, minutes_ago=5, model="GLM-5.3", custom_title=None,
+                  source=None, parent=None, archived=False, branch="main", extra=()):
+    """A transcript in home/projects/<cwd as qwen names it>/chats/<sid>.jsonl, as qwen 0.26.0
+    writes one: a slash command's record, the prompt, a message qwen injected, a reply with a
+    thought, text and a tool call, the tool's result, a subagent's sidechain record and the final
+    reply; then qwen's title record with `custom_title`, and the records that name where the
+    session came from with `source` or `parent`. `extra` lines go at the end. Returns the path."""
+    when = NOW - minutes_ago * 60
+    start = when - 60
+    ids = {}
+
+    def record(n, kind, parent_n=None, at=None, **fields):
+        ids[n] = qwen_uuid(n)
+        base = {"uuid": ids[n], "parentUuid": ids[n - 1 if parent_n is None else parent_n] if n else None,
+                "sessionId": sid, "timestamp": iso(at if at is not None else start + n), "type": kind,
+                "cwd": cwd, "version": "0.26.0", "gitBranch": branch}
+        return rec(**dict(base, **fields))
+
+    rows = [
+        record(0, "system", provenance="system", subtype="slash_command",
+               systemPayload={"phase": "invocation", "rawCommand": "/model", "sentToModel": False, "hiddenInvocation": True}),
+        record(1, "user", provenance="real_user", executionContext={"modelId": model, "authType": "openai", "approvalMode": "auto"},
+               message={"role": "user", "parts": [{"text": title}]}, promptId=sid + "########0"),
+        record(2, "user", provenance="goal_runtime", subtype="agent_message",
+               message={"role": "user", "parts": [{"text": "INJECTED QWEN CONTEXT"}]}),
+        record(3, "assistant", provenance="assistant_output", model=model,
+               message={"role": "model", "parts": [{"text": "QWEN THOUGHT", "thought": True}, {"text": "I'll inspect it."},
+                                                   {"functionCall": {"id": "call-1", "name": "read_file", "args": {"path": "src/main.rs"}}}]},
+               usageMetadata={"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15}),
+        record(4, "tool_result", provenance="tool_result",
+               message={"role": "user", "parts": [{"functionResponse": {"id": "call-1", "name": "read_file",
+                                                                        "response": {"output": "fn main() {}\n"}}}]},
+               toolCallResult={"callId": "call-1", "status": "success"}),
+        record(5, "assistant", provenance="subagent", isSidechain=True, agentId="explore-1", agentName="Explore",
+               message={"role": "model", "parts": [{"text": "SIDECHAIN QWEN TEXT"}]}),
+        record(6, "assistant", parent_n=4, at=when, provenance="assistant_output", model=model,
+               message={"role": "model", "parts": [{"text": "Done: " + title}]}),
+    ]
+    n = 7
+    if custom_title is not None:
+        rows.append(record(n, "system", provenance="system", subtype="custom_title",
+                           systemPayload={"customTitle": custom_title, "titleSource": "auto"}))
+        n += 1
+    if source is not None:
+        rows.append(record(n, "system", provenance="system", subtype="session_source", systemPayload={"sourceType": source}))
+        n += 1
+    if parent is not None:
+        rows.append(record(n, "system", provenance="system", subtype="parent_session", systemPayload={"parentSessionId": parent}))
+    rows += list(extra)
+    folder = os.path.join(home, "projects", qwen_project(cwd), "chats")
+    if archived:
+        folder = os.path.join(folder, "archive")
+    path = os.path.join(folder, sid + ".jsonl")
+    write(path, "\n".join(rows) + "\n", mtime=when)
+    return path
+
+
+def _qwen_registry(self, home, sid, cwd, pid):
+    """A record in the home's sessions/ registry, as a running qwen writes it: <pid>.json."""
+    write(os.path.join(home, "sessions", "%d.json" % pid),
+          json.dumps({"schemaVersion": 1, "pid": pid, "procStart": None, "pidNs": None, "sessionId": sid, "cwd": cwd,
+                      "name": os.path.basename(cwd) + "-ab", "startedAt": int(NOW * 1000), "qwenVersion": "0.26.0",
+                      "kind": "tui"}))
+
+
+def _qwen_sidecar(self, path, sid, cwd, pid):
+    """The <sid>.runtime.json qwen's terminal UI writes beside a transcript, and never removes."""
+    write(os.path.join(os.path.dirname(path), sid + ".runtime.json"),
+          json.dumps({"schema_version": 1, "pid": pid, "session_id": sid, "work_dir": cwd, "hostname": "test",
+                      "started_at": NOW, "qwen_version": "0.26.0"}))
+
+
+FakeHome.qwen_home = _qwen_home
+FakeHome.qwen_session = _qwen_session
+FakeHome.qwen_registry = _qwen_registry
+FakeHome.qwen_sidecar = _qwen_sidecar

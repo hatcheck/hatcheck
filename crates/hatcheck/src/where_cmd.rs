@@ -1,7 +1,7 @@
 //! hatcheck where SESSION [--json]: find a session by its ID, or the start of it. Reports
 //! each agent's transcript or readable store and any session-owned data folder; for DSH, the
 //! selected v4 log and its session directory, for mcode the active messages.jsonl and session
-//! directory. Exits 1 when nothing matches. --json prints copies as data.
+//! directory, for qwen the transcript. Exits 1 when nothing matches. --json prints copies as data.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -100,6 +100,11 @@ pub fn find(prefix: &str) -> Vec<String> {
             found.push(x.dir);
         }
     }
+    for home in paths::find_qwen_homes() {
+        for x in crate::qwen::sessions_starting_with(&home, prefix) {
+            found.push(x.file);
+        }
+    }
     found
 }
 
@@ -115,6 +120,11 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
             let home_dir = ospath::dirname(&ospath::dirname(&ospath::dirname(path)));
             copies.push(json!({"agent": Agent::Kimi.key(), "id": id, "profile": home_dir, "file": crate::kimi::wire_path(path),
                                "data_folder": path, "archived": false}));
+        } else if let Some(id) = crate::qwen::file_id(path) {
+            // Under a chats folder: qwen's, where Claude Code's are the project folder's own.
+            let archived = ospath::basename(&ospath::dirname(path)) == "archive";
+            copies.push(json!({"agent": Agent::Qwen.key(), "id": id, "profile": crate::qwen::home_of(path), "file": path,
+                               "data_folder": null, "archived": archived}));
         } else if path.ends_with(".jsonl") && path.contains(&projects) {
             let profile = ospath::dirname(&ospath::dirname(&ospath::dirname(path)));
             let data = &path[..path.len() - ".jsonl".len()];
@@ -170,7 +180,7 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness or MiniMax Code session by its ID, or the start of it.",
+        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code or Qwen Code session by its ID, or the start of it.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
     .flag(&["--json"], "json", "print the matches as JSON");

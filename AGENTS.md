@@ -1,7 +1,7 @@
 # Notes for coding agents
 
-Hatcheck keeps Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness and
-MiniMax Code accounts on one computer apart: `crates/hatcheck` is the whole CLI (and the engine the desktop app in `desktop/`
+Hatcheck keeps Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness,
+MiniMax Code and Qwen Code accounts on one computer apart: `crates/hatcheck` is the whole CLI (and the engine the desktop app in `desktop/`
 runs), `tests/` holds the command tests, and `docs/commands.md`, `docs/agents.md` and
 `docs/install.md` document every command, agent and way of installing as it is. Read
 [docs/lessons.md](docs/lessons.md) before changing code: what earlier work got wrong, and the rule

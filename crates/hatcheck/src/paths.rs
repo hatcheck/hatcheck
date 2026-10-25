@@ -121,6 +121,11 @@ pub fn find_mcode_homes() -> Vec<String> {
     crate::mcode::find_homes()
 }
 
+/// Every qwen home: ~/.qwen, ~/.qwen-* and QWEN_HOME's folder (see qwen.rs).
+pub fn find_qwen_homes() -> Vec<String> {
+    crate::qwen::find_homes()
+}
+
 /// Every profile, home and data folder of every agent, as (agent, folder).
 pub fn find_all() -> Vec<(Agent, String)> {
     let mut all: Vec<(Agent, String)> = find_profiles()
@@ -133,11 +138,12 @@ pub fn find_all() -> Vec<(Agent, String)> {
     all.extend(find_zcode_roots().into_iter().map(|r| (Agent::Zcode, r)));
     all.extend(find_dsh_homes().into_iter().map(|h| (Agent::Dsh, h)));
     all.extend(find_mcode_homes().into_iter().map(|h| (Agent::Mcode, h)));
+    all.extend(find_qwen_homes().into_iter().map(|h| (Agent::Qwen, h)));
     all
 }
 
 /// The folder an agent uses when no profile is named: ~/.claude, ~/.codex,
-/// ~/.gemini/antigravity-cli, ~/.kimi-code, ~/.zcode, ~/.dsh or ~/.minimax.
+/// ~/.gemini/antigravity-cli, ~/.kimi-code, ~/.zcode, ~/.dsh, ~/.minimax or ~/.qwen.
 pub fn default_folder(agent: Agent) -> String {
     match agent {
         Agent::Agy => crate::agy::default_root(),
@@ -539,6 +545,25 @@ impl Shell {
         }
         format!("MINIMAX_DATA_DIR={} mcode{tail}", self.shell_path(home_dir))
     }
+
+    /// The command that runs qwen with a home, then tail: qwen for ~/.qwen, QWEN_HOME elsewhere.
+    pub fn qwen_command(&self, home_dir: &str, tail: &str, _full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        if self.is_default(home_dir, Agent::Qwen.base()) {
+            return format!("qwen{tail}");
+        }
+        if self.powershell {
+            return format!(
+                "$env:QWEN_HOME={}; qwen{tail}; $env:QWEN_HOME=$null",
+                self.ps_dir(home_dir)
+            );
+        }
+        format!("QWEN_HOME={} qwen{tail}", self.shell_path(home_dir))
+    }
 }
 
 /// A word for the shell commands are printed for: PowerShell's quoting there, else sh's.
@@ -635,6 +660,7 @@ impl Shell {
             Agent::Zcode => self.zcode_command(profile, "", full),
             Agent::Dsh => self.dsh_command(profile, "web", full),
             Agent::Mcode => self.mcode_command(profile, "", full),
+            Agent::Qwen => self.qwen_command(profile, "", full),
         }
     }
 
@@ -671,6 +697,7 @@ impl Shell {
                 &format!("--session {}", Agent::Mcode.full_id(session_id)),
                 full,
             ),
+            Agent::Qwen => self.qwen_command(profile, &format!("--resume {session_id}"), full),
         }
     }
 }
@@ -1073,6 +1100,22 @@ mod tests {
         assert_eq!(
             windows(false).mcode_command("C:\\Users\\me\\.minimax-work", "--session mvs_1", false),
             "MINIMAX_DATA_DIR=~/.minimax-work mcode --session mvs_1"
+        );
+        assert_eq!(
+            s.qwen_command("/home/me/.qwen", "--resume 1", false),
+            "qwen --resume 1"
+        );
+        assert_eq!(
+            s.qwen_command("/home/me/.qwen-work", "--resume 1", false),
+            "QWEN_HOME=~/.qwen-work qwen --resume 1"
+        );
+        assert_eq!(
+            w.qwen_command("C:\\Users\\me\\.qwen-work", "--resume 1", false),
+            "$env:QWEN_HOME=\"$HOME\\.qwen-work\"; qwen --resume 1; $env:QWEN_HOME=$null"
+        );
+        assert_eq!(
+            windows(false).qwen_command("C:\\Users\\me\\.qwen-work", "", false),
+            "QWEN_HOME=~/.qwen-work qwen"
         );
     }
 

@@ -355,6 +355,23 @@ fn plan(old: &str, new: &str) -> Plan {
             }
         }
     }
+    // qwen files a session under its folder's name and writes the folder on every line; hatcheck
+    // doesn't write its store.
+    for home in paths::find_qwen_homes() {
+        for x in crate::qwen::sessions(&home) {
+            if x.cwd
+                .as_deref()
+                .is_some_and(|cwd| mapped(cwd, old, new).is_some())
+            {
+                plan.skips.push(Skip {
+                    agent: Agent::Qwen,
+                    profile: home.clone(),
+                    id: x.id.clone(),
+                    why: "is filed under the folder's name and records it on every line, which stay as they were".into(),
+                });
+            }
+        }
+    }
     let bindings = paths::load_bindings();
     plan.binding = bindings
         .keys()
@@ -389,7 +406,7 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
             }
             Agent::Agy => crate::agy::session_open(&m.profile, &m.id)
                 .then(|| crate::agy::holder(&m.profile).to_string()),
-            Agent::Kimi | Agent::Zcode | Agent::Dsh | Agent::Mcode => None, // never moved: skipped in plan()
+            Agent::Kimi | Agent::Zcode | Agent::Dsh | Agent::Mcode | Agent::Qwen => None, // never moved: skipped in plan()
         };
         if let Some(whom) = open {
             why.push(format!(
@@ -476,9 +493,13 @@ fn rewrite(m: &Move, check: bool) -> Result<usize, Stop> {
             {
                 record.get_mut("payload")
             }
-            Agent::Codex | Agent::Agy | Agent::Kimi | Agent::Zcode | Agent::Dsh | Agent::Mcode => {
-                None
-            }
+            Agent::Codex
+            | Agent::Agy
+            | Agent::Kimi
+            | Agent::Zcode
+            | Agent::Dsh
+            | Agent::Mcode
+            | Agent::Qwen => None,
         };
         let Some(Value::Object(fields)) = holder else {
             continue;

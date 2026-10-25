@@ -366,10 +366,10 @@ impl Found {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes, ZCode sessions from ~/.zcode, DeepSeek Harness sessions across all ~/.dsh* homes and MiniMax Code sessions across all ~/.minimax* homes and the homes MINIMAX_DATA_DIR and MAVIS_DATA_DIR select, with the command that resumes each one or opens DSH's session history.")
+    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes, ZCode sessions from ~/.zcode, DeepSeek Harness sessions across all ~/.dsh* homes, MiniMax Code sessions across all ~/.minimax* homes and the homes MINIMAX_DATA_DIR and MAVIS_DATA_DIR select, and Qwen Code sessions across all ~/.qwen* homes and the home QWEN_HOME names, with the command that resumes each one or opens DSH's session history.")
         .positional("hours", Count::Optional, &format!("how far back to look (default {DEFAULT_HOURS}); accepts 36, 1.5, 12h or 3d"))
         .option(&["-n", "--per-folder"], "per_folder", "N", "show only the newest N sessions per folder (default: all)")
-        .flag(&["--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, and the Antigravity app's conversations")
+        .flag(&["--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, the Antigravity app's conversations, and Qwen Code sessions from its channels, scheduled tasks and other hosts")
         .flag(&["--all-folders"], "all_folders", "list every folder, even when run from a folder that has sessions")
         .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude instead of the cl shortcut, CODEX_HOME=... codex instead of cx, and KIMI_CODE_HOME=... kimi instead of ck")
         .flag(&["--cached"], "cached", "take plan usage from the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage, instead of the APIs")
@@ -637,6 +637,31 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             found.put(key, (session.when, true, session.size), session, false);
         }
     }
+    let qwen_homes = paths::find_qwen_homes();
+    for home in &qwen_homes {
+        for x in crate::qwen::sessions(home) {
+            let mut session = crate::qwen::summary(home, &x);
+            if session.entrypoint_text() == "subagent" {
+                continue;
+            }
+            let is_open = crate::qwen::session_open(home, &x.file, &x.id);
+            if !session.has_messages && !is_open {
+                empty += 1;
+                continue;
+            }
+            if session.when < cutoff && !is_open {
+                continue;
+            }
+            session.open = is_open.then(|| open_in(Agent::Qwen.program()));
+            let key = format!(
+                "{}\u{0}{}\u{0}{}",
+                Agent::Qwen.key(),
+                ospath::realpath(home),
+                session.id
+            );
+            found.put(key, (session.when, true, session.size), session, false);
+        }
+    }
     facts::save_cache();
 
     let mut shown: Vec<Summary> = Vec::new();
@@ -688,6 +713,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .chain(&zcode_roots)
         .chain(&dsh_homes)
         .chain(&mcode_homes)
+        .chain(&qwen_homes)
         .map(|p| (p.clone(), 0))
         .collect();
     for s in &shown {
@@ -772,6 +798,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .filter(|h| used.contains(h))
         .cloned()
         .collect();
+    let used_qwen: Vec<String> = qwen_homes
+        .iter()
+        .filter(|h| used.contains(h))
+        .cloned()
+        .collect();
     let loaded: Vec<(Entry, Usage)> = if use_usage {
         usage::load_usage(
             &used_profiles,
@@ -782,6 +813,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &used_zcode,
             &used_dsh,
             &used_mcode,
+            &used_qwen,
         )
     } else {
         Vec::new()
@@ -876,6 +908,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         (Agent::Zcode, &zcode_roots),
         (Agent::Dsh, &dsh_homes),
         (Agent::Mcode, &mcode_homes),
+        (Agent::Qwen, &qwen_homes),
     ] {
         if !folders.is_empty() {
             present.push(agent);
@@ -1033,6 +1066,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .chain(&used_zcode)
         .chain(&used_dsh)
         .chain(&used_mcode)
+        .chain(&used_qwen)
     {
         let Some((_, (usage, saved_at, why))) = results.iter().find(|(r, _)| r == pr) else {
             continue;

@@ -13,7 +13,8 @@ use serde_json::Value;
 /// ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME (claude:NAME spells out a Claude
 /// Code one), agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for
 /// ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, mcode for
-/// ~/.minimax and mcode:NAME for ~/.minimax-NAME, or a path.
+/// ~/.minimax and mcode:NAME for ~/.minimax-NAME, qwen for ~/.qwen and qwen:NAME for
+/// ~/.qwen-NAME, or a path.
 pub fn place(spec: &str) -> (Agent, String) {
     if spec == "default" {
         return (Agent::Claude, paths::default_folder(Agent::Claude));
@@ -39,6 +40,7 @@ pub fn place(spec: &str) -> (Agent, String) {
         let kimi = crate::kimi::is_home(&path);
         let dsh = crate::dsh::is_home(&path);
         let mcode = crate::mcode::is_home(&path);
+        let qwen = ospath::basename(&path).starts_with(".qwen") || crate::qwen::is_home(&path);
         let codex = ospath::basename(&path).starts_with(".codex")
             || (ospath::isdir(&ospath::join(&path, "sessions"))
                 && !ospath::isdir(&ospath::join(&path, "projects")));
@@ -52,6 +54,8 @@ pub fn place(spec: &str) -> (Agent, String) {
             Agent::Dsh
         } else if mcode {
             Agent::Mcode
+        } else if qwen {
+            Agent::Qwen
         } else if codex {
             Agent::Codex
         } else {
@@ -139,6 +143,11 @@ pub fn session_copies(prefix: &str) -> Vec<Copies> {
     for home in paths::find_mcode_homes() {
         for x in crate::mcode::sessions_starting_with(&home, prefix) {
             add((Agent::Mcode, x.row.id), (home.clone(), x.dir));
+        }
+    }
+    for home in paths::find_qwen_homes() {
+        for x in crate::qwen::sessions_starting_with(&home, prefix) {
+            add((Agent::Qwen, x.id), (home.clone(), x.file));
         }
     }
     found
@@ -267,6 +276,19 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
             }
         }
     }
+    for home in paths::find_qwen_homes() {
+        for x in crate::qwen::sessions(&home) {
+            if x.cwd
+                .as_deref()
+                .is_some_and(|cwd| paths::same_folder(cwd, &here))
+            {
+                let summary = crate::qwen::summary(&home, &x);
+                if better(&summary, &best) {
+                    best = Some(summary);
+                }
+            }
+        }
+    }
     facts::save_cache();
     best
 }
@@ -350,5 +372,11 @@ mod tests {
             place("mcode:work"),
             (Agent::Mcode, format!("{home}/.minimax-work"))
         );
+        assert_eq!(place("qwen"), (Agent::Qwen, format!("{home}/.qwen")));
+        assert_eq!(
+            place("qwen:work"),
+            (Agent::Qwen, format!("{home}/.qwen-work"))
+        );
+        assert_eq!(place("/srv/.qwen-a").0, Agent::Qwen);
     }
 }

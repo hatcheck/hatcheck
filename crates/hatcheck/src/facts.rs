@@ -811,6 +811,7 @@ pub fn summarize(agent: Agent, profile: &str, path: &str) -> Option<Summary> {
         Agent::Zcode => Ok(crate::zcode::summarize(profile, path)),
         Agent::Dsh => Ok(crate::dsh::summarize(profile, path)),
         Agent::Mcode => Ok(crate::mcode::summarize(profile, path)),
+        Agent::Qwen => Ok(crate::qwen::summarize(profile, path)),
     };
     let mut s = s.ok().flatten()?;
     s.profile = profile.to_string();

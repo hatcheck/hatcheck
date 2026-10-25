@@ -10,7 +10,7 @@ needs no Python. Nothing about the agents' files is reimplemented here; the app 
 the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --json`, `hatcheck move
 --json`, `hatcheck desktop --json`), and Resume runs `hatcheck open`, which opens your terminal.
 
-*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek or MiniMax.*
+*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek, MiniMax or Alibaba Cloud.*
 
 ## What it does
 
@@ -54,6 +54,14 @@ For a MiniMax Code session, **Resume** opens a terminal in the recorded folder a
 never writes MiniMax Code's store: mcode isn't offered as a Move or Fork target, sessions aren't
 copied between MiniMax Code homes, and nothing is converted into mcode.
 
+Qwen Code homes are `~/.qwen` and `~/.qwen-NAME`, selected with `QWEN_HOME`; **Add one** makes
+`qwen:NAME`, and there is no Hatcheck qwen launcher. `hatcheck open --login qwen[:NAME]` starts
+`qwen` in that home, where its own `/auth` signs in, so sign-in stays with Qwen Code. For a Qwen
+Code session, **Resume** opens a terminal in the recorded folder and runs `qwen --resume <id>`,
+with `QWEN_HOME` for a named or custom home. Hatcheck never writes Qwen Code's store: qwen isn't
+offered as a Move or Fork target, sessions aren't copied between its homes, and nothing is
+converted into qwen.
+
 ## Rules it keeps
 
 - **No credentials.** It never asks for, stores, refreshes or passes on a login.
@@ -64,7 +72,8 @@ copied between MiniMax Code homes, and nothing is converted into mcode.
   saved token, read and never refreshed, and runs agy's own `/usage` once `agy models` has said
   it's signed in. DeepSeek Harness has no plan-quota command or endpoint, so Plans shows **no data**
   for its homes. For MiniMax Code, Plans shows a normal **no data** account with the reason "mcode
-  plan quota isn't wired into hatcheck (0.6.13)"; no MiniMax usage request is made.
+  plan quota isn't wired into hatcheck (0.6.13)"; no MiniMax usage request is made. Qwen Code has no
+  plan-usage command or endpoint either, so its homes show **no data** too.
 - **No automatic switching** between accounts.
 
 ## Build and test it

@@ -71,6 +71,7 @@ class Doctor(unittest.TestCase):
         self.assertIn("Antigravity CLI  not on your PATH", out)
         self.assertIn("DeepSeek Harness not on your PATH", out)
         self.assertIn("MiniMax Code     not on your PATH", out)
+        self.assertIn("Qwen Code        not on your PATH", out)
         self.assertIn("Hooks from hatcheck bind --hook: none.", out)
         self.assertIn("Nothing to fix.", out)
 
@@ -86,11 +87,29 @@ class Doctor(unittest.TestCase):
         code, out = h.run("doctor", "--json", PATH=folder)
         self.assertEqual(code, 0, out)
         agents = {a["agent"]: a for a in json.loads(out)["agents"]}
-        self.assertEqual(list(agents), ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode"])
+        self.assertEqual(list(agents), ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode", "qwen"])
         copy = agents["mcode"]["copies"][0]
         self.assertEqual((copy["version"], copy["origin"], copy["runs"], copy["runnable"]),
                          ("0.6.13", "the MiniMax Code installer", True, True))
         self.assertTrue(copy["path"].startswith(folder), copy["path"])
+
+    def test_qwen_installer_origin(self):
+        # Qwen Code's standalone installer: ~/.local/lib/qwen-code, run by a wrapper in ~/.local/bin
+        # on macOS and Linux, and %LOCALAPPDATA%\qwen-code\bin on Windows.
+        h = self.h
+        folder = h.folder("AppData", "Local", "qwen-code", "bin") if WINDOWS else h.folder(".local", "bin")
+        if WINDOWS:
+            write(os.path.join(folder, "qwen.cmd"), "@echo 0.26.0\r\n")
+        else:
+            program = os.path.join(folder, "qwen")
+            write(program, "#!/bin/sh\necho 0.26.0\n")
+            os.chmod(program, 0o755)
+        code, out = h.run("doctor", "--json", PATH=folder)
+        self.assertEqual(code, 0, out)
+        agents = {a["agent"]: a for a in json.loads(out)["agents"]}
+        copy = agents["qwen"]["copies"][0]
+        self.assertEqual((copy["version"], copy["origin"], copy["runs"], copy["runnable"]),
+                         ("0.26.0", "the Qwen Code installer", True, True))
 
     @unittest.skipIf(WINDOWS, "lays the install out with symlinks")
     def test_a_link_to_nothing_and_a_hook_that_is_gone(self):
@@ -117,7 +136,7 @@ class Doctor(unittest.TestCase):
         self.assertEqual(d["version"], 1)
         self.assertEqual(d["this"]["version"], re.match(r"\S+ (\S+)", h.run("--version")[1]).group(1))
         self.assertEqual([a["agent"] for a in d["agents"]],
-                         ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode"])
+                         ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode", "qwen"])
         claude = d["agents"][0]["copies"][0]
         self.assertEqual((claude["version"], claude["runs"], claude["runnable"]), ("2.1.303 (Claude Code)", True, True))
         self.assertEqual(d["agents"][1]["copies"], [])

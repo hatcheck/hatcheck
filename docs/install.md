@@ -10,7 +10,8 @@ One binary per platform, with no Python needed. Each of these installs `hatcheck
 `cx`, `ck`, `claude-z` and `claude-k`.
 
 DeepSeek Harness support uses your own `dsh`; no DSH launcher or installer alias is installed.
-MiniMax Code support likewise uses your own `mcode`, with no mcode launcher or installer alias.
+MiniMax Code and Qwen Code support likewise use your own `mcode` and `qwen`, with no launcher or
+installer alias for either.
 
 ```bash
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
@@ -145,6 +146,7 @@ The agents:
   ZCode            not on your PATH
   DeepSeek Harness not on your PATH
   MiniMax Code     not on your PATH
+  Qwen Code        0.26.0                   /opt/homebrew/bin/qwen -> /opt/homebrew/Cellar/qwen-code/0.26.0/bin/qwen  (Homebrew, runs)
 Hooks from hatcheck bind --hook:
   ~/.claude-a              Claude Code runs ~/.local/bin/hatcheck
 ⚠ To fix: 2 installs of hatcheck are on your PATH; keep one.
@@ -156,11 +158,12 @@ some of the names and not others. `hatcheck doctor` finds every copy, says how i
 pipx, Homebrew, cargo, winget, the release installer or a build from a clone, told by what each
 links to and by the version each prints) and which runs, and prints the line that removes each of
 the others, as in the table above. It changes nothing. It also lists every `claude`, `codex`,
-`agy`, `kimi`, `zcode`, `dsh` and `mcode` on your `PATH` with its version and where it came from,
-since `cl`, `cx`, `ck` and the resume, login or DSH web commands run the first one, and the hooks
-`hatcheck bind --hook` added, flagging one that runs a hatcheck that has gone. Doctor stays
+`agy`, `kimi`, `zcode`, `dsh`, `mcode` and `qwen` on your `PATH` with its version and where it came
+from, since `cl`, `cx`, `ck` and the resume, login or DSH web commands run the first one, and the
+hooks `hatcheck bind --hook` added, flagging one that runs a hatcheck that has gone. Doctor stays
 PATH-based: an installed `~/.minimax-code/bin/mcode` isn't found merely because it exists. When a
-copy is found there, doctor identifies `~/.minimax-code` as the MiniMax Code installer. A link to a file that's gone, which a shell may find first, a shell
+copy is found there, doctor identifies `~/.minimax-code` as the MiniMax Code installer, and a
+`qwen` wrapper in `~/.local/bin` or under `qwen-code` as Qwen Code's. A link to a file that's gone, which a shell may find first, a shell
 function `cl()` or `cx()` in `~/.zshrc` or `~/.bashrc`, which wins over the command, and one of
 the seven commands that isn't on your `PATH` at all are named too. The exit status is 1 when there's something to fix and 0 otherwise, and `--json` prints what
 it found as data. What it says about the agents is for you to act on: Claude Code's `claude doctor`

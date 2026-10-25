@@ -355,6 +355,15 @@ fn agent_origin(agent: Agent, f: &Found) -> &'static str {
         Agent::Kimi if lower.contains("/.kimi-code/bin/") => "the Kimi Code installer",
         Agent::Zcode if lower.contains("zcode") && lower.contains(".app/") => "the ZCode app",
         Agent::Mcode if lower.contains("/.minimax-code/") => "the MiniMax Code installer",
+        // Its standalone installer: ~/.local/lib/qwen-code, run by a wrapper script it writes to
+        // ~/.local/bin, or %LOCALAPPDATA%\qwen-code\bin on Windows.
+        Agent::Qwen
+            if lower.ends_with("/.local/bin/qwen")
+                || lower.contains("/lib/qwen-code/")
+                || lower.contains("/qwen-code/bin/") =>
+        {
+            "the Qwen Code installer"
+        }
         _ => "",
     }
 }

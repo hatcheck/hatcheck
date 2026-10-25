@@ -41,9 +41,12 @@ find: `mkdir` one in a temporary folder, `git init` it, `touch` a marker beside 
 that ask for one word, so nothing of yours is sent anywhere, and an account of yours with room.
 
 - **A session from each:** `cl <profile> -p "Reply with exactly the word PINEAPPLE"`,
-  `codex exec "… MANGO"`, `kimi -p "… KIWI"`. In the folder, `hatcheck sessions --all --json
-  --no-usage` lists each with its folder, title, model and resume command, and `hatcheck show`
-  and `where` find each.
+  `codex exec "… MANGO"`, `kimi -p "… KIWI"`, `qwen -p "… PAPAYA"`. In the folder, `hatcheck
+  sessions --all --json --no-usage` lists each with its folder, title, model and resume command,
+  and `hatcheck show` and `where` find each. For qwen, `qwen --resume <id> -p "Which single word
+  did you reply with earlier? Answer with just that word."` from the folder checks the printed
+  resume command, and `qwen --resume <id>` in its terminal UI (on a pseudo-terminal, killed
+  afterwards) checks that `hatcheck` marks the session open while it runs, and not once it's gone.
 - **Into each agent:** `hatcheck fork <claude-id> codex`, then `codex exec resume <new-id> "Which
   single word did you reply with earlier? Answer with just that word."`, which should answer
   PINEAPPLE; `fork <codex-id> <profile>`, then `cl <profile> -p --resume <new-id> "…"`; `fork
@@ -76,6 +79,10 @@ Every probe leaves something in a real home. Look for what changed since the mar
   the `user-history/` file of what you typed in its UI.
 - agy: the conversation stays: it lives in agy's own database, which hatcheck never writes; delete
   it from the Antigravity app if you want it gone.
+- qwen: the probe folder's `projects/<folder>` (its chats, `meta.json`, `extract-cursor.json` and
+  `memory/`), the session's lines in `usage/token-usage-<month>.jsonl` and `usage_record.jsonl`,
+  `tmp/<sha256 of the folder>` and `file-history/<session>` when the UI ran, and the registry
+  record `sessions/<pid>.json` a killed UI couldn't remove.
 - hatcheck: the probe's `imports/<id>.md` in its cache folder.
 
 ## 4. Update
@@ -86,7 +93,8 @@ Every probe leaves something in a real home. Look for what changed since the mar
   was; dated evidence of a probe that wasn't run again stays as it was. Installers, apps, models
   and plans in [agents.md](agents.md#getting-the-agents) and the `claude-z`, `claude-k` section.
 - **Site:** `site/agents.html`'s table and its install commands and app cards; at a release,
-  `python3 site/refresh.py` for the help blocks and samples.
+  `python3 site/refresh.py` for the help blocks and samples (it runs the release binary; for the
+  current build, `python3 site/refresh.py "$PWD/target/debug/hatcheck"`, by absolute path).
 - **CHANGELOG.md** for what users notice, and [lessons.md](lessons.md) when something had broken.
 - Add a line below.
 
@@ -94,4 +102,4 @@ Every probe leaves something in a real home. Look for what changed since the mar
 
 | Date | Checked against | Found |
 |---|---|---|
-| 2026-10-24 | Claude Code 2.1.310, Codex 0.164.0, agy 1.4.7, kimi 2.3.1, ZCode 0.16.9 (and 0.17.0 compared), dsh 0.2.1-rc.2 | agy 1.4.7 lists `--add-dir` folders first, filing an imported conversation under hatcheck's cache; ZCode 0.17.0 keeps deleted sessions' rows; Kimi's K3.1 Pro and English address, and `kimi-for-coding` renamed K2.8 Preview; Z.ai pairs `glm-5.3-flash[1m]`; the Codex app is part of ChatGPT; Claude Desktop has a Linux beta |
+| 2026-10-24 | Claude Code 2.1.310, Codex 0.164.0, agy 1.4.7, kimi 2.3.1, ZCode 0.16.9 (and 0.17.0 compared), dsh 0.2.1-rc.2, qwen 0.26.0 (added) | agy 1.4.7 lists `--add-dir` folders first, filing an imported conversation under hatcheck's cache; ZCode 0.17.0 keeps deleted sessions' rows; Kimi's K3.1 Pro and English address, and `kimi-for-coding` renamed K2.8 Preview; Z.ai pairs `glm-5.3-flash[1m]`; the Codex app is part of ChatGPT; Claude Desktop has a Linux beta; qwen 0.26.1 is out on npm while Homebrew has 0.26.0 |

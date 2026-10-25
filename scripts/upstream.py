@@ -155,6 +155,8 @@ AGENTS = [
     ("MiniMax Code", lambda: run_version([shutil.which("mcode") or os.path.expanduser("~/.minimax-code/bin/mcode"),
                                           "--version"]),
      None, ["mcode", "MiniMax Code"], r"\b0\.6\.\d+\b"),
+    ("Qwen Code", lambda: run_version(["qwen", "--version"]), lambda: (npm("@qwen-code/qwen-code"), None),
+     ["qwen", "Qwen Code"], r"\b0\.2\d\.\d+\b"),
 ]
 
 APPS = [("Claude Desktop", "claude"), ("ChatGPT, with Codex", "chatgpt"), ("Codex app (old cask)", "codex-app"),

@@ -136,7 +136,7 @@ const closeDialog = () => {
 function destinations(s: Session): { value: string; label: string }[] {
   const out: { value: string; label: string }[] = [];
   for (const a of accounts) {
-    if (a.agent === "mcode") continue;
+    if (a.agent === "mcode" || a.agent === "qwen") continue;
     const left = a.limits.filter((l) => l.left_percent !== null).map((l) => `${l.short} ${Math.round(l.left_percent!)}%`).join(", ");
     for (const p of a.profiles) {
       if (p === s.profile) continue;
