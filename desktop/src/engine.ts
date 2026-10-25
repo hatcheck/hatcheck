@@ -18,7 +18,7 @@ export type Limit = {
   per_model: boolean;
 };
 
-export type Agent = "claude" | "codex" | "agy" | "kimi" | "zcode" | "dsh" | "mcode" | "qwen";
+export type Agent = "claude" | "codex" | "agy" | "kimi" | "zcode" | "dsh" | "mcode" | "qwen" | "copilot" | "opencode";
 
 export type Account = {
   agent: Agent;

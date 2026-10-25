@@ -7,13 +7,13 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <title>Which agents, and how far · Hatcheck</title>
-  <meta name="description" content="What Hatcheck does with each agent: profiles and launchers for Claude Code, Codex and Kimi Code CLI; Antigravity CLI and ZCode read from their one folder; DeepSeek Harness, MiniMax Code and Qwen Code read from their homes; where each plan's usage comes from; and where to get each agent's CLI and app.">
+  <meta name="description" content="What Hatcheck does with each agent: profiles and launchers for Claude Code, Codex and Kimi Code CLI; Antigravity CLI and ZCode read from their one folder; DeepSeek Harness, MiniMax Code, Qwen Code and GitHub Copilot CLI read from their homes, and OpenCode from its database; where each plan's usage comes from; and where to get each agent's CLI and app.">
   <link rel="canonical" href="https://hatcheck.dev/agents">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hatcheck.dev/agents">
   <meta property="og:image" content="https://hatcheck.dev/og.png">
   <meta property="og:title" content="Which agents, and how far · Hatcheck">
-  <meta property="og:description" content="What Hatcheck does with each agent: profiles and launchers for Claude Code, Codex and Kimi Code CLI; Antigravity CLI and ZCode read from their one folder; DeepSeek Harness, MiniMax Code and Qwen Code read from their homes; where each plan's usage comes from; and where to get each agent's CLI and app.">
+  <meta property="og:description" content="What Hatcheck does with each agent: profiles and launchers for Claude Code, Codex and Kimi Code CLI; Antigravity CLI and ZCode read from their one folder; DeepSeek Harness, MiniMax Code, Qwen Code and GitHub Copilot CLI read from their homes, and OpenCode from its database; where each plan's usage comes from; and where to get each agent's CLI and app.">
 </head>
 <body>
   <nav class="top wrap" aria-label="Site">
@@ -25,7 +25,7 @@
   </nav>
   <main class="wrap page">
     <h1>Which agents, and how far</h1>
-    <p>Claude Code, Codex and Kimi Code CLI get a profile per account and a launcher. Antigravity CLI and ZCode keep one login in one folder, which only <code>HOME</code> moves, so hatcheck reads that folder: their sessions are listed, shown and converted, not moved between profiles. DeepSeek Harness gets homes selected by <code>DSH_HOME</code>, read-only: its own profiles are plugin stacks, not hatcheck account homes, and there is no DSH launcher. MiniMax Code gets homes selected by <code>MINIMAX_DATA_DIR</code>, and Qwen Code homes moved whole by <code>QWEN_HOME</code>, both read-only, with direct session resume and no launcher. Each agent's page in the <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/agents.md">docs</a> says what is read, and the version it was checked against; what each one writes, when a session counts as open, and what a conversion keeps and drops are side by side in <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/formats.md">the formats reference</a>. To install one, see <a href="#get">Get the agents</a>, below.</p>
+    <p>Claude Code, Codex and Kimi Code CLI get a profile per account and a launcher. Antigravity CLI and ZCode keep one login in one folder, which only <code>HOME</code> moves, so hatcheck reads that folder: their sessions are listed, shown and converted, not moved between profiles. DeepSeek Harness gets homes selected by <code>DSH_HOME</code>, read-only: its own profiles are plugin stacks, not hatcheck account homes, and there is no DSH launcher. MiniMax Code gets homes selected by <code>MINIMAX_DATA_DIR</code>, Qwen Code homes moved whole by <code>QWEN_HOME</code> and GitHub Copilot CLI homes by <code>COPILOT_HOME</code>, all read-only, with direct session resume and no launcher; OpenCode keeps every project's sessions in one database, read the same way, and both it and Copilot take a converted session through their own importers. Each agent's page in the <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/agents.md">docs</a> says what is read, and the version it was checked against; what each one writes, when a session counts as open, and what a conversion keeps and drops are side by side in <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/formats.md">the formats reference</a>. To install one, see <a href="#get">Get the agents</a>, below.</p>
     <div class="table">
       <table>
         <thead><tr><th>Agent</th><th>Profiles</th><th>Sessions</th><th>Between its profiles</th><th>To the other agents</th><th>From the other agents</th><th>Plan usage</th></tr></thead>
@@ -38,6 +38,8 @@
           <tr><td>DeepSeek Harness</td><td><code>~/.dsh</code> and <code>~/.dsh-NAME</code> with <code>DSH_HOME</code>; no launcher</td><td>listed and shown from v4 JSONL or Zstandard logs; <code>dsh web</code> opens its session history</td><td class="none">not copied; logs and workspace state stay untouched</td><td>converted</td><td>as a file: <code>dsh web</code>, then a prompt to paste</td><td class="none">none: dsh has no plan-usage command or endpoint</td></tr>
           <tr><td>MiniMax Code</td><td><code>~/.minimax</code> and <code>~/.minimax-NAME</code> with <code>MINIMAX_DATA_DIR</code>; no launcher</td><td>listed and shown from the v2 catalog and canonical JSONL; direct <code>mcode --session mvs_&lt;id&gt;</code></td><td class="none">not copied; shared SQLite state, manifests and assets stay untouched</td><td>converted</td><td>as a file mcode starts on</td><td class="none">none: plan quota isn't wired into hatcheck</td></tr>
           <tr><td>Qwen Code</td><td><code>~/.qwen</code> and <code>~/.qwen-NAME</code> with <code>QWEN_HOME</code>; no launcher</td><td>listed and shown from each project's transcripts, archived ones included; <code>qwen --resume &lt;id&gt;</code> from its folder</td><td class="none">not copied; its transcripts, file history and registry stay untouched</td><td>converted</td><td>as a file qwen starts on</td><td class="none">none: qwen has no plan-usage command or endpoint</td></tr>
+          <tr><td>GitHub Copilot CLI</td><td><code>~/.copilot</code> and <code>~/.copilot-NAME</code> with <code>COPILOT_HOME</code>; no launcher</td><td>listed and shown from each session's events file; <code>copilot --resume &lt;id&gt;</code> from its folder</td><td class="none">not copied; its session folders and index stay untouched</td><td>converted</td><td>as the interchange file its own <code>copilot sessions import</code> takes</td><td class="none">none: copilot's <code>/usage</code> runs only in a session</td></tr>
+          <tr><td>OpenCode</td><td>one data folder, <code>~/.local/share/opencode</code>; no profiles</td><td>listed and shown from its database, which is only read; <code>opencode --session ses_&lt;id&gt;</code> from its folder</td><td class="none">one database</td><td>converted</td><td>as the session data its own <code>opencode session import</code> takes</td><td class="none">none: its plans are its providers' own</td></tr>
         </tbody>
       </table>
     </div>
@@ -51,7 +53,9 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash   # Antigravity CLI:
 curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash  # Kimi Code CLI: kimi
 npm install -g @deepseek-ai/dsh                               # DeepSeek Harness: dsh (needs Node.js)
 curl -fsSL https://filecdn.minimax.chat/public/install.sh | bash # MiniMax Code: mcode
-curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash # Qwen Code: qwen</code></pre>
+curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash # Qwen Code: qwen
+curl -fsSL https://gh.io/copilot-install | bash               # GitHub Copilot CLI: copilot
+curl -fsSL https://opencode.ai/v2/install | bash              # OpenCode: opencode</code></pre>
       <p>On Windows, in PowerShell:</p>
 <pre><code>irm https://claude.ai/install.ps1 | iex
 powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
@@ -59,7 +63,9 @@ irm https://antigravity.google/cli/install.ps1 | iex
 irm https://code.kimi.com/kimi-code/install.ps1 | iex
 npm install -g @deepseek-ai/dsh
 irm https://filecdn.minimax.chat/public/install.ps1 | iex
-irm https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1 | iex</code></pre>
+irm https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1 | iex
+winget install GitHub.Copilot
+npm i -g @opencode/cli@latest</code></pre>
       <p>ZCode's CLI comes inside its app, which puts no <code>zcode</code> command on your <code>PATH</code>. Hatcheck lists ZCode's sessions without one; to run their resume commands, add <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/agents.md#zcode-zcode">a short wrapper</a>. DeepSeek runs DSH with <code>npx @deepseek-ai/dsh web</code>; installed as above, it's the <code>dsh</code> command hatcheck's open commands run. MiniMax Code installs into <code>~/.minimax-code</code>, separate from its <code>~/.minimax</code> data home. Qwen Code's installer puts <code>qwen</code> in <code>~/.local/bin</code>; <code>npm install -g @qwen-code/qwen-code@latest</code> and <code>brew install qwen-code</code> install it too, and its home is <code>~/.qwen</code>. Once <a href="index.html#install">hatcheck is installed</a>, <code>hat do</code> lists each agent on your <code>PATH</code>, its version and which copy runs. The desktop apps:</p>
       <div class="downloads apps">
         <a href="https://claude.com/download">Claude Desktop <span>with Claude Code in it: macOS, Windows, Linux (beta)</span></a>
@@ -70,13 +76,14 @@ irm https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-q
         <a href="https://deepseek.com/harness">DeepSeek Harness <span>macOS (Apple silicon), Windows</span></a>
         <a href="https://agent.minimax.io/docs/code/get-started/download">MiniMax Code <span>CLI and desktop: macOS, Windows</span></a>
         <a href="https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest">Qwen Code Desktop <span>macOS, Windows, Linux</span></a>
+        <a href="https://opencode.ai/">OpenCode <span>CLI and desktop: macOS, Windows, Linux</span></a>
       </div>
-      <p class="video-note">With Homebrew on macOS: <code>brew install --cask claude-code codex antigravity-cli</code> for those CLIs, and <code>brew install --cask claude chatgpt antigravity zcode</code> for the apps.</p>
+      <p class="video-note">With Homebrew on macOS: <code>brew install --cask claude-code codex antigravity-cli copilot-cli</code> for those CLIs, <code>brew install anomalyco/tap/opencode-v2</code> for OpenCode's, and <code>brew install --cask claude chatgpt antigravity zcode opencode-desktop</code> for the apps.</p>
     </section>
   </main>
   <footer class="wrap">
     <p><a href="index.html">Hatcheck</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
-    <p>Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek, MiniMax or Alibaba Cloud.</p>
+    <p>Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek, MiniMax, Alibaba Cloud, GitHub or the OpenCode project.</p>
   </footer>
 </body>
 </html>

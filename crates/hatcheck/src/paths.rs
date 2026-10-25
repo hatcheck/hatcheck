@@ -126,6 +126,17 @@ pub fn find_qwen_homes() -> Vec<String> {
     crate::qwen::find_homes()
 }
 
+/// Every copilot home: ~/.copilot, ~/.copilot-* and COPILOT_HOME's folder (see copilot.rs).
+pub fn find_copilot_homes() -> Vec<String> {
+    crate::copilot::find_homes()
+}
+
+/// Every opencode data folder: the one plain opencode uses, when opencode has run (see
+/// opencode.rs).
+pub fn find_opencode_homes() -> Vec<String> {
+    crate::opencode::find_homes()
+}
+
 /// Every profile, home and data folder of every agent, as (agent, folder).
 pub fn find_all() -> Vec<(Agent, String)> {
     let mut all: Vec<(Agent, String)> = find_profiles()
@@ -139,14 +150,26 @@ pub fn find_all() -> Vec<(Agent, String)> {
     all.extend(find_dsh_homes().into_iter().map(|h| (Agent::Dsh, h)));
     all.extend(find_mcode_homes().into_iter().map(|h| (Agent::Mcode, h)));
     all.extend(find_qwen_homes().into_iter().map(|h| (Agent::Qwen, h)));
+    all.extend(
+        find_copilot_homes()
+            .into_iter()
+            .map(|h| (Agent::Copilot, h)),
+    );
+    all.extend(
+        find_opencode_homes()
+            .into_iter()
+            .map(|h| (Agent::Opencode, h)),
+    );
     all
 }
 
 /// The folder an agent uses when no profile is named: ~/.claude, ~/.codex,
-/// ~/.gemini/antigravity-cli, ~/.kimi-code, ~/.zcode, ~/.dsh, ~/.minimax or ~/.qwen.
+/// ~/.gemini/antigravity-cli, ~/.kimi-code, ~/.zcode, ~/.dsh, ~/.minimax, ~/.qwen, ~/.copilot or
+/// ~/.local/share/opencode.
 pub fn default_folder(agent: Agent) -> String {
     match agent {
         Agent::Agy => crate::agy::default_root(),
+        Agent::Opencode => crate::opencode::default_home(),
         other => ospath::join(&home(), other.base()),
     }
 }
@@ -564,6 +587,67 @@ impl Shell {
         }
         format!("QWEN_HOME={} qwen{tail}", self.shell_path(home_dir))
     }
+
+    /// The command that runs copilot with a home, then tail: copilot for ~/.copilot,
+    /// COPILOT_HOME elsewhere.
+    pub fn copilot_command(&self, home_dir: &str, tail: &str, _full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        if self.is_default(home_dir, Agent::Copilot.base()) {
+            return format!("copilot{tail}");
+        }
+        if self.powershell {
+            return format!(
+                "$env:COPILOT_HOME={}; copilot{tail}; $env:COPILOT_HOME=$null",
+                self.ps_dir(home_dir)
+            );
+        }
+        format!("COPILOT_HOME={} copilot{tail}", self.shell_path(home_dir))
+    }
+
+    /// Where plain opencode keeps its data: XDG_DATA_HOME's opencode, or ~/.local/share/opencode.
+    fn opencode_default(&self) -> String {
+        match std::env::var("XDG_DATA_HOME")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+        {
+            Some(data) => format!("{}{}opencode", ospath::expanduser(&data), self.sep()),
+            None => format!("{0}{1}.local{1}share{1}opencode", self.home, self.sep()),
+        }
+    }
+
+    /// The command that runs opencode with a data folder, then tail: opencode for the folder
+    /// plain opencode uses; elsewhere OPENCODE_DB names the folder's database and --standalone
+    /// keeps the run off the background service, which keeps the store it started with.
+    pub fn opencode_command(&self, home_dir: &str, tail: &str, _full: bool) -> String {
+        let tail = if tail.is_empty() {
+            String::new()
+        } else {
+            format!(" {tail}")
+        };
+        if self.is_default(home_dir, &self.opencode_default()) {
+            return format!("opencode{tail}");
+        }
+        let db = format!(
+            "{}{}opencode.db",
+            home_dir.trim_end_matches(|c| self.is_sep(c)),
+            self.sep()
+        );
+        if self.powershell {
+            return format!(
+                "$env:OPENCODE_DB={}; opencode --standalone{tail}; $env:OPENCODE_DB=$null",
+                self.ps_dir(&db)
+            );
+        }
+        format!(
+            "OPENCODE_DB={} opencode --standalone{tail}",
+            self.shell_path(&db)
+        )
+    }
 }
 
 /// A word for the shell commands are printed for: PowerShell's quoting there, else sh's.
@@ -621,6 +705,14 @@ pub fn qwen_command(home_dir: &str, tail: &str, full: bool) -> String {
     Shell::here().qwen_command(home_dir, tail, full)
 }
 
+pub fn copilot_command(home_dir: &str, tail: &str, full: bool) -> String {
+    Shell::here().copilot_command(home_dir, tail, full)
+}
+
+pub fn opencode_command(home_dir: &str, tail: &str, full: bool) -> String {
+    Shell::here().opencode_command(home_dir, tail, full)
+}
+
 pub fn mcode_command(home_dir: &str, tail: &str, full: bool) -> String {
     Shell::here().mcode_command(home_dir, tail, full)
 }
@@ -669,6 +761,8 @@ impl Shell {
             Agent::Dsh => self.dsh_command(profile, "web", full),
             Agent::Mcode => self.mcode_command(profile, "", full),
             Agent::Qwen => self.qwen_command(profile, "", full),
+            Agent::Copilot => self.copilot_command(profile, "", full),
+            Agent::Opencode => self.opencode_command(profile, "", full),
         }
     }
 
@@ -706,6 +800,14 @@ impl Shell {
                 full,
             ),
             Agent::Qwen => self.qwen_command(profile, &format!("--resume {session_id}"), full),
+            Agent::Copilot => {
+                self.copilot_command(profile, &format!("--resume {session_id}"), full)
+            }
+            Agent::Opencode => self.opencode_command(
+                profile,
+                &format!("--session {}", Agent::Opencode.full_id(session_id)),
+                full,
+            ),
         }
     }
 }
@@ -1124,6 +1226,31 @@ mod tests {
         assert_eq!(
             windows(false).qwen_command("C:\\Users\\me\\.qwen-work", "", false),
             "QWEN_HOME=~/.qwen-work qwen"
+        );
+        assert_eq!(
+            s.copilot_command("/home/me/.copilot", "--resume 1", false),
+            "copilot --resume 1"
+        );
+        assert_eq!(
+            s.copilot_command("/home/me/.copilot-work", "--resume 1", false),
+            "COPILOT_HOME=~/.copilot-work copilot --resume 1"
+        );
+        assert_eq!(
+            w.copilot_command("C:\\Users\\me\\.copilot-work", "--resume 1", false),
+            "$env:COPILOT_HOME=\"$HOME\\.copilot-work\"; copilot --resume 1; $env:COPILOT_HOME=$null"
+        );
+        // Plain opencode for its own data folder; another is its database and --standalone.
+        assert_eq!(
+            s.opencode_command(&s.opencode_default(), "--session ses_1", false),
+            "opencode --session ses_1"
+        );
+        assert_eq!(
+            s.opencode_command("/srv/opencode-work", "--session ses_1", false),
+            "OPENCODE_DB=/srv/opencode-work/opencode.db opencode --standalone --session ses_1"
+        );
+        assert_eq!(
+            w.opencode_command("C:\\Users\\me\\.opencode-work", "", false),
+            "$env:OPENCODE_DB=\"$HOME\\.opencode-work\\opencode.db\"; opencode --standalone; $env:OPENCODE_DB=$null"
         );
     }
 

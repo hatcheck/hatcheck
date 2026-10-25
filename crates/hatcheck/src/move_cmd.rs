@@ -308,6 +308,7 @@ fn count_prompts(lines: &[&[u8]], agent: Agent) -> usize {
         Agent::Dsh => 0,                // compressed generations, never compared line by line
         Agent::Mcode => 0,              // SQLite, never compared line by line
         Agent::Qwen => 0,               // never copied, so never compared
+        Agent::Copilot | Agent::Opencode => 0, // never copied, so never compared
         Agent::Kimi => records_of(lines)
             .filter(|r| s(get(r, "type")) == Some("turn.prompt"))
             .count(),
@@ -702,7 +703,8 @@ fn size_text(n: u64) -> String {
 
 /// Start the agent on the session in its new profile, from the folder it ran in. For agy, zcode,
 /// qwen, mcode and DSH, sid is the import file; DSH's web UI takes no first prompt, so the prompt
-/// to paste into it is printed before it opens.
+/// to paste into it is printed before it opens. For copilot and opencode, sid is the file their
+/// own importers take: the import runs, and prints the ID of the session it makes.
 fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
     let name = agent.program();
     let Some(program) = ospath::which(name) else {
@@ -729,6 +731,8 @@ fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
             "-i",
             &crate::qwen::prompt(sid),
         ]),
+        Agent::Copilot => cmd.args(["sessions", "import", sid]),
+        Agent::Opencode => cmd.args(["session", "import", sid]),
     };
     let default = paths::default_folder(agent);
     match agent.variable() {
@@ -738,7 +742,15 @@ fn resume_now(target: &str, sid: &str, cwd: &str, agent: Agent) -> i32 {
         Some(variable) => {
             cmd.env(variable, target); // spelled as cl and cx spell it: Claude Code files the login under this string
         }
-        None => {} // agy and zcode read their own folder, the only one there is
+        None if agent == Agent::Opencode
+            && ospath::realpath(target) != ospath::realpath(&default) =>
+        {
+            // Another data folder: its database, off the background service, which keeps the
+            // store it started with.
+            cmd.env("OPENCODE_DB", crate::opencode::db_path(target));
+            cmd.arg("--standalone");
+        }
+        None => {} // agy, zcode and opencode read their own folder, the only one there is
     }
     cmd.current_dir(cwd);
     #[cfg(unix)]
@@ -1498,6 +1510,8 @@ fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
             &paths::find_dsh_homes(),
             &paths::find_mcode_homes(),
             &paths::find_qwen_homes(),
+            &paths::find_copilot_homes(),
+            &paths::find_opencode_homes(),
         );
         let accounts = crate::best::ranked_for(agent, &loaded, now);
         let mine: Vec<usize> = copies
@@ -2711,6 +2725,25 @@ fn convert(
                 )
             })?
         }
+        Agent::Copilot => {
+            if crate::copilot::session_open(&crate::copilot::session_dir(source, sid)) {
+                return Err(format!(
+                    "GitHub Copilot CLI session {id8} is open in copilot; quit it first, so it stops changing"
+                ));
+            }
+            crate::copilot::read_conversation(source, sid).map_err(|e| {
+                format!(
+                    "copilot's session {id8} in {} can't be read: {e}",
+                    show(source)
+                )
+            })?
+        }
+        Agent::Opencode => crate::opencode::read_conversation(source, sid).map_err(|e| {
+            format!(
+                "opencode's session {id8} in {} can't be read: {e}",
+                show(source)
+            )
+        })?,
     };
     if conv.turns.is_empty() {
         return Err(format!(
@@ -2730,11 +2763,19 @@ fn convert(
         .unwrap_or_else(paths::home);
     // What was written: a new session's ID and file; for agy, zcode, qwen, mcode and DSH, an ID
     // for the file the conversation was written to, which the agent starts a new conversation
-    // of its own on.
+    // of its own on; for copilot and opencode, the file their own importers take, and the ID
+    // the file is named by.
     let to_file = matches!(
         target_agent,
-        Agent::Agy | Agent::Zcode | Agent::Qwen | Agent::Mcode | Agent::Dsh
+        Agent::Agy
+            | Agent::Zcode
+            | Agent::Qwen
+            | Agent::Mcode
+            | Agent::Dsh
+            | Agent::Copilot
+            | Agent::Opencode
     );
+    let importer = matches!(target_agent, Agent::Copilot | Agent::Opencode);
     let mut written: Option<(String, String)> = None;
     if !a.dry_run {
         written = Some(
@@ -2742,6 +2783,8 @@ fn convert(
                 Agent::Codex => write_codex(&conv, &turns, target, &cwd),
                 Agent::Claude => write_claude(&conv, &turns, target, &cwd),
                 Agent::Kimi => kimi::write_session(&conv, &turns, target, &cwd),
+                Agent::Copilot => crate::copilot::write_session(&conv, &turns, target, &cwd),
+                Agent::Opencode => crate::opencode::write_session(&conv, &turns, target, &cwd),
                 Agent::Agy | Agent::Zcode | Agent::Qwen | Agent::Mcode | Agent::Dsh => {
                     let id = uuid4();
                     conv::write_import(&conv, &turns, &id).map(|path| (id, path))
@@ -2753,9 +2796,18 @@ fn convert(
     let new_sid = written.as_ref().filter(|_| !to_file).map(|w| w.0.clone());
     let prompts = conv.turns.iter().filter(|t| t.0 == "user").count();
     let shown_id = new_sid.clone().unwrap_or_else(|| "<new id>".into());
-    let file = written
+    let file = written.as_ref().map_or_else(
+        || match target_agent {
+            Agent::Copilot => crate::copilot::import_path("<new id>"),
+            Agent::Opencode => crate::opencode::import_path("<new id>"),
+            _ => conv::import_path("<new id>"),
+        },
+        |w| w.1.clone(),
+    );
+    // The ID the file is named by: for opencode, the ID its session will have.
+    let file_id = written
         .as_ref()
-        .map_or_else(|| conv::import_path("<new id>"), |w| w.1.clone());
+        .map_or("<new id>".to_string(), |w| w.0.clone());
     let resume = match target_agent {
         Agent::Codex => paths::codex_resume_command(target, &shown_id, false),
         Agent::Claude => paths::resume_command(target, &shown_id, false, None),
@@ -2765,6 +2817,8 @@ fn convert(
         Agent::Qwen => crate::qwen::start_command(target, &file, false),
         Agent::Mcode => crate::mcode::start_command(target, &file, false),
         Agent::Dsh => paths::start_command(Agent::Dsh, target, false),
+        Agent::Copilot => crate::copilot::start_command(target, &file, false),
+        Agent::Opencode => crate::opencode::start_command(target, &file, false),
     };
     // DSH's web UI takes no first prompt: what to paste into it, once it's open.
     let paste = if target_agent == Agent::Dsh {
@@ -2799,6 +2853,11 @@ fn convert(
     let into = match target_agent {
         Agent::Agy | Agent::Zcode | Agent::Qwen | Agent::Mcode | Agent::Dsh => format!(
             "into a conversation for {} in {}",
+            target_agent.name(),
+            show(&conv::imports_dir())
+        ),
+        Agent::Copilot | Agent::Opencode => format!(
+            "into a session file for {} in {}",
             target_agent.name(),
             show(&conv::imports_dir())
         ),
@@ -2902,20 +2961,26 @@ fn convert(
         Agent::Qwen => out::println("Qwen Code has no importer and hatcheck doesn't write its store, so the session starts when qwen reads the file."),
         Agent::Mcode => out::println("MiniMax Code's store isn't one hatcheck writes, so the session starts when mcode reads the file."),
         Agent::Dsh => out::println("DeepSeek Harness's store isn't one hatcheck writes, and dsh web takes no first prompt, so the session starts when you paste the prompt into its web UI."),
+        Agent::Copilot => out::println("GitHub Copilot CLI imports a session file with a command of its own, so the session exists once that has run; hatcheck doesn't write its store."),
+        Agent::Opencode => out::println("OpenCode imports a session file with a command of its own, so the session exists once that has run; hatcheck doesn't write its store."),
         _ => {}
     }
     out::println(&format!(
         "The original stays in {}, since a conversion leaves things out.",
         show(source)
     ));
-    out::heading(match (a.dry_run, to_file, target_agent == Agent::Dsh) {
-        (true, false, _) => "Then resume it with:",
-        (false, false, _) => "Resume it with:",
-        (true, true, false) => "Then start it with:",
-        (false, true, false) => "Start it with:",
-        (true, true, true) => "Then open DSH with:",
-        (false, true, true) => "Open DSH with:",
-    });
+    out::heading(
+        match (a.dry_run, to_file, target_agent == Agent::Dsh, importer) {
+            (true, false, _, _) => "Then resume it with:",
+            (false, false, _, _) => "Resume it with:",
+            (true, true, false, false) => "Then start it with:",
+            (false, true, false, false) => "Start it with:",
+            (true, true, false, true) => "Then import it with:",
+            (false, true, false, true) => "Import it with:",
+            (true, true, true, _) => "Then open DSH with:",
+            (false, true, true, _) => "Open DSH with:",
+        },
+    );
     out::command(&format!("  cd {}", show(&cwd)));
     out::command(&format!("  {resume}"));
     if target_agent == Agent::Zcode {
@@ -2926,8 +2991,26 @@ fn convert(
         out::println("and paste into its web UI:");
         out::command(&format!("  {}", dsh::prompt(&file)));
     }
+    if target_agent == Agent::Copilot {
+        out::println("which prints the ID of the session it makes; then resume it with:");
+        out::command(&format!(
+            "  {}",
+            paths::copilot_command(target, "--resume <id>", false)
+        ));
+    }
+    if target_agent == Agent::Opencode {
+        out::println("Then resume it with:");
+        out::command(&format!(
+            "  {}",
+            paths::opencode_command(
+                target,
+                &format!("--session {}", Agent::Opencode.full_id(&file_id)),
+                false
+            )
+        ));
+    }
     // What to start, when asked to: the new session, or the file for agy, zcode, qwen, mcode
-    // and DSH.
+    // and DSH, and the file copilot's and opencode's importers take.
     let handle = if to_file {
         written.as_ref().map(|w| w.1.clone())
     } else {
@@ -3035,6 +3118,17 @@ fn find_sessions(sources: &[(Agent, String)], prefix: &str) -> Vec<((Agent, Stri
             Agent::Qwen => {
                 for x in crate::qwen::sessions_starting_with(folder, prefix) {
                     add((Agent::Qwen, x.id), folder, x.file);
+                }
+            }
+            Agent::Copilot => {
+                for x in crate::copilot::sessions_starting_with(folder, prefix) {
+                    add((Agent::Copilot, x.id), folder, x.file);
+                }
+            }
+            Agent::Opencode => {
+                for x in crate::opencode::sessions_starting_with(folder, prefix) {
+                    let reference = crate::opencode::session_ref(folder, &x.row.id);
+                    add((Agent::Opencode, x.row.id), folder, reference);
                 }
             }
         }
@@ -3205,6 +3299,19 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
                     show(&target)
                 ));
             }
+            Agent::Copilot => {
+                return Err(format!(
+                    "{} isn't a GitHub Copilot CLI home. Sign in there first, e.g. with: {}",
+                    show(&target),
+                    paths::copilot_command(&target, "login", false)
+                ));
+            }
+            Agent::Opencode => {
+                return Err(format!(
+                    "{} isn't an OpenCode data folder. Run opencode once to make it",
+                    show(&target)
+                ));
+            }
             Agent::Claude => {
                 return Err(format!(
                     "{} isn't a profile folder. Sign in there first, e.g. with: cl {}",
@@ -3303,6 +3410,18 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
                 py::head(&sid, 8)
             ))
         }
+        Agent::Copilot => {
+            return Err(format!(
+                "GitHub Copilot CLI's session folders and index aren't copied between its homes; convert session {} for another agent instead",
+                py::head(&sid, 8)
+            ))
+        }
+        Agent::Opencode => {
+            return Err(format!(
+                "OpenCode keeps its sessions in one database hatcheck doesn't write; convert session {} for another agent instead",
+                py::head(&sid, 8)
+            ))
+        }
     };
     Ok(Done {
         session: resume_sid,
@@ -3313,9 +3432,9 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code or Qwen Code session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
+    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh or mcode for ~/.minimax (the last two: not supported targets), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, mcode for ~/.minimax, mcode:NAME for ~/.minimax-NAME, copilot for ~/.copilot, copilot:NAME for ~/.copilot-NAME or opencode for ~/.local/share/opencode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
         .flag(&["--brief"], "brief", "for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last turns")
@@ -3356,9 +3475,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 /// hatcheck fork SESSION PROFILE ...: bring a session into another profile as a new one, with its
 /// own ID, and keep the original; for the other agent, convert it, as move does.
 pub fn fork_main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code or Qwen Code session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
+    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
-        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh or mcode for ~/.minimax (the last two: not supported targets), or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
+        .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, mcode for ~/.minimax, mcode:NAME for ~/.minimax-NAME, copilot for ~/.copilot, copilot:NAME for ~/.copilot-NAME or opencode for ~/.local/share/opencode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--brief"], "brief", "for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last turns")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")

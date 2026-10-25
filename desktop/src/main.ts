@@ -154,6 +154,7 @@ function reportText(r: MoveReport): string {
     convert: "convert it into a new session" }[r.action];
   const items = (r.items || []).map((i) => `<tr><td>${esc(i.what)}</td><td>${esc(i.detail)}</td><td>${esc(i.state)}</td></tr>`).join("");
   const dsh = (r.target_agent ?? r.agent) === "dsh";
+  const importer = r.action === "convert" && (r.target_agent === "copilot" || r.target_agent === "opencode");
   return `<p>${verb} ${esc(what)}, to ${esc(tilde(r.target))}.</p>` +
     (items ? `<table class="items"><tr><th>What</th><th>Size</th><th>There</th></tr>${items}</table>` : "") +
     (r.action === "convert" ? `<p class="note">${r.prompts} of your messages and ${r.tool_calls} tool calls come across as text; left out: ${esc(r.left_out)}.${
@@ -166,7 +167,11 @@ function reportText(r: MoveReport): string {
       ? `<p class="note">Open DSH with <code>${esc(r.resume)}</code>, then paste into its web UI: <code>${esc(r.paste)}</code></p>`
       : dsh
         ? `<p class="note">Open DSH with <code>${esc(r.resume)}</code>, then choose the session in its web UI; the selected session isn't resumed directly.</p>`
-        : `<p class="note">Resume it with <code>${esc(r.resume)}</code></p>`);
+        : importer
+          ? `<p class="note">Import it with <code>${esc(r.resume)}</code> from the session's folder: ${r.target_agent === "copilot"
+              ? "copilot prints the ID of the session it makes, for <code>copilot --resume</code>."
+              : "then resume it with <code>opencode --session ses_&lt;id&gt;</code>, the ID the file is named by."}</p>`
+          : `<p class="note">Resume it with <code>${esc(r.resume)}</code></p>`);
 }
 
 async function startMove(s: Session) {

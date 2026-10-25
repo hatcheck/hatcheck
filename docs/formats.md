@@ -2,7 +2,7 @@
 
 Each agent keeps its sessions in a form of its own, and hatcheck reads every one of them as the
 agent writes it, checked against the real binary, with the version written down. This page puts
-the eight formats side by side, then says what a conversion keeps, drops, cuts and writes. The
+the ten formats side by side, then says what a conversion keeps, drops, cuts and writes. The
 detail of each agent, what is read and how it was checked, is in [agents.md](agents.md); what
 each command does with it is in [commands.md](commands.md).
 
@@ -18,6 +18,8 @@ each command does with it is in [commands.md](commands.md).
 | DeepSeek Harness | `~/.dsh[-NAME]/sessions/<project>/session-<uuid>/session.v4.jsonl`, or `.zstd` as concatenated Zstandard frames | a `session` header (cwd, origin), then events: `user/message` with its source (`user`, runtime context, compact checkpoints), `assistant/message` (reasoning, text, tool calls), `tool/result`, `session/title`, `model/selection`, `request/context`; a replace operation stands a compaction in for earlier events | `session-<uuid>` | `session.lock` held (POSIX) | 0.2.1-rc.2 |
 | MiniMax Code | `~/.minimax[-NAME]/v2/sqlite/runtime-state.sqlite`, the catalog, and `v2/sessions/<date>/<…>/messages.jsonl`, the canonical history, with a manifest and a display timeline beside it | catalog rows (`local_runtime_sessions`, columnar version 3), and envelopes with `message_id`, `turn_id` and a `message`: `user`, `assistant` (text, `toolCall`, thinking with a signature), `toolResult`, `compactionSummary`, and records of its own | `mvs_<32 hex>` | an unexpired lease in `local_runtime_session_locks` | 0.6.13 (source 0.6.5) |
 | Qwen Code | `~/.qwen[-NAME]/projects/<folder>/chats/<uuid>.jsonl`, archived ones in `chats/archive/`; `<folder>` as Claude Code names it, lowercased first on Windows | JSONL: `uuid` and `parentUuid`, `type` `user`, `assistant`, `tool_result` or `system`, `provenance`, `cwd`, `gitBranch`, a Gemini-style `message.parts` list (`text`, `thought`, `functionCall`, `functionResponse`); system records for titles, sources, parents and qwen's own state | UUID | `sessions/<pid>.json` or `chats/<uuid>.runtime.json` names a running process | 0.26.0 |
+| GitHub Copilot CLI | `~/.copilot[-NAME]/session-state/<uuid>/events.jsonl`, with `workspace.yaml` (folder, branch, name, times) and copilot's working files beside it; `session-store.db` at the root indexes them | JSONL of events, each with `type`, `data`, `id`, `timestamp` and `parentId`: `session.start` (folder, branch, version), `user.message`, `assistant.message` (text, `model`, `toolRequests`), `tool.user_requested`, `tool.execution_complete`, and copilot's own (`session.*`, `model.*`, `hook.*`, `system.message`) | UUID | `inuse.<pid>.lock` in the session's folder names a running process | 1.0.103 |
+| OpenCode | `~/.local/share/opencode/opencode.db` (`XDG_DATA_HOME`'s), one database for every project | tables `session_v2` (folder, title, model, times, parent) and `session_message`: a JSON record per message, `type` `user` (`text`, `files`), `assistant` (`content` parts: `text`, `reasoning`, `tool` with its input and result), `shell`, `compaction` or opencode's own; `credential` and `account` hold its logins, never read | `ses_<26 characters>` | nothing marks one | 2.1.4 |
 
 One line of a few of them, shortened, so the shapes are concrete:
 
@@ -28,6 +30,8 @@ Kimi         {"type":"agent.message.appended","agentId":"…","message":{"role":
 DSH          {"type":"assistant/message","seq":2,"time":…,"surfaceOp":"append","data":{"turn":1,"message":{"role":"assistant","source":{"kind":"model"},"content":[{"type":"text","text":"…"}]}}}
 MiniMax Code {"message_id":"…","turn_id":"…","message":{"role":"assistant","content":[{"type":"text","text":"…"},{"type":"toolCall","name":"read_file","arguments":"{\"path\":\"src/main.rs\"}"}]}}
 Qwen Code    {"uuid":"…","parentUuid":"…","type":"assistant","provenance":"assistant_output","cwd":"/code/api","model":"GLM-5.3","message":{"role":"model","parts":[{"text":"…","thought":true},{"text":"…"},{"functionCall":{"name":"read_file","args":{"path":"src/main.rs"}}}]}}
+Copilot      {"type":"assistant.message","data":{"content":"…","model":"mai-code-1.1-flash","toolRequests":[{"toolCallId":"…","name":"view","arguments":{"path":"src/main.rs"}}],"turnId":"0"},"id":"…","timestamp":"…","parentId":"…"}
+OpenCode     session_message.data: {"agent":"build","model":{"providerID":"anthropic","id":"…"},"content":[{"type":"text","text":"…"},{"type":"tool","name":"read","state":{"status":"completed","input":{"filePath":"src/main.rs"},"content":[{"type":"text","text":"…"}]}}],"time":{"created":…,"completed":…}}
 ```
 
 ## How a conversion works
@@ -48,8 +52,8 @@ way. The conversation keeps its title, folder, branch, model and start time.
 signed for the account that wrote them, Codex's is encrypted for it, and the others' is the
 agent's own; none is ever rewritten, carried or quoted. Images and files are marked as `[image]`
 or `[file]` where they were. Messages the agent added itself, such as Claude Code's
-`<system-reminder>` blocks, Codex's `<environment_context>`, DSH's runtime context and qwen's
-injected context, are left out, as are subagents' transcripts and sidechains, and the agent's own
+`<system-reminder>` blocks, Codex's `<environment_context>`, DSH's runtime context, qwen's
+injected context, the date copilot prepends and opencode's synthetic messages, are left out, as are subagents' transcripts and sidechains, and the agent's own
 UI or state records. Each `show` and conversion says what it left out.
 
 **Compaction.** Claude Code's whole history before a compaction is carried, not its summary;
@@ -83,19 +87,25 @@ fixed message, where a brief carries what an agent that can't resume the session
 | Qwen Code | the same Markdown file | `qwen --add-dir <imports> -i '…'` |
 | MiniMax Code | the same Markdown file | `mcode '…'`: its terminal UI, with the prompt as its task |
 | DeepSeek Harness | the same Markdown file | `dsh web`, then the prompt pasted into its web UI |
+| GitHub Copilot CLI | `imports/<id>.jsonl`: a version-1 session interchange file, a `session` header (title, folder, branch) and a `message` record per turn, the form its own `copilot sessions import` validates | `copilot sessions import <file>`, which prints the new session's ID, then `copilot --resume <id>` |
+| OpenCode | `imports/<id>.json`: the `{info, messages}` session data its own `session export` prints and `session import` takes, with an ID minted as opencode mints them | `opencode session import <file>` from the session's folder, then `opencode --session ses_<id>` |
 
 Claude Code, Codex and Kimi get a session in their own format, which they resume as one of
 theirs. Antigravity CLI, ZCode, Qwen Code and MiniMax Code have no importer, so they get a file
 and a command that starts them on it, and DeepSeek Harness gets the file and a prompt to paste
 into its web UI, which takes no first prompt: the session exists once the agent has read the
 file, with an ID of the agent's own, which is why `--json` reports `"new_session": null` and the
-`file` for those five, and the prompt as `paste` for DSH.
+`file` for those five, and the prompt as `paste` for DSH. GitHub Copilot CLI and OpenCode have
+importers of their own, so they get the file their importer takes and the command that runs it;
+hatcheck writes neither store, and the session exists once the import has run, so `--json`
+reports `"new_session": null` and the `file` for those two as well.
 
 **What isn't a conversion.** A move or copy between an agent's own profiles carries the session
 whole: Claude Code's transcript, subagent folder, `/rewind` snapshots and plan, with the paths in
 it repointed except inside thinking; Codex's rollout between homes on the same account; Kimi's
-session folder with its index line. ZCode's database, DSH's logs, MiniMax Code's catalog and Qwen
-Code's transcripts are never copied between homes.
+session folder with its index line. ZCode's database, DSH's logs, MiniMax Code's catalog, Qwen
+Code's transcripts and copilot's session folders are never copied between homes, and OpenCode has
+one database.
 
 **Checked how.** Each conversion was resumed with the real agent, and the version is written down
 beside it: see [`hatcheck move`](commands.md#hatcheck-move-carry-on-a-session-with-another-profile)

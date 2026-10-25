@@ -1532,6 +1532,47 @@ pub fn load_qwen_accounts(homes: &[String]) -> Vec<Entry> {
 /// plan-usage command or endpoint.
 pub const QWEN_NO_USAGE: &str = "qwen has no plan-usage command or endpoint (0.26.0)";
 
+/// Copilot homes, one account each: listed with why there's no reading; no credential is read.
+pub fn load_copilot_accounts(homes: &[String]) -> Vec<Entry> {
+    homes
+        .iter()
+        .map(|home| Entry {
+            agent: Agent::Copilot,
+            profiles: vec![home.clone()],
+            email: Value::Null,
+            account: Value::Null,
+            cache: Value::Null,
+            login: Value::Null,
+        })
+        .collect()
+}
+
+/// Why a copilot home has no reading: copilot's /usage runs only inside a session, which costs
+/// a model turn, and hatcheck makes no request of its own.
+pub const COPILOT_NO_USAGE: &str =
+    "copilot's /usage runs only in a session, and hatcheck makes no request (1.0.103)";
+
+/// OpenCode data folders, one account each: listed with why there's no reading; no credential
+/// is read.
+pub fn load_opencode_accounts(homes: &[String]) -> Vec<Entry> {
+    homes
+        .iter()
+        .map(|home| Entry {
+            agent: Agent::Opencode,
+            profiles: vec![home.clone()],
+            email: Value::Null,
+            account: Value::Null,
+            cache: Value::Null,
+            login: Value::Null,
+        })
+        .collect()
+}
+
+/// Why an opencode data folder has no reading: its plans are its providers' own, and `opencode
+/// stats` counts the tokens its sessions spent, not what a plan has left.
+pub const OPENCODE_NO_USAGE: &str =
+    "opencode has no plan-usage command: its stats count tokens spent (2.1.4)";
+
 fn fetch_kimi_usage(login: &Value, url: &str) -> (Option<Value>, Option<String>) {
     fetch_json(
         url,
@@ -1643,9 +1684,14 @@ pub fn account_plan(entry: &Entry, usage: Option<&Value>) -> String {
         Agent::Claude => plan_text(&entry.account),
         Agent::Agy => crate::agy::plan_text(usage),
         Agent::Kimi => crate::kimi::plan_text(),
-        // zcode, dsh and qwen have no usage command; mcode's quota isn't wired: the plan is the
-        // agent.
-        Agent::Zcode | Agent::Dsh | Agent::Mcode | Agent::Qwen => entry.agent.speaker().to_string(),
+        // zcode, dsh, qwen, copilot and opencode have no usage command hatcheck runs; mcode's
+        // quota isn't wired: the plan is the agent.
+        Agent::Zcode
+        | Agent::Dsh
+        | Agent::Mcode
+        | Agent::Qwen
+        | Agent::Copilot
+        | Agent::Opencode => entry.agent.speaker().to_string(),
     }
 }
 
@@ -1660,6 +1706,8 @@ fn fetch_usage(entry: &Entry, cached: bool) -> Usage {
         Agent::Dsh => (None, None, Some(DSH_NO_USAGE.into())),
         Agent::Mcode => (None, None, Some(MCODE_NO_USAGE.into())),
         Agent::Qwen => (None, None, Some(QWEN_NO_USAGE.into())),
+        Agent::Copilot => (None, None, Some(COPILOT_NO_USAGE.into())),
+        Agent::Opencode => (None, None, Some(OPENCODE_NO_USAGE.into())),
     }
 }
 
@@ -1675,6 +1723,8 @@ pub fn load_usage(
     dsh_homes: &[String],
     mcode_homes: &[String],
     qwen_homes: &[String],
+    copilot_homes: &[String],
+    opencode_homes: &[String],
 ) -> Vec<(Entry, Usage)> {
     let mut entries = load_accounts(profiles);
     entries.extend(load_codex_accounts(codex_homes));
@@ -1684,6 +1734,8 @@ pub fn load_usage(
     entries.extend(load_dsh_accounts(dsh_homes));
     entries.extend(load_mcode_accounts(mcode_homes));
     entries.extend(load_qwen_accounts(qwen_homes));
+    entries.extend(load_copilot_accounts(copilot_homes));
+    entries.extend(load_opencode_accounts(opencode_homes));
     // In a terminal, a line on stderr says what the wait is for, and goes when it's over.
     let note = if cached {
         None
@@ -1728,7 +1780,12 @@ fn will_ask(entry: &Entry, now: f64) -> bool {
                 })
         }
         Agent::Kimi => token_good(),
-        Agent::Zcode | Agent::Dsh | Agent::Mcode | Agent::Qwen => false,
+        Agent::Zcode
+        | Agent::Dsh
+        | Agent::Mcode
+        | Agent::Qwen
+        | Agent::Copilot
+        | Agent::Opencode => false,
     }
 }
 
@@ -1920,7 +1977,7 @@ pub fn account_lines(
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode, DeepSeek Harness (~/.dsh*), MiniMax Code (~/.minimax*) and Qwen Code (~/.qwen*) are listed with why they give none, with mcode's plan quota not wired yet.")
+    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode, DeepSeek Harness (~/.dsh*), MiniMax Code (~/.minimax*), Qwen Code (~/.qwen*), GitHub Copilot CLI (~/.copilot*) and OpenCode (~/.local/share/opencode) are listed with why they give none, with mcode's plan quota not wired yet.")
         .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
         .flag(&["-e", "--email"], "email", "show each account's email address (hidden by default)")
         .flag(&["--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
@@ -1942,6 +1999,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &paths::find_dsh_homes(),
             &paths::find_mcode_homes(),
             &paths::find_qwen_homes(),
+            &paths::find_copilot_homes(),
+            &paths::find_opencode_homes(),
         ),
         now,
     );

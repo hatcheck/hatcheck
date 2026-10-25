@@ -202,8 +202,8 @@ class ZcodeElsewhere(unittest.TestCase):
 
     def test_doctor_names_them(self):
         code, out = self.h.run("doctor")
-        self.assertIn("Kimi Code CLI    not on your PATH", out)
-        self.assertIn("ZCode            not on your PATH", out)
+        self.assertIn("Kimi Code CLI      not on your PATH", out)
+        self.assertIn("ZCode              not on your PATH", out)
 
 
 if __name__ == "__main__":

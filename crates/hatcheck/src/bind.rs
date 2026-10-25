@@ -359,6 +359,8 @@ fn bind(
     dsh: Option<&str>,
     mcode: Option<&str>,
     qwen: Option<&str>,
+    copilot: Option<&str>,
+    opencode: Option<&str>,
 ) -> i32 {
     let show = paths::shell_path;
     let folder = ospath::realpath(&ospath::expanduser(
@@ -562,6 +564,51 @@ fn bind(
         if crate::qwen::is_home(&path) {
             binding.insert(Agent::Qwen.key().into(), json!(spec));
         }
+    }
+    // COPILOT_HOME moves a whole home; a folder copilot has run in has its session-state folder
+    // or config.json.
+    if let Some(spec) = copilot {
+        let (name, path) = name_of(Agent::Copilot, spec);
+        if !crate::copilot::is_home(&path) || !ospath::isdir(&path) {
+            return out::fail(&format!(
+                "{} isn't a GitHub Copilot CLI home. Sign in there first, e.g. with: {}",
+                show(&path),
+                paths::copilot_command(&path, "login", false)
+            ));
+        }
+        binding.insert(Agent::Copilot.key().into(), json!(name));
+    } else if profile.is_none() {
+        if let Some(name) = old.get(Agent::Copilot.key()) {
+            binding.insert(Agent::Copilot.key().into(), name.clone());
+        }
+    } else if profile == Some("default")
+        && crate::copilot::is_home(&paths::default_folder(Agent::Copilot))
+    {
+        binding.insert(Agent::Copilot.key().into(), json!("default"));
+    } else if let Some(spec) = profile.filter(|p| !p.contains('/') && !p.contains(ospath::SEP)) {
+        let path = paths::profile_folder(Agent::Copilot, spec);
+        if crate::copilot::is_home(&path) {
+            binding.insert(Agent::Copilot.key().into(), json!(spec));
+        }
+    }
+    // OpenCode has one data folder, like agy and zcode.
+    if let Some(spec) = opencode {
+        let (name, path) = name_of(Agent::Opencode, spec);
+        if !crate::opencode::is_home(&path) {
+            return out::fail(&format!(
+                "{} isn't an OpenCode data folder. Run opencode once to make it",
+                show(&path)
+            ));
+        }
+        binding.insert(Agent::Opencode.key().into(), json!(name));
+    } else if profile.is_none() {
+        if let Some(name) = old.get(Agent::Opencode.key()) {
+            binding.insert(Agent::Opencode.key().into(), name.clone());
+        }
+    } else if profile == Some("default")
+        && crate::opencode::is_home(&paths::default_folder(Agent::Opencode))
+    {
+        binding.insert(Agent::Opencode.key().into(), json!("default"));
     }
     let binding = Value::Object(binding);
     bindings.insert(folder.clone(), binding.clone());
@@ -887,6 +934,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .option(&["--dsh"], "dsh", "HOME", "the DeepSeek Harness home to bind: NAME for ~/.dsh-NAME, default for ~/.dsh, or a path (default: the one named like PROFILE)")
         .option(&["--mcode"], "mcode", "HOME", "the MiniMax Code data home to bind: NAME for ~/.minimax-NAME, default for ~/.minimax, or a path (default: the one named like PROFILE)")
         .option(&["--qwen"], "qwen", "HOME", "the Qwen Code home to bind: NAME for ~/.qwen-NAME, default for ~/.qwen, or a path (default: the one named like PROFILE)")
+        .option(&["--copilot"], "copilot", "HOME", "the GitHub Copilot CLI home to bind: NAME for ~/.copilot-NAME, default for ~/.copilot, or a path (default: the one named like PROFILE)")
+        .option(&["--opencode"], "opencode", "FOLDER", "the OpenCode data folder to bind: default for ~/.local/share/opencode, or a path (default: that one, when PROFILE is default)")
         .flag(&["--list"], "list", "list every bound folder")
         .flag(&["--hook"], "hook", "warn in Claude Code, Codex and agy when a session starts in a bound folder under another profile")
         .hidden_choice(&["--which"], "which", "claude", &Agent::KEYS)
@@ -916,6 +965,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let dsh = args.value("dsh").filter(|d| !d.is_empty());
     let mcode = args.value("mcode").filter(|m| !m.is_empty());
     let qwen = args.value("qwen").filter(|q| !q.is_empty());
+    let copilot = args.value("copilot").filter(|c| !c.is_empty());
+    let opencode = args.value("opencode").filter(|o| !o.is_empty());
     if profile.is_some()
         || codex.is_some()
         || agy.is_some()
@@ -924,6 +975,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         || dsh.is_some()
         || mcode.is_some()
         || qwen.is_some()
+        || copilot.is_some()
+        || opencode.is_some()
     {
         return bind(
             profile,
@@ -935,6 +988,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             dsh,
             mcode,
             qwen,
+            copilot,
+            opencode,
         );
     }
     show_here()

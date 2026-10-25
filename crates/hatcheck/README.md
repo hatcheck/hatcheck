@@ -1,12 +1,12 @@
 # hatcheck
 
-Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code and Qwen Code accounts on one computer, each kept apart. `hatcheck`
+Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode accounts on one computer, each kept apart. `hatcheck`
 lists the recent sessions in every Claude Code profile (`~/.claude-<name>`), Codex home
-(`~/.codex-<name>`), Kimi home (`~/.kimi-code-<name>`), DeepSeek Harness home (`~/.dsh-<name>`), MiniMax Code home (`~/.minimax-<name>`) and Qwen Code home (`~/.qwen-<name>`), and in Antigravity CLI's and ZCode's
+(`~/.codex-<name>`), Kimi home (`~/.kimi-code-<name>`), DeepSeek Harness home (`~/.dsh-<name>`), MiniMax Code home (`~/.minimax-<name>`), Qwen Code home (`~/.qwen-<name>`) and GitHub Copilot CLI home (`~/.copilot-<name>`), and in Antigravity CLI's, ZCode's and OpenCode's
 folders, each with the command that resumes it or opens DSH's session history, and what's left of its account's plan. It carries a session to another account, converts it between the other agents, and makes Claude Desktop instances on macOS. `cl`, `cx` and `ck` run Claude Code, Codex and
 Kimi Code CLI with a profile, and `claude-z` and `claude-k` run Claude Code on Z.ai's or Kimi's models.
 
-*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek, MiniMax or Alibaba Cloud.*
+*Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek, MiniMax, Alibaba Cloud, GitHub or the OpenCode project.*
 
 ## Install
 

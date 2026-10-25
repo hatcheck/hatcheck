@@ -14,7 +14,8 @@ use serde_json::Value;
 /// Code one), agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for
 /// ~/.kimi-code-NAME, zcode for ~/.zcode, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, mcode for
 /// ~/.minimax and mcode:NAME for ~/.minimax-NAME, qwen for ~/.qwen and qwen:NAME for
-/// ~/.qwen-NAME, or a path.
+/// ~/.qwen-NAME, copilot for ~/.copilot and copilot:NAME for ~/.copilot-NAME, opencode for
+/// ~/.local/share/opencode, or a path.
 pub fn place(spec: &str) -> (Agent, String) {
     if spec == "default" {
         return (Agent::Claude, paths::default_folder(Agent::Claude));
@@ -41,6 +42,9 @@ pub fn place(spec: &str) -> (Agent, String) {
         let dsh = crate::dsh::is_home(&path);
         let mcode = crate::mcode::is_home(&path);
         let qwen = ospath::basename(&path).starts_with(".qwen") || crate::qwen::is_home(&path);
+        let copilot =
+            ospath::basename(&path).starts_with(".copilot") || crate::copilot::is_home(&path);
+        let opencode = crate::opencode::is_home(&path);
         let codex = ospath::basename(&path).starts_with(".codex")
             || (ospath::isdir(&ospath::join(&path, "sessions"))
                 && !ospath::isdir(&ospath::join(&path, "projects")));
@@ -56,6 +60,10 @@ pub fn place(spec: &str) -> (Agent, String) {
             Agent::Mcode
         } else if qwen {
             Agent::Qwen
+        } else if copilot {
+            Agent::Copilot
+        } else if opencode {
+            Agent::Opencode
         } else if codex {
             Agent::Codex
         } else {
@@ -148,6 +156,17 @@ pub fn session_copies(prefix: &str) -> Vec<Copies> {
     for home in paths::find_qwen_homes() {
         for x in crate::qwen::sessions_starting_with(&home, prefix) {
             add((Agent::Qwen, x.id), (home.clone(), x.file));
+        }
+    }
+    for home in paths::find_copilot_homes() {
+        for x in crate::copilot::sessions_starting_with(&home, prefix) {
+            add((Agent::Copilot, x.id), (home.clone(), x.file));
+        }
+    }
+    for home in paths::find_opencode_homes() {
+        for x in crate::opencode::sessions_starting_with(&home, prefix) {
+            let reference = crate::opencode::session_ref(&home, &x.row.id);
+            add((Agent::Opencode, x.row.id), (home.clone(), reference));
         }
     }
     found
@@ -289,6 +308,29 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
             }
         }
     }
+    for home in paths::find_copilot_homes() {
+        for x in crate::copilot::sessions(&home) {
+            if x.cwd
+                .as_deref()
+                .is_some_and(|cwd| paths::same_folder(cwd, &here))
+            {
+                let summary = crate::copilot::summary(&home, &x);
+                if better(&summary, &best) {
+                    best = Some(summary);
+                }
+            }
+        }
+    }
+    for home in paths::find_opencode_homes() {
+        for x in crate::opencode::sessions(&home) {
+            if paths::same_folder(&x.row.directory, &here) {
+                let summary = crate::opencode::summary(&home, &x);
+                if better(&summary, &best) {
+                    best = Some(summary);
+                }
+            }
+        }
+    }
     facts::save_cache();
     best
 }
@@ -378,5 +420,18 @@ mod tests {
             (Agent::Qwen, format!("{home}/.qwen-work"))
         );
         assert_eq!(place("/srv/.qwen-a").0, Agent::Qwen);
+        assert_eq!(
+            place("copilot"),
+            (Agent::Copilot, format!("{home}/.copilot"))
+        );
+        assert_eq!(
+            place("copilot:work"),
+            (Agent::Copilot, format!("{home}/.copilot-work"))
+        );
+        assert_eq!(place("/srv/.copilot-a").0, Agent::Copilot);
+        assert_eq!(
+            place("opencode"),
+            (Agent::Opencode, crate::opencode::default_home())
+        );
     }
 }

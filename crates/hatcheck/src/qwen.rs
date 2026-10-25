@@ -368,8 +368,8 @@ pub fn summary(home: &str, x: &Session) -> Summary {
 }
 
 /// Whether a process is running: asked of ps, as for Claude Code's registry; on Windows, of the
-/// process itself.
-fn pid_alive(pid: u64) -> bool {
+/// process itself. copilot's inuse files are read the same way.
+pub(crate) fn pid_alive(pid: u64) -> bool {
     if ospath::WINDOWS {
         return u32::try_from(pid).is_ok_and(|p| crate::sessions::windows_start_time(p).is_some());
     }

@@ -372,6 +372,35 @@ fn plan(old: &str, new: &str) -> Plan {
             }
         }
     }
+    // copilot records the folder in a session's workspace file and events, and opencode in its
+    // database; hatcheck writes neither store.
+    for home in paths::find_copilot_homes() {
+        for x in crate::copilot::sessions(&home) {
+            if x.cwd
+                .as_deref()
+                .is_some_and(|cwd| mapped(cwd, old, new).is_some())
+            {
+                plan.skips.push(Skip {
+                    agent: Agent::Copilot,
+                    profile: home.clone(),
+                    id: x.id.clone(),
+                    why: "records the folder in its workspace file and its events, which stay as they were".into(),
+                });
+            }
+        }
+    }
+    for home in paths::find_opencode_homes() {
+        for x in crate::opencode::sessions(&home) {
+            if mapped(&x.row.directory, old, new).is_some() {
+                plan.skips.push(Skip {
+                    agent: Agent::Opencode,
+                    profile: home.clone(),
+                    id: x.row.id.clone(),
+                    why: "records the folder in opencode's database, which stays as it was".into(),
+                });
+            }
+        }
+    }
     let bindings = paths::load_bindings();
     plan.binding = bindings
         .keys()
@@ -406,7 +435,13 @@ fn refusals(plan: &Plan, now: f64) -> Vec<String> {
             }
             Agent::Agy => crate::agy::session_open(&m.profile, &m.id)
                 .then(|| crate::agy::holder(&m.profile).to_string()),
-            Agent::Kimi | Agent::Zcode | Agent::Dsh | Agent::Mcode | Agent::Qwen => None, // never moved: skipped in plan()
+            Agent::Kimi
+            | Agent::Zcode
+            | Agent::Dsh
+            | Agent::Mcode
+            | Agent::Qwen
+            | Agent::Copilot
+            | Agent::Opencode => None, // never moved: skipped in plan()
         };
         if let Some(whom) = open {
             why.push(format!(
@@ -499,7 +534,9 @@ fn rewrite(m: &Move, check: bool) -> Result<usize, Stop> {
             | Agent::Zcode
             | Agent::Dsh
             | Agent::Mcode
-            | Agent::Qwen => None,
+            | Agent::Qwen
+            | Agent::Copilot
+            | Agent::Opencode => None,
         };
         let Some(Value::Object(fields)) = holder else {
             continue;

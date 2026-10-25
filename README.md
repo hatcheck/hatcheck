@@ -11,14 +11,17 @@ Several Claude accounts on one computer, each kept apart: isolated Claude Deskto
 macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume commands across all
 of them. OpenAI's Codex CLI and Moonshot's Kimi Code CLI get the same treatment, Google's
 Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them, and DeepSeek Harness (`dsh`),
-MiniMax Code (`mcode`) and Qwen Code (`qwen`) join as read-only agents. Sessions can be carried
-between all eight, as a file the agent is started on for those without an importer.
+MiniMax Code (`mcode`), Qwen Code (`qwen`), GitHub Copilot CLI (`copilot`) and OpenCode
+(`opencode`) join as read-only agents. Sessions can be carried between all ten: as a file the
+agent is started on for those without an importer, and through their own importers for copilot
+and opencode.
 
 *Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI,
-Z.ai, DeepSeek, MiniMax or Alibaba Cloud. Claude, Claude Code and Claude Desktop are trademarks of
-Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity and Gemini are trademarks of
-Google LLC; Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, DeepSeek Harness is DeepSeek's,
-MiniMax Code is MiniMax's and Qwen Code is Alibaba Cloud's.*
+Z.ai, DeepSeek, MiniMax, Alibaba Cloud, GitHub or the OpenCode project. Claude, Claude Code and
+Claude Desktop are trademarks of Anthropic; Codex and ChatGPT are trademarks of OpenAI; Antigravity
+and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's, ZCode and GLM are Z.ai's, DeepSeek
+Harness is DeepSeek's, MiniMax Code is MiniMax's, Qwen Code is Alibaba Cloud's, GitHub Copilot is
+GitHub's and OpenCode is the OpenCode project's.*
 
 On macOS, `hatcheck desktop` runs **one Claude Desktop per account, side by side**: each with its
 own data folder and login, and a launcher in a colour you pick, which brings the running one
@@ -35,7 +38,7 @@ the recent sessions in all of them, with the command that resumes each one or op
 history, and what's left of each plan. The rest
 of the commands find, show, carry and convert sessions between the accounts and the agents, tie
 folders to accounts, and check how everything is installed: see
-[the tour](#claude-code-codex-antigravity-cli-kimi-code-cli-zcode-deepseek-harness-minimax-code-and-qwen-code) below, and
+[the tour](#claude-code-codex-antigravity-cli-kimi-code-cli-zcode-deepseek-harness-minimax-code-qwen-code-github-copilot-cli-and-opencode) below, and
 [docs/commands.md](docs/commands.md) for each command as it is.
 
 **Not a gateway.** Hatcheck is never between an agent and its model. It rewrites no agent's
@@ -48,7 +51,7 @@ knowing which one each session ran on. See [Rules it keeps](#rules-it-keeps).
 |                                 | macOS | Linux | Windows |
 |---------------------------------|:-----:|:-----:|:-------:|
 | Claude Desktop instances        |  yes  | [untried](#roadmap): Claude Desktop for Linux is in beta | [planned](#roadmap) |
-| Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code and Qwen Code tools |  yes  |  yes  |   yes   |
+| Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode tools |  yes  |  yes  |   yes   |
 
 ---
 
@@ -77,7 +80,7 @@ the launcher does, and how to copy a login you already have into an instance.
 
 ---
 
-## Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code and Qwen Code
+## Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode
 
 Claude Code (the `claude` CLI) keeps its settings, history and session transcripts in `~/.claude`
 (plus `~/.claude.json`), and its login in the macOS Keychain, or on Linux and Windows in
@@ -102,7 +105,13 @@ reads its v2 SQLite catalog and canonical JSONL, and sessions resume directly wi
 `mcode --session mvs_<id>`. See [MiniMax Code](docs/agents.md#minimax-code-mcode). Qwen Code
 keeps everything under `~/.qwen`, moved whole by `QWEN_HOME`, so hatcheck reads `~/.qwen`,
 `~/.qwen-NAME` and the variable's folder: each project's transcripts, which resume directly with
-`qwen --resume <id>`. See [Qwen Code](docs/agents.md#qwen-code-qwen).
+`qwen --resume <id>`. See [Qwen Code](docs/agents.md#qwen-code-qwen). GitHub Copilot CLI keeps
+everything under `~/.copilot`, moved whole by `COPILOT_HOME`, so hatcheck reads `~/.copilot`,
+`~/.copilot-NAME` and the variable's folder: each session's events, which resume directly with
+`copilot --resume <id>`. See [GitHub Copilot CLI](docs/agents.md#github-copilot-cli-copilot).
+OpenCode 2 keeps every project's sessions in one database, `~/.local/share/opencode/opencode.db`,
+which hatcheck reads; they resume directly with `opencode --session ses_<id>`. See
+[OpenCode](docs/agents.md#opencode-opencode).
 
 ### Install
 
@@ -144,7 +153,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`cx a resume <id>`](docs/agents.md#cx-run-codex-with-a-home-per-account) | Codex with `~/.codex-a` |
 | [`ck a --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-a` |
 | [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day, in every profile, home and folder, each with its resume or open command and what's left of its plan |
-| [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable; DSH and Qwen Code homes say why there's no reading, and mcode's quota isn't wired |
+| [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable; DSH, Qwen Code, Copilot and OpenCode homes say why there's no reading, and mcode's quota isn't wired |
 | [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | the best account now, with its limits, and the `move` command that carries the newest session started here to it; `--wait` sleeps until one has room |
 | [`hatcheck where SESSION`](docs/commands.md#hatcheck-where-find-a-session) | where a session's files are |
 | [`hatcheck open SESSION`](docs/commands.md#hatcheck-open-resume-a-session-in-a-new-terminal) | resume it in a new terminal, or open DSH's session history in its folder |
@@ -152,7 +161,7 @@ Each is documented as it is, with its options and what it prints, in
 | `hatcheck show SESSION` | its conversation, read-only |
 | [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent; `--brief` hands over a brief in place of the whole conversation |
 | [`hatcheck fork SESSION PROFILE`](docs/commands.md#hatcheck-fork-a-session-as-a-new-one-in-another-profile) | bring it in there as a new session, keeping the original |
-| [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's, mcode's and qwen's stay as they are |
+| [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's, mcode's, qwen's, copilot's and opencode's stay as they are |
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
 | [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest |
 | [`hatcheck desktop`](#claude-desktop-instances-macos) | Claude Desktop instances on macOS |
@@ -169,7 +178,12 @@ are listed and shown from its v2 catalog and canonical JSONL and converted out, 
 `mcode --session mvs_<id>` resumes them directly. [Qwen Code](docs/agents.md#qwen-code-qwen)
 sessions are listed and shown from its transcripts and converted both ways, its store never
 written: a session converted for qwen is a file qwen is started on, and `qwen --resume <id>`
-resumes its own. [`claude-z` and `claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
+resumes its own. [GitHub Copilot CLI](docs/agents.md#github-copilot-cli-copilot) and
+[OpenCode](docs/agents.md#opencode-opencode) sessions are listed and shown from their stores and
+converted both ways, through their own importers: a session converted for either is a file its
+`sessions import` or `session import` takes, and `copilot --resume <id>` and
+`opencode --session ses_<id>` resume their own. [`claude-z` and
+`claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
 run Claude Code on Z.ai's or Kimi's models in any profile.
 
 
@@ -186,26 +200,26 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   Antigravity CLI's `~/.gemini/config/hooks.json`, or points the one it added at the `hatcheck` it
   finds now, and `unbind --hook` removes only what it added ([`bind.rs`](crates/hatcheck/src/bind.rs),
   `add_hooks` and `remove_hooks`).
-- **No credentials.** It never asks for, stores, refreshes or moves a login. For Claude it
-  never reads one: Claude Code's own `/usage` is run in the profile and the snapshot it saves is
-  read ([`usage.rs`](crates/hatcheck/src/usage.rs), `run_claude_usage` and `claude_live`). For
-  Codex, the home's `auth.json` token is sent only to ChatGPT's usage endpoint, as it is, and
-  never refreshed (`read_codex_login` and `fetch_codex_usage` there). For agy it never reads one
-  either: agy's own `/usage` is run, after `agy models` has said agy is signed in, since asked
-  without a sign-in agy would start one ([`agy.rs`](crates/hatcheck/src/agy.rs), `run_usage` and
-  `signed_in`). For Kimi, the home's `credentials/kimi-code.json` token is sent only to Kimi's
-  usage endpoint, the one kimi's own `/usage` asks, as it is, and never refreshed
-  ([`kimi.rs`](crates/hatcheck/src/kimi.rs), `read_login`; `usage.rs`, `fetch_kimi_usage`). For
-  ZCode, DeepSeek Harness and Qwen Code it reads none, and reads no usage: none of them has a
-  plan-usage command or endpoint hatcheck can use. MiniMax Code reads no auth or provider config,
-  and its plan quota isn't wired into hatcheck yet.
-- **Nothing leaves your computer** except those usage requests: Claude Code's to Anthropic, one
-  to ChatGPT per Codex account, one to Kimi per Kimi home, and agy's own `/usage` to Google, with
-  the model list agy fetches first to say it's signed in. `CODEX_USAGE_URL` in `usage.rs` and
+- **No credentials.** It never asks for, stores, refreshes or moves a login. For Claude it never
+  reads one: Claude Code's own `/usage` is run in the profile and the snapshot it saves is read
+  ([`usage.rs`](crates/hatcheck/src/usage.rs), `run_claude_usage` and `claude_live`). For Codex, the
+  home's `auth.json` token is sent only to ChatGPT's usage endpoint, as it is, and never refreshed
+  (`read_codex_login` and `fetch_codex_usage` there). For agy it never reads one either: agy's own
+  `/usage` is run, after `agy models` has said agy is signed in, since asked without a sign-in agy
+  would start one ([`agy.rs`](crates/hatcheck/src/agy.rs), `run_usage` and `signed_in`). For Kimi,
+  the home's `credentials/kimi-code.json` token is sent only to Kimi's usage endpoint, the one
+  kimi's own `/usage` asks, as it is, and never refreshed ([`kimi.rs`](crates/hatcheck/src/kimi.rs),
+  `read_login`; `usage.rs`, `fetch_kimi_usage`). For ZCode, DeepSeek Harness, Qwen Code, GitHub
+  Copilot CLI and OpenCode it reads none, and reads no usage: none of them has a plan-usage command
+  or endpoint hatcheck can use. MiniMax Code reads no auth or provider config, and its plan quota
+  isn't wired into hatcheck yet.
+- **Nothing leaves your computer** except those usage requests: Claude Code's to Anthropic, one to
+  ChatGPT per Codex account, one to Kimi per Kimi home, and agy's own `/usage` to Google, with the
+  model list agy fetches first to say it's signed in. `CODEX_USAGE_URL` in `usage.rs` and
   `DEFAULT_USAGE_URL` and `GLOBAL_USAGE_URL` in `kimi.rs` are the only addresses the binary itself
-  calls; DSH, mcode and qwen add none. `--cached` and `--no-usage` make none. The Z.ai and Kimi
-  endpoints in [`provider.rs`](crates/hatcheck/src/provider.rs) are handed to Claude Code, which
-  calls them only when you run `cl -z` or `cl -k`.
+  calls; DSH, mcode, qwen, copilot and opencode add none. `--cached` and `--no-usage` make none. The
+  Z.ai and Kimi endpoints in [`provider.rs`](crates/hatcheck/src/provider.rs) are handed to Claude
+  Code, which calls them only when you run `cl -z` or `cl -k`.
 - **What the agents send is theirs to govern.** Hatcheck adds no data path of its own. What each
   agent sends to its maker, and whether that is kept or used to train models, depends on the
   maker's terms for your product and plan, which differ between them and change; check them for
@@ -216,8 +230,10 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   [Kimi](https://www.kimi.com/user/agreement/userPrivacy),
   [Z.ai](https://docs.z.ai/legal-agreement/privacy-policy),
   [DeepSeek](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html),
-  [MiniMax](https://chat.minimax.io/doc/privacy-policy.html) and
-  [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/support/tos-privacy/). Hatcheck
+  [MiniMax](https://chat.minimax.io/doc/privacy-policy.html),
+  [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/support/tos-privacy/) and
+  [GitHub Copilot](https://docs.github.com/en/site-policy/privacy-policies/github-copilot-privacy-statement),
+  and OpenCode's to whichever provider you signed it in to, under that provider's terms. Hatcheck
   summarises none of them; [the weekly check](docs/maintenance.md) only keeps the links alive.
 - **No automatic switching** between accounts. `hatcheck best` ranks and prints commands, and
   nothing in the binary starts, moves or switches a session on its own
@@ -235,8 +251,10 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   ZCode's database is only ever read ([`zcode.rs`](crates/hatcheck/src/zcode.rs), `open`), DSH's
   session logs and workspace state are only ever read ([`dsh.rs`](crates/hatcheck/src/dsh.rs)),
   mcode's catalog, canonical history and assets are only ever read
-  ([`mcode.rs`](crates/hatcheck/src/mcode.rs)), and qwen's transcripts, registry and sidecars
-  are only ever read ([`qwen.rs`](crates/hatcheck/src/qwen.rs)).
+  ([`mcode.rs`](crates/hatcheck/src/mcode.rs)), qwen's transcripts, registry and sidecars are only
+  ever read ([`qwen.rs`](crates/hatcheck/src/qwen.rs)), copilot's session folders are only ever
+  read ([`copilot.rs`](crates/hatcheck/src/copilot.rs)), and opencode's database is only ever read
+  ([`opencode.rs`](crates/hatcheck/src/opencode.rs), `open`).
 
 Function names rather than line numbers, since lines move; `git grep` finds them.
 
@@ -264,8 +282,9 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 - **`crates/hatcheck/`**: hatcheck in Rust, the commands and the launchers. Its `src/` has a file per
   subcommand (`sessions.rs`, `usage.rs`, `move_cmd.rs`, `open_cmd.rs`, `desktop.rs` and the rest),
   `launch.rs` for `cl`, `cx`, `ck`, `claude-z` and `claude-k`, `agy.rs`, `kimi.rs`, `zcode.rs`,
-  `dsh.rs`, `mcode.rs` and `qwen.rs` for what it reads and writes of Antigravity CLI, Kimi Code
-  CLI, ZCode, DeepSeek Harness, MiniMax Code and Qwen Code, `doctor.rs` for `hatcheck doctor`, and
+  `dsh.rs`, `mcode.rs`, `qwen.rs`, `copilot.rs` and `opencode.rs` for what it reads and writes of
+  Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot
+  CLI and OpenCode, `doctor.rs` for `hatcheck doctor`, and
   `src/bin/` for those binaries and `hat`.
   Its own README is the crate's page on crates.io. It was ported from a Python version with the
   same output; see [docs/rust-port.md](docs/rust-port.md).
@@ -336,6 +355,15 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   doesn't have (its `usage/` files count the tokens a session spent, not what a plan has left).
   `QWEN_RUNTIME_DIR`, which moves the session data alone and leaves the login behind, isn't
   followed: only `QWEN_HOME`, which moves the home whole.
+- **GitHub Copilot CLI.** Its `/usage` runs only inside a session, so plan usage would need an
+  endpoint and maintainer approval before any request is made; until then its homes show no data.
+  Whether its system credential store keeps one login per `COPILOT_HOME` hasn't been checked:
+  hatcheck never reads a login, and the probe is in [maintenance.md](docs/maintenance.md).
+  Sessions aren't copied between its homes.
+- **OpenCode.** One data folder: a second store needs `XDG_DATA_HOME` or `OPENCODE_DB` and
+  `--standalone`, since its background service keeps the store it started with, and which of those
+  a named profile should mean is a decision not taken; until then hatcheck reads the folder plain
+  opencode uses. Nothing marks a session open. Plan usage is its providers' own.
 - **Releases:** the CLI is on GitHub, the Homebrew tap, PyPI and crates.io from 0.2.0
   ([CHANGELOG.md](CHANGELOG.md)). Next are winget, then the app's installers, once its release
   workflow has its signing and updater secrets (`desktop.yml` lists them).

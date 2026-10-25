@@ -331,7 +331,8 @@ class FakeHome:
     def env(self):
         env = {k: v for k, v in os.environ.items()
                if k not in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "DSH_HOME", "MINIMAX_DATA_DIR", "MAVIS_DATA_DIR",
-                            "QWEN_HOME", "QWEN_RUNTIME_DIR", "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
+                            "QWEN_HOME", "QWEN_RUNTIME_DIR", "COPILOT_HOME", "XDG_DATA_HOME", "OPENCODE_DB",
+                            "SHELL", "NO_COLOR", "TERM_PROGRAM", "TERMINAL")
                and not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "HATCHECK_"))}
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
                    PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"),
@@ -1002,3 +1003,225 @@ FakeHome.qwen_home = _qwen_home
 FakeHome.qwen_session = _qwen_session
 FakeHome.qwen_registry = _qwen_registry
 FakeHome.qwen_sidecar = _qwen_sidecar
+
+
+# GitHub Copilot CLI (copilot): a home and sessions as copilot 1.0.103 writes them, and the inuse
+# file a running copilot keeps in a session's folder. The tests never run copilot.
+
+def iso_z(t):
+    """A time as copilot writes one: ISO 8601 in UTC with milliseconds and a Z."""
+    d = datetime.fromtimestamp(t, timezone.utc)
+    return d.strftime("%Y-%m-%dT%H:%M:%S.") + "%03dZ" % (d.microsecond // 1000)
+
+
+def copilot_uuid(n):
+    return "%08x-0000-4000-8000-%012x" % (n, n)
+
+
+def _copilot_home(self, name="default", path=None):
+    """A copilot home (~/.copilot or ~/.copilot-NAME), or a custom one for COPILOT_HOME, with the
+    config.json and session-state folder copilot makes on its first run."""
+    path = path or os.path.join(self.home, ".copilot" if name == "default" else ".copilot-" + name)
+    os.makedirs(os.path.join(path, "session-state"), exist_ok=True)
+    write(os.path.join(path, "config.json"), "// User settings belong in settings.json.\n// This file is managed automatically.\n"
+          + json.dumps({"firstLaunchAt": iso_z(NOW - 3600), "appTipShown": True}, indent=2) + "\n")
+    return path
+
+
+def _copilot_session(self, home, cwd, sid, title, minutes_ago=5, model="mai-code-1.1-flash", name=None,
+                     client="github/cli", branch="main", extra=(), events=True):
+    """A session folder, session-state/<sid>/, with workspace.yaml and events.jsonl as copilot
+    1.0.103 writes them: the start, the model copilot chose, a hook, the prompt, a message copilot
+    injected, the model's internal record, a reply with a tool request, the tool's result, the
+    final reply, a command you ran with ! and its result, and the shutdown. `name` is copilot's
+    own name for the session; `events=False` leaves the folder as copilot leaves one it never
+    spoke in, without events.jsonl. `extra` lines go before the shutdown. Returns the events
+    file's path."""
+    when = NOW - minutes_ago * 60
+    start = when - 60
+    folder = os.path.join(home, "session-state", sid)
+
+    def y(value):
+        return json.dumps(value) if any(c in value for c in '":#') or value != value.strip() else value
+
+    yaml = ["id: " + sid, "cwd: " + y(cwd), "git_root: " + y(cwd), "repository: me/api", "host_type: github",
+            "branch: " + branch, "client_name: " + client]
+    if name is not None:
+        yaml += ["name: " + json.dumps(name), "user_named: false"]
+    yaml += ["summary_count: 0", "fork_count: 0", "created_at: " + iso_z(start), "updated_at: " + iso_z(when)]
+    write(os.path.join(folder, "workspace.yaml"), "\n".join(yaml) + "\n")
+    write(os.path.join(folder, "checkpoints", "index.md"), "# Checkpoint History\n")
+    path = os.path.join(folder, "events.jsonl")
+    if not events:
+        return path
+    ids = {"n": 0, "last": None}
+
+    def event(kind, data, at=None):
+        ids["n"] += 1
+        this = copilot_uuid(ids["n"])
+        line = rec(type=kind, data=data, id=this, timestamp=iso_z(start + ids["n"] if at is None else at),
+                   parentId=ids["last"])
+        ids["last"] = this
+        return line
+
+    rows = [
+        event("session.start", {"sessionId": sid, "version": 1, "producer": "copilot-agent", "copilotVersion": "1.0.103",
+                                "startTime": iso_z(start), "contextTier": None,
+                                "context": {"cwd": cwd, "gitRoot": cwd, "repository": "me/api", "hostType": "github",
+                                            "repositoryHost": "github.com", "branch": branch, "headCommit": "0" * 40},
+                                "alreadyInUse": False, "remoteSteerable": False}),
+        event("session.model_change", {"cause": "initial_resolution", "source": "automatic", "contextTier": None,
+                                       "newModel": "auto", "reasoningEffort": None}),
+        event("hook.start", {"hookInvocationId": "h1", "hookType": "sessionStart", "input": {}}),
+        event("hook.end", {"hookInvocationId": "h1", "hookType": "sessionStart", "success": True}),
+        event("user.message", {"content": title, "transformedContent": "<current_datetime>%s</current_datetime>\n\n%s" % (iso_z(start), title),
+                               "messageId": copilot_uuid(100), "supportedNativeDocumentMimeTypes": [], "delivery": "idle",
+                               "interactionId": copilot_uuid(101), "turnId": "0", "parentAgentTaskId": copilot_uuid(102)}),
+        event("system.message", {"content": "INJECTED COPILOT CONTEXT", "interactionId": copilot_uuid(101), "metadata": {}, "role": "system"}),
+        event("assistant.turn_start", {"turnId": "0", "interactionId": copilot_uuid(101)}),
+        event("model.message", {"callId": "m1", "kind": "message", "message": {"role": "assistant", "content": "COPILOT INTERNAL RECORD"},
+                                "modelCall": {"model": model}, "turn": 0}),
+        event("assistant.message", {"messageId": copilot_uuid(103), "originatingMessageId": copilot_uuid(100), "model": model,
+                                    "providerId": "copilot", "content": "I'll inspect it.",
+                                    "toolRequests": [{"toolCallId": "call-1", "name": "view", "arguments": {"path": "src/main.rs"}}],
+                                    "interactionId": copilot_uuid(101), "turnId": "0", "phase": "tool_use"}),
+        event("tool.execution_complete", {"toolCallId": "call-1", "success": True, "result": {"content": "fn main() {}\n"}}),
+        event("assistant.message", {"messageId": copilot_uuid(104), "originatingMessageId": copilot_uuid(100), "model": model,
+                                    "providerId": "copilot", "content": "Done: " + title, "toolRequests": [],
+                                    "interactionId": copilot_uuid(101), "turnId": "0", "phase": "final_answer"}, at=when),
+        event("assistant.turn_end", {"turnId": "0"}),
+        event("tool.user_requested", {"toolCallId": "u1", "toolName": "local_shell",
+                                      "arguments": {"command": "ls", "description": "Execute shell command: ls"}}),
+        event("tool.execution_complete", {"toolCallId": "u1", "isUserRequested": True, "success": True,
+                                          "shellExecution": {"exitCode": 0}, "result": {"content": "Cargo.toml\nsrc\n"}}),
+    ] + list(extra) + [
+        event("session.shutdown", {"shutdownType": "normal", "currentModel": model, "sessionStartTime": iso_z(start)}, at=when),
+    ]
+    write(path, "\n".join(rows) + "\n", mtime=when)
+    return path
+
+
+def _copilot_inuse(self, home, sid, pid):
+    """The inuse.<pid>.lock and inuse.<pid>.hold a running copilot keeps in a session's folder,
+    and removes when it quits."""
+    folder = os.path.join(home, "session-state", sid)
+    write(os.path.join(folder, "inuse.%d.lock" % pid), "%d\n" % pid)
+    write(os.path.join(folder, "inuse.%d.hold" % pid), "")
+
+
+FakeHome.copilot_home = _copilot_home
+FakeHome.copilot_session = _copilot_session
+FakeHome.copilot_inuse = _copilot_inuse
+
+
+# OpenCode (opencode): the data folder and database as opencode 2.1.4 keeps them. The tests never
+# run opencode; its credential and account tables are made and left empty, as hatcheck never reads
+# them.
+
+OPENCODE_SCHEMA = [
+    "CREATE TABLE project (id text PRIMARY KEY, worktree text NOT NULL, vcs text, name text, icon_url text, "
+    "icon_url_override text, icon_color text, time_created integer NOT NULL, time_updated integer NOT NULL, "
+    "time_initialized integer, time_active integer DEFAULT 0 NOT NULL, time_archived integer, sandboxes text NOT NULL, "
+    "commands text)",
+    "CREATE TABLE session_v2 (id text PRIMARY KEY, project_id text NOT NULL, workspace_id text, parent_id text, "
+    "fork_session_id text, fork_boundary text, slug text NOT NULL, directory text NOT NULL, path text, title text, "
+    "version text NOT NULL, share_url text, summary_additions integer, summary_deletions integer, summary_files integer, "
+    "summary_diffs text, metadata text, cost real DEFAULT 0 NOT NULL, tokens_input integer DEFAULT 0 NOT NULL, "
+    "tokens_output integer DEFAULT 0 NOT NULL, tokens_reasoning integer DEFAULT 0 NOT NULL, "
+    "tokens_cache_read integer DEFAULT 0 NOT NULL, tokens_cache_write integer DEFAULT 0 NOT NULL, revert text, "
+    "permission text, agent text, model text, time_created integer NOT NULL, time_updated integer NOT NULL, "
+    "time_idle integer, time_viewed integer, idle_outcome text, time_compacting integer, time_archived integer, "
+    "time_suspended integer, resume_attempts integer DEFAULT 0 NOT NULL, "
+    "CONSTRAINT fk_session_v2_project_id_project_id_fk FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE)",
+    "CREATE TABLE session_message (id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL, "
+    "time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL, "
+    "CONSTRAINT fk_session_message_session_id_session_v2_id_fk FOREIGN KEY (session_id) REFERENCES session_v2(id) ON DELETE CASCADE)",
+    "CREATE UNIQUE INDEX session_message_session_seq_idx ON session_message (session_id, seq)",
+    "CREATE TABLE credential (id text PRIMARY KEY, integration_id text, label text NOT NULL, value text NOT NULL, "
+    "connector_id text, method_id text, active integer, time_created integer NOT NULL, time_updated integer NOT NULL)",
+    "CREATE TABLE account (id text PRIMARY KEY, email text NOT NULL, url text NOT NULL, access_token text NOT NULL, "
+    "refresh_token text NOT NULL, token_expiry integer, time_created integer NOT NULL, time_updated integer NOT NULL)",
+    "CREATE TABLE migration (id integer PRIMARY KEY, name text NOT NULL, time_created integer NOT NULL)",
+]
+
+
+def opencode_db(home):
+    return os.path.join(home, "opencode.db")
+
+
+def opencode_sid(n):
+    """A bare session ID shaped as opencode mints them: 12 hex digits, then 14 of its characters."""
+    return "%012x" % n + "ABCDEFGHIJKLMN"
+
+
+def _opencode_home(self, path=None):
+    """The data folder opencode 2 makes on its first run, ~/.local/share/opencode, or a custom
+    one, with its database in WAL mode, as opencode keeps it, and its log folder."""
+    import sqlite3
+    path = path or os.path.join(self.home, ".local", "share", "opencode")
+    os.makedirs(os.path.join(path, "log"), exist_ok=True)
+    if os.path.exists(opencode_db(path)):
+        return path  # made already: one data folder, asked for again
+    db = sqlite3.connect(opencode_db(path))
+    db.execute("PRAGMA journal_mode=WAL")
+    for statement in OPENCODE_SCHEMA:
+        db.execute(statement)
+    db.execute("INSERT INTO migration (id, name, time_created) VALUES (1, '20261025123711_blob', ?)", (int(NOW * 1000),))
+    db.commit()
+    db.close()
+    return path
+
+
+def _opencode_session(self, home, cwd, sid, title, minutes_ago=5, model=("anthropic", "claude-opus-5-5"), parent=None,
+                      archived=False, extra=(), empty=False, prompt=None):
+    """A session_v2 row with its project, and its session_message rows as opencode 2.1.4 writes
+    them: the prompt with an image attached, a record opencode injected, a reply with reasoning,
+    text and a tool call with its result, a shell command, and the final reply. `title` is the
+    row's title, as opencode names a session, and the prompt too unless `prompt` says otherwise;
+    `empty` leaves it without messages. `extra` rows, as (type, data) pairs, go before the final
+    reply. Returns the database's path."""
+    prompt = title if prompt is None else prompt
+    import sqlite3
+    when = NOW - minutes_ago * 60
+    created_ms = int((when - 60) * 1000)
+    updated_ms = int(when * 1000)
+    full = "ses_" + sid
+    project = "p" + re.sub(r"[^A-Za-z0-9]", "", cwd)[:30]
+    model_json = json.dumps({"id": model[1], "providerID": model[0]}) if model else None
+    db = sqlite3.connect(opencode_db(home))
+    db.execute("INSERT OR IGNORE INTO project (id, worktree, vcs, time_created, time_updated, time_active, sandboxes) "
+               "VALUES (?, ?, 'git', ?, ?, ?, '[]')", (project, cwd, created_ms, created_ms, updated_ms))
+    db.execute("INSERT INTO session_v2 (id, project_id, parent_id, slug, directory, title, version, agent, model, "
+               "time_created, time_updated, time_archived) VALUES (?, ?, ?, ?, ?, ?, '2.1.4', 'build', ?, ?, ?, ?)",
+               (full, project, parent and "ses_" + parent, "quiet-fox", cwd, title or None, model_json, created_ms, updated_ms,
+                updated_ms if archived else None))
+    if not empty:
+        model_ref = {"id": model[1], "providerID": model[0]} if model else {"id": "unknown", "providerID": "unknown"}
+        rows = [
+            ("user", {"text": prompt, "files": [{"mime": "image/png", "filename": "shot.png", "url": "media:" + "0" * 64}]}),
+            ("synthetic", {"text": "INJECTED OPENCODE CONTEXT"}),
+            ("assistant", {"agent": "build", "model": model_ref, "content": [
+                {"type": "reasoning", "text": "OPENCODE REASONING"},
+                {"type": "text", "text": "I'll inspect it."},
+                {"type": "tool", "id": "call-1", "name": "read", "state": {"status": "completed", "input": {"filePath": "src/main.rs"},
+                                                                          "content": [{"type": "text", "text": "fn main() {}\n"}]}}],
+                "time": {"created": created_ms + 2000, "completed": created_ms + 3000}}),
+            ("shell", {"shellID": "sh1", "command": "ls", "status": "exited", "exit": 0,
+                       "output": {"output": "Cargo.toml\nsrc\n", "cursor": 15, "size": 15, "truncated": False},
+                       "time": {"created": created_ms + 4000, "completed": created_ms + 4100}}),
+        ] + list(extra) + [
+            ("assistant", {"agent": "build", "model": model_ref, "content": [{"type": "text", "text": "Done: " + title}],
+                           "time": {"created": updated_ms, "completed": updated_ms}}),
+        ]
+        for seq, (kind, data) in enumerate(rows, 1):
+            at = updated_ms if seq == len(rows) else created_ms + seq * 1000
+            db.execute("INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       ("msg_%s%02d" % (sid[:12], seq), full, kind, seq, at, at, json.dumps(data, ensure_ascii=False)))
+    db.commit()
+    db.close()
+    return opencode_db(home)
+
+
+FakeHome.opencode_home = _opencode_home
+FakeHome.opencode_session = _opencode_session

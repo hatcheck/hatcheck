@@ -67,11 +67,13 @@ class Doctor(unittest.TestCase):
         self.assertNotIn("To remove", out)
         self.assertIn("The agents:", out)
         self.assertRegex(out, r"Claude Code +2\.1\.303 \(Claude Code\) +\S+/fakebin/claude +\(runs, and cl runs it\)")
-        self.assertIn("Codex            not on your PATH; cx needs it", out)
-        self.assertIn("Antigravity CLI  not on your PATH", out)
-        self.assertIn("DeepSeek Harness not on your PATH", out)
-        self.assertIn("MiniMax Code     not on your PATH", out)
-        self.assertIn("Qwen Code        not on your PATH", out)
+        self.assertIn("Codex              not on your PATH; cx needs it", out)
+        self.assertIn("Antigravity CLI    not on your PATH", out)
+        self.assertIn("DeepSeek Harness   not on your PATH", out)
+        self.assertIn("MiniMax Code       not on your PATH", out)
+        self.assertIn("Qwen Code          not on your PATH", out)
+        self.assertIn("GitHub Copilot CLI not on your PATH", out)
+        self.assertIn("OpenCode           not on your PATH", out)
         self.assertIn("Hooks from hatcheck bind --hook: none.", out)
         self.assertIn("Nothing to fix.", out)
 
@@ -87,7 +89,7 @@ class Doctor(unittest.TestCase):
         code, out = h.run("doctor", "--json", PATH=folder)
         self.assertEqual(code, 0, out)
         agents = {a["agent"]: a for a in json.loads(out)["agents"]}
-        self.assertEqual(list(agents), ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode", "qwen"])
+        self.assertEqual(list(agents), ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode", "qwen", "copilot", "opencode"])
         copy = agents["mcode"]["copies"][0]
         self.assertEqual((copy["version"], copy["origin"], copy["runs"], copy["runnable"]),
                          ("0.6.13", "the MiniMax Code installer", True, True))
@@ -136,7 +138,7 @@ class Doctor(unittest.TestCase):
         self.assertEqual(d["version"], 1)
         self.assertEqual(d["this"]["version"], re.match(r"\S+ (\S+)", h.run("--version")[1]).group(1))
         self.assertEqual([a["agent"] for a in d["agents"]],
-                         ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode", "qwen"])
+                         ["claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode", "qwen", "copilot", "opencode"])
         claude = d["agents"][0]["copies"][0]
         self.assertEqual((claude["version"], claude["runs"], claude["runnable"]), ("2.1.303 (Claude Code)", True, True))
         self.assertEqual(d["agents"][1]["copies"], [])

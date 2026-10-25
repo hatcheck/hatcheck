@@ -1,10 +1,10 @@
 # The commands
 
-What each `hatcheck` command does, as it is, with its options; the agents and their launchers
-(`cl`, `cx`, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code,
-`claude-z` and `claude-k`) are in [agents.md](agents.md), and installing, switching and
-`hatcheck doctor` in
-[install.md](install.md). The [README](../README.md) has the short tour.
+What each `hatcheck` command does, as it is, with its options; the agents and their launchers (`cl`,
+`cx`, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub
+Copilot CLI, OpenCode, `claude-z` and `claude-k`) are in [agents.md](agents.md), and installing,
+switching and `hatcheck doctor` in [install.md](install.md). The [README](../README.md) has the
+short tour.
 
 ## `hatcheck where`: find a session
 
@@ -40,6 +40,14 @@ directly with `mcode --session mvs_<id>`; a named or custom home uses
 transcript, `~/.qwen/projects/<folder>/chats/<id>.jsonl`; with `--json`, `file` is that transcript,
 `data_folder` is `null` and `archived` says whether it's in `chats/archive/`. Resume it with
 `qwen --resume <id>` from its folder; a named or custom home uses `QWEN_HOME=… qwen --resume <id>`.
+A GitHub Copilot CLI session's text result is its events file,
+`~/.copilot/session-state/<id>/events.jsonl`; with `--json`, `file` is that file and `data_folder`
+its session folder. Resume it with `copilot --resume <id>` from its folder; a named or custom home
+uses `COPILOT_HOME=… copilot --resume <id>`. An OpenCode session is a row in
+`~/.local/share/opencode/opencode.db`, listed as that file, once per match; with `--json`, `file` is
+the database, `data_folder` is `null` and `archived` comes from its row. Its ID is the 26 characters
+after `ses_`, which can be pasted along with it; resume it with `opencode --session ses_<id>` from
+its folder.
 
 ## `hatcheck`: what to resume
 
@@ -64,7 +72,10 @@ Harness sessions from every `~/.dsh*` home and the home `DSH_HOME` names, with A
 and ZCode's from their folders. MiniMax Code sessions come from every `~/.minimax` or
 `~/.minimax-NAME` home with a current v2 store, and the home `MINIMAX_DATA_DIR` or `MAVIS_DATA_DIR`
 selects; Qwen Code sessions from every `~/.qwen` or `~/.qwen-NAME` home qwen has run in, and the
-home `QWEN_HOME` names. Sessions listed were active in the last 24 hours or are still open, grouped by folder and
+home `QWEN_HOME` names; GitHub Copilot CLI sessions from every `~/.copilot` or `~/.copilot-NAME`
+home copilot has run in, and the home `COPILOT_HOME` names; and OpenCode sessions from the data
+folder plain opencode uses, `~/.local/share/opencode` or `XDG_DATA_HOME`'s. Sessions listed were
+active in the last 24 hours or are still open, grouped by folder and
 newest first. Run from a folder that has sessions, it lists just that folder's (`--all-folders`
 lists them all). Each one comes with the command that resumes it (for DSH, opens its web session
 history) and what's left of that profile's plan:
@@ -94,16 +105,19 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 ```
 
 - Run the folder's `cd` line, then the session's command. The command's program, `cl`, `claude`,
-  `cx`, `codex`, `agy`, `kimi`, `zcode`, `dsh`, `mcode` or `qwen`, is in cyan: that word says which
-  agent the session belongs to. The branch after the title is the one the session ran on, as the agent
-  wrote it down. Sessions still open are marked `● open`, so you don't resume one twice: Claude
-  Code's say the process, from the registry Claude Code keeps; Codex's and agy's, which hold a lock
-  on a session they have open, say the agent. A DSH session's held POSIX `session.lock` says `dsh`;
-  a stale lock file doesn't count, and Windows' named semaphore isn't detected. An mcode session's
-  unexpired writer lease says `mcode`; an expired lease is stale, and unknown lock state is treated
-  as busy rather than as proof the writer died. A qwen session says `qwen` while qwen's registry or
-  its terminal UI's sidecar names a running process; a record of a process that has gone doesn't
-  count. An open session is listed even when its last message is older than the window.
+  `cx`, `codex`, `agy`, `kimi`, `zcode`, `dsh`, `mcode`, `qwen`, `copilot` or `opencode`, is in
+  cyan: that word says which agent the session belongs to. The branch after the title is the one the
+  session ran on, as the agent wrote it down. Sessions still open are marked `● open`, so you don't
+  resume one twice: Claude Code's say the process, from the registry Claude Code keeps; Codex's and
+  agy's, which hold a lock on a session they have open, say the agent. A DSH session's held POSIX
+  `session.lock` says `dsh`; a stale lock file doesn't count, and Windows' named semaphore isn't
+  detected. An mcode session's unexpired writer lease says `mcode`; an expired lease is stale, and
+  unknown lock state is treated as busy rather than as proof the writer died. A qwen session says
+  `qwen` while qwen's registry or its terminal UI's sidecar names a running process; a record of a
+  process that has gone doesn't count. A copilot session says `copilot` while the `inuse.<pid>.lock`
+  in its folder names a running process; copilot removes the file when it quits, so one a crash left
+  doesn't count. Nothing marks an opencode session open. An open session is listed even when its
+  last message is older than the window.
 - The comment after each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
   (`week`) and per-model weekly limits such as `Fable`, which are named in violet, with their bar
   drawn in it, so they stand apart from `week`. Each one has the % left and a bar of it, then `↻`, a bar of the time left until
@@ -148,6 +162,16 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   qwen launcher or usage comment; the branch is the one the transcript records. The title is qwen's
   own when it gave one (`/rename`, or generated), else the first prompt. Subagents' transcripts
   aren't listed, and sessions from channels, scheduled tasks or other hosts wait for `--all`.
+- GitHub Copilot CLI sessions resume directly with `copilot --resume <id>`, or
+  `COPILOT_HOME=… copilot --resume <id>` for a named or custom home, run from the session's folder.
+  There is no copilot launcher or usage comment; the branch is the one its workspace file records.
+  The title is copilot's own name for the session (`-n NAME`, `/rename`, or the one it generates),
+  else the first prompt. A session folder copilot never spoke in, without `events.jsonl`, isn't
+  listed, and sessions another client than its CLI made wait for `--all`.
+- OpenCode sessions resume directly with `opencode --session ses_<id>`, run from the session's
+  folder, where opencode files it. There is no opencode launcher or usage comment, and no branch:
+  its rows record none. The title is the row's, as opencode names it, else the first prompt. Child
+  sessions, which subagents run, aren't listed.
 - Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
   `setopt interactivecomments`).
 - Usage is fetched live: Claude Code's `/usage` is run once per account, in its profile, and the
@@ -167,7 +191,7 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 |--------------|-------------------------------------------------------------------------------|
 | `HOURS`      | how far back to look (default 24); takes `36`, `1.5`, `12h` or `3d`           |
 | `-n N`       | show only the newest N sessions per folder and count the rest                 |
-| `--all`      | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec`, the Antigravity app, MiniMax Code's internal, non-subagent sessions, and Qwen Code's from channels, scheduled tasks and other hosts |
+| `--all`      | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec`, the Antigravity app, MiniMax Code's internal, non-subagent sessions, Qwen Code's from channels, scheduled tasks and other hosts, and Copilot sessions another client than its CLI made |
 | `--all-folders` | list every folder, even when run from one that has sessions                |
 | `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, `CODEX_HOME=… codex …` instead of `cx`, and `KIMI_CODE_HOME=… kimi …` instead of `ck` |
 | `--cached`   | take usage from Claude Code's and Codex's saved snapshots and hatcheck's last readings of agy's `/usage` and Kimi's usage, without calling the APIs |
@@ -247,6 +271,14 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   `qwen has no plan-usage command or endpoint (0.26.0)`. qwen's `usage/` files count the tokens
   each session spent, not what a plan has left. No qwen credentials are read and no qwen request
   is made.
+- Each GitHub Copilot CLI home is listed as its own no-data account, with agent `copilot` and plan
+  `Copilot`: `copilot's /usage runs only in a session, and hatcheck makes no request (1.0.103)`.
+  copilot's `/usage` is a slash command inside a session, which costs a model turn. No copilot
+  credentials are read and no request is made.
+- The OpenCode data folder is listed as a no-data account, with agent `opencode` and plan
+  `OpenCode`: `opencode has no plan-usage command: its stats count tokens spent (2.1.4)`. Its plans
+  are its providers' own, and `opencode stats` counts the tokens its sessions spent, not what a
+  plan has left. No opencode credentials are read and no request is made.
 - Codex homes show their ChatGPT plan's Codex limits: the 5-hour and weekly windows (a free plan has
   one 30-day window instead), then limits for single models such as `GPT-5.3-Codex-Spark`, named in
   violet like `Fable`. The access token in the home's `auth.json` is sent as it is to the endpoint
@@ -607,10 +639,61 @@ bare `NAME` follows a qwen session the way it follows a Codex or Kimi one.
   which carried on from where it ended; the session qwen made was then listed and shown by
   `hatcheck`.
 
+### With GitHub Copilot CLI
+
+`copilot` is `~/.copilot` and `copilot:<name>` is `~/.copilot-<name>`, as a place to convert to or
+`--from`. A bare `NAME` follows a copilot session the way it follows a Codex or Kimi one.
+
+- From copilot, the session's `events.jsonl` supplies your messages and the commands you ran with
+  `!`, the replies' text and tool requests, and the tools' results. copilot's reasoning, what it adds
+  to the conversation itself (the date it prepends, its system messages), its hooks' and its own
+  records, and images and files are left out.
+- To copilot, the session is written as a session interchange file (version 1), `imports/<id>.jsonl`
+  in hatcheck's cache folder: a session header with the title, folder and branch, then a message
+  record per turn, the form copilot's own `copilot sessions import` validates and takes. The command
+  printed imports it from the session's folder, `copilot sessions import <file>`, with
+  `COPILOT_HOME=…` for another home; copilot gives the session an ID of its own and prints it, which
+  `copilot --resume <id>` takes. The session exists once the import has run, so `--json` reports
+  `"new_session": null` and the `file`. The original stays, as after every conversion.
+- Copies between copilot homes are refused: its session folders and index stay as they are, and
+  hatcheck never writes copilot's store.
+- A session open in copilot, by the `inuse.<pid>.lock` in its folder naming a running process, is
+  refused as a source.
+- Checked against the real `copilot` (1.0.103) on 2026-10-25: a Claude Code session converted for
+  copilot passed its importer's own check (`--dry-run`) and was imported into a throwaway home,
+  where copilot made a session folder with the title as its name; `hatcheck` then listed and showed
+  it. Resuming it with a signed-in copilot is the maintainer's probe, in
+  [maintenance.md](maintenance.md).
+
+### With OpenCode
+
+`opencode` is the data folder plain opencode uses, `~/.local/share/opencode`, as a place to convert
+to or `--from`; there are no named OpenCode homes.
+
+- From opencode, the session's message rows supply your messages, the replies' text and tool calls
+  with their results, the shell commands run in the session and its compaction summaries.
+  Reasoning, the contents of files attached or returned, and opencode's own records (skills, what
+  it adds to the conversation itself, and its agent, model and folder switches) are left out.
+- To opencode, the session is written as the session data its own `opencode session export` prints
+  and `opencode session import` takes, `imports/<id>.json` in hatcheck's cache folder: the
+  session's info, with an ID minted as opencode mints them (the file is named by it), and a user
+  or assistant message per turn. The command printed imports it from the session's folder, where
+  opencode files it: `opencode session import <file>`; the session then resumes with
+  `opencode --session ses_<id>`, printed below it. The session exists once the import has run, so
+  `--json` reports `"new_session": null` and the `file`. The original stays, as after every
+  conversion.
+- A copy into its own store is refused as already there: opencode has one data folder.
+- Nothing marks an opencode session open, so none is refused as a source.
+- Checked against the real `opencode` (2.1.4) on 2026-10-25: a Claude Code session converted for
+  opencode was imported into a throwaway data folder with its background service disabled, listed
+  by `opencode session list` with its title and folder, exported back by `opencode session export`
+  with its messages as written, and listed and shown by `hatcheck`. Resuming it with a signed-in
+  provider is the maintainer's probe, in [maintenance.md](maintenance.md).
+
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder. One word alone that names a profile or home that exists, and starts no session's ID, is `PROFILE` (`hatcheck move NAME`), with the session the newest started from this folder; a word that is both is asked for more |
-| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, `qwen` for `~/.qwen`, `qwen:NAME` for `~/.qwen-NAME`, or a path; `dsh`, `dsh:NAME`, `mcode` and `mcode:NAME` name those homes for `--from` and are refused as targets; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
+| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, `qwen` for `~/.qwen`, `qwen:NAME` for `~/.qwen-NAME`, `dsh` for `~/.dsh`, `dsh:NAME` for `~/.dsh-NAME`, `mcode` for `~/.minimax`, `mcode:NAME` for `~/.minimax-NAME`, `copilot` for `~/.copilot`, `copilot:NAME` for `~/.copilot-NAME`, `opencode` for `~/.local/share/opencode`, or a path; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
 | `--brief`        | for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last six turns within 12,000 characters |
@@ -665,10 +748,10 @@ Resume it now in ~/.claude? [y/N]
 - A copy already in the profile stays as it is, so a fork never stops for one, and the original
   always stays where it was. A plan file already there stays too, since the copy there uses it.
 - To another agent, or to a Codex home on another account, it converts the session, as `move`
-  does: a converted session is always a new one, and for agy and zcode a file the agent starts one
-  on. DSH and mcode sessions can only be converted out to another agent, and their targets are
-  refused; copies between homes of the same agent are refused for DSH, mcode and qwen, as for
-  `move`. `--brief` hands over a brief in place of the conversation, as for `move`.
+  does: a converted session is always a new one, and for agy, zcode, qwen, mcode and DSH a file the
+  agent starts one on, for copilot and opencode a file their own importers take. Copies between
+  homes of the same agent are refused for DSH, mcode, qwen and copilot, as for `move`. `--brief`
+  hands over a brief in place of the conversation, as for `move`.
 - Resuming a fork was tested with the real `claude`, 2.1.301 and again 2.1.310.
 
 | Option           | What it does                                                                 |
@@ -719,6 +802,9 @@ Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
   paths with related assets stay as they were. `--dry-run` changes nothing.
 - An affected qwen session is listed as skipped too: its transcript is filed under the folder's
   name and records the folder on every line, which stay as they were.
+- An affected copilot session is listed as skipped too: its workspace file and events record the
+  folder, which stay as they were; and an affected opencode session, whose row records the folder
+  in opencode's database, which hatcheck never writes.
 - It refuses, and changes nothing, when a session is open, was written in the last minute, is a
   link rather than a file, is already filed under the new folder (its subagent and tool-output
   folder included), or has a line naming the folder
@@ -740,12 +826,14 @@ cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 ```
 
 - It finds the session by its ID or the start of it, in every Claude Code profile, Codex home,
-  Kimi home, DeepSeek Harness home, MiniMax Code home and Qwen Code home, including `DSH_HOME`,
-  `MINIMAX_DATA_DIR`, `MAVIS_DATA_DIR` and `QWEN_HOME`, and in Antigravity CLI's and ZCode's
-  folders. When more than one profile has a copy, it takes the one used last; `--from <profile>`
+  Kimi home, DeepSeek Harness home, MiniMax Code home, Qwen Code home and GitHub Copilot CLI home,
+  including `DSH_HOME`, `MINIMAX_DATA_DIR`, `MAVIS_DATA_DIR`, `QWEN_HOME` and `COPILOT_HOME`, and in
+  Antigravity CLI's, ZCode's and OpenCode's folders. When more than one profile has a copy, it takes
+  the one used last; `--from <profile>`
   picks one.
 - The command is the one `hatcheck` prints: `cl` or `claude`, `cx` or `codex`, `agy --conversation`,
-  `ck` or `kimi --session`, `zcode --resume`, `dsh web`, `mcode --session`, `qwen --resume`, and
+  `ck` or `kimi --session`, `zcode --resume`, `dsh web`, `mcode --session`, `qwen --resume`,
+  `copilot --resume`, `opencode --session`, and
   `cl -z`/`cl -k` for a session whose last reply came from Z.ai or Kimi. Without `cl`, `cx` or `ck`
   on the `PATH` it's the full form (`CLAUDE_CONFIG_DIR=… claude …`), as `--full` gives.
 - For DSH, the default home uses `dsh web`; a named or custom home uses `DSH_HOME=… dsh web`, or
@@ -762,18 +850,28 @@ cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
   up. A named or custom home uses `QWEN_HOME=… qwen --resume <id>`, or `$env:QWEN_HOME=…; qwen
   --resume <id>; $env:QWEN_HOME=$null` in PowerShell. `open --print` prints the `cd` and resume
   commands without starting them.
+- For GitHub Copilot CLI, resume is `copilot --resume <id>`, run from the session's folder. A named
+  or custom home uses `COPILOT_HOME=… copilot --resume <id>`, or `$env:COPILOT_HOME=…; copilot
+  --resume <id>; $env:COPILOT_HOME=$null` in PowerShell. For OpenCode, it's
+  `opencode --session ses_<id>`, run from the session's folder; a data folder other than the one
+  plain opencode uses is run with `OPENCODE_DB=<its opencode.db> opencode --standalone --session
+  ses_<id>`, off the background service, which keeps the store it started with.
 - `open --login dsh` or `open --login dsh:NAME` explicitly opens a terminal running `dsh web` for
   sign-in instead of resuming, so sign-in stays with DSH; hatcheck doesn't invent a `dsh login`
   command. `open --login mcode` or `open --login mcode:NAME` runs `mcode login` in the selected
   home, with `MINIMAX_DATA_DIR` set for a named or custom one. `open --login qwen` or `open --login
   qwen:NAME` starts plain `qwen` in the selected home, with `QWEN_HOME` set for a named or custom
-  one, where its `/auth` signs in; qwen's `auth` subcommand has been removed.
+  one, where its `/auth` signs in; qwen's `auth` subcommand has been removed. `open --login copilot`
+  or `open --login copilot:NAME` runs `copilot login` in the selected home, with `COPILOT_HOME` set
+  for a named or custom one. `open --login opencode` runs `opencode auth login`, opencode's own
+  sign-in to a provider.
 - A session that's open in a terminal is refused, so it isn't resumed twice. A DSH session whose
   POSIX `session.lock` is held is refused too; a stale lock file isn't open, and Windows' named
   semaphore isn't detected. An mcode session with an unexpired writer lease is refused; an expired
   lease is stale, and unknown lock state is treated as busy rather than as proof the writer died.
   An idle session merely selected in mcode's TUI isn't detectable. A qwen session is refused while
-  qwen's registry or its terminal UI's sidecar names a running process.
+  qwen's registry or its terminal UI's sidecar names a running process, and a copilot session while
+  the `inuse.<pid>.lock` in its folder does. Nothing marks an opencode session open.
 - The terminal:
   - **macOS:** Terminal, or the one `hatcheck` runs in when that's iTerm2, Ghostty or WezTerm. Terminal
     and iTerm2 are driven with AppleScript, which macOS asks you to allow once.
@@ -815,13 +913,15 @@ cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
   `MINIMAX_DATA_DIR` and PowerShell clearing for a named or custom home. `resume --print` prints
   just the `cd` and direct resume commands.
 - For a qwen session, `resume` uses the same `qwen --resume <id>` as `open`, with `QWEN_HOME` for
-  a named or custom home.
+  a named or custom home; for a copilot session, the same `copilot --resume <id>`, with
+  `COPILOT_HOME`; for an opencode session, the same `opencode --session ses_<id>`.
 - The command runs in this terminal, in the session's folder, in hatcheck's place, as
   `hatcheck open --here` runs it; `hatcheck open` opens a new terminal window instead.
 - A session that's open in a terminal is refused, so it isn't resumed twice. A held POSIX DSH
   `session.lock` is refused too; Windows' named semaphore isn't detected. An unexpired mcode writer
   lease is refused, an expired lease is stale, and unknown lock state is busy rather than proof the
-  writer died. A qwen session open by its registry or sidecar is refused too.
+  writer died. A qwen session open by its registry or sidecar is refused too, and a copilot session
+  open by its `inuse.<pid>.lock`.
 
 ## `hatcheck show`: a session's conversation
 
@@ -848,7 +948,8 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
   and the start of its output, as a conversion carries them (see
   [`hatcheck move`](#hatcheck-move-carry-on-a-session-with-another-profile)). A Codex session, an
   Antigravity conversation, a Kimi session, a ZCode session, a DeepSeek Harness session, a MiniMax
-  Code session or a Qwen Code session is shown the same way, from its own file, log or rows.
+  Code session, a Qwen Code session, a GitHub Copilot CLI session or an OpenCode session is shown
+  the same way, from its own file, log or rows.
 - A DSH session comes from the selected current v4 log, raw JSONL or concatenated Zstandard
   frames; an unsupported or corrupt newest generation isn't passed over for an older one. Its
   current surface supplies direct `source.kind=user` prompts, assistant text and tool calls, tool
@@ -865,6 +966,15 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
   the user's own messages, the replies' text and tool calls, and tool results, along the
   `parentUuid` chain from the last message. Thoughts, messages qwen injected itself, subagents'
   sidechains and qwen's own records are left out; images and files are marked.
+- A copilot session comes from its `events.jsonl`, as
+  [GitHub Copilot CLI](agents.md#github-copilot-cli-copilot) describes: your messages and the
+  commands you ran with `!`, the replies' text and tool requests, and the tools' results. copilot's
+  reasoning, what it adds to the conversation itself, its hooks' and its own records are left out;
+  images and files are marked.
+- An opencode session comes from its message rows, as [OpenCode](agents.md#opencode-opencode)
+  describes: your messages, the replies' text and tool calls with their results, shell commands and
+  compaction summaries. Reasoning, files' contents and opencode's own records are left out; images
+  and files are marked.
 - `--brief` shows the handover brief `hatcheck move --brief` would hand over in its place: the
   first prompt, the files and commands the tool calls named, and the last six turns; `--json`
   then says `"brief": true`, and `turns_total` counts the brief's turns.
@@ -920,23 +1030,24 @@ No room yet; waiting for ~/.claude-a until Tue 12:00pm (in 2d14h)…
   98% behind those; then those out of Fable, or out of the weekly limit for all models, the soonest
   back on top; then accounts without a Fable limit, by the limit with the least left. Codex homes,
   Kimi homes and Antigravity CLI's folder are ranked by the limit with the least left. DeepSeek
-  Harness, MiniMax Code and Qwen Code homes have no usage data: they sort after accounts with data
-  and are never offered as another agent's best.
+  Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode homes have no usage data: they
+  sort after accounts with data and are never offered as another agent's best.
 - An account has room when every limit it needs has some left: its Fable limit and every limit
   that isn't per model, so a used-up 5-hour limit leaves none until it resets, which `--wait`
   waits for; for Antigravity CLI, whose limits are all per model, every one. Usage that's missing,
-  or that hatcheck can't read, is never room, so DSH, mcode and qwen homes never count as having
-  room.
+  or that hatcheck can't read, is never room, so DSH, mcode, qwen, copilot and opencode homes never
+  count as having room.
 - A line's Fable part ends with the account's pace: what's left, divided by the hours until it
   resets, so what the account can spend per hour without running out before the reset. `0.5%/h`
   with 31% left means about 62 hours to go. An account without a Fable limit shows the pace of its
   tightest limit instead.
 - `--wait` sleeps until an account has room, then answers as above: any account of the session's
   agent (Claude Code's, without a session); `--wait NAME` (or `default`, `codex`, `codex:NAME`,
-  `kimi`, `kimi:NAME`, `dsh`, `dsh:NAME`, `mcode`, `mcode:NAME`, `qwen`, `qwen:NAME`) that one
+  `kimi`, `kimi:NAME`, `dsh`, `dsh:NAME`, `mcode`, `mcode:NAME`, `qwen`, `qwen:NAME`, `copilot`,
+  `copilot:NAME`, `opencode`) that one
   profile or home. It sleeps until the soonest reset the numbers name, says so on stderr, then
-  looks again; when nothing says when an account will have room, as with DSH's, mcode's and qwen's
-  no-data accounts, it stops with an error instead of polling. For a script:
+  looks again; when nothing says when an account will have room, as with DSH's, mcode's, qwen's,
+  copilot's and opencode's no-data accounts, it stops with an error instead of polling. For a script:
   `hatcheck best --wait a && cl a`.
 - The numbers are the ones `hatcheck usage` shows, live when it can be, with a snapshot's age
   otherwise; `--cached` skips the APIs.
@@ -967,20 +1078,23 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
   git. The deepest bound folder wins, and folders are compared once symlinks are resolved.
 - `default` binds `~/.claude`, `~/.codex` and `~/.dsh`, plus `~/.gemini/antigravity-cli`,
   `~/.kimi-code` and `~/.zcode` when agy, kimi and zcode have sessions there, `~/.minimax` when
-  its actual v2 store exists, and `~/.qwen` when qwen has run there. The Codex, Kimi, DSH, mcode
-  and qwen homes are the ones named like the profile when there are any; a named mcode home is
-  included only with its actual v2 store, and a named qwen home only once qwen has run in it.
-  `--codex <name>`, `--kimi <name>`, `--dsh <name>`, `--mcode <name>` and `--qwen <name>` pick
-  others, and one of those options alone binds just that home. `--agy default`, `--zcode default`,
-  `--dsh default`, `--mcode default` and `--qwen default` bind just those folders. `--mcode NAME`,
+  its actual v2 store exists, `~/.qwen` when qwen has run there, `~/.copilot` when copilot has, and
+  `~/.local/share/opencode` when opencode has. The Codex, Kimi, DSH, mcode, qwen and copilot homes
+  are the ones named like the profile when there are any; a named mcode home is included only with
+  its actual v2 store, and a named qwen or copilot home only once its agent has run in it.
+  `--codex <name>`, `--kimi <name>`, `--dsh <name>`, `--mcode <name>`, `--qwen <name>` and
+  `--copilot <name>` pick others, and one of those options alone binds just that home. `--agy
+  default`, `--zcode default`, `--dsh default`, `--mcode default`, `--qwen default` and `--opencode
+  default` bind just those folders. `--mcode NAME`,
   `--mcode default` or `--mcode PATH` requires the actual v2 store; `~/.minimax-code` is the
   installer, not a profile named `code`.
 - `cl`, `cx` and `ck` use the binding when no profile name is given: `cl --resume <id>`, `cl`,
   `cx resume <id>`, `ck --session <id>`. A name given still wins, and outside bound folders
   nothing changes.
-- `bind --which dsh`, `bind --which mcode` and `bind --which qwen` print `default`, `NAME` or the
-  bound path. An agent-only binding command with no PROFILE keeps the existing DSH, mcode or qwen
-  binding unless `--dsh`, `--mcode` or `--qwen` replaces it.
+- `bind --which dsh`, `bind --which mcode`, `bind --which qwen`, `bind --which copilot` and
+  `bind --which opencode` print `default`, `NAME` or the bound path. An agent-only binding command
+  with no PROFILE keeps the existing DSH, mcode, qwen, copilot or opencode binding unless `--dsh`,
+  `--mcode`, `--qwen`, `--copilot` or `--opencode` replaces it.
 - `hatcheck` marks sessions that ran in a bound folder under another profile:
   `⚠ folder bound to ~/.claude-a`.
 - `--hook` adds a `SessionStart` hook, `hatcheck bind --check`, to every profile's `settings.json`
@@ -990,7 +1104,7 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
   and run cl a here instead.` For a resumed session it gives the `hatcheck move` command instead.
   The hook runs the `hatcheck` that `--hook` found on your `PATH`, by its path. Run `--hook` again
   after installing hatcheck another way, and it points the hooks at the new one. No hook is added
-  for kimi, zcode, DSH, mcode or qwen.
+  for kimi, zcode, DSH, mcode, qwen, copilot or opencode.
   - **Claude Code:** tested with the real `claude` (2.1.301). It shows the warning in the interactive
     UI; `claude -p` doesn't display it.
   - **Codex:** Codex runs a new hook only once you trust it with `/hooks` in `codex`, once per home.
@@ -1063,17 +1177,20 @@ $ hatcheck --json
   `--no-usage`). `hatcheck usage --json` gives every account, in its Fable order, with `sorted_by`.
 - **Stable:** absolute paths rather than `~`, times in UTC (ISO 8601), no colours. `version` goes up
   only when a field changes meaning or goes away; new fields can appear at any time. `agent` is
-  `claude`, `codex`, `agy`, `kimi`, `zcode`, `dsh`, `mcode` or `qwen`; a Kimi or ZCode session's
-  `id` is the UUID after the agent's own `session_` or `sess_`, which `resume` puts back. A conventional DSH
-  `session-<uuid>` also has the bare UUID as its `id`, but its `resume` is `dsh web` without the ID.
-  An mcode session's `id` is the 32 hex digits after `mvs_`, and `resume` puts the prefix back.
+  `claude`, `codex`, `agy`, `kimi`, `zcode`, `dsh`, `mcode`, `qwen`, `copilot` or `opencode`; a Kimi
+  or ZCode session's `id` is the UUID after the agent's own `session_` or `sess_`, which `resume`
+  puts back. A conventional DSH `session-<uuid>` also has the bare UUID as its `id`, but its
+  `resume` is `dsh web` without the ID. An mcode session's `id` is the 32 hex digits after `mvs_`,
+  and `resume` puts the prefix back; an opencode session's is the 26 characters after `ses_`, put
+  back the same way.
 - `open` is `null`, or what a session is open in: Claude Code's with the process's `pid` and `status`,
   Codex's and agy's with `pid` and `status` `null`, since only a lock says they're open. DSH's are
   the same on POSIX, from a held `session.lock`; a stale file doesn't count, and Windows' named
   semaphore isn't detected. Mcode's likewise have `pid` and `status` `null`, from an unexpired
   writer lease; an expired lease is stale and unknown lock state is busy. Qwen's too, while qwen's
-  registry or its terminal UI's sidecar names a running process. Kimi's and ZCode's are never
-  marked open, since nothing marks one.
+  registry or its terminal UI's sidecar names a running process, and copilot's while the
+  `inuse.<pid>.lock` in its folder does. Kimi's, ZCode's and OpenCode's are never marked open, since
+  nothing marks one.
 - `left_percent` is `null` for a snapshot's limit that has reset since it was saved. `pace` is what's
   left per hour until the reset (`left_percent` over the hours to go, at least one), `null` without
   a reset ahead. `fable` is `{"left": true, "resets_at": …}`, `{"left": false, "back_at": …}`, or

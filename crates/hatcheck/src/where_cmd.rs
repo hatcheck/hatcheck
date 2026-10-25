@@ -1,7 +1,8 @@
 //! hatcheck where SESSION [--json]: find a session by its ID, or the start of it. Reports
 //! each agent's transcript or readable store and any session-owned data folder; for DSH, the
 //! selected v4 log and its session directory, for mcode the active messages.jsonl and session
-//! directory, for qwen the transcript. Exits 1 when nothing matches. --json prints copies as data.
+//! directory, for qwen the transcript, for copilot the session's events file and for opencode
+//! the database its rows share. Exits 1 when nothing matches. --json prints copies as data.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -105,6 +106,17 @@ pub fn find(prefix: &str) -> Vec<String> {
             found.push(x.file);
         }
     }
+    for home in paths::find_copilot_homes() {
+        for x in crate::copilot::sessions_starting_with(&home, prefix) {
+            found.push(x.file);
+        }
+    }
+    // An opencode session is a row: its database, once per match, as ZCode's.
+    for home in paths::find_opencode_homes() {
+        for _ in crate::opencode::sessions_starting_with(&home, prefix) {
+            found.push(crate::opencode::db_path(&home));
+        }
+    }
     found
 }
 
@@ -125,6 +137,9 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
             let archived = ospath::basename(&ospath::dirname(path)) == "archive";
             copies.push(json!({"agent": Agent::Qwen.key(), "id": id, "profile": crate::qwen::home_of(path), "file": path,
                                "data_folder": null, "archived": archived}));
+        } else if let Some(id) = crate::copilot::file_id(path) {
+            copies.push(json!({"agent": Agent::Copilot.key(), "id": id, "profile": crate::copilot::home_of(path), "file": path,
+                               "data_folder": ospath::dirname(path), "archived": false}));
         } else if path.ends_with(".jsonl") && path.contains(&projects) {
             let profile = ospath::dirname(&ospath::dirname(&ospath::dirname(path)));
             let data = &path[..path.len() - ".jsonl".len()];
@@ -174,13 +189,22 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
             );
         }
     }
+    // opencode's sessions are rows too, so they come from the database.
+    for home in paths::find_opencode_homes() {
+        for x in crate::opencode::sessions_starting_with(&home, prefix) {
+            copies.push(
+                json!({"agent": Agent::Opencode.key(), "id": x.row.id, "profile": home, "file": crate::opencode::db_path(&home),
+                               "data_folder": null, "archived": x.row.archived}),
+            );
+        }
+    }
     json!({"version": 1, "query": prefix, "sessions": copies})
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code or Qwen Code session by its ID, or the start of it.",
+        "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session by its ID, or the start of it.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
     .flag(&["--json"], "json", "print the matches as JSON");

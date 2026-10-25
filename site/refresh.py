@@ -12,7 +12,7 @@ index.html: each block between <!-- sample:NAME --> and <!-- /sample:NAME --> be
 run in a demo home made with tests/helpers.py, never your profiles: `list` is `hatcheck` in a
 folder with sessions from every agent, `best` is `hatcheck best` there, and `relocate` is
 `hatcheck relocate` once ~/code/web, with sessions in two profiles, a Codex home, a Kimi home, a DSH home, an
-mcode home and a qwen home, is renamed ~/code/site; the demo home's path reads /Users/me wherever it's printed in full, as
+mcode home, a qwen home, a copilot home and opencode's data folder, is renamed ~/code/site; the demo home's path reads /Users/me wherever it's printed in full, as
 in the project folders' names. They
 run on a
 pseudo-terminal with 256 colours, so the output is coloured as in a terminal; its colour codes
@@ -53,7 +53,7 @@ def help_text(name):
 def demo_home():
     """A home with sessions from every agent in ~/code/api: two Claude Code profiles with usage a
     fake claude answers, a Codex home with limits in its session, and Antigravity CLI's folder, a
-    Kimi home, ZCode's folder, a DSH home, an mcode home and a qwen home with no usage, as when their agents aren't on the PATH. The
+    Kimi home, ZCode's folder, a DSH home, an mcode home, a qwen home, a copilot home and opencode's data folder with no usage, as when their agents aren't on the PATH. The
     snapshots are shaped as Claude Code saves them: a session limit and a Fable one for the team
     plan, a session limit and the week's for the Pro plan. ~/.claude-a is the Pro one, nearly out
     for the week, with the newest session, and ~/.claude-b the team one, so hatcheck best has
@@ -106,6 +106,10 @@ def demo_home():
     h.mcode_session(mcode, api, "c54e0009000040008000000000000009", "Review the retry backoff", 280)
     qwen = h.qwen_home()
     h.qwen_session(qwen, api, "4b4c9dc9-2b3e-4449-a2d5-93c9c165469f", "Document the export command", 320)
+    copilot = h.copilot_home()
+    h.copilot_session(copilot, api, "50b1f120-6353-4117-b918-fb4553e92eb4", "Explain the usage command's bars", 360)
+    opencode = h.opencode_home()
+    h.opencode_session(opencode, api, "e8b2fb6edffetJXXHNatoXnITH", "Rename the export command's flags", 400)
     path = h.fake_claude() + os.pathsep + "/bin" + os.pathsep + "/usr/bin"
     env = dict(h.env(), PATH=path, TERM="xterm-256color", COLUMNS="150")
     env.pop("NO_COLOR", None)
@@ -234,8 +238,8 @@ def sample(name, home):
 
 def relocate_sample(h, env):
     """A project folder renamed, and hatcheck relocate bringing its sessions along: two in the
-    b profile, one in a, one in Codex, and one in Kimi, one in DSH, one in mcode and one in qwen,
-    which stay; the folder is bound to b, so the binding moves too."""
+    b profile, one in a, one in Codex, and one in Kimi, one in DSH, one in mcode, one in qwen, one in
+    copilot and one in opencode, which stay; the folder is bound to b, so the binding moves too."""
     profile_b, profile_a = os.path.join(h.home, ".claude-b"), os.path.join(h.home, ".claude-a")
     web = h.folder("code", "web")
     h.session(profile_b, web, "5a1e2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b", "Move the checkout page to the new API", 300)
@@ -246,6 +250,8 @@ def relocate_sample(h, env):
     h.dsh_session(os.path.join(h.home, ".dsh"), web, "d54e0010-0000-4000-8000-000000000010", "Check the webhook log", 140)
     h.mcode_session(os.path.join(h.home, ".minimax"), web, "c54e0010000040008000000000000010", "Check the retry log", 140)
     h.qwen_session(h.qwen_home(), web, "5c5d0e0e-3f4f-4550-b3e6-a4d0d276570a", "Tidy the export's error text", 130)
+    h.copilot_session(h.copilot_home(), web, "61c2a031-7464-4228-a029-0c5664fa3fc5", "Check the webhook retries", 120)
+    h.opencode_session(h.opencode_home(), web, "e8b2fb6ee000uKYYIObupYoJUI", "Check the export's exit codes", 110)
     subprocess.run([BINARY, "bind", "b"], cwd=web, env=env, capture_output=True, check=True)
     site = os.path.join(h.home, "code", "site")
     os.rename(web, site)

@@ -148,7 +148,17 @@ pub(crate) fn refuse_if_open(s: &Summary) -> Result<(), String> {
                 Ok(())
             };
         }
-        Agent::Kimi | Agent::Zcode => return Ok(()), // nothing marks one of theirs open
+        Agent::Copilot => {
+            let dir = crate::copilot::session_dir(&s.profile, &s.id);
+            return if crate::copilot::session_open(&dir) {
+                Err(format!(
+                    "GitHub Copilot CLI session {id8} is open in copilot; switch to it, or quit it first"
+                ))
+            } else {
+                Ok(())
+            };
+        }
+        Agent::Kimi | Agent::Zcode | Agent::Opencode => return Ok(()), // nothing marks one of theirs open
         Agent::Claude => {}
     }
     let live = sessions::open_sessions(std::slice::from_ref(&s.profile));
@@ -538,8 +548,13 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
     let (agent, folder) = find::place(profile);
     let line = |shell: &paths::Shell| {
         let mut command = shell.start_command(agent, &folder, full || !launcher_on_path(agent));
-        if matches!(agent, Agent::Codex | Agent::Kimi | Agent::Mcode) {
+        if matches!(
+            agent,
+            Agent::Codex | Agent::Kimi | Agent::Mcode | Agent::Copilot
+        ) {
             command += " login";
+        } else if agent == Agent::Opencode {
+            command += " auth login"; // opencode's own sign-in to a provider
         }
         command
     };
@@ -582,7 +597,7 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, MiniMax Code or Qwen Code session in a new terminal window, already in its folder; for DeepSeek Harness, open dsh web there and choose the session in its session history.")
+    let parser = Parser::new(prog, "Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session in a new terminal window, already in its folder; for DeepSeek Harness, open dsh web there and choose the session in its session history.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has a copy")
         .flag(&["--here"], "here", "resume it in this terminal instead")
@@ -591,7 +606,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .option(&["--terminal"], "terminal", "NAME", "the terminal to open (default: HATCHECK_TERMINAL, or this system's usual one)")
         .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=... kimi rather than ck")
         .flag(&["--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec")
-        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME, zcode, dsh, dsh:NAME, mcode, mcode:NAME, qwen or qwen:NAME) in a new terminal, instead of resuming a session");
+        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME, zcode, dsh, dsh:NAME, mcode, mcode:NAME, qwen, qwen:NAME, copilot, copilot:NAME or opencode) in a new terminal, instead of resuming a session");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),

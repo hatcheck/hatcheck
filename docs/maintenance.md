@@ -42,13 +42,16 @@ run of an npm one), then probe from a folder of its own, so everything a probe l
 find: `mkdir` one in a temporary folder, `git init` it, `touch` a marker beside it. Use prompts
 that ask for one word, so nothing of yours is sent anywhere, and an account of yours with room.
 
-- **A session from each:** `cl <profile> -p "Reply with exactly the word PINEAPPLE"`,
-  `codex exec "… MANGO"`, `kimi -p "… KIWI"`, `qwen -p "… PAPAYA"`. In the folder, `hatcheck
-  sessions --all --json --no-usage` lists each with its folder, title, model and resume command,
-  and `hatcheck show` and `where` find each. For qwen, `qwen --resume <id> -p "Which single word
-  did you reply with earlier? Answer with just that word."` from the folder checks the printed
-  resume command, and `qwen --resume <id>` in its terminal UI (on a pseudo-terminal, killed
-  afterwards) checks that `hatcheck` marks the session open while it runs, and not once it's gone.
+- **A session from each:** `cl <profile> -p "Reply with exactly the word PINEAPPLE"`, `codex exec "…
+  MANGO"`, `kimi -p "… KIWI"`, `qwen -p "… PAPAYA"`, `copilot -p "… GUAVA"`, `opencode run "…
+  LYCHEE"`. In the folder, `hatcheck sessions --all --json --no-usage` lists each with its folder,
+  title, model and resume command, and `hatcheck show` and `where` find each. For copilot, `copilot
+  --resume <id>` in its terminal UI (on a pseudo-terminal, quit with Ctrl-C and killed afterwards)
+  checks that `hatcheck` marks the session open while it runs, by the `inuse.<pid>.lock` in its
+  folder, and not once it's gone. For qwen, `qwen --resume <id> -p "Which single word did you reply
+  with earlier? Answer with just that word."` from the folder checks the printed resume command, and
+  `qwen --resume <id>` in its terminal UI (on a pseudo-terminal, killed afterwards) checks that
+  `hatcheck` marks the session open while it runs, and not once it's gone.
 - **Into each agent:** `hatcheck fork <claude-id> codex`, then `codex exec resume <new-id> "Which
   single word did you reply with earlier? Answer with just that word."`, which should answer
   PINEAPPLE; `fork <codex-id> <profile>`, then `cl <profile> -p --resume <new-id> "…"`; `fork
@@ -60,6 +63,14 @@ that ask for one word, so nothing of yours is sent anywhere, and an account of y
   the question added to the prompt, quit with its own keys and killed afterwards, and sent nothing
   else: a key sent on a word in its output becomes a message. `hatcheck show` of the session mcode
   made reads its reply. DSH's handover is a prompt pasted into its web UI, and isn't probed.
+  `fork <id> copilot`, then the printed `copilot sessions import …`, which prints the new session's
+  ID, then `copilot --resume <new-id> -p "Which single word…"`; `fork <id> opencode`, then the
+  printed `opencode session import …` from the folder, then `opencode run --session ses_<new-id>
+  "Which single word…"`. Both importers were checked without a login on 2026-10-25, in a
+  throwaway home with copilot's `--dry-run` and a real import, and opencode's with its service
+  disabled (`service.json` `{"disabled": true}` in its config folder); the resumes above are the
+  check with a login. For copilot, sign in twice with two `COPILOT_HOME`s to see whether its system
+  credential store keeps one login per home, which hatcheck has no way to read and hasn't checked.
 - **Between profiles:** `hatcheck move` and `fork` a Claude Code session to another profile with
   room, and resume it there.
 - **Usage:** `hatcheck usage --json`: every signed-in account reads `live`, with its limits.
@@ -114,7 +125,13 @@ Every probe leaves something in a real home. Look for what changed since the mar
   `memory/`), the session's lines in `usage/token-usage-<month>.jsonl` and `usage_record.jsonl`,
   `tmp/<sha256 of the folder>` and `file-history/<session>` when the UI ran, and the registry
   record `sessions/<pid>.json` a killed UI couldn't remove.
-- hatcheck: the probe's `imports/<id>.md` in its cache folder.
+- copilot: the probe's session folders under `session-state/` and their rows in `session-store.db`,
+  which its session browser lists; the `sidebar-sessions-state/<hash>.json` of the probe folder,
+  and a `logs/process-<ms>-<pid>.log` per run. The package cache under `~/Library/Caches/copilot`
+  (`XDG_CACHE_HOME`'s on Linux) is copilot's own.
+- opencode: the probe's session, which `opencode session delete <id>` removes, and the `project`
+  row for the probe folder, which stays; a `log/opencode.log` per day.
+- hatcheck: the probe's `imports/<id>.md`, `.jsonl` or `.json` in its cache folder.
 
 ## 4. Update
 
@@ -195,3 +212,4 @@ tags ([desktop/README.md](../desktop/README.md#releases)).
 |---|---|---|
 | 2026-10-24 | Claude Code 2.1.310, Codex 0.164.0, agy 1.4.7, kimi 2.3.1, ZCode 0.16.9 (and 0.17.0 compared), dsh 0.2.1-rc.2, qwen 0.26.0 (added, both ways) | agy 1.4.7 lists `--add-dir` folders first, filing an imported conversation under hatcheck's cache; ZCode 0.17.0 keeps deleted sessions' rows; Kimi's K3.1 Pro and English address, and `kimi-for-coding` renamed K2.8 Preview; Z.ai pairs `glm-5.3-flash[1m]`; the Codex app is part of ChatGPT; Claude Desktop has a Linux beta; qwen 0.26.1 is out on npm while Homebrew has 0.26.0 |
 | 2026-10-25 | mcode 0.6.13 (added as a target, as a file) | mcode's terminal UI starts on the prompt and reads the file outside the workspace without a question in its Auto mode; a pseudo-terminal probe that answered words in its status bar sent keys mcode took as messages, eight turns of `y`; mcode's session browser archives and nothing of mcode's deletes, so the probe's session was taken out by hand, following mcode's own deletion |
+| 2026-10-25 | copilot 1.0.103, opencode 2.1.4 (added, both ways; importers probed without a login) | copilot's `sessions import` takes a version-1 interchange JSONL (a `session` header, then `message`, `tool-call` and `tool-result` records); it validated and imported hatcheck's file into a throwaway home, naming the session by its title. opencode's `session import` took the `{info, messages}` JSON its export prints, with the background service disabled, and listed and exported the session back. Resuming either with a signed-in agent wasn't run. `opencode2` is a shim opencode's installer writes that runs `opencode` |

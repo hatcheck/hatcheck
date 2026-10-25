@@ -364,6 +364,10 @@ fn agent_origin(agent: Agent, f: &Found) -> &'static str {
         {
             "the Qwen Code installer"
         }
+        // Its installer (gh.io/copilot-install) puts copilot in ~/.local/bin, or $PREFIX/bin.
+        Agent::Copilot if lower.ends_with("/.local/bin/copilot") => "the Copilot CLI installer",
+        // Its installer puts opencode in ~/.opencode/bin, with an opencode2 shim beside it.
+        Agent::Opencode if lower.contains("/.opencode/bin/") => "the OpenCode installer",
         _ => "",
     }
 }
@@ -731,7 +735,13 @@ fn describe(r: &Report) {
     }
     out::heading("The agents:");
     for (agent, copies) in &r.agents {
-        let label = format!("{:<16}", agent.name());
+        // One column for every agent's name, as wide as the longest.
+        let width = Agent::ALL
+            .iter()
+            .map(|a| a.name().chars().count())
+            .max()
+            .unwrap_or(16);
+        let label = format!("{:<width$}", agent.name());
         if copies.is_empty() {
             let needs = agent
                 .launcher()

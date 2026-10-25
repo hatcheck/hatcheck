@@ -1,8 +1,8 @@
 //! The agents hatcheck keeps apart: Claude Code, Codex, Antigravity CLI (agy), Kimi Code CLI,
-//! ZCode, DeepSeek Harness (dsh), MiniMax Code (mcode) and Qwen Code (qwen). One place for what
-//! each is called and where it keeps things,
-//! so that the commands tell them apart by matching on the agent, which the compiler checks is
-//! complete, rather than on its name as text.
+//! ZCode, DeepSeek Harness (dsh), MiniMax Code (mcode), Qwen Code (qwen), GitHub Copilot CLI
+//! (copilot) and OpenCode (opencode). One place for what each is called and where it keeps
+//! things, so that the commands tell them apart by matching on the agent, which the compiler
+//! checks is complete, rather than on its name as text.
 
 use std::cmp::Ordering;
 
@@ -16,11 +16,13 @@ pub enum Agent {
     Dsh,
     Mcode,
     Qwen,
+    Copilot,
+    Opencode,
 }
 
 impl Agent {
     /// Every agent, in the order the commands list them.
-    pub const ALL: [Agent; 8] = [
+    pub const ALL: [Agent; 10] = [
         Agent::Claude,
         Agent::Codex,
         Agent::Agy,
@@ -29,10 +31,12 @@ impl Agent {
         Agent::Dsh,
         Agent::Mcode,
         Agent::Qwen,
+        Agent::Copilot,
+        Agent::Opencode,
     ];
     /// Their keys, for an argument that takes one.
-    pub const KEYS: [&'static str; 8] = [
-        "claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode", "qwen",
+    pub const KEYS: [&'static str; 10] = [
+        "claude", "codex", "agy", "kimi", "zcode", "dsh", "mcode", "qwen", "copilot", "opencode",
     ];
 
     /// The word --json, a PROFILE argument and the folder bindings use for it.
@@ -46,6 +50,8 @@ impl Agent {
             Agent::Dsh => "dsh",
             Agent::Mcode => "mcode",
             Agent::Qwen => "qwen",
+            Agent::Copilot => "copilot",
+            Agent::Opencode => "opencode",
         }
     }
 
@@ -64,6 +70,8 @@ impl Agent {
             Agent::Dsh => "DeepSeek Harness",
             Agent::Mcode => "MiniMax Code",
             Agent::Qwen => "Qwen Code",
+            Agent::Copilot => "GitHub Copilot CLI",
+            Agent::Opencode => "OpenCode",
         }
     }
 
@@ -74,6 +82,7 @@ impl Agent {
             Agent::Kimi => "Kimi Code",
             Agent::Mcode => "MiniMax",
             Agent::Qwen => "Qwen",
+            Agent::Copilot => "Copilot",
             other => other.name(),
         }
     }
@@ -89,14 +98,19 @@ impl Agent {
             Agent::Dsh => "DeepSeek",
             Agent::Mcode => "MiniMax",
             Agent::Qwen => "Qwen",
+            Agent::Copilot => "Copilot",
+            Agent::Opencode => "OpenCode",
         }
     }
 
     /// The start of the agent's profile folders in the home folder: a profile is ~/<base>-NAME,
-    /// and ~/<base> is where plain claude, codex, kimi, dsh, mcode or qwen looks. Antigravity CLI
-    /// keeps everything under ~/.gemini/antigravity-cli, and ZCode under ~/.zcode, which only HOME
-    /// moves, so a profile of either would be a home folder of its own, ~/.agy-NAME or
-    /// ~/.zcode-NAME; none is made yet (see paths::profile_folder).
+    /// and ~/<base> is where plain claude, codex, kimi, dsh, mcode, qwen or copilot looks.
+    /// Antigravity CLI keeps everything under ~/.gemini/antigravity-cli, and ZCode under
+    /// ~/.zcode, which only HOME moves, so a profile of either would be a home folder of its
+    /// own, ~/.agy-NAME or ~/.zcode-NAME; none is made yet (see paths::profile_folder). OpenCode
+    /// keeps its data in ~/.local/share/opencode, and a second store would need XDG_DATA_HOME or
+    /// OPENCODE_DB and --standalone, since its background service keeps the store it started
+    /// with: a product decision not taken, so ~/.opencode-NAME is a name and nothing more.
     pub fn base(self) -> &'static str {
         match self {
             Agent::Claude => ".claude",
@@ -107,10 +121,13 @@ impl Agent {
             Agent::Dsh => ".dsh",
             Agent::Mcode => ".minimax",
             Agent::Qwen => ".qwen",
+            Agent::Copilot => ".copilot",
+            Agent::Opencode => ".opencode",
         }
     }
 
-    /// The variable that points the agent at a profile; Antigravity CLI and ZCode have none.
+    /// The variable that points the agent at a profile; Antigravity CLI, ZCode and OpenCode
+    /// have none.
     pub fn variable(self) -> Option<&'static str> {
         match self {
             Agent::Claude => Some("CLAUDE_CONFIG_DIR"),
@@ -119,13 +136,14 @@ impl Agent {
             Agent::Dsh => Some("DSH_HOME"),
             Agent::Mcode => Some("MINIMAX_DATA_DIR"),
             Agent::Qwen => Some("QWEN_HOME"),
-            Agent::Agy | Agent::Zcode => None,
+            Agent::Copilot => Some("COPILOT_HOME"),
+            Agent::Agy | Agent::Zcode | Agent::Opencode => None,
         }
     }
 
     /// Whether the agent keeps one folder per account that hatcheck names ~/<base>-NAME, so a
-    /// bare NAME can mean one of its profiles: Claude Code's, Codex's, Kimi's, DSH's, mcode's and
-    /// qwen's.
+    /// bare NAME can mean one of its profiles: Claude Code's, Codex's, Kimi's, DSH's, mcode's,
+    /// qwen's and copilot's.
     pub fn has_profiles(self) -> bool {
         self.variable().is_some()
     }
@@ -141,30 +159,39 @@ impl Agent {
             Agent::Dsh => "dsh",
             Agent::Mcode => "mcode",
             Agent::Qwen => "qwen",
+            Agent::Copilot => "copilot",
+            Agent::Opencode => "opencode",
         }
     }
 
-    /// The launcher that runs it with a profile; Antigravity CLI, ZCode, DSH, mcode and qwen have
-    /// none.
+    /// The launcher that runs it with a profile; Antigravity CLI, ZCode, DSH, mcode, qwen,
+    /// copilot and opencode have none.
     pub fn launcher(self) -> Option<&'static str> {
         match self {
             Agent::Claude => Some("cl"),
             Agent::Codex => Some("cx"),
             Agent::Kimi => Some("ck"),
-            Agent::Agy | Agent::Zcode | Agent::Dsh | Agent::Mcode | Agent::Qwen => None,
+            Agent::Agy
+            | Agent::Zcode
+            | Agent::Dsh
+            | Agent::Mcode
+            | Agent::Qwen
+            | Agent::Copilot
+            | Agent::Opencode => None,
         }
     }
 
     /// The agent's own prefix on its session IDs, which hatcheck leaves off when it names a
     /// session and puts back in the agent's commands and files: Kimi's session_<uuid>, ZCode's
-    /// sess_<uuid>, DSH's session-<uuid> and mcode's mvs_<id>.
+    /// sess_<uuid>, DSH's session-<uuid>, mcode's mvs_<id> and opencode's ses_<id>.
     pub fn id_prefix(self) -> &'static str {
         match self {
             Agent::Kimi => "session_",
             Agent::Zcode => "sess_",
             Agent::Dsh => "session-",
             Agent::Mcode => "mvs_",
-            Agent::Claude | Agent::Codex | Agent::Agy | Agent::Qwen => "",
+            Agent::Opencode => "ses_",
+            Agent::Claude | Agent::Codex | Agent::Agy | Agent::Qwen | Agent::Copilot => "",
         }
     }
 
@@ -190,7 +217,8 @@ impl Agent {
     }
 }
 
-/// Sorted by key, as the names sorted as text: agy, claude, codex, dsh, kimi, mcode, qwen, zcode.
+/// Sorted by key, as the names sorted as text: agy, claude, codex, copilot, dsh, kimi, mcode,
+/// opencode, qwen, zcode.
 impl Ord for Agent {
     fn cmp(&self, other: &Self) -> Ordering {
         self.key().cmp(other.key())
@@ -216,10 +244,12 @@ mod tests {
         assert_eq!(Agent::from_key("x"), None);
         assert!(Agent::Agy < Agent::Claude && Agent::Claude < Agent::Codex);
         assert!(
-            Agent::Codex < Agent::Dsh
+            Agent::Codex < Agent::Copilot
+                && Agent::Copilot < Agent::Dsh
                 && Agent::Dsh < Agent::Kimi
                 && Agent::Kimi < Agent::Mcode
-                && Agent::Mcode < Agent::Qwen
+                && Agent::Mcode < Agent::Opencode
+                && Agent::Opencode < Agent::Qwen
                 && Agent::Qwen < Agent::Zcode
         );
     }
@@ -241,5 +271,9 @@ mod tests {
         assert_eq!(Agent::Codex.full_id(id), id);
         assert_eq!(Agent::Qwen.bare_id(id), id);
         assert_eq!(Agent::Qwen.full_id(id), id);
+        assert_eq!(Agent::Copilot.bare_id(id), id);
+        assert_eq!(Agent::Opencode.bare_id("ses_abc"), "abc");
+        assert_eq!(Agent::Opencode.bare_id("se"), "");
+        assert_eq!(Agent::Opencode.full_id("abc"), "ses_abc");
     }
 }

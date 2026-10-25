@@ -1,5 +1,5 @@
 //! hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax
-//! Code and Qwen Code accounts on one computer, each kept apart. The hatcheck and hat commands, the cl, cx, claude-z and claude-k
+//! Code, Qwen Code, GitHub Copilot CLI and OpenCode accounts on one computer, each kept apart. The hatcheck and hat commands, the cl, cx, claude-z and claude-k
 //! launchers, and hatcheck serve, the engine the desktop app runs. It was ported from a Python
 //! version, with the same output, which the command tests in tests/ still hold it to
 //! (docs/rust-port.md).
@@ -14,6 +14,7 @@ pub mod best;
 pub mod bind;
 pub mod cli;
 pub mod conv;
+pub mod copilot;
 pub mod desktop;
 pub mod doctor;
 pub mod dsh;
@@ -24,6 +25,7 @@ pub mod launch;
 pub mod mcode;
 pub mod move_cmd;
 pub mod open_cmd;
+pub mod opencode;
 pub mod ospath;
 pub mod out;
 pub mod paths;

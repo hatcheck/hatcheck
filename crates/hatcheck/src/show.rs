@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Show a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code or Qwen Code session's conversation, read-only.",
+        "Show a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session's conversation, read-only.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
     .option(
@@ -60,6 +60,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Agent::Dsh => crate::dsh::read_conversation(&s.profile, &s.id),
         Agent::Mcode => crate::mcode::read_conversation(&s.profile, &s.id),
         Agent::Qwen => crate::qwen::read_conversation(&s.profile, &s.id),
+        Agent::Copilot => crate::copilot::read_conversation(&s.profile, &s.id),
+        Agent::Opencode => crate::opencode::read_conversation(&s.profile, &s.id),
     };
     let conv = match conv {
         Ok(c) => c,

@@ -1,9 +1,9 @@
 # The agents and their launchers
 
-How Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code and
-Qwen Code keep their profiles, homes and folders, and the launchers that run them with one: `cl`,
-`cx`, `ck`, and `claude-z` and `claude-k` for Claude Code on Z.ai and Kimi. The commands are in
-[commands.md](commands.md), and installing hatcheck in [install.md](install.md).
+How Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen
+Code, GitHub Copilot CLI and OpenCode keep their profiles, homes and folders, and the launchers that
+run them with one: `cl`, `cx`, `ck`, and `claude-z` and `claude-k` for Claude Code on Z.ai and Kimi.
+The commands are in [commands.md](commands.md), and installing hatcheck in [install.md](install.md).
 
 ## Getting the agents
 
@@ -17,6 +17,8 @@ curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash  # Kimi Code CLI: k
 npm install -g @deepseek-ai/dsh                               # DeepSeek Harness: dsh (needs Node.js)
 curl -fsSL https://filecdn.minimax.chat/public/install.sh | bash # MiniMax Code: mcode
 curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash # Qwen Code: qwen
+curl -fsSL https://gh.io/copilot-install | bash               # GitHub Copilot CLI: copilot
+curl -fsSL https://opencode.ai/v2/install | bash              # OpenCode: opencode (with an opencode2 shim beside it)
 ```
 
 On Windows, in PowerShell:
@@ -29,9 +31,13 @@ irm https://code.kimi.com/kimi-code/install.ps1 | iex
 npm install -g @deepseek-ai/dsh
 irm https://filecdn.minimax.chat/public/install.ps1 | iex
 irm https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1 | iex
+winget install GitHub.Copilot
+npm i -g @opencode/cli@latest
 ```
 
-- Homebrew on macOS has the first three: `brew install --cask claude-code codex antigravity-cli`.
+- Homebrew on macOS has the first three and Copilot:
+  `brew install --cask claude-code codex antigravity-cli copilot-cli`; OpenCode is a formula,
+  `brew install anomalyco/tap/opencode-v2` (its own tap, always current) or `brew install opencode`.
 - ZCode has no installer for its CLI, which comes inside the ZCode app: see [ZCode](#zcode-zcode).
 - DeepSeek runs DSH with `npx @deepseek-ai/dsh web`; installed with npm, it's the `dsh` command
   hatcheck's open commands run.
@@ -41,6 +47,12 @@ irm https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-q
   `~/.local/bin` (`%LOCALAPPDATA%\qwen-code\bin` on Windows); `npm install -g
   @qwen-code/qwen-code@latest` and `brew install qwen-code` (a formula, not a cask) install it too.
   Its home, `~/.qwen`, is separate: see [Qwen Code](#qwen-code-qwen).
+- GitHub Copilot CLI's installer puts `copilot` in `~/.local/bin` (`$PREFIX/bin`); `npm install -g
+  @github/copilot` installs it too. Its home, `~/.copilot`, is separate: see
+  [GitHub Copilot CLI](#github-copilot-cli-copilot).
+- OpenCode's installer puts `opencode` in `~/.opencode/bin`, with an `opencode2` shim beside it
+  that runs `opencode`, a leftover from when version 2 shipped beside version 1. Its data folder,
+  `~/.local/share/opencode`, is separate: see [OpenCode](#opencode-opencode).
 - `hatcheck doctor` then lists each agent on your `PATH`, its version and which copy runs.
 
 The desktop apps:
@@ -55,8 +67,10 @@ The desktop apps:
 | DeepSeek Harness | macOS (Apple silicon), Windows | [deepseek.com/harness](https://deepseek.com/harness) |
 | Qwen Code Desktop | macOS, Windows, Linux | [GitHub releases, `desktop-latest`](https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) |
 | MiniMax Code | macOS, Windows | [MiniMax Code's download guide](https://agent.minimax.io/docs/code/get-started/download) |
+| OpenCode | macOS, Windows, Linux | [opencode.ai](https://opencode.ai/) |
 
-Homebrew on macOS has four of them: `brew install --cask claude chatgpt antigravity zcode`.
+Homebrew on macOS has five of them:
+`brew install --cask claude chatgpt antigravity zcode opencode-desktop`.
 
 ## `cl`: run Claude Code with a profile
 
@@ -429,6 +443,111 @@ qwen 0.26.0:
   explicitly. `bind --which qwen` prints `default`, `NAME` or the bound path. An agent-only
   binding command with no PROFILE keeps the existing qwen binding unless `--qwen` replaces it. No
   hook is added for qwen.
+
+## GitHub Copilot CLI (`copilot`)
+
+[GitHub Copilot CLI](https://github.com/github/copilot-cli) keeps everything under `~/.copilot`, and
+`COPILOT_HOME` moves that home whole: its settings, its sessions and, when the system has no
+credential store, its login, which hatcheck never reads. hatcheck discovers `~/.copilot`, every
+`~/.copilot-NAME` and the home `COPILOT_HOME` names, when copilot has run there (its `session-state`
+folder, or its `config.json`); `copilot` and `copilot:NAME` name these in profile arguments. There
+is no hatcheck copilot launcher or installer alias. Whether copilot's system credential store keeps
+one login per home is for the maintainer's probe in [maintenance.md](maintenance.md): hatcheck
+reads no login and can't tell. What hatcheck reads, checked against copilot 1.0.103:
+
+- `session-state/<uuid>/events.jsonl`, the record copilot writes as a session runs: an event per
+  line with `type`, `data`, `id`, `timestamp` and `parentId`. `session.start` carries the folder,
+  branch and copilot's version; `user.message` your message (`content`, before the date copilot
+  prepends in `transformedContent`); `assistant.message` the reply's `content`, its `model` and
+  its `toolRequests` (`toolCallId`, `name`, `arguments`, as copilot's own code writes them);
+  `tool.user_requested` a command you ran with `!`; `tool.execution_complete` a tool's `result`.
+  copilot's own records (`session.*`, `model.*`, `hook.*`, `assistant.reasoning`, `system.message`)
+  stay out of the conversation. The last event's time is the session's activity, and a folder
+  without `events.jsonl`, which copilot leaves when a session is started and never spoken in, isn't
+  a session.
+- `workspace.yaml` beside it: `id`, `cwd` (the session's folder), `branch`, `client_name`
+  (`github/cli` for the CLI; another client's sessions wait for `--all`), `name` (copilot's own name
+  for the session, from `-n`, `/rename` or the one it generates; else the title is the first
+  prompt) and its times. `session-store.db` at the root, copilot's index for its session browser,
+  isn't read.
+- `inuse.<pid>.lock` in a session's folder names the process that has it open; copilot removes it
+  when it quits, so one naming a process that has gone is a crash's, and isn't open. An open
+  session stays listed past the time window, and `open` and `move` refuse it.
+- The resume command is `copilot --resume <id>`, run from the session's folder; a named or custom
+  home uses `COPILOT_HOME=… copilot --resume <id>` (in PowerShell, `$env:COPILOT_HOME=…; copilot
+  --resume <id>; $env:COPILOT_HOME=$null`). `hatcheck open --login copilot[:NAME]` runs
+  `copilot login` in that home: copilot's own sign-in, to its system credential store.
+- `hatcheck usage` lists one no-data account per copilot home, with agent `copilot` and plan
+  `Copilot`: `copilot's /usage runs only in a session, and hatcheck makes no request (1.0.103)`.
+  copilot's `/usage` is a slash command inside a session, a model turn; hatcheck reads no
+  credential and asks nothing.
+- `move` and `fork` convert copilot sessions out to existing writable targets, always keeping the
+  original, and convert a session of another agent for copilot as a file its own importer takes:
+  `imports/<id>.jsonl` in hatcheck's cache folder, a version-1 session interchange file (a
+  `session` header with the title, folder and branch, then a `message` record per turn), which
+  `copilot sessions import <file>` validates and imports, giving the session an ID of its own that
+  it prints for `copilot --resume`. Checked with copilot 1.0.103 on 2026-10-25, whose `sessions
+  import --dry-run` accepted the file and whose import made the session folder, with the title as
+  its name. Copies between copilot homes are refused: hatcheck never writes copilot's store.
+- `relocate` lists affected copilot sessions as skipped: its workspace file and events record the
+  folder, and stay as they were. `--dry-run` changes nothing.
+- `hatcheck bind default` binds `~/.copilot` along with the rest when copilot has run there, `bind
+  NAME` binds `~/.copilot-NAME` when it has, and `--copilot NAME`, `--copilot default` or
+  `--copilot PATH` picks one explicitly. `bind --which copilot` prints `default`, `NAME` or the
+  bound path. An agent-only binding command with no PROFILE keeps the existing copilot binding
+  unless `--copilot` replaces it. No hook is added for copilot.
+
+## OpenCode (`opencode`)
+
+[OpenCode](https://opencode.ai) 2 keeps its data in the XDG data folder, `~/.local/share/opencode`,
+or `XDG_DATA_HOME`'s `opencode`: one SQLite database, `opencode.db`, with every project's sessions,
+their messages and its provider logins, which hatcheck never reads, and its logs, shell history and
+repository cache beside it. Its settings are in `~/.config/opencode`, and the background service
+plain opencode runs through registers under `~/.local/state/opencode`. hatcheck reads the one data
+folder plain opencode uses, when opencode has run (its database exists); `opencode` names it in
+profile arguments. There are no named OpenCode homes: a second store needs `XDG_DATA_HOME` or
+`OPENCODE_DB` and `--standalone`, since the background service keeps the store it started with,
+and which of those a profile should mean is a decision not taken (see `agent.rs`). `~/.opencode`,
+where its installer puts the program, isn't a data folder, and the `opencode2` shim beside it runs
+`opencode`. The version-1 store, `storage/` beside the database, is what opencode 2 imports on its
+first run, and isn't read. What hatcheck reads, checked against opencode 2.1.4:
+
+- `session_v2`: a row per session with its `id` (`ses_` and 26 characters; hatcheck shows the
+  characters and takes either), `parent_id` (set on the child sessions subagents run, which stay
+  out of the list), `directory` (the session's folder), `title`, `model` (shown as
+  `provider/model`), `time_created`, `time_updated` (the session's activity) and `time_archived`.
+  Nothing records a branch.
+- `session_message`: a row per message, in `seq` order, with `type` and a JSON `data` record. A
+  `user` message's `text` and `files` (marked as images or files), an `assistant` message's
+  `content` parts (`text` kept, `reasoning` left out, `tool` as a call with its `state.input` and
+  the text of its `state.content` or its error), a `shell` message's command and output, and a
+  completed `compaction`'s summary make the conversation; `synthetic`, `system` and `skill`
+  messages and the agent, model and folder switches are opencode's own. The first user message's
+  text is the title when the row has none.
+- Nothing marks a session open; `open` and `move` refuse none.
+- The resume command is `opencode --session ses_<id>`, run from the session's folder, where
+  opencode files it. A data folder other than the one plain opencode uses, reached by its path, is
+  run with `OPENCODE_DB=<its opencode.db> opencode --standalone --session ses_<id>` (in
+  PowerShell, `$env:OPENCODE_DB=…; opencode --standalone --session ses_<id>;
+  $env:OPENCODE_DB=$null`), off the background service. `hatcheck open --login opencode` runs
+  `opencode auth login`, opencode's own sign-in to a provider.
+- `hatcheck usage` lists the data folder as one no-data account, with agent `opencode` and plan
+  `OpenCode`: `opencode has no plan-usage command: its stats count tokens spent (2.1.4)`. Its
+  plans are its providers' own; hatcheck reads no credential and asks nothing.
+- `move` and `fork` convert opencode sessions out to existing writable targets, always keeping the
+  original, and convert a session of another agent for opencode as a file its own importer takes:
+  `imports/<id>.json` in hatcheck's cache folder, the `{info, messages}` session data `opencode
+  session export` prints, with an ID minted as opencode mints them, which `opencode session import
+  <file>` takes from the session's folder; the session then resumes with `opencode --session
+  ses_<id>`. Checked with opencode 2.1.4 on 2026-10-25, with its service disabled, whose import
+  took the file, listed the session with its title and folder and exported it back. A copy into
+  its own store is refused as already there; hatcheck never writes opencode's database.
+- `relocate` lists affected opencode sessions as skipped: the row records the folder in opencode's
+  database, which hatcheck never writes. `--dry-run` changes nothing.
+- `hatcheck bind default` binds `~/.local/share/opencode` along with the rest when opencode has
+  run, and `--opencode default` or `--opencode PATH` picks one explicitly. `bind --which opencode`
+  prints `default` or the bound path. An agent-only binding command with no PROFILE keeps the
+  existing opencode binding unless `--opencode` replaces it. No hook is added for opencode.
 
 ## `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
 

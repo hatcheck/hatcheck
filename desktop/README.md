@@ -65,6 +65,17 @@ with `QWEN_HOME` for a named or custom home. Hatcheck never writes Qwen Code's s
 moved or forked to Qwen Code becomes a file qwen is started on, as with Antigravity CLI and ZCode,
 and sessions aren't copied between its homes.
 
+GitHub Copilot CLI homes are `~/.copilot` and `~/.copilot-NAME`, selected with `COPILOT_HOME`; **Add
+one** makes `copilot:NAME`, and there is no Hatcheck copilot launcher. `hatcheck open --login
+copilot[:NAME]` runs `copilot login` in that home, so sign-in stays with Copilot. For a Copilot
+session, **Resume** opens a terminal in the recorded folder and runs `copilot --resume <id>`, with
+`COPILOT_HOME` for a named or custom home. OpenCode has one data folder, `~/.local/share/opencode`,
+which plain `opencode` makes; `hatcheck open --login opencode` runs `opencode auth login`, and
+**Resume** runs `opencode --session ses_<id>` in the recorded folder. Hatcheck never writes either
+store: a session moved or forked to Copilot or OpenCode becomes a file its own importer takes,
+whose command Hatcheck prints (`copilot sessions import`, `opencode session import`), and sessions
+aren't copied between Copilot homes.
+
 ## Rules it keeps
 
 - **No credentials.** It never asks for, stores, refreshes or passes on a login.
@@ -76,7 +87,8 @@ and sessions aren't copied between its homes.
   it's signed in. DeepSeek Harness has no plan-quota command or endpoint, so Plans shows **no data**
   for its homes. For MiniMax Code, Plans shows a normal **no data** account with the reason "mcode
   plan quota isn't wired into hatcheck (0.6.13)"; no MiniMax usage request is made. Qwen Code has no
-  plan-usage command or endpoint either, so its homes show **no data** too.
+  plan-usage command or endpoint either, so its homes show **no data** too, as do Copilot's, whose
+  `/usage` runs only in a session, and OpenCode's, whose plans are its providers' own.
 - **No automatic switching** between accounts.
 
 ## Build and test it

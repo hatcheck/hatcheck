@@ -157,6 +157,12 @@ AGENTS = [
      None, ["mcode", "MiniMax Code"], r"\b0\.6\.\d+\b"),
     ("Qwen Code", lambda: run_version(["qwen", "--version"]), lambda: (npm("@qwen-code/qwen-code"), None),
      ["qwen", "Qwen Code"], r"\b0\.2\d\.\d+\b"),
+    ("GitHub Copilot CLI", lambda: run_version(["copilot", "--version"]),
+     lambda: (npm("@github/copilot"), "prerelease %s" % npm("@github/copilot", "prerelease")),
+     ["copilot", "GitHub Copilot CLI"], r"\b1\.0\.\d{2,3}\b"),
+    # Version 2 is on GitHub releases and the anomalyco tap; npm's opencode-ai is version 1.
+    ("OpenCode", lambda: run_version(["opencode", "--version"]), lambda: (github_release("anomalyco/opencode"), None),
+     ["opencode", "OpenCode"], r"\b2\.\d+\.\d+\b"),
 ]
 
 APPS = [("Claude Desktop", "claude"), ("ChatGPT, with Codex", "chatgpt"), ("Codex app (old cask)", "codex-app"),
