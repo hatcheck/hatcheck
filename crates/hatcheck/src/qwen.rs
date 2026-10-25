@@ -682,7 +682,13 @@ mod tests {
 
     #[test]
     fn names_projects_as_qwen_does_and_knows_its_files() {
-        assert_eq!(project_name("/Volumes/x/repo"), "-Volumes-x-repo");
+        // Lowercased first on Windows, as qwen names it there.
+        let named = if ospath::WINDOWS {
+            "-volumes-x-repo"
+        } else {
+            "-Volumes-x-repo"
+        };
+        assert_eq!(project_name("/Volumes/x/repo"), named);
         assert!(is_transcript_name(&format!("{ID}.jsonl")));
         assert!(!is_transcript_name(&format!("{ID}.runtime.json")));
         assert!(!is_transcript_name("notes.jsonl"));

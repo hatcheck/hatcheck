@@ -620,9 +620,11 @@ mod tests {
         ] {
             assert!(relative_segments(bad).is_err(), "{bad}");
         }
-        assert!(derived_history("/h/.minimax", &r).ends_with(
+        // As this system spells a path: with \ on Windows.
+        let native = |p: &str| p.replace('/', ospath::SEP);
+        assert!(derived_history("/h/.minimax", &r).ends_with(&native(
             "2026/10/24/21-55-57-992-session_bXZzX2I4YmRlM2ViYWRlYjQ5ZDViZTA0NzU3MDQwYThhMmIz"
-        ));
+        )));
     }
 
     #[test]
