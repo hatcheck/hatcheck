@@ -4,7 +4,9 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
-## Unreleased
+## 0.7.0 - 2026-10-25
+
+GitHub Copilot CLI (`copilot`) and OpenCode (`opencode`) join the agents, read-only, and take a converted session through their own importers, which hatcheck writes the file for and prints the command of. MiniMax Code and DeepSeek Harness take one too, as a file mcode's terminal UI is started on and as a prompt pasted into DSH's web UI. Every handover now tells the agent to check whether its last action completed before repeating it.
 
 ### Added
 
