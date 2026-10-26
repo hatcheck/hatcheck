@@ -72,6 +72,22 @@ The desktop apps:
 Homebrew on macOS has five of them:
 `brew install --cask claude chatgpt antigravity zcode opencode-desktop`.
 
+Their source, where the maker publishes the program's:
+
+| Agent | Source | Licence |
+|---|---|---|
+| Codex | [openai/codex](https://github.com/openai/codex) | Apache-2.0 |
+| Kimi Code CLI | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) | MIT |
+| DeepSeek Harness | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) | MIT |
+| MiniMax Code | [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code) | MIT for its own code, with the third-party exceptions its `LICENSE-STATUS.md` lists |
+| Qwen Code | [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code) | Apache-2.0 |
+| OpenCode | [anomalyco/opencode](https://github.com/anomalyco/opencode) | MIT |
+
+Claude Code, Antigravity CLI, ZCode and GitHub Copilot CLI ship without theirs:
+[anthropics/claude-code](https://github.com/anthropics/claude-code) and
+[github/copilot-cli](https://github.com/github/copilot-cli) hold issues, a changelog and plugins, not
+the program, and the other two have no repository.
+
 ## `cl`: run Claude Code with a profile
 
 ```bash
