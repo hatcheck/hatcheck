@@ -1,0 +1,85 @@
+<!doctype html>
+<!-- Hatcheck's site, a guide: Claude Code with two accounts, a profile per account. The facts are
+     docs/agents.md's and docs/commands.md's; the pages share style.css, and refresh.py fills the
+     sample block at a release. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Claude Code with two accounts · Hatcheck</title>
+  <meta name="description" content="A Claude Code profile per account with CLAUDE_CONFIG_DIR, the cl launcher that runs one, and one list of every profile's sessions and plan usage. No login read or copied.">
+  <link rel="canonical" href="https://hatcheck.dev/claude-code-two-accounts">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://hatcheck.dev/claude-code-two-accounts">
+  <meta property="og:image" content="https://hatcheck.dev/og.png">
+  <meta property="og:title" content="Claude Code with two accounts · Hatcheck">
+  <meta property="og:description" content="A Claude Code profile per account with CLAUDE_CONFIG_DIR, the cl launcher that runs one, and one list of every profile's sessions and plan usage. No login read or copied.">
+</head>
+<body>
+  <nav class="top wrap" aria-label="Site">
+    <a href="index.html" class="brand"><img src="favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="guides.html" aria-current="page">Guides</a>
+    <a href="agents.html">Agents</a>
+    <a href="commands.html">Commands</a>
+    <a href="rules.html">Rules</a>
+    <a href="https://github.com/hatcheck/hatcheck">GitHub</a>
+  </nav>
+  <main class="wrap page guide">
+    <h1>Claude Code with two accounts</h1>
+    <p>Claude Code keeps its settings and sessions in one folder, <code>~/.claude</code>, and its login with them: in the Keychain on macOS, in a credentials file in that folder on Linux and Windows. Pointed at another folder, it keeps a second set there, with a login of its own: a profile. A profile per account is the whole trick. Hatcheck adds a short way to run one, a single list of what's in all of them, and what's left of each plan, and it never reads or copies a login.</p>
+
+    <h2>The variable itself</h2>
+    <p><code>CLAUDE_CONFIG_DIR</code> names the folder. Set it for one run and that run is a separate Claude Code, which asks you to sign in the first time:</p>
+<pre><code>CLAUDE_CONFIG_DIR=~/.claude-work claude                  # a second Claude Code, with its own login
+CLAUDE_CONFIG_DIR=~/.claude-work claude --resume &lt;id&gt;    # one of its sessions, later</code></pre>
+    <p>Plain <code>claude</code> keeps using <code>~/.claude</code>. On macOS, Claude Code names the profile's Keychain entry after the exact folder string it was given, so spell a profile's path the same way every time: <code>~/.claude-work</code> and <code>/Users/me/.claude-work</code> would be two logins.</p>
+
+    <h2>With hatcheck</h2>
+    <p>Install the CLI, with one line in a terminal or with Homebrew. It installs no agent and changes nothing in <code>~/.claude</code>:</p>
+<pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
+brew install hatcheck/tap/hatcheck    # or, with Homebrew; Windows and the other ways: hatcheck.dev/#install</code></pre>
+    <p>Then <code>cl</code> runs Claude Code with a profile, always spelling its folder <code>~/.claude-&lt;name&gt;</code> the same way, so the Keychain entry matches every time:</p>
+<pre><code>cl work                     # Claude Code with ~/.claude-work; the first run asks you to sign in
+cl home                     # ~/.claude-home, signed in to the other account
+cl work --resume &lt;id&gt;       # any claude option works
+cd ~/code/api
+hatcheck bind work          # in this folder, plain cl means cl work
+hatcheck                    # the sessions here from every profile, with the command that resumes each</code></pre>
+    <p><code>hatcheck</code>, run in a project folder, lists that folder's recent sessions from every profile, newest first, each with the command that resumes it and what's left of its plan. <code>~/.claude</code> counts as a profile too, called <code>default</code>.</p>
+
+    <h2>What's left of each plan, and which to use</h2>
+<pre><code>hat u      # every account's limits: the 5-hour session, the week, and per-model limits such as Fable
+hat b      # the account with the most room now, and the command that carries the newest session here to it</code></pre>
+    <p>The numbers come from Claude Code's own <code>/usage</code>, run in each profile with that profile's login; hatcheck reads the snapshot Claude Code saves and never a login. <a href="claude-usage-limits.html">Claude usage limits</a> explains the limits and the bars. <code>hat b</code> is <code>hatcheck best</code>:</p>
+<pre><code><!-- sample:best -->$ hatcheck best
+Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
+<span class="b c">Best Claude Code account now: </span><span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 10:50pm (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Sat 12:58am (in 4d4h)</span>
+Carry it there with:
+<span class="c">  hatcheck move b</span><span class="d">    (hatcheck fork b keeps the original)</span>
+<span class="d">Then:</span>
+   2. <span class="b">~/.claude-a</span>  week 9%, 0.4%/h · 5h 20% (where it is)  <span class="c">→ cl a</span>
+<span class="d">Codex:</span> <span class="b">~/.codex</span>  week 64%, 1.3%/h · 5h 80% · cached 50m ago  <span class="c">→ codex</span>
+<span class="d">Advice only: nothing is started, moved or switched. hatcheck usage shows every account's limits.</span><!-- /sample:best --></code></pre>
+
+    <h2>Carry a session to the other account</h2>
+    <p>When one account runs low, <code>hatcheck move home</code> carries the newest session started from this folder to <code>~/.claude-home</code>, after showing what it would do and asking; <code>hatcheck fork home</code> copies it there as a new session and keeps the original. The copy resumes with <code>cl home --resume</code> and the session's id. Nothing switches on its own: hatcheck prints the command, and you run it.</p>
+
+    <h2>Claude Desktop, too</h2>
+    <p>Claude Desktop keeps one login as well, and the same idea applies: a data folder per account. <a href="two-claude-accounts-on-one-mac.html">Two Claude accounts on one Mac</a> has it.</p>
+
+    <h2>Windows</h2>
+    <p><code>cl work</code> works in PowerShell too, and the commands hatcheck prints there are in PowerShell's words, so paste them into PowerShell rather than <code>cmd</code>.</p>
+
+    <h2>What hatcheck never does</h2>
+    <p>It never asks for, reads, copies, refreshes or moves a login: signing in happens in Claude Code itself, in your terminal. It is never between Claude Code and Anthropic, runs nothing in the background, and switches no account on its own. Each rule, with the code that keeps it: <a href="rules.html">rules it keeps</a>.</p>
+  </main>
+  <footer class="wrap">
+    <p><a href="index.html">Hatcheck</a> · <a href="guides.html">Guides</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
+    <p>Unofficial: not made by, affiliated with or endorsed by any of the agents' makers.</p>
+  </footer>
+</body>
+</html>

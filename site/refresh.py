@@ -8,9 +8,10 @@ commands.html: each block between <!-- help:NAME --> and <!-- /help:NAME --> bec
 `hatcheck NAME --help` prints (hatcheck: `hatcheck --help`; version: the version), HTML-escaped,
 wrapped as in an 80-column terminal.
 
-index.html: each block between <!-- sample:NAME --> and <!-- /sample:NAME --> becomes a command
-run in a demo home made with tests/helpers.py, never your profiles: `list` is `hatcheck` in a
-folder with sessions from every agent, `best` is `hatcheck best` there, and `relocate` is
+index.html, and every guide page with such blocks: each block between <!-- sample:NAME --> and
+<!-- /sample:NAME --> becomes a command run in a demo home made with tests/helpers.py, never your
+profiles: `list` is `hatcheck` in a folder with sessions from every agent, `best` is `hatcheck
+best` there, `usage` is `hatcheck usage` there, and `relocate` is
 `hatcheck relocate` once ~/code/web, with sessions in two profiles, a Codex home, a Kimi home, a DSH home, an
 mcode home, a qwen home, a copilot home and opencode's data folder, is renamed ~/code/site; the demo home's path reads /Users/me wherever it's printed in full, as
 in the project folders' names. They
@@ -23,6 +24,7 @@ runs, so each sample reads live. The list's lines after the sessions (the profil
 came from) are left out.
 
 Not uploaded with the pages: .assetsignore names it."""
+import glob
 import html
 import os
 import re
@@ -231,6 +233,8 @@ def sample(name, home):
         return "$ hatcheck\n" + ansi_to_html(text)
     if name == "best":
         return "$ hatcheck best\n" + ansi_to_html(on_terminal([BINARY, "best"], api, env))
+    if name == "usage":
+        return "$ hatcheck usage\n" + ansi_to_html(on_terminal([BINARY, "usage"], api, env))
     if name == "relocate":
         return relocate_sample(h, env)
     sys.exit("no such sample: " + name)
@@ -278,6 +282,8 @@ if __name__ == "__main__":
     refresh(os.path.join(HERE, "commands.html"), "help", lambda name: html.escape(help_text(name), quote=False))
     home = demo_home()
     try:
-        refresh(os.path.join(HERE, "index.html"), "sample", lambda name: sample(name, home))
+        for page in sorted(glob.glob(os.path.join(HERE, "*.html"))):
+            if "<!-- sample:" in open(page, encoding="utf-8").read():
+                refresh(page, "sample", lambda name: sample(name, home))
     finally:
         home[0].cleanup()

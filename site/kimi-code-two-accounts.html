@@ -1,0 +1,55 @@
+<!doctype html>
+<!-- Hatcheck's site, a guide: Kimi Code CLI with two accounts, a home per account. The facts are
+     docs/agents.md's and docs/commands.md's; the pages share style.css. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Kimi Code CLI with two accounts · Hatcheck</title>
+  <meta name="description" content="A Kimi Code CLI home per account with KIMI_CODE_HOME, the ck launcher that runs one, and every home's sessions and plan windows beside Claude Code's and Codex's. No login read or copied.">
+  <link rel="canonical" href="https://hatcheck.dev/kimi-code-two-accounts">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://hatcheck.dev/kimi-code-two-accounts">
+  <meta property="og:image" content="https://hatcheck.dev/og.png">
+  <meta property="og:title" content="Kimi Code CLI with two accounts · Hatcheck">
+  <meta property="og:description" content="A Kimi Code CLI home per account with KIMI_CODE_HOME, the ck launcher that runs one, and every home's sessions and plan windows beside Claude Code's and Codex's. No login read or copied.">
+</head>
+<body>
+  <nav class="top wrap" aria-label="Site">
+    <a href="index.html" class="brand"><img src="favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="guides.html" aria-current="page">Guides</a>
+    <a href="agents.html">Agents</a>
+    <a href="commands.html">Commands</a>
+    <a href="rules.html">Rules</a>
+    <a href="https://github.com/hatcheck/hatcheck">GitHub</a>
+  </nav>
+  <main class="wrap page guide">
+    <h1>Kimi Code CLI with two accounts</h1>
+    <p>Moonshot's <a href="https://github.com/MoonshotAI/kimi-code">Kimi Code CLI</a>, <code>kimi</code>, keeps its login, settings and sessions in <code>~/.kimi-code</code>. <code>KIMI_CODE_HOME</code> moves the whole home, so a second account is a second home, <code>~/.kimi-code-work</code>, signed in once there, exactly as <a href="codex-two-accounts.html">Codex's</a> are. Hatcheck adds <code>ck</code> to run kimi with a home, and lists every home's sessions and plan windows beside Claude Code's and Codex's.</p>
+
+    <h2>The variable itself</h2>
+<pre><code>mkdir -p ~/.kimi-code-work
+KIMI_CODE_HOME=~/.kimi-code-work kimi login     # sign that home in, once
+KIMI_CODE_HOME=~/.kimi-code-work kimi           # Kimi Code CLI with that account</code></pre>
+
+    <h2>With hatcheck</h2>
+    <p><a href="index.html#install">Install the CLI</a>, and <code>ck</code> does the above, making the folder on first use:</p>
+<pre><code>ck work login               # sign in once, with that account
+ck work                     # Kimi Code CLI with ~/.kimi-code-work
+ck work --session &lt;id&gt;      # one of that home's sessions
+cd ~/code/api
+hatcheck bind work          # here, plain ck means ck work, and cl and cx the same
+hatcheck                    # the sessions here from every home and profile, with the command that resumes each</code></pre>
+    <p><code>hatcheck usage</code> shows each home's Kimi Code plan windows, the 5-hour and 7-day ones and the month's, from the endpoint kimi's own <code>/usage</code> asks, with the access token kimi saved in the home sent as it is and never refreshed. That token lasts a quarter of an hour and kimi renews it as it runs, so a live reading needs kimi to have run recently; otherwise hatcheck's last reading is shown with its age. <code>hatcheck move</code> carries a session between Kimi homes whole, as it does between Codex homes, or converts it for Claude Code and the others, and theirs for kimi; quit kimi first, since nothing marks a Kimi session open.</p>
+
+    <h2>What hatcheck never does</h2>
+    <p>It never asks for, copies, refreshes or moves a login: <code>ck work login</code> is kimi's own sign-in, in your terminal. It is never between kimi and Moonshot, runs nothing in the background, and switches no account on its own. Each rule, with the code that keeps it: <a href="rules.html">rules it keeps</a>.</p>
+  </main>
+  <footer class="wrap">
+    <p><a href="index.html">Hatcheck</a> · <a href="guides.html">Guides</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
+    <p>Unofficial: not made by, affiliated with or endorsed by any of the agents' makers.</p>
+  </footer>
+</body>
+</html>

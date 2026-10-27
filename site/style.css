@@ -1,4 +1,4 @@
-/* Hatcheck's site: the styles index.html, agents.html, commands.html and rules.html share.
+/* Hatcheck's site: the styles index.html, guides.html and the guides, agents.html, commands.html and rules.html share.
    Light and dark follow the system; colours are the tokens on :root. */
 :root {
   color-scheme: light dark;
@@ -23,7 +23,8 @@ header { padding: 36px 0 28px; }
 .hero svg { width: 96px; height: 96px; flex: none; border-radius: 22px; }
 h1 { font-size: 40px; margin: 0; letter-spacing: -0.02em; }
 .tagline { font-size: 20px; color: var(--muted); margin: 6px 0 0; max-width: 640px; }
-.unofficial { color: var(--muted); font-size: 14px; margin: 18px 0 0; }
+.unofficial { color: var(--muted); font-size: 14px; margin: 18px 0 22px; }
+.nowrap { white-space: nowrap; }
 .buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
 .button { display: inline-block; padding: 9px 16px; border-radius: 8px; background: var(--accent); color: var(--accent-text); text-decoration: none; font-weight: 600; }
 .button.ghost { background: var(--bg-soft); color: var(--text); }
@@ -92,3 +93,10 @@ footer { padding: 26px 0 48px; border-top: 1px solid var(--line); color: var(--m
 /* Colours in the samples of hatcheck's output, as a terminal shows them: bold, dim and the basic colours. */
 pre .b { font-weight: 700; } pre .d { opacity: 0.62; }
 pre .r { color: #ff6b6b; } pre .g { color: #4fd18b; } pre .y { color: #f2c94c; } pre .bl { color: #6ea8fe; } pre .m { color: #c58af9; } pre .c { color: #5fd3e8; }
+/* The guides: a page each, with the same h1 as the other pages and room between their sections. */
+.guide h2 { margin-top: 30px; }
+.guide pre { margin: 10px 0 14px; }
+.guide li { margin: 6px 0; }
+.guide li pre { margin: 8px 0 4px; }
+.guides li { margin: 10px 0; }
+.guides li span { display: block; color: var(--muted); font-size: 15px; }

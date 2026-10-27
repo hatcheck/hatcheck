@@ -1,27 +1,44 @@
 <!doctype html>
-<!-- Hatcheck's site: this page, agents.html, commands.html and rules.html, sharing style.css, with
+<!-- Hatcheck's site: this page, guides.html and the guides, agents.html, commands.html and rules.html, sharing style.css, with
      the images beside them, served at hatcheck.dev from Cloudflare as static assets (each page
      also at its name without .html); deploy.sh in this folder ships it (see wrangler.jsonc). It
      loads nothing from outside until the video is played, which brings in YouTube's player.
-     commands.html's help blocks and the samples here come from refresh.py, run at a release. -->
+     commands.html's help blocks and the samples here and in the guides come from refresh.py, run at a release. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
-  <title>Hatcheck</title>
-  <meta name="description" content="Claude Code, Codex and eight more coding agents on one computer, their accounts kept apart: recent sessions, plan usage and resume commands in one list, and sessions carried between them.">
+  <title>Hatcheck: two Claude accounts on one computer, kept apart</title>
+  <meta name="description" content="Work and personal Claude accounts on one computer, kept apart: a Claude Desktop and a Claude Code profile per account, usage and sessions in one list, no login touched. Codex, Kimi Code and seven more coding agents too.">
   <link rel="canonical" href="https://hatcheck.dev/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hatcheck.dev/">
   <meta property="og:image" content="https://hatcheck.dev/og.png">
-  <meta property="og:title" content="Hatcheck">
-  <meta property="og:description" content="Claude Code, Codex and eight more coding agents on one computer, their accounts kept apart: recent sessions, plan usage and resume commands in one list, and sessions carried between them.">
+  <meta property="og:title" content="Hatcheck: two Claude accounts on one computer, kept apart">
+  <meta property="og:description" content="Work and personal Claude accounts on one computer, kept apart: a Claude Desktop and a Claude Code profile per account, usage and sessions in one list, no login touched. Codex, Kimi Code and seven more coding agents too.">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Hatcheck",
+    "url": "https://hatcheck.dev/",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux, Windows",
+    "description": "Work and personal Claude accounts on one computer, kept apart: a Claude Desktop and a Claude Code profile per account, usage and sessions in one list, no login touched. Codex, Kimi Code and seven more coding agents too.",
+    "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+    "license": "https://github.com/hatcheck/hatcheck/blob/main/LICENSE",
+    "downloadUrl": "https://github.com/hatcheck/hatcheck/releases/latest",
+    "softwareHelp": {"@type": "CreativeWork", "url": "https://hatcheck.dev/guides"},
+    "author": {"@type": "Person", "name": "Yi Wang", "url": "https://github.com/yiwang"}
+  }
+  </script>
 </head>
 <body>
   <nav class="top wrap" aria-label="Site">
     <a href="index.html" class="brand" aria-current="page"><img src="favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="guides.html">Guides</a>
     <a href="agents.html">Agents</a>
     <a href="commands.html">Commands</a>
     <a href="rules.html">Rules</a>
@@ -41,18 +58,19 @@
         </g>
       </svg>
       <div>
-        <h1>Hatcheck</h1>
-        <p class="tagline">Claude Code, Codex and eight more coding agents on one computer, their accounts kept apart: recent sessions, plan usage and resume commands in one list, and sessions carried between them.</p>
+        <h1>Two Claude accounts on one computer, <span class="nowrap">each kept apart</span></h1>
+        <p class="tagline">Work and personal, a team seat and your own plan, two or more: each gets its own Claude Desktop on macOS and its own Claude Code profile anywhere, with its own login. Codex, Kimi Code and seven more coding agents get the same. Hatcheck never asks for, copies or moves a login, and never switches accounts for you.</p>
       </div>
     </div>
-    <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by any of the agents' makers. The agents' names and marks are theirs.</p>
     <div class="buttons">
+      <a class="button" href="two-claude-accounts-on-one-mac.html">Claude Desktop: two accounts on one Mac</a>
       <a class="button" href="#install">Install the CLI</a>
-      <a class="button ghost" href="#start">Start a profile per account</a>
+      <a class="button ghost" href="#start">A profile per account</a>
       <a class="button ghost" href="#video">Watch the video</a>
-      <a class="button ghost" href="#app">Get the app</a>
+      <a class="button ghost" href="#app">The app</a>
       <a class="button ghost" href="https://github.com/hatcheck/hatcheck">Source on GitHub</a>
     </div>
+    <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by any of the agents' makers. The agents' names and marks are theirs.</p>
   </header>
 
   <section class="wrap" id="video">
@@ -89,7 +107,7 @@ hatcheck             # the sessions here from every profile, and what's left of 
       </div>
       <div class="card">
         <h3>Sessions that travel</h3>
-        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/formats.md#how-a-conversion-works">converts it</a> for any of the eight agents, as a file the agent is started on for those without an importer; <code>--brief</code> hands over a brief in place of the whole conversation. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
+        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/formats.md#how-a-conversion-works">converts it</a> for any of the ten agents, as a file the agent is started on for those without an importer; <code>--brief</code> hands over a brief in place of the whole conversation. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
       </div>
       <div class="card">
         <h3>Claude Desktop, one per account</h3>
@@ -214,6 +232,10 @@ hat r               # carry on the newest session here, after asking</code></pre
         <h3><a href="rules.html">Rules it keeps</a></h3>
         <p>Not a gateway, no credentials, nothing in the background, no automatic switching, and every change undoable: each rule with the code that keeps it.</p>
       </div>
+      <div class="card">
+        <h3><a href="guides.html">Guides</a></h3>
+        <p>Plain-language pages: <a href="two-claude-accounts-on-one-mac.html">two Claude accounts on one Mac</a>, <a href="claude-code-two-accounts.html">Claude Code with two accounts</a>, the same for Codex and Kimi Code, and <a href="claude-usage-limits.html">what's left of each plan</a>.</p>
+      </div>
     </div>
   </section>
 
@@ -245,7 +267,7 @@ cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</cod
   </section>
 
   <footer class="wrap">
-    <p><a href="index.html">Hatcheck</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
+    <p><a href="index.html">Hatcheck</a> · <a href="guides.html">Guides</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
     <p>Unofficial: not made by, affiliated with or endorsed by any of the agents' makers.</p>
   </footer>
   <script>

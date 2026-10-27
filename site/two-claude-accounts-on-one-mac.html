@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- Hatcheck's site, a guide: two Claude accounts on one Mac, a Claude Desktop per account. The facts
+     are docs/desktop-instances.md's and the README's; the pages share style.css. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Two Claude accounts on one Mac · Hatcheck</title>
+  <meta name="description" content="Run Claude Desktop twice on one Mac, each signed in to its own account, with an icon in its own colour: the data-folder trick in one command, and the launchers Hatcheck adds.">
+  <link rel="canonical" href="https://hatcheck.dev/two-claude-accounts-on-one-mac">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://hatcheck.dev/two-claude-accounts-on-one-mac">
+  <meta property="og:image" content="https://hatcheck.dev/og.png">
+  <meta property="og:title" content="Two Claude accounts on one Mac · Hatcheck">
+  <meta property="og:description" content="Run Claude Desktop twice on one Mac, each signed in to its own account, with an icon in its own colour: the data-folder trick in one command, and the launchers Hatcheck adds.">
+</head>
+<body>
+  <nav class="top wrap" aria-label="Site">
+    <a href="index.html" class="brand"><img src="favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="guides.html" aria-current="page">Guides</a>
+    <a href="agents.html">Agents</a>
+    <a href="commands.html">Commands</a>
+    <a href="rules.html">Rules</a>
+    <a href="https://github.com/hatcheck/hatcheck">GitHub</a>
+  </nav>
+  <main class="wrap page guide">
+    <h1>Two Claude accounts on one Mac</h1>
+    <p>Claude Desktop keeps one login. To be signed in to a work account and a personal one at the same time, it has to run twice, each run with its own data folder. This page shows the folder trick itself, which is one command, and what hatcheck adds on top: a launcher per account in <code>/Applications</code>, with Claude's icon in a colour of its own, that opens that account's Claude or brings it forward. No login is read, copied or shared: each Claude signs in on its own, as it always did.</p>
+
+    <h2>What a second data folder does</h2>
+    <p>Claude Desktop is an Electron app. Started with <code>--user-data-dir</code>, it keeps everything in that folder instead of its usual one: the login, settings, sessions, MCP servers and Cowork data. So one command opens a second Claude that knows nothing of the first:</p>
+<pre><code>open -n -a /Applications/Claude.app --args --user-data-dir="$HOME/.claude-instances/work"</code></pre>
+    <p>That idea is <a href="https://philippstracker.com/multiple-claude-instances/">Philipp Stracker's</a>, and it works on its own. Two things make it unpleasant to live with:</p>
+    <ul>
+      <li><strong>Every run of that command starts another process</strong>, even when one is already open on that folder. Only the first process on a folder gets its login; a second one on the same folder comes up signed out, and two on one folder can damage it.</li>
+      <li><strong>Nothing tells the two Claudes apart</strong> in the Dock or Launchpad: the same icon, the same name.</li>
+    </ul>
+
+    <h2>What hatcheck adds</h2>
+    <p><code>hatcheck desktop new</code> makes a small launcher app in <code>/Applications</code> for each account, named as you like, with Claude's icon recoloured. A click opens that account's Claude if it isn't running, and brings it forward if it is, so there's never a second process on one folder. The Claude it starts is the one <code>Claude.app</code> you already have, with that account's folder, so Claude updates itself as it always did.</p>
+
+    <h2>Set it up</h2>
+    <ol>
+      <li>Install the CLI, with one line in Terminal or with Homebrew. It installs no agent and changes nothing about your Claude:
+<pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
+brew install hatcheck/tap/hatcheck    # or, with Homebrew</code></pre></li>
+      <li>Make a launcher per account. The first word names the data folder, the quoted one is what the app is called, and <code>--hue</code> turns the icon's colours by that many degrees, with about 110 green, 190 blue and 240 purple:
+<pre><code>hatcheck desktop new work "Work" --hue 190    # Claude Work.app, blue, with ~/.claude-instances/work
+hatcheck desktop new home "Home" --hue -10    # Claude Home.app, red-orange</code></pre></li>
+      <li>Open each from Launchpad, Spotlight or the Dock, and sign in to its account the first time. The first time a launcher brings a window forward, macOS asks whether it may control System Events: allow it, once per launcher.</li>
+    </ol>
+    <p>That's it. The Dock shows two Claudes in two colours, each signed in to its own account, and a click on either goes to that one.</p>
+
+    <h2>Make one for the account you use most, too</h2>
+    <p>Claude Desktop has no lock per data folder, and only the first process on a folder gets its login. So the setup that holds up is an instance per account, the one you use most included, and leaving the stock Claude icon alone day to day: a launcher pointed at Claude's built-in folder while the stock icon also runs it would be a second, signed-out window. Starting fresh means signing in once. To carry over the login, settings, MCP servers and sessions you already have instead, copy Claude's built-in folder into the instance while Claude is fully quit, as <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/desktop-instances.md#copying-an-existing-login-into-an-instance">docs/desktop-instances.md</a> shows.</p>
+    <p>⌘W closes a window and leaves that Claude running, so the next click brings it straight back; ⌘Q quits it.</p>
+
+    <h2>Everyday commands</h2>
+<pre><code>hatcheck desktop                # the instances, and which are running
+hatcheck desktop open work      # the same as clicking the launcher
+hatcheck desktop remove home    # delete the launcher; --data deletes its data folder too, login and all</code></pre>
+
+    <h2>What stays yours</h2>
+    <ul>
+      <li>The data folders are Claude's own, in <code>~/.claude-instances</code>, and each Claude signs in itself. Hatcheck never asks for, reads, copies or moves a login.</li>
+      <li>Nothing runs in the background: a launcher runs for the moment of a click.</li>
+      <li>Removing hatcheck leaves the instances and their logins as they are. <code>hatcheck desktop remove</code> takes a launcher away, and <code>--data</code> the folder with it.</li>
+    </ul>
+    <p>The rest of what hatcheck never does, each with the code that keeps it: <a href="rules.html">rules it keeps</a>.</p>
+
+    <h2>Windows and Linux</h2>
+    <p>Claude Desktop is an Electron app there too, so a data folder per account should work the same way; the launchers haven't been built for them yet (<a href="https://github.com/hatcheck/hatcheck#roadmap">roadmap</a>). The command-line side, <a href="claude-code-two-accounts.html">a Claude Code profile per account</a> included, works on all three.</p>
+
+    <h2>The app</h2>
+    <p>A menu-bar app is on its way that makes an instance with a button and a colour of your choice, and shows what's left of each plan and the last day's sessions. Until its first release, the three commands above are the way; <a href="index.html#app">the app</a> says where it stands.</p>
+  </main>
+  <footer class="wrap">
+    <p><a href="index.html">Hatcheck</a> · <a href="guides.html">Guides</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
+    <p>Unofficial: not made by, affiliated with or endorsed by any of the agents' makers.</p>
+  </footer>
+</body>
+</html>

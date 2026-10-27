@@ -1,0 +1,78 @@
+<!doctype html>
+<!-- Hatcheck's site, a guide: Claude's usage limits and what's left of each plan, on every account.
+     The facts are docs/commands.md's (hatcheck usage); the pages share style.css, and refresh.py
+     fills the sample block at a release. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Claude usage limits: what's left of each plan · Hatcheck</title>
+  <meta name="description" content="The 5-hour, weekly and per-model limits Claude plans have, how Claude Code's /usage reports them, and hatcheck usage: every account's limits in one list, sorted by which to use first.">
+  <link rel="canonical" href="https://hatcheck.dev/claude-usage-limits">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://hatcheck.dev/claude-usage-limits">
+  <meta property="og:image" content="https://hatcheck.dev/og.png">
+  <meta property="og:title" content="Claude usage limits: what's left of each plan · Hatcheck">
+  <meta property="og:description" content="The 5-hour, weekly and per-model limits Claude plans have, how Claude Code's /usage reports them, and hatcheck usage: every account's limits in one list, sorted by which to use first.">
+</head>
+<body>
+  <nav class="top wrap" aria-label="Site">
+    <a href="index.html" class="brand"><img src="favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="guides.html" aria-current="page">Guides</a>
+    <a href="agents.html">Agents</a>
+    <a href="commands.html">Commands</a>
+    <a href="rules.html">Rules</a>
+    <a href="https://github.com/hatcheck/hatcheck">GitHub</a>
+  </nav>
+  <main class="wrap page guide">
+    <h1>Claude usage limits: what's left of each plan</h1>
+    <p>A Claude plan's limits come in windows. There is a 5-hour session limit, which fills as you work and resets five hours after it started; a weekly limit; and on Team and Max plans a weekly limit for a single model, such as Fable, beside the one for all models. In Claude Code, <code>/usage</code> shows them for the account you're signed in to. With more than one account, <code>hatcheck usage</code> shows all of them in one list, each with what's left and how long until it resets, sorted by which to use first:</p>
+<pre><code><!-- sample:usage -->$ hatcheck usage
+<span class="b">Plan usage by profile</span><span class="d"> (% left, then time left until reset)</span>
+<span class="d">Sorted by Fable: those with some left first, the soonest reset on top, any past 90% used behind them; then those out of it, the soonest back on top.</span>
+<span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
+  session (5h)      <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 10:50pm (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)     </span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Sat 12:58am (in 4d4h)</span>
+<span class="b c">~/.claude-a</span>  <span class="d">pro · </span><span class="g">live</span>
+  session (5h)      <span class="y"> 20%</span> <span class="y">██░░░░░░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 10:50pm (in 2h39m)</span>
+  week (all models) <span class="r">  9%</span> <span class="r">▉░░░░░░░░░</span>  <span style="color:#d75f00">█▎░░░░░░░░</span> <span class="d">resets 5:46pm (in 21h35m)</span>
+<span class="b c">~/.codex</span>  <span class="d">ChatGPT plus · </span><span class="y">cached 50m ago</span><span class="d"> (token expired; run codex in this profile to renew it)</span>
+  session (5h)      <span class="g"> 80%</span> <span class="g">████████░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets 11:10pm (in 2h59m)</span>
+  week (all models) <span class="g"> 64%</span> <span class="g">██████▍░░░</span>  <span style="color:#d7af00">██▉░░░░░░░</span> <span class="d">resets Wed 8:10pm (in 1d23h)</span>
+<span class="b c">~/.gemini/antigravity-cli</span>  <span class="d">Antigravity · </span><span class="r">no data</span><span class="d"> (agy isn't on your PATH)</span>
+<span class="b c">~/.kimi-code</span>  <span class="d">Kimi Code · </span><span class="r">no data</span><span class="d"> (not signed in)</span>
+<span class="b c">~/.zcode</span>  <span class="d">ZCode · </span><span class="r">no data</span><span class="d"> (zcode has no usage command; see z.ai/manage-apikey/subscription for the plan)</span>
+<span class="b c">~/.dsh</span>  <span class="d">DeepSeek · </span><span class="r">no data</span><span class="d"> (dsh has no plan-usage command or endpoint (0.2.1-rc.2))</span>
+<span class="b c">~/.minimax</span>  <span class="d">MiniMax · </span><span class="r">no data</span><span class="d"> (mcode plan quota isn't wired into hatcheck (0.6.13))</span>
+<span class="b c">~/.qwen</span>  <span class="d">Qwen · </span><span class="r">no data</span><span class="d"> (qwen has no plan-usage command or endpoint (0.26.0))</span>
+<span class="b c">~/.copilot</span>  <span class="d">Copilot · </span><span class="r">no data</span><span class="d"> (copilot's /usage runs only in a session, and hatcheck makes no request (1.0.103))</span>
+<span class="b c">~/.local/share/opencode</span>  <span class="d">OpenCode · </span><span class="r">no data</span><span class="d"> (opencode has no plan-usage command: its stats count tokens spent (2.1.4))</span><!-- /sample:usage --></code></pre>
+
+    <h2>Reading the bars</h2>
+    <ul>
+      <li>Each limit has two bars: <strong>what's left of it</strong>, then <strong>how much of its window is left</strong> before it resets. In a terminal the second goes from blue with most of the window to go, through gold and orange, to red as the reset nears.</li>
+      <li>When the first bar is shorter than the second, the limit is being used up faster than its window runs out.</li>
+      <li>A limit without a reset time, such as an unused 5-hour session, has no time bar. A <code>?</code> means unknown: a limit that reset since its reading was saved is never shown as full or empty.</li>
+      <li>A per-model limit such as <code>week (Fable)</code> is named in violet, with its bar drawn in it, to tell it from <code>week (all models)</code>.</li>
+    </ul>
+
+    <h2>Where the numbers come from</h2>
+    <p>From Claude Code itself. <code>claude -p /usage</code> is run in each profile, with no tools or settings, which asks Anthropic with that profile's own login and saves the answer in the profile; hatcheck reads that snapshot and never a login. The runs take about a second each, in parallel. A reading under a minute old is shown as it is, since Claude Code's own <code>/usage</code> wouldn't ask again either. When nothing new comes back, because <code>claude</code> isn't installed, the profile isn't signed in, you're offline or Anthropic is rate-limiting the account, the last saved snapshot is shown with its age and the reason, as <em>cached</em>, never as fresh. <code>hat u --cached</code> asks nothing and shows what each agent last saved.</p>
+
+    <h2>Which account to use now</h2>
+    <p>The list is sorted by the per-model limit, Fable first: accounts with some left, the soonest reset on top, because what's left there goes to waste once it resets, so it's the one to use first. An account nearly out of it goes behind the fresher ones. Then come those out of it, the soonest back on top, then accounts without such a limit, such as Pro plans, and the Codex and Kimi homes. <code>hat b</code> puts it in one line, with the command that carries the newest session from this folder to the account with the most room; it is advice only, and nothing is started, moved or switched on its own. <a href="claude-code-two-accounts.html">Claude Code with two accounts</a> shows it in use.</p>
+
+    <h2>The other agents' plans</h2>
+    <p>Codex homes show their ChatGPT plan's 5-hour and weekly windows, and limits for single models, from the endpoint Codex's own <code>/status</code> asks, with the token Codex saved sent as it is and never refreshed; expired, the newest limits recorded in that home's sessions are shown with their age. Kimi homes show their Kimi Code plan's 5-hour, 7-day and monthly windows the same way. Antigravity CLI's folder shows what its own <code>/usage</code> reports, asked only once <code>agy models</code> has said it's signed in, so that nothing starts a sign-in. ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode have no plan-usage command or endpoint hatcheck asks, and each is listed with no data and the reason; <a href="agents.html">which agents, and how far</a> has the table.</p>
+
+    <h2>In the menu bar</h2>
+    <p>The app shows the same bars for every account in the menu bar, and sends a notification when a limit runs low, when a low one resets, and when a limit is about to reset with much of it unused, since that's the account to use now. Live usage is opt-in there. It isn't released yet; <a href="index.html#app">the app</a> says where it stands.</p>
+  </main>
+  <footer class="wrap">
+    <p><a href="index.html">Hatcheck</a> · <a href="guides.html">Guides</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
+    <p>Unofficial: not made by, affiliated with or endorsed by any of the agents' makers.</p>
+  </footer>
+</body>
+</html>

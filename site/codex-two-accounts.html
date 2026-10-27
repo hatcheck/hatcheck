@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- Hatcheck's site, a guide: Codex CLI with two ChatGPT accounts, a home per account. The facts are
+     docs/agents.md's and docs/commands.md's; the pages share style.css. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Codex CLI with two ChatGPT accounts · Hatcheck</title>
+  <meta name="description" content="A Codex home per ChatGPT account with CODEX_HOME, the cx launcher that runs one, and every home's sessions and limits in one list beside Claude Code's. No login read or copied.">
+  <link rel="canonical" href="https://hatcheck.dev/codex-two-accounts">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://hatcheck.dev/codex-two-accounts">
+  <meta property="og:image" content="https://hatcheck.dev/og.png">
+  <meta property="og:title" content="Codex CLI with two ChatGPT accounts · Hatcheck">
+  <meta property="og:description" content="A Codex home per ChatGPT account with CODEX_HOME, the cx launcher that runs one, and every home's sessions and limits in one list beside Claude Code's. No login read or copied.">
+</head>
+<body>
+  <nav class="top wrap" aria-label="Site">
+    <a href="index.html" class="brand"><img src="favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="guides.html" aria-current="page">Guides</a>
+    <a href="agents.html">Agents</a>
+    <a href="commands.html">Commands</a>
+    <a href="rules.html">Rules</a>
+    <a href="https://github.com/hatcheck/hatcheck">GitHub</a>
+  </nav>
+  <main class="wrap page guide">
+    <h1>Codex CLI with two ChatGPT accounts</h1>
+    <p>OpenAI's <a href="https://github.com/openai/codex">Codex</a> keeps its login, config and sessions in <code>~/.codex</code>. <code>CODEX_HOME</code> points it at another folder, so a second ChatGPT account is a second home: <code>~/.codex-work</code>, signed in once there. Hatcheck adds <code>cx</code> to run Codex with a home, and lists every home's sessions and limits beside <a href="claude-code-two-accounts.html">Claude Code's profiles</a>.</p>
+
+    <h2>The variable itself</h2>
+<pre><code>mkdir -p ~/.codex-work
+CODEX_HOME=~/.codex-work codex login         # sign that home in, once
+CODEX_HOME=~/.codex-work codex               # Codex with that account</code></pre>
+    <p>Codex won't start with a <code>CODEX_HOME</code> that doesn't exist, hence the <code>mkdir</code>. A new home starts without your <code>~/.codex/config.toml</code>, which holds the model, trusted folders and MCP servers; copy it over if you want the same settings.</p>
+
+    <h2>With hatcheck</h2>
+    <p><a href="index.html#install">Install the CLI</a>, and <code>cx</code> does the above, making the folder on first use:</p>
+<pre><code>cx work login               # sign in once, with that account
+cx work                     # Codex with ~/.codex-work
+cx work resume &lt;id&gt;         # one of that home's sessions
+cx home exec "run the tests" # any codex command works
+cd ~/code/api
+hatcheck bind work          # here, plain cx means cx work, and cl means cl work
+hatcheck                    # the sessions here from every home and profile, with the command that resumes each</code></pre>
+    <p><code>hatcheck usage</code> shows each home's ChatGPT plan limits beside the Claude accounts': the 5-hour and weekly windows, and limits for single models. The access token Codex saved in the home is sent as it is to the endpoint Codex's own <code>/status</code> asks, and never refreshed; once it has expired, the newest limits Codex recorded in that home's session files are shown instead, with their age. <code>hatcheck move</code> carries a session between Codex homes, or converts it for Claude Code and the other agents, and back.</p>
+
+    <h2>What hatcheck never does</h2>
+    <p>It never asks for, copies, refreshes or moves a login: <code>cx work login</code> is Codex's own sign-in, in your terminal. It is never between Codex and OpenAI, runs nothing in the background, and switches no account on its own. Each rule, with the code that keeps it: <a href="rules.html">rules it keeps</a>. The Codex app, like Claude Desktop, keeps one login; hatcheck makes instances for Claude Desktop only, so far.</p>
+  </main>
+  <footer class="wrap">
+    <p><a href="index.html">Hatcheck</a> · <a href="guides.html">Guides</a> · <a href="agents.html">Which agents, and how far</a> · <a href="commands.html">Every command</a> · <a href="rules.html">Rules it keeps</a> · <a href="https://github.com/hatcheck/hatcheck">Source, issues and releases on GitHub</a></p>
+    <p>Unofficial: not made by, affiliated with or endorsed by any of the agents' makers.</p>
+  </footer>
+</body>
+</html>
