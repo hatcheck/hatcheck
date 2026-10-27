@@ -7,14 +7,30 @@
 
 # Hatcheck
 
-Several Claude accounts on one computer, each kept apart: isolated Claude Desktop instances on
-macOS, and Claude Code CLI profiles, with recent sessions, plan usage and resume commands across all
-of them. OpenAI's Codex CLI and Moonshot's Kimi Code CLI get the same treatment, Google's
-Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them, and DeepSeek Harness (`dsh`),
-MiniMax Code (`mcode`), Qwen Code (`qwen`), GitHub Copilot CLI (`copilot`) and OpenCode
-(`opencode`) join as read-only agents. Sessions can be carried between all ten: as a file the
-agent is started on for those without an importer, and through their own importers for copilot
-and opencode.
+Several Claude accounts on one computer, each kept apart: work and personal, a team seat and your
+own plan. On macOS each gets its own Claude Desktop, with its own login and an icon in its own
+colour; anywhere, each gets its own Claude Code profile, with recent sessions, plan usage and
+resume commands across all of them in one list. OpenAI's Codex CLI and Moonshot's Kimi Code CLI
+get the same treatment, Google's Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them,
+and DeepSeek Harness (`dsh`), MiniMax Code (`mcode`), Qwen Code (`qwen`), GitHub Copilot CLI
+(`copilot`) and OpenCode (`opencode`) join as read-only agents. Sessions can be carried between
+all ten: as a file the agent is started on for those without an importer, and through their own
+importers for copilot and opencode.
+
+Hatcheck never asks for, stores, copies or moves a login, is never between an agent and its model,
+runs nothing in the background, and never switches accounts on its own: see
+[Rules it keeps](#rules-it-keeps).
+
+**Start here:**
+
+- [Two Claude accounts on one Mac](https://hatcheck.dev/two-claude-accounts-on-one-mac): a Claude
+  Desktop per account, in three commands.
+- [Claude Code with two accounts](https://hatcheck.dev/claude-code-two-accounts): a profile per
+  account, and one list of what's in all of them; the same for
+  [Codex](https://hatcheck.dev/codex-two-accounts) and [Kimi Code CLI](https://hatcheck.dev/kimi-code-two-accounts),
+  and [what's left of each plan](https://hatcheck.dev/claude-usage-limits).
+- [Install the CLI](#install): one line on macOS, Linux or Windows. The menu-bar app is
+  [on its way](#the-desktop-app).
 
 *Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI,
 Z.ai, DeepSeek, MiniMax, Alibaba Cloud, GitHub or the OpenCode project. Claude, Claude Code and
@@ -32,7 +48,7 @@ Running Claude Desktop with its own `--user-data-dir` is
 ([write-up](https://philippstracker.com/multiple-claude-instances/)); hatcheck adds the colours and
 the launchers.
 
-It also has **command-line tools for all seven agents**, for keeping one profile per account:
+It also has **command-line tools for all ten agents**, for keeping one profile per account:
 `cl`, `cx` and `ck` run Claude Code, Codex and Kimi Code CLI with a profile, and `hatcheck` lists
 the recent sessions in all of them, with the command that resumes each one or opens DSH's session
 history, and what's left of each plan. The rest
