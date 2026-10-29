@@ -92,8 +92,11 @@ was run two hatchecks at once.
 data without saying the shape had changed. A reading that finds the groups but none of the
 fields should say so, and the doc names the version the fields were taken from.
 - Evidence: 2026-10-20: `agy's /usage reported limits hatcheck couldn't read` from `hat usage`,
-  the day after agy 1.4.3 arrived; `usage_body` in `agy.rs` reads both shapes now.
-- Seen 1× (2026-10-20).
+  the day after agy 1.4.3 arrived; `usage_body` in `agy.rs` reads both shapes now. And
+  2026-10-29, agy 1.4.10: a bucket per model and effort tier with no window, and the epoch as
+  the reset of a limit nothing was spent from, which hatcheck showed as `?` for all 22, read as
+  "reset since the snapshot"; noticed only when the list's comment ran off the screen.
+- Seen 2× (2026-10-20, 2026-10-29).
 
 **A probe that runs another agent stops at the first step that fails.** A check that converts a
 session and then has the real agent read the file must not reach the agent when the conversion
@@ -235,6 +238,17 @@ naming the old folder, was then where neither that run nor the undo command look
 - Evidence: 2026-10-24, reproduced in a throwaway home; `move_session` in `relocate.rs`, with a
   check before anything moves for the data folder too.
 - Seen 1× (2026-10-24).
+
+**A rule about which agents exist is applied wherever their homes are found, and the test that
+pins it runs every command.** An agent's homes are found in three places: `paths::find_*` for
+the list, `best`, `open`, `move` and `relocate`; `usage::find_profiles` and `find_codex_homes`
+for `usage`, which also take a folder with a login and no sessions; and `where`'s own search of
+`~/.codex*`. `config.toml`'s `ignore.agents` guarded the first, and `hat usage` and `hat where`
+still found Codex.
+- Evidence: 2026-10-29, `test_an_agent_left_out_is_looked_for_nowhere` in `tests/test_config.py`,
+  which runs the list, `usage` and `where`; `unless_ignored` in `paths.rs`, and the guards in
+  `usage.rs` and `where_cmd.rs`.
+- Seen 1× (2026-10-29).
 
 ## What hatcheck prints
 

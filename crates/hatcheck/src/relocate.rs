@@ -849,7 +849,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .positional("old", Count::One, "the folder the sessions ran in, as it was")
         .positional("new", Count::One, "the folder as it is now; it has to exist")
         .flag(&["--dry-run"], "dry_run", "say what would move and change nothing")
-        .flag(&["--json"], "json", "say what was or would be done as JSON");
+        .flag(&["-j", "--json"], "json", "say what was or would be done as JSON");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),

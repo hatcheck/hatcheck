@@ -51,9 +51,11 @@ class SessionCache(unittest.TestCase):
 
     def test_what_was_appended_shows(self):
         self.listed()
-        self.append(rec(type="custom-title", customTitle="Retry uploads", sessionId=S1), self.activity(1, "go on", "fix"))
+        self.append(rec(type="custom-title", customTitle="Retry uploads", sessionId=S1), self.activity(1, "go on", "fix"),
+                    rec(type="cost-state", sessionId=S1, totalCostUSD=0.25))
         s, = self.listed()
-        self.assertEqual((s["title"], s["branch"], s["last_active"]), ("Retry uploads", "fix", iso(NOW - 60)[:19] + "Z"))
+        self.assertEqual((s["title"], s["branch"], s["last_active"], s["cost_usd"]),
+                         ("Retry uploads", "fix", iso(NOW - 60)[:19] + "Z", 0.25))
 
     def test_a_line_still_being_written(self):
         self.append(self.activity(2, "more"))
@@ -90,7 +92,7 @@ class SessionCache(unittest.TestCase):
         write(self.cache_file(), "{not json")
         self.assertEqual(self.listed()[0]["title"], "Fix the uploader")
         with open(self.cache_file(), encoding="utf-8") as fh:
-            self.assertEqual(json.load(fh)["version"], 1)
+            self.assertEqual(json.load(fh)["version"], 3)  # CACHE_VERSION in facts.rs
 
     def test_codex(self):
         home = self.h.codex_home("work", "acct-9")

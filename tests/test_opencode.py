@@ -14,6 +14,7 @@ N = opencode_sid(0xd00000000001)
 E = opencode_sid(0xe00000000001)
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 R = opencode_sid(0xe00000000002)
+P = opencode_sid(0xc05700000001)
 TITLE = "Fix the uploader with OpenCode"
 MODEL = "anthropic/claude-opus-5-5"
 NO_USAGE = "opencode has no plan-usage command: its stats count tokens spent (2.1.4)"
@@ -78,6 +79,26 @@ class OpencodeSessions(unittest.TestCase):
         self.assertEqual((o["agent"], o["profile"], o["title"], o["cwd"], o["entrypoint"], o["branch"]),
                          ("opencode", self.home, TITLE, self.api, "cli", None))
         self.assertEqual((o["resume"], o["model"], o["open"]), ("opencode --session ses_" + O, MODEL, None))
+        self.assertIsNone(o["cost_usd"])  # the row's cost is 0: a model opencode has no price for
+
+    def test_a_cost_opencode_priced_shows_and_details_count_its_tokens(self):
+        self.h.opencode_session(self.home, self.api, P, "Priced by opencode", 2, cost=0.1234,
+                                tokens=(6551, 83883, 42938, 12077475, 696121))
+        code, out = self.h.run("sessions", "--no-usage")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Priced by opencode · $0.12\n", out)
+        self.assertIn(TITLE + "\n", out)
+        costs = {s["id"]: s["cost_usd"] for s in self.sessions()}
+        self.assertEqual((costs[P], costs[O]), (0.1234, None))
+        code, out = self.h.run("sessions", "--no-usage", "--details")
+        self.assertEqual(code, 0, out)
+        # The row counts the session's tokens for every model together, with no cost per model, so
+        # the table has no cost column.
+        self.assertIn("          in    out  think   read   write\n"
+                      "        tokens  6.6k  83.9k  42.9k  12.1m  696.1k\n", out)
+        spend = {s["id"]: s["spend"] for s in self.sessions("--details")}
+        self.assertEqual((spend[P]["models"][0]["model"], spend[P]["models"][0]["usd"], spend[P]["models"][0]["output"],
+                          spend[P]["api_seconds"], spend[O]), (None, None, 83883, None, None))
 
     def test_ids_with_or_without_the_prefix_where_show_open_and_resume(self):
         for query in (O, O[:8], "ses_" + O, "SES_" + O[:8].upper()):

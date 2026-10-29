@@ -167,11 +167,18 @@ against 1.4.2):
   again, as cached with its age and `asked at most once in 5m`, and agy is asked after that.
   One hatcheck asks agy at a time, with a lock in that folder: two `/usage` runs at once made
   Google's quota service answer the second with a 503 after a minute, so a second hatcheck
-  waits for the first and takes its reading the same way. agy 1.4.3 and later answer with each
-  group's limits as `buckets`, each with a `window` (`5h` or `weekly`), a `remaining_fraction` and
-  a `reset_time`, which hatcheck shows as one row per bucket with the window's length; the
-  `windows` and `models` of 1.4.2's answer are still read. Checked against the answers agy 1.4.3
-  gave on 2026-10-20 and 1.4.7 on 2026-10-24.
+  waits for the first and takes its reading the same way. agy 1.4.10 answers with one group, `All
+  Models`, and a bucket per model and effort tier (`Gemini 4 Argon (High)`, `(Medium)`, `(Low)`,
+  `Claude Opus 5.5 (Max)`, …), each with a `remaining_fraction` and a `reset_time` that is the
+  epoch while nothing has been spent from it, meaning no reset ahead; its description says the
+  buckets are views of three quota pools (Gemini Pro, Gemini Flash, Claude/GPT), each showing its
+  pool's tighter cap. hatcheck shows a row per model, the tiers folded while they read the same
+  and a row per reading named by its tiers when they don't, and in the session list's one-line
+  comment folds the models that read the same into one meter (`Gemini 4 Argon +1`, or `all
+  models`). agy 1.4.3 answered with each group's limits as `buckets`, each with a `window` (`5h`
+  or `weekly`), shown as one row per bucket with the window's length, and the `windows` and
+  `models` of 1.4.2's answer are still read. Checked against the answers agy 1.4.3 gave on
+  2026-10-20, 1.4.7 on 2026-10-24 and 1.4.10 on 2026-10-29.
 - A session converted for agy can't be written into its store, so `hatcheck move <id> agy` writes
   the conversation as a file in `imports` in hatcheck's cache folder and prints the command that
   starts agy on it: see [With Antigravity CLI](commands.md#with-antigravity-cli).
@@ -531,8 +538,11 @@ first run, and isn't read. What hatcheck reads, checked against opencode 2.1.4:
 - `session_v2`: a row per session with its `id` (`ses_` and 26 characters; hatcheck shows the
   characters and takes either), `parent_id` (set on the child sessions subagents run, which stay
   out of the list), `directory` (the session's folder), `title`, `model` (shown as
-  `provider/model`), `time_created`, `time_updated` (the session's activity) and `time_archived`.
-  Nothing records a branch.
+  `provider/model`), `time_created`, `time_updated` (the session's activity), `time_archived`,
+  `cost`, what the session cost in dollars as opencode prices its tokens (0 for a model it has no
+  price for, which the list leaves out), and its tokens by kind for every model together,
+  `tokens_input`, `tokens_output`, `tokens_reasoning`, `tokens_cache_read` and
+  `tokens_cache_write`, which `hatcheck --details` shows. Nothing records a branch.
 - `session_message`: a row per message, in `seq` order, with `type` and a JSON `data` record. A
   `user` message's `text` and `files` (marked as images or files), an `assistant` message's
   `content` parts (`text` kept, `reasoning` left out, `tool` as a call with its `state.input` and

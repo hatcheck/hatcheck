@@ -589,7 +589,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         );
         if json {
             p.flag(
-                &["--json"],
+                &["-j", "--json"],
                 "json",
                 "as JSON, for scripts, with null for unset",
             )

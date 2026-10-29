@@ -361,6 +361,8 @@ pub fn summary(home: &str, x: &Session) -> Summary {
         path: x.file.clone(),
         open: None,
         bound_to: None,
+        cost: None,
+        spend: None,
     }
 }
 

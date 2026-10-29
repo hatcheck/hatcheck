@@ -217,6 +217,42 @@ class AgyUsage(unittest.TestCase):
                          [("Gemini Models weekly", 62, 7 * 86400), ("Gemini Models 5h", 100, 5 * 3600),
                           ("Claude and GPT models weekly", 5, 7 * 86400)])
 
+    def test_the_buckets_agy_1_4_10_answers_with(self):
+        # agy 1.4.10 names one group with a bucket per model and effort tier, and the epoch as the
+        # reset of a limit nothing was spent from: a row per model, the tiers folded while they
+        # read the same, and no reset ahead for the epoch.
+        later = iso(NOW + 3 * 3600)
+        epoch = "1970-01-01T00:00:00Z"
+        bucket = lambda id_, name, left, reset: {"id": id_, "name": name, "remaining_fraction": left, "reset_time": reset}  # noqa: E731
+        write(os.path.join(self.root, "fake-usage.json"), json.dumps({"groups": [{"name": "All Models", "buckets": [
+            bucket("gemini-4-argon-high", "Gemini 4 Argon (High)", 1, epoch),
+            bucket("gemini-4-argon-medium", "Gemini 4 Argon (Medium)", 1, epoch),
+            bucket("gemini-4-argon-low", "Gemini 4 Argon (Low)", 1, epoch),
+            bucket("gemini-3.8-flash-high", "Gemini 3.8 Flash (High)", 1, epoch),
+            bucket("gemini-3.8-flash-low", "Gemini 3.8 Flash (Low)", 1, epoch),
+            bucket("claude-opus-5-5-max", "Claude Opus 5.5 (Max)", 0.25, later),
+            bucket("claude-opus-5-5-high", "Claude Opus 5.5 (High)", 0.62, later),
+            bucket("claude-opus-5-5-medium", "Claude Opus 5.5 (Medium)", 0.62, later)]}]}))
+        code, out = self.run_usage()
+        self.assertEqual(code, 0, out)
+        self.assertRegex(out, r"\n  Gemini 4 Argon +100% █{10} *\n")  # nothing spent, no reset ahead
+        self.assertRegex(out, r"\n  Gemini 3.8 Flash +100% █{10} *\n")
+        self.assertRegex(out, r"\n  Claude Opus 5.5 \(Max\) +25% ")
+        self.assertRegex(out, r"\n  Claude Opus 5.5 \(High, Medium\) +62% .*resets \S+ \(in 2h59m\)")
+        self.assertNotIn("All Models", out)
+        self.assertNotIn("after this snapshot", out)
+        code, out = self.run_usage("--json")
+        account = json.loads(out)["accounts"][0]
+        self.assertEqual([(l["name"], l["left_percent"], l["resets_at"] is None) for l in account["limits"]],
+                         [("Gemini 4 Argon", 100, True), ("Gemini 3.8 Flash", 100, True),
+                          ("Claude Opus 5.5 (Max)", 25, False), ("Claude Opus 5.5 (High, Medium)", 62, False)])
+        # The list's one-line comment folds the models that read the same into one meter.
+        code, out = self.h.run("sessions", "--cached", PATH=self.bin + os.pathsep + self.h.env()["PATH"],
+                               HATCHECK_CACHE_DIR=self.cache)
+        self.assertEqual(code, 0, out)
+        comment = next(line for line in out.splitlines() if "agy --conversation " + G in line)
+        self.assertRegex(comment, r"# Gemini 4 Argon \+1 +100% █+ +Claude Opus 5.5 \(Max\) +25% .*Claude Opus 5.5 \(High, Medium\) +62% ")
+
     def test_two_hatchecks_ask_agy_once(self):
         """The app's engine and the CLI can ask at once; a second /usage at the same time gets
         a 503 from Google after a minute, so the second hatcheck waits for the first and takes

@@ -18,7 +18,9 @@ use serde_json::{json, Map, Value};
 use std::fs::File;
 use std::sync::Mutex;
 
-const CACHE_VERSION: u64 = 1;
+/// Goes up when the facts change shape, so a cache from before is read again from the files:
+/// 2 and 3 added cost-state's total, then what it's made of, to a transcript's fields.
+const CACHE_VERSION: u64 = 3;
 const CACHE_FILE: &str = "session-facts.json";
 
 /// Where hatcheck keeps what it can work out again: $HATCHECK_CACHE_DIR, or
@@ -273,14 +275,27 @@ pub fn last_record(data: &[u8], rtype: &str, stop: usize) -> Option<Value> {
     }
 }
 
-/// The record types read_session wants the newest of, and the field it reads from each.
-const LAST_TYPES: [(&str, &str); 6] = [
-    ("relocated", "relocatedCwd"),
-    ("continued-in", "continuedInSessionId"),
-    ("custom-title", "customTitle"),
-    ("ai-title", "aiTitle"),
-    ("agent-name", "agentName"),
-    ("last-prompt", "lastPrompt"),
+/// The record types read_session wants the newest of, and the fields it reads from each.
+const LAST_TYPES: [(&str, &[&str]); 7] = [
+    ("relocated", &["relocatedCwd"]),
+    ("continued-in", &["continuedInSessionId"]),
+    ("custom-title", &["customTitle"]),
+    ("ai-title", &["aiTitle"]),
+    ("agent-name", &["agentName"]),
+    ("last-prompt", &["lastPrompt"]),
+    // The running total, which a resume carries on, and what it's made of.
+    (
+        "cost-state",
+        &[
+            "totalCostUSD",
+            "modelUsage",
+            "totalAPIDuration",
+            "totalDuration",
+            "totalToolDuration",
+            "totalLinesAdded",
+            "totalLinesRemoved",
+        ],
+    ),
 ];
 
 /// Field -> value, from the newest record of each type in LAST_TYPES that appears from stop
@@ -297,7 +312,7 @@ pub fn last_fields(data: &[u8], stop: usize) -> Map<String, Value> {
         }
     }
     let mut found = Map::new();
-    for (k, (rtype, field)) in LAST_TYPES.iter().enumerate() {
+    for (k, (rtype, fields)) in LAST_TYPES.iter().enumerate() {
         let mut below: Option<usize> = None;
         for &i in starts[k].iter().rev() {
             if below.is_some_and(|b| i >= b) {
@@ -307,7 +322,9 @@ pub fn last_fields(data: &[u8], stop: usize) -> Map<String, Value> {
             below = Some(start);
             if let Some(r) = record {
                 if r.is_object() && s(get(&r, "type")) == Some(rtype) {
-                    found.insert(field.to_string(), get(&r, field).clone());
+                    for field in *fields {
+                        found.insert(field.to_string(), get(&r, field).clone());
+                    }
                     break;
                 }
             }
@@ -460,12 +477,112 @@ pub struct Summary {
     pub path: String,
     pub open: Option<Value>,
     pub bound_to: Option<String>,
+    /// What the session cost in US dollars, as its agent worked it out, when it recorded one
+    /// above zero: Claude Code's running total at API prices, or OpenCode's row.
+    pub cost: Option<f64>,
+    /// What that's made of, where the agent wrote it down.
+    pub spend: Option<Spend>,
 }
 
 impl Summary {
     pub fn entrypoint_text(&self) -> String {
         py::str_of(&self.entrypoint)
     }
+}
+
+/// A cost an agent recorded, as the list shows one: above zero, since 0 is what an agent
+/// writes for a model it has no price for, as OpenCode does for a subscription's.
+pub fn cost_of(usd: f64) -> Option<f64> {
+    (usd.is_finite() && usd > 0.0).then_some(usd)
+}
+
+/// What an agent wrote down of a session's spending beyond its total, for the list's
+/// --details: tokens by kind, a model at a time where the agent counts them so, and the
+/// durations and code changes it keeps (Claude Code's cost-state).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Spend {
+    pub models: Vec<ModelSpend>,
+    pub api_seconds: Option<f64>,
+    pub wall_seconds: Option<f64>,
+    pub tool_seconds: Option<f64>,
+    pub lines_added: Option<u64>,
+    pub lines_removed: Option<u64>,
+}
+
+/// Tokens spent by kind on one model, with that model's own cost where the agent prices a model
+/// at a time (Claude Code), or on every model together, without a model (OpenCode).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ModelSpend {
+    pub model: Option<String>,
+    pub usd: Option<f64>,
+    pub input: u64,
+    pub output: u64,
+    pub thinking: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    pub web_searches: u64,
+}
+
+impl ModelSpend {
+    /// Every token counted, of any kind.
+    pub fn tokens(&self) -> u64 {
+        self.input + self.output + self.thinking + self.cache_read + self.cache_write
+    }
+}
+
+impl Spend {
+    /// As --json shows it.
+    pub fn to_json(&self) -> Value {
+        json!({
+            "models": self.models.iter().map(|m| json!({
+                "model": m.model, "usd": m.usd, "input": m.input, "output": m.output, "thinking": m.thinking,
+                "cache_read": m.cache_read, "cache_write": m.cache_write, "web_searches": m.web_searches,
+            })).collect::<Vec<_>>(),
+            "api_seconds": self.api_seconds, "wall_seconds": self.wall_seconds, "tool_seconds": self.tool_seconds,
+            "lines_added": self.lines_added, "lines_removed": self.lines_removed,
+        })
+    }
+}
+
+/// A count as a cost-state record keeps one, 0 when it isn't a number.
+fn counted(v: &Value) -> u64 {
+    v.as_u64()
+        .or_else(|| v.as_f64().map(|x| x.max(0.0) as u64))
+        .unwrap_or(0)
+}
+
+/// What a transcript's newest cost-state record says the session spent, beyond its total, or
+/// None without such a record: a model at a time (modelUsage), the durations in milliseconds
+/// (totalAPIDuration, totalDuration since the session started, totalToolDuration) and the
+/// lines added and removed. Read as Claude Code 2.1.312 writes it.
+fn cost_state_spend(fields: &Value) -> Option<Spend> {
+    if get(fields, "totalCostUSD").is_null() {
+        return None;
+    }
+    let seconds = |key: &str| get(fields, key).as_f64().map(|ms| ms / 1000.0);
+    let mut models = Vec::new();
+    if let Value::Object(usage) = get(fields, "modelUsage") {
+        for (model, u) in usage {
+            models.push(ModelSpend {
+                model: Some(model.clone()),
+                usd: get(u, "costUSD").as_f64().and_then(cost_of),
+                input: counted(get(u, "inputTokens")),
+                output: counted(get(u, "outputTokens")),
+                thinking: counted(get(u, "thinkingTokens")),
+                cache_read: counted(get(u, "cacheReadInputTokens")),
+                cache_write: counted(get(u, "cacheCreationInputTokens")),
+                web_searches: counted(get(u, "webSearchRequests")),
+            });
+        }
+    }
+    Some(Spend {
+        models,
+        api_seconds: seconds("totalAPIDuration"),
+        wall_seconds: seconds("totalDuration"),
+        tool_seconds: seconds("totalToolDuration"),
+        lines_added: get(fields, "totalLinesAdded").as_u64(),
+        lines_removed: get(fields, "totalLinesRemoved").as_u64(),
+    })
 }
 
 /// The time a stamp names, or the file's modification time when it names none.
@@ -532,6 +649,8 @@ pub fn read_session(path: &str) -> std::io::Result<Option<Summary>> {
         path: path.to_string(),
         open: None,
         bound_to: None,
+        cost: get(fields, "totalCostUSD").as_f64().and_then(cost_of),
+        spend: cost_state_spend(fields),
     }))
 }
 
@@ -798,6 +917,8 @@ pub fn read_codex_session(
         path: path.to_string(),
         open: None,
         bound_to: None,
+        cost: None,
+        spend: None,
     }))
 }
 
@@ -888,12 +1009,57 @@ mod tests {
 
     #[test]
     fn finds_the_newest_of_each_type_in_one_pass() {
-        let data = b"{\"type\":\"ai-title\",\"aiTitle\":\"old\"}\n{\"type\":\"user\",\"x\":{\"type\":\"ai-title\"}}\n{\"type\":\"ai-title\",\"aiTitle\":\"new\"}\n{\"type\":\"custom-title\"}\n";
+        let data = b"{\"type\":\"ai-title\",\"aiTitle\":\"old\"}\n{\"type\":\"user\",\"x\":{\"type\":\"ai-title\"}}\n{\"type\":\"ai-title\",\"aiTitle\":\"new\"}\n{\"type\":\"custom-title\"}\n{\"type\":\"cost-state\",\"totalCostUSD\":1.5}\n{\"type\":\"cost-state\",\"totalCostUSD\":5.25,\"totalLinesAdded\":3}\n";
         let found = last_fields(data, 0);
         assert_eq!(found.get("aiTitle"), Some(&json!("new")));
+        assert_eq!(found.get("totalCostUSD"), Some(&json!(5.25))); // the running total
+        assert_eq!(found.get("totalLinesAdded"), Some(&json!(3))); // from the same record
         assert_eq!(found.get("customTitle"), Some(&Value::Null)); // there, without the field
         assert!(!found.contains_key("relocatedCwd"));
         let tail = last_fields(data, data.len());
         assert!(tail.is_empty());
+    }
+
+    #[test]
+    fn a_cost_state_record_says_what_was_spent() {
+        // As Claude Code 2.1.312 writes one, cut to the fields read.
+        let fields = json!({"totalCostUSD": 5.0095065, "totalAPIDuration": 1146609, "totalDuration": 18300000,
+            "totalToolDuration": 80567, "totalLinesAdded": 130, "totalLinesRemoved": 7,
+            "modelUsage": {"claude-sonnet-5": {"inputTokens": 6551, "outputTokens": 83883, "thinkingTokens": 42938,
+                "cacheReadInputTokens": 12077475, "cacheCreationInputTokens": 696121, "webSearchRequests": 0, "costUSD": 5.0077}}});
+        let spend = cost_state_spend(&fields).unwrap();
+        assert_eq!(spend.models.len(), 1);
+        let m = &spend.models[0];
+        assert_eq!(
+            (
+                m.model.as_deref(),
+                m.usd,
+                m.input,
+                m.output,
+                m.thinking,
+                m.cache_read,
+                m.cache_write
+            ),
+            (
+                Some("claude-sonnet-5"),
+                Some(5.0077),
+                6551,
+                83883,
+                42938,
+                12077475,
+                696121
+            )
+        );
+        assert_eq!(m.tokens(), 6551 + 83883 + 42938 + 12077475 + 696121);
+        assert_eq!(
+            (spend.api_seconds, spend.wall_seconds, spend.tool_seconds),
+            (Some(1146.609), Some(18300.0), Some(80.567))
+        );
+        assert_eq!(
+            (spend.lines_added, spend.lines_removed),
+            (Some(130), Some(7))
+        );
+        assert_eq!(spend.to_json()["models"][0]["cache_read"], 12077475);
+        assert_eq!(cost_state_spend(&json!({"aiTitle": "x"})), None);
     }
 }

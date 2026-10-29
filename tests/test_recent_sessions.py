@@ -1,4 +1,5 @@
 """hatcheck sessions (plain hatcheck) against a throwaway home."""
+import json
 import os
 import re
 import unittest
@@ -11,6 +12,9 @@ B = "bbbbbbbb-0000-4000-8000-000000000002"
 C = "cccccccc-0000-4000-8000-000000000003"
 D = "dddddddd-0000-4000-8000-000000000004"
 E = "eeeeeeee-0000-4000-8000-000000000005"
+F = "ffffffff-0000-4000-8000-000000000006"
+G = "abababab-0000-4000-8000-000000000007"
+H = "cdcdcdcd-0000-4000-8000-000000000008"
 SCRIPT = "sessions"
 
 
@@ -56,6 +60,89 @@ class RecentSessions(unittest.TestCase):
         self.assertIn(D, out)
         self.assertIn(E, out)
         self.assertIn("via claude-desktop", out)
+
+    def test_cost_when_the_agent_wrote_one_down(self):
+        # Claude Code appends cost-state records with the session's running total; the newest
+        # is the total, as Claude Code takes it when the session is resumed.
+        folder = self.h.folder("code", "cost")
+        cost = lambda sid, usd: rec(type="cost-state", sessionId=sid, totalCostUSD=usd, totalAPIDuration=1146609,  # noqa: E731
+                                    startTime=int((NOW - 600) * 1000), hasUnknownModelCost=False,
+                                    modelUsage={"claude-sonnet-5": {"inputTokens": 6551, "outputTokens": 83883, "costUSD": usd}})
+        self.h.session(self.work, folder, F, "Costly", 6, extra=[cost(F, 1.5), cost(F, 5.0095065)])
+        self.h.session(self.work, folder, G, "Tiny", 7, extra=[cost(G, 0.0042)])
+        self.h.session(self.work, folder, H, "Free", 8, extra=[cost(H, 0)])
+        code, out = self.h.run(SCRIPT, "--no-usage")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Costly · main · $5.01\n", out)
+        self.assertIn("Tiny · main · <$0.01\n", out)
+        self.assertIn("Free · main\n", out)  # priced at nothing: not shown
+        self.assertIn("Fix the flaky login test · main\n", out)  # no record at all
+        code, out = self.h.run(SCRIPT, "--no-usage", "--json")
+        self.assertEqual(code, 0, out)
+        costs = {s["id"]: s["cost_usd"] for s in json.loads(out)["sessions"]}
+        self.assertEqual((costs[F], costs[G], costs[H], costs[A]), (5.0095065, 0.0042, None, None))
+
+    def test_details_and_by_cost(self):
+        # Claude Code's cost-state says what the total is made of, a model at a time, with the
+        # durations and the lines changed: --details shows it, and --by-cost puts the costliest first.
+        folder = self.h.folder("code", "cost")
+        state = rec(type="cost-state", sessionId=F, totalCostUSD=5.0095065, totalAPIDuration=1146609,
+                    totalDuration=18300000, totalToolDuration=80567, totalLinesAdded=130, totalLinesRemoved=7,
+                    startTime=int((NOW - 600) * 1000), hasUnknownModelCost=False,
+                    modelUsage={"claude-haiku-4-5": {"inputTokens": 1092, "outputTokens": 137, "thinkingTokens": 0,
+                                                     "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0,
+                                                     "webSearchRequests": 0, "costUSD": 0.001777},
+                                "claude-sonnet-5": {"inputTokens": 6551, "outputTokens": 83883, "thinkingTokens": 42938,
+                                                    "cacheReadInputTokens": 12077475, "cacheCreationInputTokens": 696121,
+                                                    "webSearchRequests": 0, "costUSD": 5.0077}})
+        self.h.session(self.work, folder, F, "Costly", 6, extra=[state])
+        self.h.session(self.work, folder, G, "Cheap", 2, extra=[rec(type="cost-state", sessionId=G, totalCostUSD=0.25)])
+        code, out = self.h.run(SCRIPT, "--no-usage", "--by-cost", "--details")
+        self.assertEqual(code, 0, out)
+        self.assertIn("costliest first", out)
+        cost, api, blog = ("cd " + self.h.shown(f) for f in (folder, self.api, self.blog))
+        self.assertIn(cost + "  # $5.26 in 2 sessions\n", out)  # what the folder's sessions cost together
+        self.assertLess(out.index(cost), out.index(api))  # the costliest folder first, then A-Z
+        self.assertLess(out.index(api), out.index(blog))
+        self.assertLess(out.index("Costly"), out.index("Cheap"))  # the costliest session first, not the newest
+        # The columns line up across the whole list: numbers right-aligned, · for none, and the
+        # kinds no row has (web searches here) left out.
+        self.assertIn("        turns 2  prompts 1  calls 0  API 19m  wall 5h05m  tools 1m  lines +130 -7\n", out)
+        self.assertIn("        " + " " * 21 + "cost    in    out  think   read   write\n", out)
+        self.assertIn("        claude-sonnet-5     $5.01  6.6k  83.9k  42.9k  12.1m  696.1k\n", out)
+        self.assertIn("        claude-haiku-4-5  $0.0018  1.1k    137      ·      ·       ·\n", out)
+        self.assertIn("        turns 2  prompts 1  calls 0\n", out)  # a session without a cost-state record
+        code, out = self.h.run(SCRIPT, "--no-usage", "--by-cost", "--details", "--json")
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        self.assertEqual(data["sorted_by"], "cost")
+        self.assertEqual([s["id"] for s in data["sessions"]][:2], [F, G])
+        costly = data["sessions"][0]
+        self.assertEqual(costly["turns"], {"total": 2, "prompts": 1, "tool_calls": 0})
+        sonnet = next(m for m in costly["spend"]["models"] if m["model"] == "claude-sonnet-5")
+        self.assertEqual((sonnet["usd"], sonnet["input"], sonnet["cache_read"]), (5.0077, 6551, 12077475))
+        self.assertEqual((costly["spend"]["api_seconds"], costly["spend"]["lines_added"]), (1146.609, 130))
+        self.assertIsNone(next(s for s in data["sessions"] if s["id"] == A)["spend"])
+        plain = json.loads(self.h.run(SCRIPT, "--no-usage", "--json")[1])
+        self.assertEqual(plain["sorted_by"], "time")
+        self.assertNotIn("spend", plain["sessions"][0])
+
+    def test_short_flags_bundle_as_pythons_do(self):
+        # -dc is --details --by-cost, -qA the quick list of every folder, and -n ends a bundle.
+        self.h.session(self.work, self.api, F, "Costly", 6, extra=[rec(type="cost-state", sessionId=F, totalCostUSD=2.5)])
+        long_form = self.h.run(SCRIPT, "--no-usage", "--details", "--by-cost", "--all-folders", "-n", "1", cwd=self.api)
+        self.assertEqual(self.h.run(SCRIPT, "-qdcAn1", cwd=self.api), long_form)
+        self.assertEqual(self.h.run(SCRIPT, "-q", "-d", "-c", "-A", "-n1", cwd=self.api), long_form)
+        code, out = long_form
+        self.assertEqual(code, 0, out)
+        self.assertIn("Costly · main · $2.50\n", out)
+        self.assertIn("+2  other sessions", out)  # -n 1 under --by-cost: the cheaper and the unpriced
+        short, long_json = (json.loads(self.h.run(SCRIPT, *flags)[1]) for flags in (("-qj",), ("--no-usage", "--json")))
+        short.pop("generated_at"), long_json.pop("generated_at")  # a second may pass between the runs
+        self.assertEqual(short, long_json)
+        code, out = self.h.run(SCRIPT, "-qx")  # a letter that's no flag, as argparse reports it
+        self.assertEqual(code, 2)
+        self.assertIn("unrecognized arguments: -x", out)
 
     def test_newest_n_per_folder(self):
         code, out = self.h.run(SCRIPT, "-n", "1", "--no-usage")

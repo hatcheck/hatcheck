@@ -398,6 +398,8 @@ pub fn summary(home: &str, x: &Session) -> Summary {
         path: x.dir.clone(),
         open: None,
         bound_to: None,
+        cost: None,
+        spend: None,
     }
 }
 

@@ -337,6 +337,8 @@ pub fn summary(root: &str, row: &Row) -> Summary {
         path,
         open: None,
         bound_to: None,
+        cost: None,
+        spend: None,
     }
 }
 
@@ -572,12 +574,16 @@ fn window_seconds(window: &str) -> Value {
     }
 }
 
-/// agy's /usage answer as a usage body with limits[] rows like Claude's: one row per quota it
-/// reports, each the share of a model group's quota used and when it resets. agy 1.4.3 names
-/// groups, each with a name and `buckets`, each with a `window` (5h or weekly), a
-/// remaining_fraction and a reset_time; agy 1.4.2 named the same with quota_info on the group,
-/// on each of its windows or on each of its models, which is still read. A remaining_fraction
-/// left out beside a reset_time means none left.
+/// agy's /usage answer as a usage body with limits[] rows like Claude's: one row per limit it
+/// reports, each the share of a quota used and when it resets. agy 1.4.10 names one group, `All
+/// Models`, with a bucket per model and effort tier (`Gemini 4 Argon (High)`), each with a
+/// remaining_fraction and a reset_time that is the epoch while nothing has been spent, meaning
+/// no reset ahead; a bucket stands by its own name, and a model's tiers become one row while
+/// they read the same, else a row per reading, named by its tiers. agy 1.4.3 named groups with
+/// `buckets` by `window` (5h or weekly), each labelled with the group's name and the window;
+/// agy 1.4.2 named the same with quota_info on the group, on each of its windows or on each of
+/// its models. All are still read. A remaining_fraction left out beside a reset_time means none
+/// left.
 pub fn usage_body(data: &Value) -> Value {
     let mut rows = Vec::new();
     let groups = match get(data, "groups") {
@@ -590,16 +596,18 @@ pub fn usage_body(data: &Value) -> Value {
         for (key, prefix) in [("buckets", true), ("windows", true), ("models", false)] {
             if let Value::Array(items) = get(group, key) {
                 for item in items.iter().filter(|i| i.is_object()) {
-                    // A bucket is named by its window, 5h or weekly, not its long name.
+                    // A bucket named by its window, 5h or weekly, takes the group's name before
+                    // it; one named by a model stands by its own name.
                     let window = s(get(item, "window")).unwrap_or("").to_string();
-                    let part = if key == "buckets" && !window.is_empty() {
+                    let by_window = key == "buckets" && !window.is_empty();
+                    let part = if by_window {
                         window.clone()
                     } else {
                         label_of(item, "")
                     };
                     let label = if part.is_empty() {
                         name.clone()
-                    } else if prefix {
+                    } else if prefix && (key != "buckets" || by_window) {
                         format!("{name} {part}")
                     } else {
                         part
@@ -617,7 +625,10 @@ pub fn usage_body(data: &Value) -> Value {
             } else {
                 meter
             };
-            let reset = s(get(quota, "reset_time")).and_then(times::parse_time);
+            // The epoch, which 1.4.10 gives a limit nothing has been spent from, is no reset.
+            let reset = s(get(quota, "reset_time"))
+                .and_then(times::parse_time)
+                .filter(|t| *t > 946_684_800.0);
             let used = match (
                 Num::of(get(quota, "used_percentage"))
                     .filter(|_| get(quota, "used_percentage").is_number()),
@@ -637,12 +648,14 @@ pub fn usage_body(data: &Value) -> Value {
             } else {
                 "normal"
             };
+            let (model, tier) = model_and_tier(&label);
             rows.push(json!({"kind": "quota_scoped", "group": "quota", "label": label.clone(), "short": label,
                              "window_seconds": window, "percent": used,
                              "resets_at": reset.and_then(times::isoformat_utc).map_or(Value::Null, Value::String),
-                             "severity": severity}));
+                             "severity": severity, "model": model, "tier": tier}));
         }
     }
+    let rows = fold_tiers(rows);
     let tier = [
         get(get(data, "plan_info"), "tier_display_name"),
         get(data, "tier_display_name"),
@@ -654,6 +667,65 @@ pub fn usage_body(data: &Value) -> Value {
     .cloned()
     .unwrap_or(Value::Null);
     json!({"limits": rows, "plan_type": tier})
+}
+
+/// A bucket's name as the model and the effort tier in parentheses after it: `Claude Opus 5.5
+/// (Max)` is `Claude Opus 5.5` and `Max`; a name without one is its own model, with no tier.
+fn model_and_tier(label: &str) -> (String, Option<String>) {
+    let name = label.trim_end();
+    if let Some(open) = name.strip_suffix(')').and_then(|t| t.rfind(" (")) {
+        let (model, tier) = (&name[..open], &name[open + 2..name.len() - 1]);
+        if !model.is_empty() && !tier.is_empty() && !tier.contains('(') {
+            return (model.to_string(), Some(tier.to_string()));
+        }
+    }
+    (name.to_string(), None)
+}
+
+/// A model's tiers as one row while they read the same (`Claude Opus 5.5`), else a row per
+/// reading named by its tiers (`Claude Opus 5.5 (High, Medium)`), in the order first seen;
+/// rows without a tier stay as they are.
+fn fold_tiers(rows: Vec<Value>) -> Vec<Value> {
+    let mut by_model: Vec<(String, Vec<Value>)> = Vec::new();
+    for row in rows {
+        let model = py::str_of(get(&row, "model"));
+        match by_model.iter_mut().find(|(m, _)| *m == model) {
+            Some((_, list)) => list.push(row),
+            None => by_model.push((model, vec![row])),
+        }
+    }
+    let mut folded = Vec::new();
+    for (model, list) in by_model {
+        if list.len() == 1 || list.iter().any(|r| get(r, "tier").is_null()) {
+            folded.extend(list);
+            continue;
+        }
+        let reading = |r: &Value| (get(r, "percent").clone(), get(r, "resets_at").clone());
+        let mut readings: Vec<(Value, Vec<String>)> = Vec::new(); // a reading's first row, and its tiers
+        for row in &list {
+            let tier = py::str_of(get(row, "tier"));
+            match readings
+                .iter_mut()
+                .find(|(first, _)| reading(first) == reading(row))
+            {
+                Some((_, tiers)) => tiers.push(tier),
+                None => readings.push((row.clone(), vec![tier])),
+            }
+        }
+        let same = readings.len() == 1;
+        for (mut row, tiers) in readings {
+            let label = if same {
+                model.clone()
+            } else {
+                format!("{model} ({})", tiers.join(", "))
+            };
+            row["label"] = json!(label);
+            row["short"] = json!(label);
+            row["tier"] = json!(tiers);
+            folded.push(row);
+        }
+    }
+    folded
 }
 
 /// The plan, as the usage names it: Antigravity, with its tier when /usage said one.
@@ -824,5 +896,53 @@ mod tests {
         assert_eq!(rows[0]["window_seconds"], 7 * 86400);
         assert_eq!(rows[1]["window_seconds"], 5 * 3600);
         assert_eq!(plan_text(Some(&body)), "Antigravity"); // 1.4.3 names no tier
+    }
+
+    #[test]
+    fn buckets_named_by_model_and_tier_become_a_row_per_model() {
+        // As agy 1.4.10 answered on 2026-10-29: one group, a bucket per model and effort tier,
+        // and the epoch as the reset of a limit nothing has been spent from.
+        let later = times::isoformat_utc(1_800_000_000.0).unwrap();
+        let bucket = |id: &str, name: &str, left: f64, reset: &str| json!({"id": id, "name": name, "remaining_fraction": left, "reset_time": reset});
+        let epoch = "1970-01-01T00:00:00Z";
+        let data = json!({"groups": [{"name": "All Models", "description": "the one closest to being reached", "buckets": [
+            bucket("gemini-4-argon-high", "Gemini 4 Argon (High)", 1.0, epoch),
+            bucket("gemini-4-argon-medium", "Gemini 4 Argon (Medium)", 1.0, epoch),
+            bucket("gemini-4-argon-low", "Gemini 4 Argon (Low)", 1.0, epoch),
+            bucket("claude-opus-5-5-max", "Claude Opus 5.5 (Max)", 0.25, &later),
+            bucket("claude-opus-5-5-high", "Claude Opus 5.5 (High)", 0.62, &later),
+            bucket("claude-opus-5-5-medium", "Claude Opus 5.5 (Medium)", 0.62, &later),
+            bucket("gpt", "GPT 6", 0.9, &later)]}]});
+        let body = usage_body(&data);
+        let rows = body["limits"].as_array().unwrap();
+        let labels: Vec<&str> = rows.iter().map(|r| r["label"].as_str().unwrap()).collect();
+        assert_eq!(
+            labels,
+            [
+                "Gemini 4 Argon",
+                "Claude Opus 5.5 (Max)",
+                "Claude Opus 5.5 (High, Medium)",
+                "GPT 6"
+            ]
+        );
+        assert_eq!(
+            (rows[0]["percent"].as_i64(), &rows[0]["resets_at"]),
+            (Some(0), &Value::Null)
+        );
+        assert_eq!(rows[1]["percent"], 75);
+        assert_eq!(
+            (rows[2]["percent"].as_i64(), rows[2]["resets_at"].as_str()),
+            (Some(38), Some(later.as_str()))
+        );
+        assert_eq!(rows[2]["tier"], json!(["High", "Medium"]));
+        assert_eq!(rows[3]["tier"], Value::Null);
+        assert_eq!(
+            model_and_tier("Gemini 3.8 Flash (Low)"),
+            ("Gemini 3.8 Flash".into(), Some("Low".into()))
+        );
+        assert_eq!(
+            model_and_tier("Weekly Limit Remaining"),
+            ("Weekly Limit Remaining".into(), None)
+        );
     }
 }

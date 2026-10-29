@@ -218,6 +218,8 @@ pub fn summary(root: &str, row: &Row) -> Summary {
         path: artifacts_path(root, &row.id),
         open: None,
         bound_to: None,
+        cost: None,
+        spend: None,
     }
 }
 

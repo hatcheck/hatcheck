@@ -174,6 +174,15 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         }
         _ => ("sessions".to_string(), me.to_string()),
     };
+    // hatcheck's own config file, read before every subcommand: one that can't be read stops
+    // here, since one silently ignored would seem to apply.
+    match crate::config::load() {
+        Ok(config) => crate::config::install(config),
+        Err(e) => {
+            out::error(&format!("{me}: {e}\n"));
+            return 2;
+        }
+    }
     match command.as_str() {
         "sessions" => sessions::main(&argv, &prog),
         "usage" => usage::main(&argv, &prog),

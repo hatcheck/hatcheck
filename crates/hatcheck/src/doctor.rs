@@ -623,6 +623,7 @@ fn as_json(r: &Report) -> Value {
         "installs": groups, "missing": r.missing, "others": others,
         "shell_functions": r.functions.iter().map(|(n, rc)| json!({"command": n, "file": ospath::abspath(rc)})).collect::<Vec<_>>(),
         "agents": agents, "hooks": hooks, "problems": r.problems,
+        "config": crate::config::current().to_json(),
     })
 }
 
@@ -814,6 +815,18 @@ fn describe(r: &Report) {
             ));
         }
     }
+    let config = crate::config::current();
+    if config.found {
+        out::heading(&format!("Config: {}", show(&config.path)));
+        for line in config.describe() {
+            out::println(&format!("  {line}"));
+        }
+    } else {
+        out::heading(&format!(
+            "Config: none ({} would set the list's defaults and what to leave out).",
+            show(&config.path)
+        ));
+    }
     if r.problems.is_empty() {
         out::success("Nothing to fix.");
     } else {
@@ -823,7 +836,7 @@ fn describe(r: &Report) {
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Check how hatcheck and the agents are installed: every copy on the PATH, which one runs, and how to remove the rest. Changes nothing.")
-        .flag(&["--json"], "json", "print what it found as JSON");
+        .flag(&["-j", "--json"], "json", "print what it found as JSON");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),

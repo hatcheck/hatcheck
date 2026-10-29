@@ -84,8 +84,12 @@ fn default_codex_home() -> String {
     ospath::join(&paths::home(), ".codex")
 }
 
-/// ~/.claude plus every ~/.claude-* (and $CLAUDE_CONFIG_DIR) Claude Code config dir.
+/// ~/.claude plus every ~/.claude-* (and $CLAUDE_CONFIG_DIR) Claude Code config dir; none when
+/// config.toml leaves Claude Code out, as paths::find_profiles gives none then.
 pub fn find_profiles() -> Vec<String> {
+    if crate::config::ignores(Agent::Claude) {
+        return Vec::new();
+    }
     let home = paths::home();
     let default = default_profile();
     let mut candidates = vec![default.clone()];
@@ -112,8 +116,11 @@ pub fn find_profiles() -> Vec<String> {
 }
 
 /// ~/.codex plus every ~/.codex-* (and $CODEX_HOME) Codex home: a folder with Codex's login,
-/// config or sessions in it.
+/// config or sessions in it; none when config.toml leaves Codex out.
 pub fn find_codex_homes() -> Vec<String> {
+    if crate::config::ignores(Agent::Codex) {
+        return Vec::new();
+    }
     let home = paths::home();
     let mut candidates = vec![default_codex_home()];
     let mut others = ospath::glob(&home, &[Part::Wild(".codex-", "")]);
@@ -857,6 +864,53 @@ pub fn percent_left(
         Num::Int(0),
         Num::min(Num::Int(100), Num::minus(Num::Int(100), used)),
     ))
+}
+
+/// An account's limits folded for the session list's one-line comment: with more than three,
+/// as Antigravity's bucket per model, every row with the same reading (used, reset and window)
+/// becomes one meter, named by the models that share it (`Gemini 4 Argon, Gemini 3.1 Pro`, or
+/// `Gemini 4 Argon +1` when that's long) or `all models` when every row reads the same. Three or
+/// fewer are shown as they are, and hatcheck usage keeps every row.
+pub fn fold_limits(limits: &[Value]) -> Vec<Value> {
+    let rows: Vec<&Value> = limits.iter().filter(|r| r.is_object()).collect();
+    if rows.len() <= 3 {
+        return rows.into_iter().cloned().collect();
+    }
+    let reading = |row: &Value| {
+        (
+            get(row, "percent").clone(),
+            get(row, "resets_at").clone(),
+            get(row, "window_seconds").clone(),
+        )
+    };
+    let mut folded: Vec<(Value, Vec<String>)> = Vec::new(); // a reading's first row, and every label with it
+    for row in rows {
+        let label = row_label(row, true);
+        match folded
+            .iter_mut()
+            .find(|(first, _)| reading(first) == reading(row))
+        {
+            Some((_, labels)) => labels.push(label),
+            None => folded.push((row.clone(), vec![label])),
+        }
+    }
+    let all = folded.len() == 1;
+    folded
+        .into_iter()
+        .map(|(mut row, labels)| {
+            let joined = labels.join(", ");
+            let name = if all {
+                "all models".to_string()
+            } else if labels.len() == 1 || joined.chars().count() <= 28 {
+                joined
+            } else {
+                format!("{} +{}", labels[0], labels.len() - 1)
+            };
+            row["label"] = json!(name);
+            row["short"] = json!(name);
+            row
+        })
+        .collect()
 }
 
 /// Whether a limits[] row is the weekly limit for Fable.
@@ -1978,9 +2032,9 @@ pub fn account_lines(
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode, DeepSeek Harness (~/.dsh*), MiniMax Code (~/.minimax*), Qwen Code (~/.qwen*), GitHub Copilot CLI (~/.copilot*) and OpenCode (~/.local/share/opencode) are listed with why they give none, with mcode's plan quota not wired yet.")
-        .flag(&["--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
+        .flag(&["-C", "--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
         .flag(&["-e", "--email"], "email", "show each account's email address (hidden by default)")
-        .flag(&["--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
+        .flag(&["-j", "--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
@@ -2168,6 +2222,48 @@ mod tests {
         let part =
             |v: &Value| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(v.to_string());
         format!("{}.{}.x", part(&json!({"alg": "none"})), part(claims))
+    }
+
+    #[test]
+    fn many_limits_that_read_the_same_fold_for_the_list() {
+        let row = |label: &str, used: i64, reset: Option<&str>| {
+            json!({"kind": "quota_scoped", "group": "quota", "label": label, "short": label, "percent": used,
+                   "resets_at": reset, "window_seconds": null, "severity": "normal"})
+        };
+        let later = "2026-11-01T00:00:00Z";
+        let limits = vec![
+            row("Gemini 4 Argon", 0, None),
+            row("Gemini 3.8 Flash", 0, None),
+            row("Claude Opus 5.5 (Max)", 75, Some(later)),
+            row("Claude Opus 5.5 (High, Medium)", 38, Some(later)),
+        ];
+        let folded = fold_limits(&limits);
+        let labels: Vec<String> = folded.iter().map(|r| row_label(r, true)).collect();
+        assert_eq!(
+            labels,
+            [
+                "Gemini 4 Argon +1", // too long joined
+                "Claude Opus 5.5 (Max)",
+                "Claude Opus 5.5 (High, Medium)"
+            ]
+        );
+        assert_eq!(folded[0]["percent"], 0);
+        assert_eq!(fold_limits(&limits[..3]).len(), 3); // three or fewer: as they are
+        let pairs = vec![
+            row("Flash", 0, None),
+            row("Pro", 0, None),
+            row("Claude", 50, None),
+            row("GPT", 50, None),
+        ];
+        let labels: Vec<String> = fold_limits(&pairs)
+            .iter()
+            .map(|r| row_label(r, true))
+            .collect();
+        assert_eq!(labels, ["Flash, Pro", "Claude, GPT"]);
+        let same: Vec<Value> = (0..4)
+            .map(|i| row(&format!("Model {i}"), 0, None))
+            .collect();
+        assert_eq!(row_label(&fold_limits(&same)[0], true), "all models");
     }
 
     #[test]

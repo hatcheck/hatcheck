@@ -1,7 +1,6 @@
 //! hatcheck show SESSION [--from PROFILE] [--last N] [--json]: a session's conversation,
 //! read-only: your messages and the replies, with each tool call as a block of text.
 
-use crate::agent::Agent;
 use crate::args::{Count, Parser};
 use crate::conv;
 use crate::open_cmd::{pick, Pick};
@@ -26,7 +25,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     )
     .option(&["--last"], "last", "N", "only the last N turns")
     .flag(&["--brief"], "brief", "show the handover brief hatcheck move --brief hands over instead: the first prompt, the files and commands its tool calls named, and its last turns")
-    .flag(&["--json"], "json", "print it as JSON");
+    .flag(&["-j", "--json"], "json", "print it as JSON");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
@@ -51,19 +50,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Ok(s) => s,
         Err(message) => return out::fail(&message),
     };
-    let conv = match s.agent {
-        Agent::Codex => conv::read_codex(&s.path, &s.profile),
-        Agent::Claude => conv::read_claude(&s.path),
-        Agent::Agy => crate::agy::read_conversation(&s.profile, &s.id),
-        Agent::Kimi => crate::kimi::read_conversation(&s.profile, &s.id),
-        Agent::Zcode => crate::zcode::read_conversation(&s.profile, &s.id),
-        Agent::Dsh => crate::dsh::read_conversation(&s.profile, &s.id),
-        Agent::Mcode => crate::mcode::read_conversation(&s.profile, &s.id),
-        Agent::Qwen => crate::qwen::read_conversation(&s.profile, &s.id),
-        Agent::Copilot => crate::copilot::read_conversation(&s.profile, &s.id),
-        Agent::Opencode => crate::opencode::read_conversation(&s.profile, &s.id),
-    };
-    let conv = match conv {
+    let conv = match conv::read_for(&s) {
         Ok(c) => c,
         Err(e) => return out::fail(&e.to_string()),
     };

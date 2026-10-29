@@ -590,7 +590,7 @@ fn float_arg(parser: &Parser, name: &str, text: Option<&str>, default: f64) -> R
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Claude Desktop instances on macOS: one per account, each with its own data folder and a launcher of its own colour.")
-        .flag(&["--json"], "json", "list the instances as JSON")
+        .flag(&["-j", "--json"], "json", "list the instances as JSON")
         .subcommands("action", &[
             ("new", "make an instance's launcher, /Applications/Claude DISPLAY.app"),
             ("open", "start an instance, or bring it forward"),

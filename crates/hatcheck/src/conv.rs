@@ -589,6 +589,22 @@ fn claude_result(content: &Value) -> String {
     }
 }
 
+/// A session the list found, as a conversation, read by its agent's reader.
+pub fn read_for(s: &facts::Summary) -> std::io::Result<Conversation> {
+    match s.agent {
+        Agent::Codex => read_codex(&s.path, &s.profile),
+        Agent::Claude => read_claude(&s.path),
+        Agent::Agy => crate::agy::read_conversation(&s.profile, &s.id),
+        Agent::Kimi => crate::kimi::read_conversation(&s.profile, &s.id),
+        Agent::Zcode => crate::zcode::read_conversation(&s.profile, &s.id),
+        Agent::Dsh => crate::dsh::read_conversation(&s.profile, &s.id),
+        Agent::Mcode => crate::mcode::read_conversation(&s.profile, &s.id),
+        Agent::Qwen => crate::qwen::read_conversation(&s.profile, &s.id),
+        Agent::Copilot => crate::copilot::read_conversation(&s.profile, &s.id),
+        Agent::Opencode => crate::opencode::read_conversation(&s.profile, &s.id),
+    }
+}
+
 /// A Claude Code session as a conversation. Follows the conversation back from its newest
 /// message, so turns undone with /rewind and other branches are left out, and past
 /// compactions to what came before them.

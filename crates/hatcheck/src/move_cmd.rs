@@ -3443,7 +3443,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .hidden(&["--no-keep"], "no_keep", Takes::Nothing)
         .hidden(&["--fork"], "fork", Takes::Nothing)
         .flag(&["--dry-run"], "dry_run", "show what would be moved, copied, converted and deleted, and change nothing")
-        .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
+        .flag(&["-j", "--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
@@ -3481,7 +3481,7 @@ pub fn fork_main(argv: &[String], prog: &str) -> i32 {
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--brief"], "brief", "for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last turns")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")
-        .flag(&["--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
+        .flag(&["-j", "--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),

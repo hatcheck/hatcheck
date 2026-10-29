@@ -13,7 +13,7 @@
 
 use crate::agent::Agent;
 use crate::conv::{self, Conversation, Turn};
-use crate::facts::Summary;
+use crate::facts::{self, Summary};
 use crate::ospath;
 use crate::paths;
 use crate::py::{self, get, s, truthy};
@@ -70,14 +70,19 @@ fn text(v: rusqlite::types::Value) -> String {
     }
 }
 
-/// A time in milliseconds, as the rows keep them, in seconds.
-fn seconds(v: rusqlite::types::Value) -> f64 {
+/// A number as the rows keep it: a real, an integer or text.
+fn number(v: rusqlite::types::Value) -> f64 {
     match v {
-        rusqlite::types::Value::Integer(n) => n as f64 / 1000.0,
-        rusqlite::types::Value::Real(x) => x / 1000.0,
-        rusqlite::types::Value::Text(t) => t.trim().parse::<f64>().map_or(0.0, |x| x / 1000.0),
+        rusqlite::types::Value::Integer(n) => n as f64,
+        rusqlite::types::Value::Real(x) => x,
+        rusqlite::types::Value::Text(t) => t.trim().parse().unwrap_or(0.0),
         _ => 0.0,
     }
+}
+
+/// A time in milliseconds, as the rows keep them, in seconds.
+fn seconds(v: rusqlite::types::Value) -> f64 {
+    number(v) / 1000.0
 }
 
 /// A model reference as the rows keep it, {"providerID": …, "id": …}, as provider/model.
@@ -103,10 +108,17 @@ pub struct Row {
     pub created: f64,
     pub updated: f64,
     pub archived: bool,
+    /// What the session cost in dollars as opencode prices its tokens: 0 for a model it has no
+    /// price for.
+    pub cost: f64,
+    /// The tokens it spent, on every model together: input, output, reasoning, cache read and
+    /// cache write.
+    pub tokens: [u64; 5],
 }
 
-const COLUMNS: &str =
-    "id, parent_id, directory, title, version, agent, model, time_created, time_updated, time_archived";
+const COLUMNS: &str = "id, parent_id, directory, title, version, agent, model, time_created, \
+                       time_updated, time_archived, cost, tokens_input, tokens_output, \
+                       tokens_reasoning, tokens_cache_read, tokens_cache_write";
 
 fn row_of(r: &rusqlite::Row) -> rusqlite::Result<Row> {
     let v = |i: usize| r.get::<_, rusqlite::types::Value>(i);
@@ -124,6 +136,14 @@ fn row_of(r: &rusqlite::Row) -> rusqlite::Result<Row> {
         created: seconds(v(7)?),
         updated: seconds(v(8)?),
         archived: !matches!(v(9)?, rusqlite::types::Value::Null),
+        cost: number(v(10)?),
+        tokens: [
+            number(v(11)?).max(0.0) as u64,
+            number(v(12)?).max(0.0) as u64,
+            number(v(13)?).max(0.0) as u64,
+            number(v(14)?).max(0.0) as u64,
+            number(v(15)?).max(0.0) as u64,
+        ],
     })
 }
 
@@ -296,7 +316,29 @@ pub fn summary(home: &str, x: &Session) -> Summary {
         path: db_path(home),
         open: None,
         bound_to: None,
+        cost: facts::cost_of(x.row.cost),
+        spend: spend(&x.row),
     }
+}
+
+/// The tokens a row counts, on every model together, as one line of --details; None when it
+/// counts none.
+fn spend(row: &Row) -> Option<facts::Spend> {
+    let [input, output, reasoning, cache_read, cache_write] = row.tokens;
+    let tokens = facts::ModelSpend {
+        model: None,
+        usd: None,
+        input,
+        output,
+        thinking: reasoning,
+        cache_read,
+        cache_write,
+        web_searches: 0,
+    };
+    (tokens.tokens() > 0).then(|| facts::Spend {
+        models: vec![tokens],
+        ..Default::default()
+    })
 }
 
 /// A time in milliseconds, as the rows keep them, as text for a turn.
@@ -607,8 +649,10 @@ mod tests {
         )
         .unwrap();
         db.execute(
-            "INSERT INTO session_v2 (id, project_id, slug, directory, title, version, agent, model, time_created, time_updated) \
-             VALUES (?1, 'p1', 'quiet-fox', '/work/api', 'Uploader fix', '2.1.4', 'build', '{\"id\":\"claude-opus-5-5\",\"providerID\":\"anthropic\"}', 1792958000000, 1792958100000)",
+            "INSERT INTO session_v2 (id, project_id, slug, directory, title, version, agent, model, time_created, time_updated, cost, \
+             tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write) \
+             VALUES (?1, 'p1', 'quiet-fox', '/work/api', 'Uploader fix', '2.1.4', 'build', '{\"id\":\"claude-opus-5-5\",\"providerID\":\"anthropic\"}', 1792958000000, 1792958100000, 0.42, \
+             6551, 83883, 42938, 12077475, 696121)",
             [format!("ses_{ID}")],
         )
         .unwrap();
@@ -670,6 +714,23 @@ mod tests {
             ("Uploader fix", ID)
         );
         assert_eq!(summary.when, 1792958100.0);
+        assert_eq!((x.row.cost, summary.cost), (0.42, Some(0.42)));
+        let spent = summary.spend.unwrap();
+        assert_eq!(spent.models.len(), 1);
+        let m = &spent.models[0];
+        assert_eq!(
+            (
+                m.model.as_deref(),
+                m.usd,
+                m.input,
+                m.output,
+                m.thinking,
+                m.cache_read,
+                m.cache_write
+            ),
+            (None, None, 6551, 83883, 42938, 12077475, 696121)
+        );
+        assert_eq!(spent.api_seconds, None); // opencode keeps no durations
         assert_eq!(sessions_starting_with(&home, "SES_7F3A").len(), 1);
         let reference = session_ref(&home, ID);
         assert_eq!(ref_id(&reference).as_deref(), Some(ID));

@@ -4,7 +4,7 @@
 //! docs/commands.md's `hatcheck` section describes the list.
 
 use crate::agent::Agent;
-use crate::args::{Count, Parser};
+use crate::args::{Count, Parser, Takes};
 use crate::facts::{self, Summary};
 use crate::ospath::{self, Part};
 use crate::out::{self, Paint};
@@ -163,6 +163,15 @@ pub fn session_command_in(shell: &paths::Shell, s: &Summary, full: bool) -> Stri
     )
 }
 
+/// A session's cost as its row shows it: dollars and cents, `<$0.01` under a cent.
+pub fn dollars(usd: f64) -> String {
+    if usd < 0.005 {
+        "<$0.01".into()
+    } else {
+        format!("${usd:.2}")
+    }
+}
+
 /// The command with its program in cyan: `cl`, `claude`, `claude-k`, `cx`, `codex` or `agy`, the
 /// word that says which agent the session belongs to, since the row carries no tag for it. In
 /// the full form it follows the variable that names the profile.
@@ -191,14 +200,13 @@ pub fn paint_program(command: &str, agent: Agent, paint: &Paint) -> String {
 /// The agents that have a profile, home or folder here, as the heading names them before
 /// "CLI sessions": Claude Code, then each of the others that has one, without its own "CLI".
 fn agents_text(present: &[Agent]) -> String {
-    let mut names = vec![Agent::Claude.heading_name()];
-    names.extend(
-        Agent::ALL
-            .iter()
-            .filter(|a| **a != Agent::Claude && present.contains(a))
-            .map(|a| a.heading_name()),
-    );
+    let names: Vec<&str> = Agent::ALL
+        .iter()
+        .filter(|a| present.contains(a))
+        .map(|a| a.heading_name())
+        .collect();
     match names.len() {
+        0 => "No".to_string(), // every agent left out by config.toml
         1 => names[0].to_string(),
         2 => format!("{} and {}", names[0], names[1]),
         _ => format!(
@@ -232,7 +240,8 @@ pub fn usage_cells(
         let mut rows: Vec<Meter> = Vec::new();
         let limits = usage.as_ref().map(|u| get(u, "limits"));
         if let Some(Value::Array(limits)) = limits {
-            for row in limits.iter().filter(|r| r.is_object()) {
+            // One line: an account with many limits that read the same shows them as one.
+            for row in &usage::fold_limits(limits) {
                 let left =
                     usage::percent_left(get(row, "percent"), get(row, "resets_at"), *saved_at, now);
                 let reset = s(get(row, "resets_at")).and_then(times::parse_time);
@@ -365,24 +374,332 @@ impl Found {
     }
 }
 
+/// One more session hidden for a reason, in the count the end of the list gives.
+fn count_hidden(hidden: &mut Vec<(String, usize)>, label: &str) {
+    match hidden.iter_mut().find(|(k, _)| k == label) {
+        Some((_, n)) => *n += 1,
+        None => hidden.push((label.to_string(), 1)),
+    }
+}
+
+/// A folder's sessions as the list shows them: the ones listed, how many more it has in the
+/// window, and what they all cost together, with how many of them have a cost.
+struct Folder {
+    path: String,
+    listed: Vec<Summary>,
+    more: usize,
+    cost: f64,
+    priced: usize,
+    total: usize,
+}
+
+/// Colour for a cost, by its size, so a big one stands out: dim under $1, plain to $10, then
+/// gold to $50, orange to $100 and red from there, from the time bars' palette. wide: the
+/// terminal shows 256 colours.
+pub fn cost_color(usd: f64, wide: bool) -> String {
+    let (step, basic) = if usd < 1.0 {
+        return "2".into();
+    } else if usd < 10.0 {
+        return String::new();
+    } else if usd < 50.0 {
+        (3, "33")
+    } else if usd < 100.0 {
+        (1, "33")
+    } else {
+        (0, "31")
+    };
+    if wide {
+        format!("38;5;{}", usage::URGENCY_COLORS[step])
+    } else {
+        basic.into()
+    }
+}
+
+/// A cost with the detail Claude Code's /cost gives a small one: cents, or four decimals under
+/// a cent.
+pub fn dollars_fine(usd: f64) -> String {
+    if usd >= 0.005 {
+        format!("${usd:.2}")
+    } else {
+        format!("${usd:.4}")
+    }
+}
+
+/// A count of tokens as Claude Code's /cost shows one: 137, 6.6k, 12.1m.
+pub fn tokens(n: u64) -> String {
+    let scaled = |x: f64, unit: &str| {
+        let text = format!("{x:.1}");
+        format!("{}{unit}", text.strip_suffix(".0").unwrap_or(&text))
+    };
+    if n < 1000 {
+        n.to_string()
+    } else if n < 999_950 {
+        scaled(n as f64 / 1000.0, "k")
+    } else {
+        scaled(n as f64 / 1e6, "m")
+    }
+}
+
+/// How many turns a session has, as hatcheck show counts them, with how many are your prompts
+/// and how many tool calls there were, by reading it whole; None when it can't be read.
+fn turn_counts(s: &Summary) -> Option<(usize, usize, usize)> {
+    let conv = crate::conv::read_for(s).ok()?;
+    let prompts = conv.turns.iter().filter(|t| t.0 == "user").count();
+    Some((conv.turns.len(), prompts, conv.calls))
+}
+
+/// What --details shows for a session, kept as numbers so the columns line up across the whole
+/// list and the biggest in each can be marked: its turns, as hatcheck show counts them, and
+/// what its agent wrote down of what it spent.
+struct Block {
+    turns: Option<(usize, usize, usize)>,
+    spend: Option<facts::Spend>,
+}
+
+/// The first line's labels, each before its number: turns, prompts and tool calls, the API,
+/// wall and tool time, and the lines added and removed.
+const STATS: [&str; 7] = ["turns", "prompts", "calls", "API", "wall", "tools", "lines"];
+
+/// The token columns' headers: in, out, thinking, cache read, cache write and web searches.
+const KINDS: [&str; 6] = ["in", "out", "think", "read", "write", "web"];
+
+impl Block {
+    fn of(s: &Summary) -> Block {
+        Block {
+            turns: turn_counts(s),
+            spend: s.spend.clone(),
+        }
+    }
+
+    /// The first line's cells, each a value with its text, or None where the agent keeps none.
+    fn stats(&self) -> [Option<(f64, String)>; 7] {
+        let count = |n: usize| Some((n as f64, n.to_string()));
+        let (turns, prompts, calls) = match self.turns {
+            Some((t, p, c)) => (count(t), count(p), count(c)),
+            None => (None, None, None),
+        };
+        let x = self.spend.as_ref();
+        let span = |t: Option<f64>| t.map(|t| (t, times::duration(t)));
+        [
+            turns,
+            prompts,
+            calls,
+            span(x.and_then(|x| x.api_seconds)),
+            span(x.and_then(|x| x.wall_seconds)),
+            span(x.and_then(|x| x.tool_seconds)),
+            x.and_then(|x| match (x.lines_added, x.lines_removed) {
+                (Some(a), Some(r)) => Some((a as f64, format!("+{a} -{r}"))),
+                _ => None,
+            }),
+        ]
+    }
+
+    /// A row per model that spent anything, the costliest first: its name (`tokens` where the
+    /// agent counts every model's together), its cost, and its tokens by KINDS.
+    fn models(&self) -> Vec<(String, Option<f64>, [u64; 6])> {
+        let Some(spend) = &self.spend else {
+            return Vec::new();
+        };
+        let mut rows: Vec<&facts::ModelSpend> = spend
+            .models
+            .iter()
+            .filter(|m| m.tokens() > 0 || m.usd.is_some())
+            .collect();
+        rows.sort_by(|a, b| {
+            b.usd
+                .unwrap_or(0.0)
+                .partial_cmp(&a.usd.unwrap_or(0.0))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        rows.into_iter()
+            .map(|m| {
+                (
+                    m.model.clone().unwrap_or_else(|| "tokens".into()),
+                    m.usd,
+                    [
+                        m.input,
+                        m.output,
+                        m.thinking,
+                        m.cache_read,
+                        m.cache_write,
+                        m.web_searches,
+                    ],
+                )
+            })
+            .collect()
+    }
+}
+
+/// The columns of every block listed: each one's width, its biggest value, and how many rows
+/// have one, since the biggest is marked only with another to compare it with.
+struct Columns {
+    stats: [(usize, f64, usize); 7],
+    name: usize,
+    /// 0 when no row has a cost.
+    cost: usize,
+    /// (width, biggest, any at all) per kind of token: a kind no row has is left out.
+    kinds: [(usize, u64, bool); 6],
+    rows: usize,
+}
+
+impl Columns {
+    fn of(blocks: &[Block]) -> Columns {
+        let mut stats = [(0usize, 0f64, 0usize); 7];
+        let (mut name, mut cost, mut rows) = (0, 0, 0);
+        let mut kinds = [(0usize, 0u64, false); 6];
+        for b in blocks {
+            for (i, cell) in b.stats().iter().enumerate() {
+                if let Some((v, text)) = cell {
+                    stats[i] = (
+                        stats[i].0.max(text.chars().count()),
+                        stats[i].1.max(*v),
+                        stats[i].2 + 1,
+                    );
+                }
+            }
+            for (model, usd, by_kind) in b.models() {
+                rows += 1;
+                name = name.max(model.chars().count());
+                if let Some(u) = usd {
+                    cost = cost.max(dollars_fine(u).len()).max("cost".len());
+                }
+                for (k, n) in by_kind.iter().enumerate() {
+                    if *n > 0 {
+                        kinds[k] = (
+                            kinds[k].0.max(tokens(*n).chars().count()),
+                            kinds[k].1.max(*n),
+                            true,
+                        );
+                    }
+                }
+            }
+        }
+        for (k, label) in KINDS.iter().enumerate() {
+            kinds[k].0 = kinds[k].0.max(label.len()); // the header counts in the width
+        }
+        Columns {
+            stats,
+            name,
+            cost,
+            kinds,
+            rows,
+        }
+    }
+}
+
+/// A block's lines in the columns: the first with its labels, then, when a model spent
+/// anything, a dim header and a row per model, the numbers right-aligned, `·` for none, the
+/// biggest in a column in bold when another row has one, and a cost in its colour.
+fn render(block: &Block, c: &Columns, paint: &Paint) -> Vec<String> {
+    let p = |code: &str, text: &str| paint.p(code, text);
+    let right = |text: &str, width: usize| {
+        format!(
+            "{}{text}",
+            " ".repeat(width.saturating_sub(text.chars().count()))
+        )
+    };
+    let stats = block.stats();
+    // The trailing cells a row lacks are left off, not shown as none.
+    let shown = stats.iter().rposition(Option::is_some).map_or(0, |i| i + 1);
+    let first: Vec<String> = stats[..shown]
+        .iter()
+        .enumerate()
+        .map(|(i, cell)| {
+            let (width, biggest, rows) = c.stats[i];
+            let number = match cell {
+                Some((v, text)) if rows > 1 && *v == biggest && biggest > 0.0 => {
+                    p("1", &right(text, width))
+                }
+                Some((_, text)) => right(text, width),
+                None => p("2", &right("·", width)),
+            };
+            format!("{} {number}", p("2", STATS[i]))
+        })
+        .collect();
+    let mut lines = vec![if first.is_empty() {
+        p("2", "turns ?")
+    } else {
+        first.join("  ")
+    }];
+    let models = block.models();
+    if models.is_empty() {
+        return lines;
+    }
+    let kinds: Vec<usize> = (0..KINDS.len()).filter(|k| c.kinds[*k].2).collect();
+    let mut header = vec![" ".repeat(c.name)];
+    if c.cost > 0 {
+        header.push(right("cost", c.cost));
+    }
+    header.extend(kinds.iter().map(|&k| right(KINDS[k], c.kinds[k].0)));
+    lines.push(p("2", header.join("  ").trim_end()));
+    for (model, usd, by_kind) in models {
+        let mut row = vec![format!("{model:<width$}", width = c.name)];
+        if c.cost > 0 {
+            row.push(match usd {
+                Some(u) => {
+                    let text = dollars_fine(u);
+                    format!(
+                        "{}{}",
+                        " ".repeat(c.cost.saturating_sub(text.len())),
+                        p(&cost_color(u, paint.wide), &text)
+                    )
+                }
+                None => p("2", &right("·", c.cost)),
+            });
+        }
+        for &k in &kinds {
+            let (width, biggest, _) = c.kinds[k];
+            let n = by_kind[k];
+            row.push(if n == 0 {
+                p("2", &right("·", width))
+            } else if c.rows > 1 && n == biggest {
+                p("1", &right(&tokens(n), width))
+            } else {
+                right(&tokens(n), width)
+            });
+        }
+        lines.push(row.join("  ").trim_end().to_string());
+    }
+    lines
+}
+
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes, ZCode sessions from ~/.zcode, DeepSeek Harness sessions across all ~/.dsh* homes, MiniMax Code sessions across all ~/.minimax* homes and the homes MINIMAX_DATA_DIR and MAVIS_DATA_DIR select, Qwen Code sessions across all ~/.qwen* homes and the home QWEN_HOME names, GitHub Copilot CLI sessions across all ~/.copilot* homes and the home COPILOT_HOME names, and OpenCode sessions from ~/.local/share/opencode, with the command that resumes each one or opens DSH's session history.")
         .positional("hours", Count::Optional, &format!("how far back to look (default {DEFAULT_HOURS}); accepts 36, 1.5, 12h or 3d"))
         .option(&["-n", "--per-folder"], "per_folder", "N", "show only the newest N sessions per folder (default: all)")
-        .flag(&["--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, the Antigravity app's conversations, Qwen Code sessions from its channels, scheduled tasks and other hosts, and Copilot sessions from clients other than its CLI")
-        .flag(&["--all-folders"], "all_folders", "list every folder, even when run from a folder that has sessions")
-        .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude instead of the cl shortcut, CODEX_HOME=... codex instead of cx, and KIMI_CODE_HOME=... kimi instead of ck")
-        .flag(&["--cached"], "cached", "take plan usage from the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage, instead of the APIs")
-        .flag(&["--no-usage"], "no_usage", "leave plan usage out")
-        .flag(&["--json"], "json", "print the sessions, and the accounts behind them, as JSON for scripts and apps")
+        .flag(&["-a", "--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, the Antigravity app's conversations, Qwen Code sessions from its channels, scheduled tasks and other hosts, and Copilot sessions from clients other than its CLI")
+        .flag(&["-A", "--all-folders"], "all_folders", "list every folder, even when run from a folder that has sessions")
+        .flag(&["-f", "--full"], "full", "print CLAUDE_CONFIG_DIR=... claude instead of the cl shortcut, CODEX_HOME=... codex instead of cx, and KIMI_CODE_HOME=... kimi instead of ck")
+        .flag(&["-C", "--cached"], "cached", "take plan usage from the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage, instead of the APIs")
+        .flag(&["-d", "--details"], "details", "under each session, its turns and what it spent, by model and kind of token, with the durations its agent wrote down")
+        .flag(&["-c", "--by-cost"], "by_cost", "the costliest sessions and folders first, instead of the newest")
+        // Undo what config.toml sets, for one run; docs/commands.md's config.toml section lists them.
+        .hidden(&["--no-details"], "no_details", Takes::Nothing)
+        .hidden(&["--by-time"], "by_time", Takes::Nothing)
+        .hidden(&["--no-full"], "no_full", Takes::Nothing)
+        .hidden(&["--this-folder"], "this_folder", Takes::Nothing)
+        .hidden(&["--usage"], "usage", Takes::Nothing)
+        .exclusive(&["details", "no_details"])
+        .exclusive(&["by_cost", "by_time"])
+        .exclusive(&["full", "no_full"])
+        .exclusive(&["all_folders", "this_folder"])
+        .exclusive(&["no_usage", "usage"])
+        .flag(&["-q", "--no-usage"], "no_usage", "leave plan usage out")
+        .flag(&["-j", "--json"], "json", "print the sessions, and the accounts behind them, as JSON for scripts and apps")
         .flag(&["-e", "--email"], "email", "with --json, include each account's email address");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
-    let hours_value: Value = match args.value("hours") {
+    // What config.toml sets stands unless the command line says otherwise.
+    let cfg = crate::config::current();
+    let hours_text = args
+        .value("hours")
+        .map(str::to_string)
+        .or_else(|| cfg.hours.clone());
+    let hours_value: Value = match hours_text {
         None => json!(DEFAULT_HOURS),
-        Some(text) => match parse_hours(text) {
+        Some(text) => match parse_hours(&text) {
             Some(h) => json!(h),
             None => {
                 return parser
@@ -393,19 +710,26 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     };
     let hours = py::Num::of(&hours_value).map_or(24.0, py::Num::f);
     let per_folder = match args.value("per_folder") {
-        None => None,
+        None => cfg.per_folder,
         Some(n) => match n.parse::<usize>() {
-            Ok(n) if n >= 1 && n.to_string() == n.to_string() && !n.to_string().is_empty() => {
-                Some(n)
-            }
-            _ => {
+            Ok(0) => None, // every session: undoes what config.toml set
+            Ok(n) => Some(n),
+            Err(_) => {
                 return parser
-                    .error("argument -n/--per-folder: expected a whole number of 1 or more")
+                    .error("argument -n/--per-folder: expected a whole number (0 for all)")
                     .exit_code()
             }
         },
     };
-    let (all, full, json_out) = (args.flag("all"), args.flag("full"), args.flag("json"));
+    let setting = |flag: &str, undo: &str, from_file: Option<bool>| {
+        args.flag(flag) || (from_file == Some(true) && !args.flag(undo))
+    };
+    let (all, json_out) = (args.flag("all"), args.flag("json"));
+    let full = setting("full", "no_full", cfg.full);
+    let details = setting("details", "no_details", cfg.details);
+    let by_cost = setting("by_cost", "by_time", cfg.by_cost);
+    let all_folders = setting("all_folders", "this_folder", cfg.all_folders);
+    let use_usage = !setting("no_usage", "usage", cfg.usage.map(|u| !u));
     let paint = Paint::new();
     let p = |code: &str, text: &str| paint.p(code, text);
     let width = out::columns(100);
@@ -713,17 +1037,26 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let mut hidden: Vec<(String, usize)> = Vec::new();
     for key in &found.order {
         let s = found.by_key[key].1.clone();
+        if all {
+            shown.push(s);
+            continue;
+        }
+        // A folder config.toml leaves out, or doesn't list, counted with the rest hidden, which
+        // --all shows.
+        if s.cwd.as_deref().is_some_and(crate::config::folder_left_out) {
+            count_hidden(&mut hidden, "by config");
+            continue;
+        }
         let entrypoint = s.entrypoint_text();
-        if entrypoint != "cli" && !all {
-            let label = if entrypoint == "claude-desktop" {
-                "Desktop".to_string()
-            } else {
-                entrypoint
-            };
-            match hidden.iter_mut().find(|(k, _)| *k == label) {
-                Some((_, n)) => *n += 1,
-                None => hidden.push((label, 1)),
-            }
+        if entrypoint != "cli" {
+            count_hidden(
+                &mut hidden,
+                if entrypoint == "claude-desktop" {
+                    "Desktop"
+                } else {
+                    entrypoint.as_str()
+                },
+            );
             continue;
         }
         shown.push(s);
@@ -741,7 +1074,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         })
         .cloned()
         .collect();
-    let only_here = !mine.is_empty() && !args.flag("all_folders");
+    let only_here = !mine.is_empty() && !all_folders;
     let elsewhere = if only_here {
         shown.len() - mine.len()
     } else {
@@ -786,28 +1119,58 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             None => groups.push((folder, vec![s])),
         }
     }
-    groups.sort_by_key(|(f, _)| f.to_lowercase());
-    let mut folders: Vec<(String, Vec<Summary>, usize)> = Vec::new();
-    for (folder, mut sessions) in groups {
-        sessions.sort_by(|a, b| {
-            b.when
-                .partial_cmp(&a.when)
+    // Folders A-Z, each newest first; with --by-cost, the costliest first: sessions by what
+    // each cost, those without one after, and folders by what their sessions cost together.
+    let folder_cost = |sessions: &[Summary]| sessions.iter().filter_map(|s| s.cost).sum::<f64>();
+    groups.sort_by(|(fa, sa), (fb, sb)| {
+        let by_name = fa.to_lowercase().cmp(&fb.to_lowercase());
+        if by_cost {
+            folder_cost(sb)
+                .partial_cmp(&folder_cost(sa))
                 .unwrap_or(std::cmp::Ordering::Equal)
+                .then(by_name)
+        } else {
+            by_name
+        }
+    });
+    let mut folders: Vec<Folder> = Vec::new();
+    for (path, mut sessions) in groups {
+        sessions.sort_by(|a, b| {
+            let newest = b
+                .when
+                .partial_cmp(&a.when)
+                .unwrap_or(std::cmp::Ordering::Equal);
+            if by_cost {
+                b.cost
+                    .unwrap_or(0.0)
+                    .partial_cmp(&a.cost.unwrap_or(0.0))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(newest)
+            } else {
+                newest
+            }
         });
         let total = sessions.len();
+        let cost = folder_cost(&sessions);
+        let priced = sessions.iter().filter(|s| s.cost.is_some()).count();
         let listed: Vec<Summary> = sessions
             .into_iter()
             .take(per_folder.unwrap_or(usize::MAX))
             .collect();
-        let older = total - listed.len();
-        folders.push((folder, listed, older));
+        folders.push(Folder {
+            more: total - listed.len(),
+            path,
+            listed,
+            cost,
+            priced,
+            total,
+        });
     }
 
     // Plan usage for the profiles behind the listed sessions, one request per account.
-    let use_usage = !args.flag("no_usage");
     let used: Vec<&String> = folders
         .iter()
-        .flat_map(|(_, l, _)| l.iter().map(|s| &s.profile))
+        .flat_map(|f| f.listed.iter().map(|s| &s.profile))
         .collect();
     let used_profiles: Vec<String> = profiles
         .iter()
@@ -889,8 +1252,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         }
     }
     let bindings = paths::load_bindings();
-    for (_, listed, _) in folders.iter_mut() {
-        for s in listed.iter_mut() {
+    for f in folders.iter_mut() {
+        for s in f.listed.iter_mut() {
             let want = paths::bound_profile(s.cwd.as_deref(), s.agent, &bindings);
             s.bound_to = want.filter(|w| !paths::same_folder(w, &s.profile));
         }
@@ -904,18 +1267,31 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         );
         data.insert("hours".into(), hours_value.clone());
         data.insert("this_folder_only".into(), json!(only_here));
+        data.insert(
+            "sorted_by".into(),
+            json!(if by_cost { "cost" } else { "time" }),
+        );
         let mut sessions = Vec::new();
-        for (_, listed, _) in &folders {
-            for s in listed {
-                sessions.push(json!({
+        for f in &folders {
+            for s in &f.listed {
+                let mut row = json!({
                     "agent": s.agent.key(), "id": s.id, "profile": ospath::abspath(&s.profile),
                     "account": account.get(&s.profile).map_or(Value::Null, |n| json!(n)), "title": s.title, "cwd": s.cwd,
                     "last_active": times::iso_utc(s.when), "entrypoint": s.entrypoint, "branch": s.branch, "model": s.model,
+                    "cost_usd": s.cost,
                     "open": s.open.as_ref().map_or(Value::Null, |live| json!({"pid": get(live, "pid"), "status": get(live, "status"),
                         "in": if truthy(get(live, "in")) { get(live, "in").clone() } else { json!(s.agent.program()) }})),
                     "continued_in": s.continued_in,
                     "bound_to": s.bound_to.as_ref().map_or(Value::Null, |b| json!(ospath::abspath(b))),
-                    "resume": session_command(s, full)}));
+                    "resume": session_command(s, full)});
+                if details {
+                    // Only asked for: the turns mean reading the whole session.
+                    row["spend"] = s.spend.as_ref().map_or(Value::Null, facts::Spend::to_json);
+                    row["turns"] = turn_counts(s).map_or(Value::Null, |(total, prompts, calls)| {
+                        json!({"total": total, "prompts": prompts, "tool_calls": calls})
+                    });
+                }
+                sessions.push(row);
             }
         }
         data.insert("sessions".into(), Value::Array(sessions));
@@ -938,8 +1314,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             Value::Object(
                 folders
                     .iter()
-                    .filter(|f| f.2 > 0)
-                    .map(|(f, _, o)| (f.clone(), json!(o)))
+                    .filter(|f| f.more > 0)
+                    .map(|f| (f.path.clone(), json!(f.more)))
                     .collect(),
             ),
         );
@@ -954,12 +1330,19 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     // The usage comments line up after the longest resume command.
     let command_width = folders
         .iter()
-        .flat_map(|(_, l, _)| l.iter().map(|s| session_command(s, full).chars().count()))
+        .flat_map(|f| {
+            f.listed
+                .iter()
+                .map(|s| session_command(s, full).chars().count())
+        })
         .max()
         .unwrap_or(0);
 
     let window = format!("{}h", py::g(hours));
     let mut present = Vec::new();
+    if !crate::config::ignores(Agent::Claude) {
+        present.push(Agent::Claude);
+    }
     for (agent, folders) in [
         (Agent::Codex, &codex_homes),
         (Agent::Agy, &agy_roots),
@@ -983,8 +1366,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         )) + &p(
             "2",
             &format!(
-                " ({}newest first{})",
+                " ({}{} first{})",
                 if only_here { "" } else { "by folder, " },
+                if by_cost { "costliest" } else { "newest" },
                 if cells.is_empty() {
                     ""
                 } else {
@@ -998,16 +1382,45 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             "  No sessions in this window. Try a longer one, e.g. {prog} 72"
         ));
     }
+    // --details: every session's block first, so the columns line up across the whole list.
+    let blocks: Vec<Block> = if details {
+        folders
+            .iter()
+            .flat_map(|f| f.listed.iter().map(Block::of))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let columns = Columns::of(&blocks);
+    let mut block_at = 0;
     let mut previous: Option<(Option<usize>, Option<String>)> = None; // (account, usage text) of the row above
-    for (folder, listed, older) in &folders {
+    for f in &folders {
+        let (folder, listed, older) = (&f.path, &f.listed, f.more);
         let missing = if ospath::isdir(folder) {
             String::new()
         } else {
             format!("  {}", p("31", "(directory missing)"))
         };
-        out::println(&(paint.accent(&format!("cd {}", paths::shell_path(folder))) + &missing));
+        let mut head = paint.accent(&format!("cd {}", paths::shell_path(folder)));
+        if by_cost && f.priced > 0 {
+            // What the folder's sessions cost together, as a shell comment like the usage after
+            // a command, so the line still pastes.
+            let of = if f.priced == f.total {
+                format!("{} session{}", f.total, if f.total == 1 { "" } else { "s" })
+            } else {
+                format!("{} of {} sessions", f.priced, f.total)
+            };
+            head = format!(
+                "{head}  {} {}{}",
+                p("2", "#"),
+                p(&cost_color(f.cost, paint.wide), &dollars(f.cost)),
+                p("2", &format!(" in {of}"))
+            );
+        }
+        out::println(&(head + &missing));
         for s in listed {
             // No profile or agent here: the command shows both (plain `claude` means ~/.claude).
+            let cost_code = s.cost.map(|c| cost_color(c, paint.wide)); // outlives meta, which borrows it
             let mut meta: Vec<(String, &str)> = Vec::new();
             if truthy(&s.branch) {
                 meta.push((py::str_of(&s.branch), "2"));
@@ -1016,6 +1429,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 .filter(|m| s.agent == Agent::Claude && !m.is_empty() && !m.starts_with("claude"))
             {
                 meta.push((format!("on {model}"), "35")); // e.g. GLM or Kimi, through claude-z or claude-k
+            }
+            if let (Some(cost), Some(code)) = (s.cost, &cost_code) {
+                meta.push((dollars(cost), code)); // what it cost, as the agent worked it out
             }
             let entrypoint = s.entrypoint_text();
             if entrypoint != "cli" {
@@ -1091,16 +1507,24 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             }
             previous = Some(this);
             out::println(&format!("{}{command}", " ".repeat(8)));
+            if details {
+                for line in render(&blocks[block_at], &columns, &paint) {
+                    out::println(&format!("{}{line}", " ".repeat(8)));
+                }
+                block_at += 1;
+            }
         }
-        if *older > 0 {
+        if older > 0 {
+            // Cut by -n: the older ones, or with --by-cost the cheaper and the unpriced.
             out::println(&format!(
                 "  {}",
                 p(
                     "2",
                     &format!(
-                        "{:>4}  older session{}",
+                        "{:>4}  {} session{}",
                         format!("+{older}"),
-                        if *older > 1 { "s" } else { "" }
+                        if by_cost { "other" } else { "older" },
+                        if older > 1 { "s" } else { "" }
                     )
                 )
             ));
@@ -1303,6 +1727,124 @@ mod tests {
             assert_eq!(paint_program(command, agent, &on), painted);
             assert_eq!(paint_program(command, agent, &off), command);
         }
+    }
+
+    #[test]
+    fn a_cost_is_shown_in_cents() {
+        assert_eq!(dollars(5.009506499999996), "$5.01");
+        assert_eq!(dollars(27.729848199999996), "$27.73");
+        assert_eq!(dollars(0.005), "$0.01");
+        assert_eq!(dollars(0.0042), "<$0.01");
+        assert_eq!(dollars_fine(0.0018), "$0.0018"); // --details keeps a small one's detail
+        assert_eq!(dollars_fine(5.0095), "$5.01");
+    }
+
+    #[test]
+    fn a_cost_is_coloured_by_its_size() {
+        assert_eq!(cost_color(0.5, true), "2");
+        assert_eq!(cost_color(5.0, true), "");
+        assert_eq!(cost_color(12.0, true), "38;5;178"); // gold
+        assert_eq!(cost_color(60.0, true), "38;5;166"); // orange
+        assert_eq!(cost_color(150.0, true), "38;5;160"); // red
+        assert_eq!(cost_color(12.0, false), "33"); // a 16-colour terminal
+        assert_eq!(cost_color(150.0, false), "31");
+    }
+
+    #[test]
+    fn tokens_are_counted_as_claude_code_shows_them() {
+        assert_eq!(tokens(137), "137");
+        assert_eq!(tokens(1000), "1k");
+        assert_eq!(tokens(1092), "1.1k");
+        assert_eq!(tokens(83883), "83.9k");
+        assert_eq!(tokens(999_960), "1m");
+        assert_eq!(tokens(12_077_475), "12.1m");
+    }
+
+    #[test]
+    fn the_details_line_up_in_columns() {
+        let spend = facts::Spend {
+            models: vec![
+                facts::ModelSpend {
+                    model: Some("claude-haiku-4-5".into()),
+                    usd: Some(0.001777),
+                    input: 1092,
+                    output: 137,
+                    ..Default::default()
+                },
+                facts::ModelSpend {
+                    model: Some("claude-sonnet-5".into()),
+                    usd: Some(5.0077),
+                    input: 6551,
+                    output: 83883,
+                    thinking: 42938,
+                    cache_read: 12077475,
+                    cache_write: 696121,
+                    web_searches: 1,
+                },
+            ],
+            api_seconds: Some(1146.6),
+            wall_seconds: Some(18300.0),
+            tool_seconds: Some(80.5),
+            lines_added: Some(130),
+            lines_removed: Some(7),
+        };
+        let block = Block {
+            turns: Some((42, 21, 97)),
+            spend: Some(spend),
+        };
+        let bare = Block {
+            turns: None,
+            spend: None,
+        };
+        let off = Paint {
+            on: false,
+            wide: false,
+        };
+        let columns = Columns::of(std::slice::from_ref(&block));
+        assert_eq!(
+            render(&block, &columns, &off),
+            [
+                "turns 42  prompts 21  calls 97  API 19m  wall 5h05m  tools 1m  lines +130 -7",
+                "                     cost    in    out  think   read   write  web",
+                "claude-sonnet-5     $5.01  6.6k  83.9k  42.9k  12.1m  696.1k    1",
+                "claude-haiku-4-5  $0.0018  1.1k    137      ·      ·       ·    ·",
+            ]
+        );
+        assert_eq!(render(&bare, &columns, &off), ["turns ?"]);
+        // On a terminal: the biggest in each column bold, a cost in its colour, none dim.
+        let on = Paint {
+            on: true,
+            wide: false,
+        };
+        let lines = render(&block, &columns, &on);
+        assert!(lines[2].contains("\x1b[1m6.6k\x1b[0m"), "{}", lines[2]);
+        assert!(lines[2].contains("  $5.01  "), "{}", lines[2]); // under $10: plain
+        assert!(lines[3].contains("\x1b[2m$0.0018\x1b[0m"), "{}", lines[3]);
+        assert!(lines[3].ends_with("\x1b[2m  ·\x1b[0m"), "{}", lines[3]);
+        // Columns run across blocks: a bigger count elsewhere widens them and takes the bold.
+        let more = Block {
+            turns: Some((7, 3, 120)),
+            spend: None,
+        };
+        let both = Columns::of(&[block, more]);
+        assert_eq!(render(&bare, &both, &off), ["turns ?"],);
+        let lines = render(
+            &Block {
+                turns: Some((7, 3, 120)),
+                spend: None,
+            },
+            &both,
+            &on,
+        );
+        assert_eq!(
+            lines,
+            [format!(
+                "{}  {}  {}",
+                "\x1b[2mturns\x1b[0m  7",
+                "\x1b[2mprompts\x1b[0m  3",
+                "\x1b[2mcalls\x1b[0m \x1b[1m120\x1b[0m"
+            )]
+        );
     }
 
     #[test]

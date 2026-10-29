@@ -35,6 +35,9 @@ pub fn find(prefix: &str) -> Vec<String> {
             homes.push(ospath::abspath(&ospath::expanduser(&dir)));
         }
     }
+    if crate::config::ignores(crate::agent::Agent::Codex) {
+        homes.clear(); // config.toml leaves Codex out: looked for nowhere
+    }
     let mut seen: Vec<String> = Vec::new();
     let lower = prefix.to_lowercase();
     for h in homes {
@@ -207,7 +210,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session by its ID, or the start of it.",
     )
     .positional("session", Count::One, "the session ID, or the start of it")
-    .flag(&["--json"], "json", "print the matches as JSON");
+    .flag(&["-j", "--json"], "json", "print the matches as JSON");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),

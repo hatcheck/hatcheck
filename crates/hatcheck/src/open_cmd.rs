@@ -604,8 +604,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .flag(&["--print"], "print", "print the cd and resume commands instead")
         .exclusive(&["here", "print"])
         .option(&["--terminal"], "terminal", "NAME", "the terminal to open (default: HATCHECK_TERMINAL, or this system's usual one)")
-        .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=... kimi rather than ck")
-        .flag(&["--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec")
+        .flag(&["-f", "--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=... kimi rather than ck")
+        .flag(&["-a", "--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec")
         .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME, zcode, dsh, dsh:NAME, mcode, mcode:NAME, qwen, qwen:NAME, copilot, copilot:NAME or opencode) in a new terminal, instead of resuming a session");
     let args = match parser.parse(argv) {
         Ok(a) => a,

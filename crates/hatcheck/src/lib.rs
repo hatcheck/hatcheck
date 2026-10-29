@@ -13,6 +13,7 @@ pub mod args;
 pub mod best;
 pub mod bind;
 pub mod cli;
+pub mod config;
 pub mod conv;
 pub mod copilot;
 pub mod desktop;

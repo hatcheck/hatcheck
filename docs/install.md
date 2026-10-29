@@ -165,7 +165,8 @@ the others, as in the table above. It changes nothing. It also lists every `clau
 `kimi`, `zcode`, `dsh`, `mcode`, `qwen`, `copilot` and `opencode` on your `PATH` with its version
 and where it came from, since `cl`, `cx`, `ck` and the resume, login or DSH web commands run the
 first one, and the hooks `hatcheck bind --hook` added, flagging one that runs a hatcheck that has
-gone. Doctor stays PATH-based: an installed `~/.minimax-code/bin/mcode` isn't found merely because
+gone, and hatcheck's own [config file](commands.md#configtoml-the-lists-defaults-and-what-to-leave-out),
+`~/.config/hatcheck/config.toml`, with what it sets, or that there is none. Doctor stays PATH-based: an installed `~/.minimax-code/bin/mcode` isn't found merely because
 it exists. When a copy is found there, doctor identifies `~/.minimax-code` as the MiniMax Code
 installer, and a `qwen` wrapper in `~/.local/bin` or under `qwen-code` as Qwen Code's, a `copilot`
 in `~/.local/bin` as the Copilot CLI installer's, and an `opencode` under `~/.opencode/bin` as

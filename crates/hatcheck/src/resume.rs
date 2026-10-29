@@ -19,8 +19,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .flag(&["-y", "--yes"], "yes", "don't ask")
         .flag(&["--print"], "print", "print the cd and resume commands instead")
         .exclusive(&["yes", "print"])
-        .flag(&["--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=... kimi rather than ck")
-        .flag(&["--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec");
+        .flag(&["-f", "--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=... kimi rather than ck")
+        .flag(&["-a", "--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),

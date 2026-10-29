@@ -84,7 +84,7 @@ history) and what's left of that profile's plan:
 $ hatcheck
 🎩 Claude Code and Codex CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
-    4m  Fix flaky login test · main · ● open in pid 48213 (busy)
+    4m  Fix flaky login test · main · $5.01 · ● open in pid 48213 (busy)
         cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10         # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
    40m  Add retries to the uploader · main
         cx a resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e           # 5h  80% ████░ ↻███▏░ 3h10m  week  64% ████▌░░ ↻█▊░░░░░ 1d18h
@@ -118,6 +118,42 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   in its folder names a running process; copilot removes the file when it quits, so one a crash left
   doesn't count. Nothing marks an opencode session open. An open session is listed even when its
   last message is older than the window.
+- What a session cost follows the branch, like `$5.01` above, when its agent wrote one down.
+  Claude Code keeps a running total of what the session's requests cost at API prices, whatever
+  its plan bills, in the `cost-state` records it appends to the transcript when it saves the
+  session's figures (2.1.278 on; checked with 2.1.312), and takes the newest up again when the
+  session is resumed, so a continued session shows the whole conversation's, and one still open
+  shows the total as of its last record. OpenCode keeps a total per session as it prices its
+  tokens. Under a cent shows as `<$0.01`; a session priced at nothing shows none, as OpenCode
+  prices a model it has no price for, such as a subscription's. The other agents' sessions show
+  none: hatcheck reads no price from their files (Codex, agy, ZCode and copilot record tokens or
+  request counts, not dollars).
+- A cost is coloured by its size, so a big one stands out: dim under a dollar, plain to $10, then
+  gold to $50, orange to $100 and red from there, the time bars' colours.
+- `--details` puts a block under each session: first its turns, as `hatcheck show` counts them,
+  with its prompts and tool calls, which means reading the whole session, and for a Claude Code
+  session the API, wall and tool time and the lines added and removed from its `cost-state`;
+  then, when a model spent anything, a small table, a row per model with its cost and its tokens
+  by kind under a dim header (`in`, `out`, `think`, `read`, `write` and `web`, as Claude Code's
+  own `/cost` counts them):
+
+  ```
+  turns 20  prompts 10  calls 75  API 37m  wall 3d6h  tools 5m  lines +485 -6
+                       cost      in     out  think  read  write  web
+  claude-fable-5-1   $27.42      3k  156.4k  93.8k  6.7m   1.4m    ·
+  claude-haiku-5-5    $0.31  341.9k   22.4k   5.5k     ·      ·   26
+  ```
+
+  The numbers are right-aligned in columns that line up across the whole list, so sessions
+  compare at a glance; `·` stands for none, a kind no row has is left out, the biggest in each
+  column is bold when another row has one, and a cost has its colour. Claude Code prices a model
+  at a time, not a kind of token, so the kinds are counts; an OpenCode session counts its tokens
+  for every model together, on one `tokens` row, with no cost column. hatcheck prices nothing
+  itself.
+- `--by-cost` puts the costliest first: folders by what their sessions cost together, shown on
+  the `cd` line as a shell comment (`cd ~/code/api  # $23.40 in 3 sessions`), and sessions by
+  cost within each, those without one last and newest first among them; `-n` then keeps each
+  folder's costliest, and the rest are `other sessions`.
 - The comment after each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
   (`week`) and per-model weekly limits such as `Fable`, which are named in violet, with their bar
   drawn in it, so they stand apart from `week`. Each one has the % left and a bar of it, then `↻`, a bar of the time left until
@@ -138,7 +174,11 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   from the Codex app (now part of the ChatGPT desktop app), its IDE extension and `codex exec` are
   hidden like Desktop ones, and Codex's own approval reviews aren't listed.
 - Antigravity CLI sessions resume with `agy --conversation <id>`, and have no branch after the
-  title, since agy writes none down. Their comment shows what agy's `/usage` reports. The
+  title, since agy writes none down. Their comment shows what agy's `/usage` reports, a limit per
+  model (agy 1.4.10 names a bucket per model and effort tier, which hatcheck folds to one per
+  model while the tiers read the same), and since that's many, those that read the same are one
+  meter here, named by the models sharing it (`Gemini 4 Argon +1`), or `all models` when every
+  one does; `hatcheck usage` keeps a row per model. The
   Antigravity app's conversations, read from the app's own folder, are hidden like Desktop ones,
   and conversations agy ran itself aren't listed.
 - Kimi Code CLI sessions, from every `~/.kimi-code*` home, resume with `kimi --session session_<id>`,
@@ -190,14 +230,22 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 | Option       | What it does                                                                  |
 |--------------|-------------------------------------------------------------------------------|
 | `HOURS`      | how far back to look (default 24); takes `36`, `1.5`, `12h` or `3d`           |
-| `-n N`       | show only the newest N sessions per folder and count the rest                 |
-| `--all`      | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec`, the Antigravity app, MiniMax Code's internal, non-subagent sessions, Qwen Code's from channels, scheduled tasks and other hosts, and Copilot sessions another client than its CLI made |
-| `--all-folders` | list every folder, even when run from one that has sessions                |
-| `--full`     | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, `CODEX_HOME=… codex …` instead of `cx`, and `KIMI_CODE_HOME=… kimi …` instead of `ck` |
-| `--cached`   | take usage from Claude Code's and Codex's saved snapshots and hatcheck's last readings of agy's `/usage` and Kimi's usage, without calling the APIs |
-| `--no-usage` | leave plan usage out                                                          |
-| `--json`     | print the sessions, and the accounts behind them, as JSON ([below](#--json-for-scripts-status-bars-and-apps)) |
+| `-n N`       | show only the newest N sessions per folder and count the rest; `0` for all, undoing [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out)'s |
+| `-a`, `--all` | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec`, the Antigravity app, MiniMax Code's internal, non-subagent sessions, Qwen Code's from channels, scheduled tasks and other hosts, and Copilot sessions another client than its CLI made |
+| `-A`, `--all-folders` | list every folder, even when run from one that has sessions          |
+| `-f`, `--full` | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, `CODEX_HOME=… codex …` instead of `cx`, and `KIMI_CODE_HOME=… kimi …` instead of `ck` |
+| `-d`, `--details` | under each session, its turns and what it spent by model and kind of token, with the durations its agent wrote down |
+| `-c`, `--by-cost` | the costliest sessions and folders first, instead of the newest            |
+| `-C`, `--cached` | take usage from Claude Code's and Codex's saved snapshots and hatcheck's last readings of agy's `/usage` and Kimi's usage, without calling the APIs |
+| `-q`, `--no-usage` | leave plan usage out: the quick list                                     |
+| `-j`, `--json` | print the sessions, and the accounts behind them, as JSON ([below](#--json-for-scripts-status-bars-and-apps)) |
 | `-e`, `--email` | with `--json`, include each account's email address                        |
+
+Short flags bundle as in Python: `hat -dc` is `hat --details --by-cost`, `hat -qA` the quick list of every
+folder, and `-n` can end a bundle with its number attached, `hat -cn3`. The same letters mean the same
+elsewhere: `-j` for `--json`, `-C` for `--cached`, `-a` and `-f` for `--all` and `--full`, in every
+command that has the long flag. What the list does by default, and the agents and folders it leaves
+out, can be set once in [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out).
 
 ## `hatcheck usage`: plan usage for every profile
 
@@ -1119,6 +1167,52 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
     to another agy folder with `--agy`. Tested with the real `agy` (1.4.2) in print mode: it ran
     the hook as a conversation started, and the model quoted the message back.
 
+## `config.toml`: the list's defaults, and what to leave out
+
+hatcheck reads one config file of its own, `~/.config/hatcheck/config.toml` (`$XDG_CONFIG_HOME`'s,
+or `%APPDATA%\hatcheck\config.toml` on Windows), beside the bindings `hatcheck bind` keeps, or the
+file `HATCHECK_CONFIG` names. Without one, nothing changes. It sets what the session list does by
+default, and names agents and folders to leave out:
+
+```toml
+# What hat does by default; each setting has a flag that undoes it for one run.
+[list]
+details = true       # hat --details; --no-details undoes it
+by_cost = true       # hat --by-cost; --by-time undoes it
+hours = "3d"         # 24, 1.5, 12h or 3d; HOURS on the command line wins
+per_folder = 3       # hat -n 3; -n 0 lists them all
+full = false         # CLAUDE_CONFIG_DIR=… claude … instead of cl; --no-full undoes it
+all_folders = false  # every folder, even from one that has sessions; --this-folder undoes it
+usage = true         # false leaves plan usage out, as --no-usage does; --usage puts it back
+folders = ["~/repos/*"]   # only these folders; left out or empty, every folder
+
+[ignore]
+agents = ["copilot", "opencode"]   # of claude, codex, agy, kimi, zcode, dsh, mcode, qwen, copilot, opencode
+folders = ["~/orca/workspaces/*", "/tmp"]   # never these, even among the ones listed
+```
+
+- **Precedence is one line:** hatcheck's own defaults, then the file, then the command line. Every
+  setting the file can make has a flag that undoes it for one run, named above, so the file never
+  takes a choice away; a flag and its opposite together are refused.
+- **An agent left out is one hatcheck doesn't look for:** no command finds its profiles or homes,
+  so it's missing from the list and its heading, from `usage` and `best`, from `where`, and from
+  the profiles `move` and `fork` can carry a session to. `hatcheck doctor` still says which file
+  leaves it out.
+- **Folders are chosen both ways:** `[list] folders` names the only folders to list, and
+  `[ignore] folders` folders never to list, which wins where they overlap. A session in any other
+  folder is hidden, counted with the rest hidden (`Hidden: 5 by config (show with --all)`), so
+  nothing vanishes silently, and `--all` shows them. A pattern is a path, with `~`, `*` for any
+  part of a name and `?` for one character, and covers the folder it names and every folder under
+  it: `~/orca/workspaces` and `~/orca/workspaces/*` both mean everything there. Only the list
+  reads them: `where`, `show`, `open` and `resume` still find a session there by its ID.
+- **The file is a plain subset of TOML,** read by hatcheck itself: comments, `[table]` headers,
+  and `key = value` with `"strings"`, numbers, `true` or `false`, and arrays of them, over several
+  lines where an array has to be. A file that can't be read, or that names a setting or an agent
+  that doesn't exist, stops every command and says where (`hatcheck:
+  ~/.config/hatcheck/config.toml, line 4: expected key = value`), since a file silently ignored
+  would seem to apply.
+- `hatcheck doctor` shows the file and what it sets, and its `--json` has it as `config`.
+
 ## `--json`: for scripts, status bars and apps
 
 `hatcheck --json` and `hatcheck usage --json` print what the text shows, as data:
@@ -1130,6 +1224,7 @@ $ hatcheck --json
   "generated_at": "2026-10-15T22:41:07Z",
   "hours": 24,
   "this_folder_only": false,
+  "sorted_by": "time",
   "sessions": [
     {
       "agent": "claude",
@@ -1142,6 +1237,7 @@ $ hatcheck --json
       "entrypoint": "cli",
       "branch": "main",
       "model": "claude-fable-5-1",
+      "cost_usd": 5.0095065,
       "open": {"pid": 48213, "status": "busy", "in": "claude"},
       "continued_in": null,
       "bound_to": null,
@@ -1191,6 +1287,17 @@ $ hatcheck --json
   registry or its terminal UI's sidecar names a running process, and copilot's while the
   `inuse.<pid>.lock` in its folder does. Kimi's, ZCode's and OpenCode's are never marked open, since
   nothing marks one.
+- `cost_usd` is what the session cost in US dollars as its agent worked it out, the number the text
+  rounds to cents, with every digit the agent wrote; `null` when it recorded none, or nothing above
+  zero. `sorted_by` is `time`, or `cost` with `--by-cost`, which orders `sessions` as the text does.
+- `--details` adds two fields to each session. `spend` is what its agent wrote down of what it
+  spent: `models`, one per model with `model` (`null` where the agent counts the session's tokens
+  for every model together, as OpenCode does), `usd` (that model's own cost; `null` where the agent
+  prices the session as a whole), `input`, `output`, `thinking`, `cache_read`, `cache_write` and
+  `web_searches`, then `api_seconds`, `wall_seconds`, `tool_seconds`, `lines_added` and
+  `lines_removed`, each `null` where the agent keeps none; `spend` itself is `null` when it wrote
+  nothing down. `turns` is `total`, `prompts` and `tool_calls`, as `hatcheck show` counts them,
+  `null` when the session can't be read.
 - `left_percent` is `null` for a snapshot's limit that has reset since it was saved. `pace` is what's
   left per hour until the reset (`left_percent` over the hours to go, at least one), `null` without
   a reset ahead. `fable` is `{"left": true, "resets_at": …}`, `{"left": false, "back_at": …}`, or

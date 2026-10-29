@@ -45,8 +45,12 @@ fn env(name: &str) -> Option<String> {
 }
 
 /// Every Claude Code config dir with sessions: ~/.claude* dirs (and $CLAUDE_CONFIG_DIR) that
-/// hold a projects/ folder, ~/.claude first, the rest by name.
+/// hold a projects/ folder, ~/.claude first, the rest by name. None of them, as of every agent's
+/// folders below, when config.toml leaves the agent out.
 pub fn find_profiles() -> Vec<String> {
+    if crate::config::ignores(Agent::Claude) {
+        return Vec::new();
+    }
     let mut candidates = ospath::glob(&home(), &[Part::Wild(".claude", "")]);
     if let Some(dir) = env("CLAUDE_CONFIG_DIR") {
         candidates.push(ospath::expanduser(&dir));
@@ -70,6 +74,9 @@ pub fn find_profiles() -> Vec<String> {
 /// Every Codex home with sessions: ~/.codex and ~/.codex-* dirs (and $CODEX_HOME) that hold
 /// a sessions/ folder, ~/.codex first.
 pub fn find_codex_homes() -> Vec<String> {
+    if crate::config::ignores(Agent::Codex) {
+        return Vec::new();
+    }
     let h = home();
     let mut candidates = ospath::glob(&h, &[Part::Name(".codex")]);
     candidates.extend(ospath::glob(&h, &[Part::Wild(".codex-", "")]));
@@ -93,48 +100,57 @@ pub fn find_codex_homes() -> Vec<String> {
 
 /// Every Antigravity CLI data folder with an account behind it (see agy.rs).
 pub fn find_agy_roots() -> Vec<String> {
-    crate::agy::find_roots()
+    unless_ignored(Agent::Agy, crate::agy::find_roots)
 }
 
 /// Every folder with Antigravity conversations to list: agy's, and the Antigravity app's.
 pub fn find_agy_stores() -> Vec<String> {
-    crate::agy::find_stores()
+    unless_ignored(Agent::Agy, crate::agy::find_stores)
 }
 
 /// Every Kimi home with sessions: ~/.kimi-code and ~/.kimi-code-* (see kimi.rs).
 pub fn find_kimi_homes() -> Vec<String> {
-    crate::kimi::find_homes()
+    unless_ignored(Agent::Kimi, crate::kimi::find_homes)
 }
 
 /// ZCode's data folder, when it has sessions: ~/.zcode (see zcode.rs).
 pub fn find_zcode_roots() -> Vec<String> {
-    crate::zcode::find_roots()
+    unless_ignored(Agent::Zcode, crate::zcode::find_roots)
 }
 
 /// Every DSH home with sessions: ~/.dsh and ~/.dsh-* (see dsh.rs).
 pub fn find_dsh_homes() -> Vec<String> {
-    crate::dsh::find_homes()
+    unless_ignored(Agent::Dsh, crate::dsh::find_homes)
 }
 
 /// Every current mcode home with a v2 store (see mcode.rs).
 pub fn find_mcode_homes() -> Vec<String> {
-    crate::mcode::find_homes()
+    unless_ignored(Agent::Mcode, crate::mcode::find_homes)
 }
 
 /// Every qwen home: ~/.qwen, ~/.qwen-* and QWEN_HOME's folder (see qwen.rs).
 pub fn find_qwen_homes() -> Vec<String> {
-    crate::qwen::find_homes()
+    unless_ignored(Agent::Qwen, crate::qwen::find_homes)
 }
 
 /// Every copilot home: ~/.copilot, ~/.copilot-* and COPILOT_HOME's folder (see copilot.rs).
 pub fn find_copilot_homes() -> Vec<String> {
-    crate::copilot::find_homes()
+    unless_ignored(Agent::Copilot, crate::copilot::find_homes)
 }
 
 /// Every opencode data folder: the one plain opencode uses, when opencode has run (see
 /// opencode.rs).
 pub fn find_opencode_homes() -> Vec<String> {
-    crate::opencode::find_homes()
+    unless_ignored(Agent::Opencode, crate::opencode::find_homes)
+}
+
+/// An agent's folders, or none when config.toml leaves the agent out.
+fn unless_ignored(agent: Agent, find: fn() -> Vec<String>) -> Vec<String> {
+    if crate::config::ignores(agent) {
+        Vec::new()
+    } else {
+        find()
+    }
 }
 
 /// Every profile, home and data folder of every agent, as (agent, folder).
@@ -660,6 +676,18 @@ pub fn shell_path(path: &str) -> String {
     Shell::here().shell_path(path)
 }
 
+/// A path to show, not to paste: ~/... when it's in the home folder, with nothing quoted.
+pub fn tilde_path(path: &str) -> String {
+    let home = home();
+    if path == home {
+        return "~".into();
+    }
+    match path.strip_prefix(&home) {
+        Some(rest) if rest.starts_with(ospath::is_sep) => format!("~{rest}"),
+        _ => path.to_string(),
+    }
+}
+
 /// z or k when the model is served by Z.ai (GLM) or Kimi, else None.
 pub fn provider_of(model: Option<&str>) -> Option<&'static str> {
     let model = model.unwrap_or("").to_lowercase();
@@ -847,17 +875,23 @@ pub fn same_folder(a: &str, b: &str) -> bool {
 
 // Folder bindings (hatcheck bind): which profile and Codex home a folder's work belongs to.
 
-/// ~/.config/hatcheck/bindings.json (%APPDATA%\hatcheck\bindings.json on Windows).
-pub fn bindings_path() -> String {
+/// hatcheck's own config folder, where bindings.json and config.toml live:
+/// $XDG_CONFIG_HOME/hatcheck or ~/.config/hatcheck (%APPDATA%\hatcheck on Windows).
+pub fn config_dir() -> String {
     let base = if ospath::WINDOWS {
         env("APPDATA")
     } else {
-        None
+        env("XDG_CONFIG_HOME").map(|d| ospath::expanduser(&d))
     };
-    ospath::join_all(
+    ospath::join(
         &base.unwrap_or_else(|| ospath::join(&home(), ".config")),
-        &["hatcheck", "bindings.json"],
+        "hatcheck",
     )
+}
+
+/// ~/.config/hatcheck/bindings.json (%APPDATA%\hatcheck\bindings.json on Windows).
+pub fn bindings_path() -> String {
+    ospath::join(&config_dir(), "bindings.json")
 }
 
 /// Bound folder -> {"claude": name, "codex": name}.

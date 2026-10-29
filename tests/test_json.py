@@ -43,6 +43,7 @@ class Json(unittest.TestCase):
         self.assertIn("-k work --resume " + A, a["resume"])  # last on Kimi, as the text says
         self.assertRegex(a["last_active"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
         self.assertIsNone(a["open"])
+        self.assertIsNone(a["cost_usd"])  # no cost-state record: none known
         work = data["accounts"][a["account"]]
         self.assertEqual((work["agent"], work["profiles"], work["source"]), ("claude", [self.work], "cached"))
         row = next(r for r in work["limits"] if r["short"] == "Fable")

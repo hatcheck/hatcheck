@@ -243,6 +243,15 @@ class FakeHome:
         os.makedirs(path, exist_ok=True)
         return path
 
+    def config(self, text):
+        """hatcheck's own config.toml, where it looks for one in this home. Returns its path."""
+        if WINDOWS:
+            path = os.path.join(self.home, "AppData", "Roaming", "hatcheck", "config.toml")
+        else:
+            path = os.path.join(self.home, ".config", "hatcheck", "config.toml")
+        write(path, text)
+        return path
+
     def session(self, profile, cwd, sid, title, minutes_ago=5, entrypoint="cli", extra=(), model=None):
         """A transcript in profile/projects/<cwd as Claude Code names it>/<sid>.jsonl, its
         reply from `model` when given."""
@@ -337,7 +346,8 @@ class FakeHome:
         env.update(HOME=self.home, USERPROFILE=self.home, NO_COLOR="1", PYTHONIOENCODING="utf-8",
                    PYTHONDONTWRITEBYTECODE="1", APPDATA=os.path.join(self.home, "AppData", "Roaming"),
                    LOCALAPPDATA=os.path.join(self.home, "AppData", "Local"),
-                   XDG_CACHE_HOME=os.path.join(self.home, ".cache"))  # caches stay in this home too
+                   XDG_CACHE_HOME=os.path.join(self.home, ".cache"),  # caches stay in this home too
+                   XDG_CONFIG_HOME=os.path.join(self.home, ".config"))  # and hatcheck's own config and bindings
         if sys.platform == "darwin":
             env["PATH"] = "/bin"  # has ps, but not the security tool, so the real Keychain stays untouched
         return env
@@ -1173,13 +1183,15 @@ def _opencode_home(self, path=None):
 
 
 def _opencode_session(self, home, cwd, sid, title, minutes_ago=5, model=("anthropic", "claude-opus-5-5"), parent=None,
-                      archived=False, extra=(), empty=False, prompt=None):
+                      archived=False, extra=(), empty=False, prompt=None, cost=0, tokens=(0, 0, 0, 0, 0)):
     """A session_v2 row with its project, and its session_message rows as opencode 2.1.4 writes
     them: the prompt with an image attached, a record opencode injected, a reply with reasoning,
     text and a tool call with its result, a shell command, and the final reply. `title` is the
     row's title, as opencode names a session, and the prompt too unless `prompt` says otherwise;
     `empty` leaves it without messages. `extra` rows, as (type, data) pairs, go before the final
-    reply. Returns the database's path."""
+    reply. `cost` is the row's, what the session cost in dollars as opencode priced its tokens,
+    and `tokens` its counts of input, output, reasoning, cache read and cache write tokens.
+    Returns the database's path."""
     prompt = title if prompt is None else prompt
     import sqlite3
     when = NOW - minutes_ago * 60
@@ -1192,9 +1204,11 @@ def _opencode_session(self, home, cwd, sid, title, minutes_ago=5, model=("anthro
     db.execute("INSERT OR IGNORE INTO project (id, worktree, vcs, time_created, time_updated, time_active, sandboxes) "
                "VALUES (?, ?, 'git', ?, ?, ?, '[]')", (project, cwd, created_ms, created_ms, updated_ms))
     db.execute("INSERT INTO session_v2 (id, project_id, parent_id, slug, directory, title, version, agent, model, "
-               "time_created, time_updated, time_archived) VALUES (?, ?, ?, ?, ?, ?, '2.1.4', 'build', ?, ?, ?, ?)",
+               "time_created, time_updated, time_archived, cost, tokens_input, tokens_output, tokens_reasoning, "
+               "tokens_cache_read, tokens_cache_write) "
+               "VALUES (?, ?, ?, ?, ?, ?, '2.1.4', 'build', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                (full, project, parent and "ses_" + parent, "quiet-fox", cwd, title or None, model_json, created_ms, updated_ms,
-                updated_ms if archived else None))
+                updated_ms if archived else None, cost) + tuple(tokens))
     if not empty:
         model_ref = {"id": model[1], "providerID": model[0]} if model else {"id": "unknown", "providerID": "unknown"}
         rows = [

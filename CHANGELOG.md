@@ -4,6 +4,24 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
+## Unreleased
+
+### Fixed
+
+- **Antigravity CLI 1.4.10's usage reads right.** Its `/usage` now answers with a bucket per model and effort tier (`Gemini 4 Argon (High)`, `(Medium)`, `(Low)`, …), with no window and the epoch as the reset time of a limit nothing has been spent from, which hatcheck took for a reset that had already passed and showed as `?` for every one. Each is read as a limit with nothing used and no reset ahead; a bucket is named by its own name, without the group's.
+
+### Changed
+
+- **Antigravity's limits are one row per model in `hatcheck usage`**, the effort tiers folded while they read the same (`Claude Opus 5.5 (Max)` apart from `Claude Opus 5.5 (High, Medium, Low)` when they don't), and in the session list's one-line comment the models that read the same are one meter (`Gemini 4 Argon +1`, or `all models`), where every bucket used to follow the command.
+
+### Added
+
+- **The session list shows what a session cost**, like `$5.01` after the branch, when its agent wrote one down: Claude Code's running total at API prices, from the `cost-state` records it keeps in the transcript (2.1.278 on) and takes up again when a session is resumed, and OpenCode's total per session as it prices its tokens. Under a cent is `<$0.01`; a session with no price recorded, or priced at nothing, shows none. A cost is coloured by its size, so a big one stands out: dim under a dollar, plain to $10, then gold, orange from $50 and red from $100. `--json` has it as `cost_usd`, `null` without one.
+- **`hatcheck --details`** puts under each session its turns, as `hatcheck show` counts them, with its prompts and tool calls, and what its agent wrote down of what it spent: for Claude Code the API, wall and tool time and the lines added and removed, then a small table, a row per model with its cost and its tokens by kind (`in`, `out`, `think`, `read`, `write`, `web`), as its own `/cost` counts them; for OpenCode its tokens for every model together. The numbers are right-aligned in columns that line up across the whole list, `·` for none, the biggest in each column bold and a cost in its colour. `--json` gets them as `spend` and `turns`.
+- **`hatcheck --by-cost`** lists the costliest first: folders by what their sessions cost together, shown on the `cd` line, and sessions by cost within each; `-n` keeps each folder's costliest, and `--json` says `sorted_by`.
+- **A config file of hatcheck's own, `~/.config/hatcheck/config.toml`** (`%APPDATA%\hatcheck\config.toml` on Windows, or the file `HATCHECK_CONFIG` names), beside the bindings. `[list]` sets the session list's defaults, `details`, `by_cost`, `hours`, `per_folder`, `full`, `all_folders` and `usage`, each undone for one run by a flag (`--no-details`, `--by-time`, `-n 0`, `--no-full`, `--this-folder`, `--usage`), and `folders`, the only folders to list; `[ignore]` names `agents` hatcheck doesn't look for anywhere, and `folders` the list never shows. Sessions in folders left out are counted as `Hidden: … by config` and shown with `--all`. The file is a plain subset of TOML; one that can't be read stops every command and says where. `hatcheck doctor` shows it, and its `--json` has `config`.
+- **Short flags for the list, which bundle as Python's do:** `-d` for `--details`, `-c` for `--by-cost`, `-a` for `--all`, `-A` for `--all-folders`, `-f` for `--full`, `-C` for `--cached`, `-q` for `--no-usage` and `-j` for `--json`, so `hat -dc` is `hat --details --by-cost` and `hat -qA` the quick list of every folder. The same letters work in every command that has the long flag: `-j` with `usage`, `where`, `show`, `move`, `fork`, `relocate`, `desktop`, `provider` and `doctor`, `-C` with `usage` and `best`, `-a` and `-f` with `open` and `resume`.
+
 ## 0.7.0 - 2026-10-25
 
 GitHub Copilot CLI (`copilot`) and OpenCode (`opencode`) join the agents, read-only, and take a converted session through their own importers, which hatcheck writes the file for and prints the command of. MiniMax Code and DeepSeek Harness take one too, as a file mcode's terminal UI is started on and as a prompt pasted into DSH's web UI. Every handover now tells the agent to check whether its last action completed before repeating it.
