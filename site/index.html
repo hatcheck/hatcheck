@@ -103,7 +103,7 @@ hatcheck             # the sessions here from every profile, and what's left of 
     <div class="cards three">
       <div class="card">
         <h3>What to resume, and what's left</h3>
-        <p><code>hatcheck</code> lists recent sessions from every profile and home, and Antigravity CLI's and ZCode's beside them, with the command that resumes each or opens DSH's session history, and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> shows the best account now and the <code>move</code> command that carries a session to it.</p>
+        <p><code>hatcheck</code> lists recent sessions from every profile and home, and Antigravity CLI's and ZCode's beside them, with the command that resumes each or opens DSH's session history, what it cost, and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> shows the best account now and the <code>move</code> command that carries a session to it.</p>
       </div>
       <div class="card">
         <h3>Sessions that travel</h3>
@@ -116,32 +116,43 @@ hatcheck             # the sessions here from every profile, and what's left of 
     </div>
 
     <h3>In the terminal</h3>
-    <p>Run in a folder, it lists that folder's sessions from every agent, newest first, each with the command that resumes it and what's left of its plan, as the terminal shows them:</p>
+    <p>Run in a folder, it lists that folder's sessions from every agent, newest first, each with the command that resumes it, what it cost when its agent wrote one down, and what's left of its plan on the line under it, as the terminal shows them. <code>hat -d</code> adds each session's turns and spend by model, <code>hat -c</code> puts the costliest first, <code>hat -A</code> lists every folder, and run from a folder with no sessions it prints its help and says so:</p>
 <pre><code><!-- sample:list -->$ hatcheck
 <span class="b">🎩 Claude Code, Codex, Antigravity, Kimi Code, ZCode, DeepSeek Harness, MiniMax, Qwen, Copilot and OpenCode CLI sessions in this folder, active in the last 24h or open now</span><span class="d"> (newest first; % = plan left, ↻ = hours/days until reset)</span>
 <span class="b c">cd ~/code/api</span>
-  <span class="d">  4m</span>  <span class="b">Fix flaky login test</span><span class="d"> · </span><span class="d">main</span>
-        <span class="c">cl</span> a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10           <span class="d">#</span> <span class="d">5h</span> <span class="y">20%</span> <span class="y">█░░░░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span class="d">week</span>   <span class="r">9%</span> <span class="r">▋░░░░░░</span> <span style="color:#d75f00">↻▉░░░░░░ 21h35m</span>
+  <span class="d">  4m</span>  <span class="b">Fix flaky login test</span><span class="d"> · </span><span class="d">main</span><span class="d"> · </span>$5.01
+        <span class="c">cl</span> a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+        <span class="d">#</span> <span class="d">5h</span> <span class="y">20%</span> <span class="y">█░░░░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span class="d">week</span>   <span class="r">9%</span> <span class="r">▋░░░░░░</span> <span style="color:#d75f00">↻▉░░░░░░ 21h35m</span>
   <span class="d"> 35m</span>  <span class="b">Add rate limiting to the login endpoint</span><span class="d"> · </span><span class="d">main</span>
-        <span class="c">cl</span> b --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d           <span class="d">#</span> <span class="d">5h</span> <span class="g">62%</span> <span class="g">███▏░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span style="color:#af5fd7">Fable</span> <span class="g">48%</span> <span style="color:#af5fd7">███▍░░░</span> <span style="color:#87afd7">↻████▎░░ 4d4h</span>
+        <span class="c">cl</span> b --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+        <span class="d">#</span> <span class="d">5h</span> <span class="g">62%</span> <span class="g">███▏░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span style="color:#af5fd7">Fable</span> <span class="g">48%</span> <span style="color:#af5fd7">███▍░░░</span> <span style="color:#87afd7">↻████▎░░ 4d4h</span>
   <span class="d"> 50m</span>  <span class="b">Add retries to the uploader</span><span class="d"> · </span><span class="d">main</span>
-        <span class="c">codex</span> resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e            <span class="d">#</span> <span class="d">5h</span> <span class="g">80%</span> <span class="g">████░</span> <span style="color:#87afd7">↻███░░ 2h59m</span>  <span class="d">week</span>  <span class="g">64%</span> <span class="g">████▌░░</span> <span style="color:#d7af00">↻██░░░░░ 1d23h</span>
+        <span class="c">codex</span> resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e
+        <span class="d">#</span> <span class="d">5h</span> <span class="g">80%</span> <span class="g">████░</span> <span style="color:#87afd7">↻███░░ 2h59m</span>  <span class="d">week</span>  <span class="g">64%</span> <span class="g">████▌░░</span> <span style="color:#d7af00">↻██░░░░░ 1d23h</span>
   <span class="d">  1h</span>  <span class="b">Profile the slow search query</span>
-        <span class="c">agy</span> --conversation c134893c-20f5-48ea-bc9b-7f7c9271bc4e      <span class="d">#</span> <span class="d">usage ?</span>
+        <span class="c">agy</span> --conversation c134893c-20f5-48ea-bc9b-7f7c9271bc4e
+        <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  2h</span>  <span class="b">Write the migration for the audit table</span>
-        <span class="c">kimi</span> --session session_6d2f1b0a-3c4e-4f5a-9b8c-7d6e5f4a3b2c  <span class="d">#</span> <span class="d">usage ?</span>
+        <span class="c">kimi</span> --session session_6d2f1b0a-3c4e-4f5a-9b8c-7d6e5f4a3b2c
+        <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  3h</span>  <span class="b">Tidy the uploader's error handling</span>
-        <span class="c">zcode</span> --resume sess_1fb068a4-b6d4-4a9f-b2d3-6e428e094fbe     <span class="d">#</span> <span class="d">usage ?</span>
+        <span class="c">zcode</span> --resume sess_1fb068a4-b6d4-4a9f-b2d3-6e428e094fbe
+        <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  4h</span>  <span class="b">Trace the missing webhook</span>
-        <span class="c">dsh</span> web                                                      <span class="d">#</span> <span class="d">usage ?</span>
+        <span class="c">dsh</span> web
+        <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  4h</span>  <span class="b">Review the retry backoff</span>
-        <span class="c">mcode</span> --session mvs_c54e0009000040008000000000000009         <span class="d">#</span> <span class="d">usage ?</span>
+        <span class="c">mcode</span> --session mvs_c54e0009000040008000000000000009
+        <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  5h</span>  <span class="b">Document the export command</span><span class="d"> · </span><span class="d">main</span>
-        <span class="c">qwen</span> --resume 4b4c9dc9-2b3e-4449-a2d5-93c9c165469f           <span class="d">#</span> <span class="d">usage ?</span>
+        <span class="c">qwen</span> --resume 4b4c9dc9-2b3e-4449-a2d5-93c9c165469f
+        <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  6h</span>  <span class="b">Explain the usage command's bars</span><span class="d"> · </span><span class="d">main</span>
-        <span class="c">copilot</span> --resume 50b1f120-6353-4117-b918-fb4553e92eb4        <span class="d">#</span> <span class="d">usage ?</span>
+        <span class="c">copilot</span> --resume 50b1f120-6353-4117-b918-fb4553e92eb4
+        <span class="d">#</span> <span class="d">usage ?</span>
   <span class="d">  6h</span>  <span class="b">Rename the export command's flags</span>
-        <span class="c">opencode</span> --session ses_e8b2fb6edffetJXXHNatoXnITH            <span class="d">#</span> <span class="d">usage ?</span><!-- /sample:list --></code></pre>
+        <span class="c">opencode</span> --session ses_e8b2fb6edffetJXXHNatoXnITH
+        <span class="d">#</span> <span class="d">usage ?</span><!-- /sample:list --></code></pre>
 
     <h3>Every plan, at a glance</h3>
     <p>Each limit has two bars: what's left of it, then how much of its window is left before it resets. A per-model limit such as Fable, which team and Max plans have, is violet, so it stands apart from the weekly limit for all models that Pro plans have.</p>
@@ -155,8 +166,8 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
 <span class="b c">Best Claude Code account now: </span><span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
-  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 11:37pm (in 2h39m)</span>
-  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Fri 1:45am (in 4d4h)</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 12:10am (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Tue 1:18am (in 4d4h)</span>
 Carry it there with:
 <span class="c">  hatcheck move b</span><span class="d">    (hatcheck fork b keeps the original)</span>
 <span class="d">Then:</span>
@@ -186,7 +197,9 @@ Resume them from ~/code/site. To undo: <span class="c">hatcheck relocate ~/code/
   <section class="wrap" id="short">
     <h2>Every command in a few letters</h2>
     <p><code>hat</code> is hatcheck's short name, and each command can be cut to its first letters. In a project folder:</p>
-<pre><code>hat                 # the sessions here, with resume commands and plan usage
+<pre><code>hat                 # the sessions here, with resume commands, costs and plan usage
+hat -d              # with each session's turns and spend by model; -c costliest first
+hat -A              # every folder's
 hat u               # what's left of every plan
 hat b               # the best account now
 hat m               # move the newest session here to it, after asking
@@ -196,7 +209,7 @@ hat r               # carry on the newest session here, after asking</code></pre
       <table>
         <thead><tr><th>Short</th><th>For</th><th>What it does</th></tr></thead>
         <tbody>
-          <tr><td><code>hat</code></td><td><code>hatcheck</code></td><td>the recent sessions, with the command that resumes each and what's left of its plan</td></tr>
+          <tr><td><code>hat</code></td><td><code>hatcheck</code></td><td>the recent sessions, with the command that resumes each, what it cost and what's left of its plan; <code>-d</code> details, <code>-c</code> costliest first, <code>-A</code> every folder</td></tr>
           <tr><td><code>hat u</code></td><td><code>usage</code></td><td>what's left of every plan</td></tr>
           <tr><td><code>hat b</code></td><td><code>best</code></td><td>the best account now, and the command that carries a session to it</td></tr>
           <tr><td><code>hat m</code></td><td><code>move</code></td><td>carry a session to another profile, or convert it for another agent</td></tr>

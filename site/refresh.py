@@ -33,7 +33,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
-BINARY = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "target", "release", "hatcheck")
+# Absolute: the samples run from the demo home's folders, where a relative path wouldn't resolve.
+BINARY = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(REPO, "target", "release", "hatcheck")
 
 
 def printed(args):
@@ -62,7 +63,7 @@ def demo_home():
     somewhere better to point."""
     os.environ["HATCHECK_ENGINE"] = BINARY  # or the helpers build a debug engine
     sys.path.insert(0, os.path.join(REPO, "tests"))
-    from helpers import NOW, FakeHome, iso, write
+    from helpers import NOW, FakeHome, iso, rec, write
 
     sev = lambda used: "critical" if used >= 90 else "warning" if used >= 75 else "normal"
 
@@ -88,7 +89,10 @@ def demo_home():
     write(os.path.join(profile_b, "fake-usage.json"), __import__("json").dumps(team_plan))
     write(os.path.join(profile_a, "fake-usage.json"), __import__("json").dumps(pro_plan))
     api = h.folder("code", "api")
-    h.session(profile_a, api, "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10", "Fix flaky login test", 4)
+    cost = rec(type="cost-state", sessionId="3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10", totalCostUSD=5.0095065,
+               totalAPIDuration=1146609, startTime=int((NOW - 600) * 1000), hasUnknownModelCost=False,
+               modelUsage={"claude-fable-5-1": {"inputTokens": 6551, "outputTokens": 83883, "costUSD": 5.0095065}})
+    h.session(profile_a, api, "3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10", "Fix flaky login test", 4, extra=[cost])
     h.session(profile_b, api, "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", "Add rate limiting to the login endpoint", 35)
     codex = h.codex_home("default", "acct-codex")
     h.codex_session(codex, api, "019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e", "Add retries to the uploader", 50,

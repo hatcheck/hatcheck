@@ -75,9 +75,10 @@ fork. Where two share a letter, it goes to the one used more: b is best, s is
 show, u is usage, d is desktop and r is resume, so bind, unbind and doctor take
 two letters, bi, un and do, and relocate three, rel.<!-- /help:hatcheck --></code></pre>
     <div class="helps">
-      <details><summary><code>hatcheck sessions</code><span>or plain <code>hat</code>, the default: recent sessions in every profile and home, with resume commands and plan usage</span></summary>
-<pre><code><!-- help:sessions -->usage: hatcheck sessions [-h] [-n N] [--all] [--all-folders] [--full]
-                         [--cached] [--no-usage] [--json] [-e]
+      <details><summary><code>hatcheck sessions</code><span>or plain <code>hat</code>, the default: recent sessions in every profile and home, with resume commands, costs and plan usage</span></summary>
+<pre><code><!-- help:sessions -->usage: hatcheck sessions [-h] [-n N] [-a] [-A | --this-folder] [-f |
+                         --no-full] [-C] [-d | --no-details] [-c | --by-time]
+                         [-q | --usage] [-j] [-e]
                          [hours]
 
 List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI
@@ -99,27 +100,32 @@ options:
   -h, --help          show this help message and exit
   -n, --per-folder N  show only the newest N sessions per folder (default:
                       all)
-  --all               also list sessions last used from Claude Desktop or the
+  -a, --all           also list sessions last used from Claude Desktop or the
                       SDK, Codex sessions from the Codex app, its IDE
                       extension or codex exec, the Antigravity app's
                       conversations, Qwen Code sessions from its channels,
                       scheduled tasks and other hosts, and Copilot sessions
                       from clients other than its CLI
-  --all-folders       list every folder, even when run from a folder that has
-                      sessions
-  --full              print CLAUDE_CONFIG_DIR=... claude instead of the cl
+  -A, --all-folders   list every folder, from one that has sessions or one
+                      that has none
+  -f, --full          print CLAUDE_CONFIG_DIR=... claude instead of the cl
                       shortcut, CODEX_HOME=... codex instead of cx, and
                       KIMI_CODE_HOME=... kimi instead of ck
-  --cached            take plan usage from the snapshots Claude Code and Codex
+  -C, --cached        take plan usage from the snapshots Claude Code and Codex
                       last saved, and hatcheck's last readings of agy's /usage
                       and Kimi's usage, instead of the APIs
-  --no-usage          leave plan usage out
-  --json              print the sessions, and the accounts behind them, as
+  -d, --details       under each session, its turns and what it spent, by
+                      model and kind of token, with the durations its agent
+                      wrote down
+  -c, --by-cost       the costliest sessions and folders first, instead of the
+                      newest
+  -q, --no-usage      leave plan usage out
+  -j, --json          print the sessions, and the accounts behind them, as
                       JSON for scripts and apps
   -e, --email         with --json, include each account's email address<!-- /help:sessions --></code></pre>
       </details>
       <details><summary><code>hatcheck usage</code><span>or <code>hat u</code>: plan usage left for every profile and home</span></summary>
-<pre><code><!-- help:usage -->usage: hatcheck usage [-h] [--cached] [-e] [--json]
+<pre><code><!-- help:usage -->usage: hatcheck usage [-h] [-C] [-e] [-j]
 
 Show how much of each plan limit is left, for every Claude Code profile
 (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder
@@ -129,16 +135,16 @@ Copilot CLI (~/.copilot*) and OpenCode (~/.local/share/opencode) are listed
 with why they give none, with mcode's plan quota not wired yet.
 
 options:
-  -h, --help   show this help message and exit
-  --cached     don't call the APIs; show the snapshots Claude Code and Codex
-               last saved, and hatcheck's last readings of agy's /usage and
-               Kimi's usage
-  -e, --email  show each account's email address (hidden by default)
-  --json       print the accounts and their limits as JSON, for scripts and
-               status bars<!-- /help:usage --></code></pre>
+  -h, --help    show this help message and exit
+  -C, --cached  don't call the APIs; show the snapshots Claude Code and Codex
+                last saved, and hatcheck's last readings of agy's /usage and
+                Kimi's usage
+  -e, --email   show each account's email address (hidden by default)
+  -j, --json    print the accounts and their limits as JSON, for scripts and
+                status bars<!-- /help:usage --></code></pre>
       </details>
       <details><summary><code>hatcheck best</code><span>or <code>hat b</code>: the best account now, and the move command that carries a session to it</span></summary>
-<pre><code><!-- help:best -->usage: hatcheck best [-h] [--for SESSION] [--cached] [--wait [PROFILE]]
+<pre><code><!-- help:best -->usage: hatcheck best [-h] [--for SESSION] [-C] [--wait [PROFILE]]
 
 The best account now, shown as hatcheck usage shows it, and the hatcheck move
 command that carries a session to it: the newest started from this folder, or
@@ -148,7 +154,7 @@ options:
   -h, --help        show this help message and exit
   --for SESSION     the session to carry: its ID, or the start of it (default:
                     the newest session started from this folder)
-  --cached          don't call the APIs; use the snapshots Claude Code and
+  -C, --cached      don't call the APIs; use the snapshots Claude Code and
                     Codex last saved, and hatcheck's last readings of agy's
                     /usage and Kimi's usage
   --wait [PROFILE]  wait until an account has room, then answer: any account
@@ -158,7 +164,7 @@ options:
                     qwen:NAME, copilot, copilot:NAME, opencode)<!-- /help:best --></code></pre>
       </details>
       <details><summary><code>hatcheck where</code><span>or <code>hat w</code>: where a session is stored</span></summary>
-<pre><code><!-- help:where -->usage: hatcheck where [-h] [--json] session
+<pre><code><!-- help:where -->usage: hatcheck where [-h] [-j] session
 
 Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
 Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session by
@@ -169,11 +175,10 @@ positional arguments:
 
 options:
   -h, --help  show this help message and exit
-  --json      print the matches as JSON<!-- /help:where --></code></pre>
+  -j, --json  print the matches as JSON<!-- /help:where --></code></pre>
       </details>
       <details><summary><code>hatcheck show</code><span>or <code>hat s</code>: a session's conversation, read-only</span></summary>
-<pre><code><!-- help:show -->usage: hatcheck show [-h] [--from PROFILE] [--last N] [--brief] [--json]
-                     session
+<pre><code><!-- help:show -->usage: hatcheck show [-h] [--from PROFILE] [--last N] [--brief] [-j] session
 
 Show a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
 Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session's
@@ -190,11 +195,10 @@ options:
   --brief         show the handover brief hatcheck move --brief hands over
                   instead: the first prompt, the files and commands its tool
                   calls named, and its last turns
-  --json          print it as JSON<!-- /help:show --></code></pre>
+  -j, --json      print it as JSON<!-- /help:show --></code></pre>
       </details>
       <details><summary><code>hatcheck move</code><span>or <code>hat m</code>: move a session to another profile or home, or convert it for another agent</span></summary>
-<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--brief] [--dry-run]
-                     [--json]
+<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--brief] [--dry-run] [-j]
                      [session] [profile]
 
 Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
@@ -231,11 +235,11 @@ options:
                   and commands its tool calls named, and its last turns
   --dry-run       show what would be moved, copied, converted and deleted, and
                   change nothing
-  --json          say what was or would be done as JSON, and never ask to
+  -j, --json      say what was or would be done as JSON, and never ask to
                   resume it<!-- /help:move --></code></pre>
       </details>
       <details><summary><code>hatcheck fork</code><span>or <code>hat f</code>: fork a session into another profile or home, as a new session with its own ID</span></summary>
-<pre><code><!-- help:fork -->usage: hatcheck fork [-h] [--from PROFILE] [--brief] [--dry-run] [--json]
+<pre><code><!-- help:fork -->usage: hatcheck fork [-h] [--from PROFILE] [--brief] [--dry-run] [-j]
                      [session] [profile]
 
 Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
@@ -270,11 +274,11 @@ options:
                   place of the whole conversation: the first prompt, the files
                   and commands its tool calls named, and its last turns
   --dry-run       show what would be copied or converted, and change nothing
-  --json          say what was or would be done as JSON, and never ask to
+  -j, --json      say what was or would be done as JSON, and never ask to
                   resume it<!-- /help:fork --></code></pre>
       </details>
       <details><summary><code>hatcheck relocate</code><span>or <code>hat rel</code>: a moved project folder's sessions, brought along</span></summary>
-<pre><code><!-- help:relocate -->usage: hatcheck relocate [-h] [--dry-run] [--json] old new
+<pre><code><!-- help:relocate -->usage: hatcheck relocate [-h] [--dry-run] [-j] old new
 
 Bring the sessions of a project folder that was moved or renamed along to its
 new place, in every Claude Code profile and Codex home: OLD is where they ran,
@@ -287,11 +291,11 @@ positional arguments:
 options:
   -h, --help  show this help message and exit
   --dry-run   say what would move and change nothing
-  --json      say what was or would be done as JSON<!-- /help:relocate --></code></pre>
+  -j, --json  say what was or would be done as JSON<!-- /help:relocate --></code></pre>
       </details>
       <details><summary><code>hatcheck open</code><span>or <code>hat o</code>: resume a session in a new terminal, in its folder</span></summary>
 <pre><code><!-- help:open -->usage: hatcheck open [-h] [--from PROFILE] [--here | --print]
-                     [--terminal NAME] [--full] [--all] [--login PROFILE]
+                     [--terminal NAME] [-f] [-a] [--login PROFILE]
                      [session]
 
 Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, MiniMax
@@ -311,10 +315,10 @@ options:
   --print          print the cd and resume commands instead
   --terminal NAME  the terminal to open (default: HATCHECK_TERMINAL, or this
                    system's usual one)
-  --full           print CLAUDE_CONFIG_DIR=... claude rather than cl,
+  -f, --full       print CLAUDE_CONFIG_DIR=... claude rather than cl,
                    CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=...
                    kimi rather than ck
-  --all            without SESSION, also consider sessions from Claude
+  -a, --all        without SESSION, also consider sessions from Claude
                    Desktop, the SDK, the Codex app or codex exec
   --login PROFILE  sign in to a profile (NAME, default, codex, codex:NAME,
                    agy, kimi, kimi:NAME, zcode, dsh, dsh:NAME, mcode,
@@ -322,7 +326,7 @@ options:
                    opencode) in a new terminal, instead of resuming a session<!-- /help:open --></code></pre>
       </details>
       <details><summary><code>hatcheck resume</code><span>or <code>hat r</code>: carry on the newest session started here, in this terminal, after asking</span></summary>
-<pre><code><!-- help:resume -->usage: hatcheck resume [-h] [--from PROFILE] [-y | --print] [--full] [--all]
+<pre><code><!-- help:resume -->usage: hatcheck resume [-h] [--from PROFILE] [-y | --print] [-f] [-a]
                        [session]
 
 Carry on the newest session started from this folder, or the one named, in
@@ -340,10 +344,10 @@ options:
                   a copy
   -y, --yes       don't ask
   --print         print the cd and resume commands instead
-  --full          print CLAUDE_CONFIG_DIR=... claude rather than cl,
+  -f, --full      print CLAUDE_CONFIG_DIR=... claude rather than cl,
                   CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=...
                   kimi rather than ck
-  --all           without SESSION, also consider sessions from Claude Desktop,
+  -a, --all       without SESSION, also consider sessions from Claude Desktop,
                   the SDK, the Codex app or codex exec<!-- /help:resume --></code></pre>
       </details>
       <details><summary><code>hatcheck bind</code><span>or <code>hat bi</code>: tie a folder to a profile, for cl, cx, ck and the list</span></summary>
@@ -405,7 +409,7 @@ options:
   --hook      remove the warning hook from every profile<!-- /help:unbind --></code></pre>
       </details>
       <details><summary><code>hatcheck desktop</code><span>or <code>hat d</code>: Claude Desktop instances on macOS</span></summary>
-<pre><code><!-- help:desktop -->usage: hatcheck desktop [-h] [--json] {new,open,remove} ...
+<pre><code><!-- help:desktop -->usage: hatcheck desktop [-h] [-j] {new,open,remove} ...
 
 Claude Desktop instances on macOS: one per account, each with its own data
 folder and a launcher of its own colour.
@@ -419,7 +423,7 @@ positional arguments:
 
 options:
   -h, --help         show this help message and exit
-  --json             list the instances as JSON<!-- /help:desktop --></code></pre>
+  -j, --json         list the instances as JSON<!-- /help:desktop --></code></pre>
       </details>
       <details><summary><code>hatcheck provider</code><span>or <code>hat p</code>: the Z.ai and Kimi keys and models behind claude-z and claude-k</span></summary>
 <pre><code><!-- help:provider -->usage: hatcheck provider [-h] {setup,env} ...
@@ -435,14 +439,14 @@ options:
   -h, --help   show this help message and exit<!-- /help:provider --></code></pre>
       </details>
       <details><summary><code>hatcheck doctor</code><span>or <code>hat do</code>: every copy of hatcheck and the agents on your PATH</span></summary>
-<pre><code><!-- help:doctor -->usage: hatcheck doctor [-h] [--json]
+<pre><code><!-- help:doctor -->usage: hatcheck doctor [-h] [-j]
 
 Check how hatcheck and the agents are installed: every copy on the PATH, which
 one runs, and how to remove the rest. Changes nothing.
 
 options:
   -h, --help  show this help message and exit
-  --json      print what it found as JSON<!-- /help:doctor --></code></pre>
+  -j, --json  print what it found as JSON<!-- /help:doctor --></code></pre>
       </details>
     </div>
   </main>

@@ -171,7 +171,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`cl a --resume <id>`](docs/agents.md#cl-run-claude-code-with-a-profile) | Claude Code with `~/.claude-a`; `cl -z` and `cl -k` run it on Z.ai or Kimi there |
 | [`cx a resume <id>`](docs/agents.md#cx-run-codex-with-a-home-per-account) | Codex with `~/.codex-a` |
 | [`ck a --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-a` |
-| [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day, in every profile, home and folder, each with its resume or open command and what's left of its plan |
+| [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day in this folder, or every folder with `-A`, each with its resume or open command, what it cost and what's left of its plan; `-d` adds each one's turns and spend by model, `-c` puts the costliest first, and [`config.toml`](docs/commands.md#configtoml-the-lists-defaults-and-what-to-leave-out) sets the defaults |
 | [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable; DSH, Qwen Code, Copilot and OpenCode homes say why there's no reading, and mcode's quota isn't wired |
 | [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | the best account now, with its limits, and the `move` command that carries the newest session started here to it; `--wait` sleeps until one has room |
 | [`hatcheck where SESSION`](docs/commands.md#hatcheck-where-find-a-session) | where a session's files are |
@@ -186,7 +186,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck desktop`](#claude-desktop-instances-macos-and-windows) | Claude Desktop instances on macOS and Windows |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |
 
-`hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`, `hat r` is `hat resume`.
+`hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`, `hat r` is `hat resume`; the list's flags have single letters that bundle, so `hat -dc` is `hat --details --by-cost`.
 [Antigravity CLI](docs/agents.md#antigravity-cli-agy) sessions are listed, shown and converted
 from its one folder, with what its `/usage` reports; [Kimi Code CLI](docs/agents.md#kimi-code-cli-kimi)
 sessions are listed, shown, converted and moved between its homes, and [ZCode](docs/agents.md#zcode-zcode)'s
