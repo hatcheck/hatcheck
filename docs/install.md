@@ -64,7 +64,7 @@ The launchers run the build, so after a `git pull`, run it again. They work from
 `cmd` alike, whatever the script execution policy. If PowerShell won't run `install.ps1`, start it
 with `powershell -ExecutionPolicy Bypass -File install.ps1`. On Windows, `hatcheck` prints `cd` and
 resume commands for PowerShell. Paste them into PowerShell, not `cmd`, because `cmd` doesn't treat
-the trailing `# usage` as a comment. Inside a Visual Studio developer prompt, the MSVC compiler is
+the `# usage` line under a command, or a `cd` line's trailing `# $…`, as a comment. Inside a Visual Studio developer prompt, the MSVC compiler is
 also called `cl`, and whichever comes first on `PATH` wins.
 
 ### Or as shell functions

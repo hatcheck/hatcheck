@@ -221,7 +221,7 @@ class Commands(unittest.TestCase):
                      "hatcheck bind PROFILE", "hatcheck unbind [FOLDER]", "hatcheck provider", "take --json",
                      "hatcheck show SESSION", "hatcheck desktop"):
             self.assertIn(line, out)
-        code, out = self.run_command(HATCHECK + ["3d", "--no-usage"])
+        code, out = self.run_command(HATCHECK + ["3d", "--no-usage", "--all-folders"])
         self.assertEqual(code, 0, out)  # HOURS on its own: the session list
         self.assertIn("cl work --resume " + ID, out)
         code, out = self.run_command(HATCHECK + ["nope"])
@@ -248,7 +248,7 @@ class Commands(unittest.TestCase):
         self.assertEqual(sorted(out.split()), sorted([self.transcript, self.transcript[:-len(".jsonl")]]))
         code, out = self.run_command(hat + ["nope"])
         self.assertIn("hat: there's no 'nope' subcommand; see hat --help", out)
-        code, out = self.run_command(hat + ["check", "3d", "--no-usage"])
+        code, out = self.run_command(hat + ["check", "3d", "--no-usage", "--all-folders"])
         self.assertEqual(code, 0, out)  # hat check: hat again, so the session list
         self.assertIn("cl work --resume " + ID, out)
         code, out = self.run_command(hat + ["check", "usage", "--help"])

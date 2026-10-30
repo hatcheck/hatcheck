@@ -94,7 +94,7 @@ class Moves(unittest.TestCase):
             self.assertEqual(json.loads(fh.read())["thread_name"], "Run the test suite")
         with open(self.transcript, "rb") as fh:
             self.assertEqual(fh.read(), original)
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertIn("cx work resume " + new, out)
 
     def test_a_bare_name_follows_the_session(self):
@@ -162,7 +162,7 @@ class Moves(unittest.TestCase):
                          ("system", "informational", messages[-1]["uuid"]))
         self.assertEqual(records[-1], {"type": "ai-title", "aiTitle": "Uploader fix", "sessionId": new})
         self.assertTrue(all(m["sessionId"] == new and m["cwd"] == self.cwd for m in messages))
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertIn("cl work --resume " + new, out)
         self.assertIn("Uploader fix", out)
 

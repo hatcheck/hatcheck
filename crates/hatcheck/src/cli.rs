@@ -92,6 +92,18 @@ pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// The main help, as `hatcheck --help` prints it; `me` is the name it was run by, and `hat`
+/// gets a line saying it's the short name. The session list prints it too, run from a folder
+/// with no sessions.
+pub fn print_help(me: &str) {
+    if me == "hat" {
+        out::println("hat is the short name for hatcheck.\n");
+    }
+    let (banner, rest) = HELP.split_once('\n').unwrap_or((HELP, ""));
+    out::heading(&format!("🎩 {banner}"));
+    out::println(rest);
+}
+
 /// Whether a word is HOURS for the session list: 36, 1.5, 12h or 3d.
 fn is_hours(word: &str) -> bool {
     let w = word.to_lowercase();
@@ -148,12 +160,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
             (c.to_string(), format!("{me} {c}"))
         }
         (_, Some("-h" | "--help" | "help")) => {
-            if me == "hat" {
-                out::println("hat is the short name for hatcheck.\n");
-            }
-            let (banner, rest) = HELP.split_once('\n').unwrap_or((HELP, ""));
-            out::heading(&format!("🎩 {banner}"));
-            out::println(rest);
+            print_help(me);
             return 0;
         }
         (_, Some("-V" | "--version")) => {

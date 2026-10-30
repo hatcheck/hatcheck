@@ -76,32 +76,50 @@ home `QWEN_HOME` names; GitHub Copilot CLI sessions from every `~/.copilot` or `
 home copilot has run in, and the home `COPILOT_HOME` names; and OpenCode sessions from the data
 folder plain opencode uses, `~/.local/share/opencode` or `XDG_DATA_HOME`'s. Sessions listed were
 active in the last 24 hours or are still open, grouped by folder and
-newest first. Run from a folder that has sessions, it lists just that folder's (`--all-folders`
-lists them all). Each one comes with the command that resumes it (for DSH, opens its web session
-history) and what's left of that profile's plan:
+newest first. Run from a folder that has sessions, it lists just that folder's; from one that has
+none, it prints hatcheck's help and says so, with how many sessions other folders have
+(`--all-folders` lists every folder's, from anywhere). Each one comes with the command that
+resumes it (for DSH, opens its web session history) and, on the line under it, what's left of
+that profile's plan:
 
 ```
-$ hatcheck
+$ hatcheck --all-folders
 🎩 Claude Code and Codex CLI sessions active in the last 24h or open now (by folder, newest first; % = plan left, ↻ = hours/days until reset)
 cd ~/code/api
     4m  Fix flaky login test · main · $5.01 · ● open in pid 48213 (busy)
-        cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10         # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
+        cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+        # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
    40m  Add retries to the uploader · main
-        cx a resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e           # 5h  80% ████░ ↻███▏░ 3h10m  week  64% ████▌░░ ↻█▊░░░░░ 1d18h
+        cx a resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e
+        # 5h  80% ████░ ↻███▏░ 3h10m  week  64% ████▌░░ ↻█▊░░░░░ 1d18h
     1h  Refactor the auth middleware · main · on k3
         cl -k a --resume 2d4f6a8c-1e3b-4d5f-9a7c-0b2d4e6f8a1c
     3h  Add rate limiting to the login endpoint · feat/rate-limit
-        claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d       # 5h  62% ███▏░ ↻██▋░░ 2h41m  week  91% ██████▍ ↻███▏░░░ 3d2h
+        claude --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+        # 5h  62% ███▏░ ↻██▋░░ 2h41m  week  91% ██████▍ ↻███▏░░░ 3d2h
 cd ~/code/blog
    20h  Draft post on Rust lifetimes · main
-        cl b --resume c47e2b1d-0a9f-4e8d-b7c6-5d4e3f2a1b0c         # 5h    ? ·····               week  97% ██████▊ ↻█████▏░ 5d2h
+        cl b --resume c47e2b1d-0a9f-4e8d-b7c6-5d4e3f2a1b0c
+        # 5h    ? ·····               week  97% ██████▊ ↻█████▏░ 5d2h
 cd ~/notes
     6h  Plan next sprint · main
-        cl a --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e         # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
+        cl a --resume 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e
+        # 5h 100% █████               Fable 48% ███▍░░░ ↻████▎░░ 4d6h
     9h  Write release notes · main
         cl a --resume 7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b
 Profiles: ~/.claude (1), ~/.claude-a (4), ~/.claude-b (1)
 Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new numbers; offline, or rate limited?): ~/.claude-b 9h ago
+```
+
+Run from a folder with no sessions, it prints the help instead, and says so under it:
+
+```
+$ cd ~/code/new && hatcheck
+🎩 hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
+Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode accounts on one
+computer, each kept apart. …
+
+No sessions active in ~/code/new in the last 24h or open now; 7 in other folders, which hatcheck --all-folders lists. A longer window, e.g. hatcheck 72, looks further back.
 ```
 
 - Run the folder's `cd` line, then the session's command. The command's program, `cl`, `claude`,
@@ -154,7 +172,7 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   the `cd` line as a shell comment (`cd ~/code/api  # $23.40 in 3 sessions`), and sessions by
   cost within each, those without one last and newest first among them; `-n` then keeps each
   folder's costliest, and the rest are `other sessions`.
-- The comment after each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
+- The comment under each command shows each plan limit: the 5-hour session (`5h`), the weekly limit
   (`week`) and per-model weekly limits such as `Fable`, which are named in violet, with their bar
   drawn in it, so they stand apart from `week`. Each one has the % left and a bar of it, then `↻`, a bar of the time left until
   it resets and that time. Bars have a block per hour of the 5-hour window and per day of a weekly
@@ -212,8 +230,8 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
   folder, where opencode files it. There is no opencode launcher or usage comment, and no branch:
   its rows record none. The title is the row's, as opencode names it, else the first prompt. Child
   sessions, which subagents run, aren't listed.
-- Since the usage is a shell comment, pasting the whole line runs just the command (zsh needs
-  `setopt interactivecomments`).
+- Since the usage is a shell comment, on a line of its own, pasting a command with its comment runs
+  just the command (zsh needs `setopt interactivecomments`).
 - Usage is fetched live: Claude Code's `/usage` is run once per account, in its profile, and the
   snapshot it saves is read (see [`hatcheck usage`](#hatcheck-usage-plan-usage-for-every-profile)
   below), unless that snapshot is under a minute old, which Claude Code's `/usage` shows again
@@ -232,7 +250,7 @@ Usage from Claude Code's last snapshot (Claude Code's /usage couldn't fetch new 
 | `HOURS`      | how far back to look (default 24); takes `36`, `1.5`, `12h` or `3d`           |
 | `-n N`       | show only the newest N sessions per folder and count the rest; `0` for all, undoing [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out)'s |
 | `-a`, `--all` | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec`, the Antigravity app, MiniMax Code's internal, non-subagent sessions, Qwen Code's from channels, scheduled tasks and other hosts, and Copilot sessions another client than its CLI made |
-| `-A`, `--all-folders` | list every folder, even when run from one that has sessions          |
+| `-A`, `--all-folders` | list every folder, from one that has sessions or one that has none  |
 | `-f`, `--full` | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, `CODEX_HOME=… codex …` instead of `cx`, and `KIMI_CODE_HOME=… kimi …` instead of `ck` |
 | `-d`, `--details` | under each session, its turns and what it spent by model and kind of token, with the durations its agent wrote down |
 | `-c`, `--by-cost` | the costliest sessions and folders first, instead of the newest            |
@@ -1182,7 +1200,7 @@ by_cost = true       # hat --by-cost; --by-time undoes it
 hours = "3d"         # 24, 1.5, 12h or 3d; HOURS on the command line wins
 per_folder = 3       # hat -n 3; -n 0 lists them all
 full = false         # CLAUDE_CONFIG_DIR=… claude … instead of cl; --no-full undoes it
-all_folders = false  # every folder, even from one that has sessions; --this-folder undoes it
+all_folders = false  # every folder, wherever hat runs; --this-folder undoes it
 usage = true         # false leaves plan usage out, as --no-usage does; --usage puts it back
 folders = ["~/repos/*"]   # only these folders; left out or empty, every folder
 
@@ -1268,7 +1286,9 @@ $ hatcheck --json
 ```
 
 - **The same choices as the text:** the time window, `--all`, `--all-folders` and `-n` pick the same
-  sessions in the same order, and `resume` is the command the text prints. `account` is the
+  sessions in the same order, and `resume` is the command the text prints. The one difference is a
+  folder with no sessions: the text prints the help there, and `--json` lists every folder's, as
+  `--all-folders` would, with `this_folder_only` false, since a script wants the data. `account` is the
   session's place in `accounts`, which holds the accounts behind the listed sessions (none with
   `--no-usage`). `hatcheck usage --json` gives every account, in its Fable order, with `sorted_by`.
 - **Stable:** absolute paths rather than `~`, times in UTC (ISO 8601), no colours. `version` goes up

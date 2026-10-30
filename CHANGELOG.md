@@ -16,6 +16,8 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 
 ### Changed
 
+- **The session list puts a plan's usage on a line of its own under the command**, a `#` comment at the command's indent, where it followed the command on the same line, padded out past the longest one; a pasted block still runs just the command.
+- **Run from a folder with no sessions, `hatcheck` prints its help and says so**, with how many sessions other folders have and that `--all-folders` lists them, where it listed every folder's as if run from nowhere in particular. `--all-folders`, or `all_folders` in `config.toml`, lists every folder from anywhere, and `--json` lists every folder's as before, since a script wants the data.
 - **Antigravity's limits are one row per model in `hatcheck usage`**, the effort tiers folded while they read the same (`Claude Opus 5.5 (Max)` apart from `Claude Opus 5.5 (High, Medium, Low)` when they don't), and in the session list's one-line comment the models that read the same are one meter (`Gemini 4 Argon +1`, or `all models`), where every bucket used to follow the command.
 
 ### Added

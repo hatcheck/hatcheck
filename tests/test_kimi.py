@@ -35,7 +35,7 @@ class KimiSessions(unittest.TestCase):
         self.folder = h.kimi_session(self.home, self.api, K, "Fix the uploader with kimi", 1)
 
     def test_listed_with_the_others(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Claude Code and Kimi Code CLI sessions", out)
         self.assertIn("Fix the uploader with kimi\n", out)
@@ -128,7 +128,7 @@ class KimiSessions(unittest.TestCase):
         mine = [e for e in index if e["sessionId"] == "session_" + new]
         self.assertEqual(mine, [{"sessionId": "session_" + new, "sessionDir": folder, "workDir": self.api}])
         self.assertTrue(os.path.exists(h.session(self.claude, self.api, A, "A Claude Code session", 3)))  # kept
-        code, out = h.run("sessions", "--no-usage")  # and listed, like kimi's own
+        code, out = h.run("sessions", "--all-folders", "--no-usage")  # and listed, like kimi's own
         self.assertIn("kimi --session session_" + new, out)
 
     def test_an_index_without_a_final_newline_gets_one_first(self):
@@ -290,7 +290,7 @@ class KimiUsage(unittest.TestCase):
         home = h.kimi_home(signed_in=True)
         api = h.folder("code", "api")
         h.kimi_session(home, api, K, "Fix the uploader with kimi", 1)
-        code, out = h.run("sessions")
+        code, out = h.run("sessions", "--all-folders", "--all-folders")
         self.assertEqual(code, 0, out)
         self.assertIn("kimi --session session_" + K, out)
         self.assertIn("No usage data (token expired; run kimi in this home to renew it): " + h.shown(home), out)

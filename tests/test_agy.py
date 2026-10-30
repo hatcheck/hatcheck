@@ -28,7 +28,7 @@ class AgySessions(unittest.TestCase):
         h.agy_session(self.root, self.api, S, "A subagent", 1, parent=G)
 
     def test_listed_with_the_others(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Claude Code and Antigravity CLI sessions", out)
         self.assertIn("Fix the uploader with agy\n", out)  # no tag after the title: the command names the agent
@@ -38,7 +38,7 @@ class AgySessions(unittest.TestCase):
         self.assertNotIn(S, out)
         self.assertIn("Hidden: 1 Antigravity app (show with --all)", out)
         self.assertIn(self.h.shown(self.root) + " (1)", out)
-        code, out = self.h.run("sessions", "--no-usage", "--all")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage", "--all")
         self.assertIn("via Antigravity app", out)
         self.assertNotIn(S, out)  # one agy ran itself is never listed
 
@@ -247,11 +247,12 @@ class AgyUsage(unittest.TestCase):
                          [("Gemini 4 Argon", 100, True), ("Gemini 3.8 Flash", 100, True),
                           ("Claude Opus 5.5 (Max)", 25, False), ("Claude Opus 5.5 (High, Medium)", 62, False)])
         # The list's one-line comment folds the models that read the same into one meter.
-        code, out = self.h.run("sessions", "--cached", PATH=self.bin + os.pathsep + self.h.env()["PATH"],
+        code, out = self.h.run("sessions", "--all-folders", "--cached", PATH=self.bin + os.pathsep + self.h.env()["PATH"],
                                HATCHECK_CACHE_DIR=self.cache)
         self.assertEqual(code, 0, out)
-        comment = next(line for line in out.splitlines() if "agy --conversation " + G in line)
-        self.assertRegex(comment, r"# Gemini 4 Argon \+1 +100% █+ +Claude Opus 5.5 \(Max\) +25% .*Claude Opus 5.5 \(High, Medium\) +62% ")
+        lines = out.splitlines()
+        command = next(k for k, line in enumerate(lines) if "agy --conversation " + G in line)
+        self.assertRegex(lines[command + 1], r"^ {8}# Gemini 4 Argon \+1 +100% █+ +Claude Opus 5.5 \(Max\) +25% .*Claude Opus 5.5 \(High, Medium\) +62% ")
 
     def test_two_hatchecks_ask_agy_once(self):
         """The app's engine and the CLI can ask at once; a second /usage at the same time gets
@@ -414,7 +415,7 @@ class AntigravityApp(unittest.TestCase):
 
     def test_each_from_its_own_folder(self):
         h = self.h
-        code, out = h.run("sessions", "--no-usage")
+        code, out = h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("With agy\n", out)
         self.assertNotIn("index lists it", out)
@@ -422,7 +423,7 @@ class AntigravityApp(unittest.TestCase):
         self.assertIn("Hidden: 2 Antigravity app (show with --all)", out)
         self.assertIn(h.shown(self.cli) + " (1)", out)
         self.assertNotIn(h.shown(self.app) + " (", out)  # named only when one of its conversations is listed
-        code, out = h.run("sessions", "--no-usage", "--all")
+        code, out = h.run("sessions", "--all-folders", "--no-usage", "--all")
         self.assertEqual(code, 0, out)
         self.assertIn("From the app · via Antigravity app", out)
         self.assertIn("Another in the app · via Antigravity app", out)
@@ -460,7 +461,7 @@ class AntigravityApp(unittest.TestCase):
         fakebin = h.fake_agy()
         write(os.path.join(self.cli, "fake-usage.json"), json.dumps({
             "groups": [{"group_name": "Gemini 4 Argon", "quota_info": {"remaining_fraction": 0.5, "reset_time": iso(NOW + 3600)}}]}))
-        code, out = h.run("sessions", "--all", PATH=fakebin + os.pathsep + h.env()["PATH"])
+        code, out = h.run("sessions", "--all-folders", "--all", PATH=fakebin + os.pathsep + h.env()["PATH"])
         self.assertEqual(code, 0, out)
         self.assertEqual([r["args"] for r in h.agy_runs()], [["models"], USAGE_ARGS])
         self.assertNotRegex(out, r"antigravity  ")  # the app's folder is no account of its own
@@ -480,10 +481,10 @@ class AgyOpenInTheList(unittest.TestCase):
         root = h.agy_root()
         api = h.folder("code", "api")
         h.agy_session(root, api, G, "Still going", 30 * 60)  # older than the window
-        code, out = h.run("sessions", "--no-usage")
+        code, out = h.run("sessions", "--all-folders", "--no-usage")
         self.assertNotIn(G, out)
         with AgyOpen(root, G):
-            code, out = h.run("sessions", "--no-usage")
+            code, out = h.run("sessions", "--all-folders", "--no-usage")
             self.assertEqual(code, 0, out)
             self.assertIn("Still going · ● open in agy", out)
             code, out = h.run("sessions", "--no-usage", "--json")

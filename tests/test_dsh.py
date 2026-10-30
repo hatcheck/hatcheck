@@ -71,7 +71,7 @@ class DshSessions(unittest.TestCase):
         return json.loads(out)["sessions"]
 
     def test_raw_listing_and_json(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("DeepSeek Harness CLI sessions", out)
         self.assertIn(TITLE + "\n", out)
@@ -88,7 +88,7 @@ class DshSessions(unittest.TestCase):
 
     def test_compressed_listing_json_and_show(self):
         log = self.h.dsh_compressed_session(self.home)
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Compressed DSH session\n", out)
         c = next(s for s in self.sessions() if s["id"] == DSH_COMPRESSED_ID)
@@ -166,7 +166,7 @@ class DshSessions(unittest.TestCase):
 
     def test_subagent_is_not_listed(self):
         self.h.dsh_session(self.home, self.api, S, "A dsh subagent", origin="subagent")
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertNotIn("A dsh subagent", out)
         self.assertEqual([s["id"] for s in self.sessions()], [D])

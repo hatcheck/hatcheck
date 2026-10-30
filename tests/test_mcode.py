@@ -89,7 +89,7 @@ class McodeSessions(unittest.TestCase):
         return json.loads(out)["sessions"]
 
     def test_listing_and_json_metadata(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("MiniMax CLI sessions", out)
         self.assertIn(TITLE + "\n", out)
@@ -219,7 +219,7 @@ class McodeSessions(unittest.TestCase):
         self.h.mcode_session(self.home, self.api, branch, "An ordinary MiniMax branch",
                              session_type="branch", parent=M)
         self.assertEqual({s["id"] for s in self.sessions()}, {M, branch})
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("An ordinary MiniMax branch\n", out)
         self.assertNotIn("Subagent ", out)

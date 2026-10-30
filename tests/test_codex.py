@@ -35,7 +35,7 @@ class CodexSessions(unittest.TestCase):
         h.codex_session(self.codex, self.api, Z, "From the app", 4, source="vscode", originator="Codex Desktop")
 
     def test_listed_with_claude_code_sessions(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Claude Code and Codex CLI sessions", out)
         self.assertIn("codex resume " + X, out)
@@ -50,7 +50,7 @@ class CodexSessions(unittest.TestCase):
         self.assertIn("~/.codex-work (1)".replace("/", os.sep), out)
 
     def test_all_and_full(self):
-        code, out = self.h.run("sessions", "--no-usage", "--all", "--full")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage", "--all", "--full")
         self.assertIn(Z, out)
         self.assertIn("via Codex app", out)
         if WINDOWS:
@@ -62,7 +62,7 @@ class CodexSessions(unittest.TestCase):
     def test_sessions_codex_runs_itself_are_not_listed(self):
         self.h.codex_session(self.codex, self.api, "019f0000-dddd-7000-8000-000000000004", "Review this", 1,
                              source={"subagent": {"other": "guardian"}}, originator="codex_cli_rs")
-        code, out = self.h.run("sessions", "--no-usage", "--all")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage", "--all")
         self.assertNotIn("019f0000-dddd", out)
         self.assertNotIn("without messages", out)
 
@@ -75,14 +75,14 @@ class CodexSessions(unittest.TestCase):
         fd = os.open(lock, os.O_RDWR)
         self.addCleanup(os.close, fd)
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # as a running codex holds it
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Fix the uploader · main · ● open in codex", out)
         code, out = self.h.run("sessions", "--no-usage", "--json")
         x = next(s for s in json.loads(out)["sessions"] if s["id"] == X)
         self.assertEqual(x["open"], {"pid": None, "status": None, "in": "codex"})
         fcntl.flock(fd, fcntl.LOCK_UN)
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertNotIn("● open", out)
 
     def test_usage_comment_from_codex_session_files(self):
@@ -91,7 +91,7 @@ class CodexSessions(unittest.TestCase):
                         rate_limits=rate_limits(40, 10))
         code, out = h.run("sessions", "--cached", cwd=h.folder("code", "web"))
         self.assertEqual(code, 0, out)
-        self.assertRegex(out, r"cx work resume 019f0000-eeee-\S+ +# 5h 60% ███░░ ↻██░░░ 1h5\dm  week 90% ██████▎ ↻███░░░░ 2d23h")
+        self.assertRegex(out, r"cx work resume 019f0000-eeee-\S+\n {8}# 5h 60% ███░░ ↻██░░░ 1h5\dm  week 90% ██████▎ ↻███░░░░ 2d23h\n")
         self.assertRegex(out, r"Usage from Codex's session files \(--cached\): ~.\.codex-work \dm ago")
 
 

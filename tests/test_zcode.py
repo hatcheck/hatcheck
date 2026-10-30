@@ -35,7 +35,7 @@ class ZcodeSessions(unittest.TestCase):
             db.close()
 
     def test_listed_with_the_others(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Claude Code and ZCode CLI sessions", out)
         self.assertIn("Fix the uploader with zcode\n", out)
@@ -50,7 +50,7 @@ class ZcodeSessions(unittest.TestCase):
         db.execute("update session set time_deleted = 1792881000000 where id = ?", ("sess_" + Z,))
         db.commit()
         db.close()
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertNotIn(Z, out)
         code, out = self.h.run("where", Z[:8])
@@ -196,7 +196,7 @@ class ZcodeElsewhere(unittest.TestCase):
         self.assertEqual((z["profiles"], z["plan"], z["source"], z["limits"]), ([self.root], "ZCode", "none", []))
         api = self.h.folder("code", "api")
         self.h.zcode_session(self.root, api, Z, "Fix the uploader with zcode", 1)
-        code, out = self.h.run("sessions")
+        code, out = self.h.run("sessions", "--all-folders", "--all-folders")
         self.assertIn("No usage data (zcode has no usage command; see z.ai/manage-apikey/subscription for the plan): "
                       + self.h.shown(self.root), out)
 

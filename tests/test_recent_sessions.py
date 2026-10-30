@@ -41,7 +41,7 @@ class RecentSessions(unittest.TestCase):
         self.h.session(self.default, self.blog, E, "From the Desktop app", 30, entrypoint="claude-desktop")
 
     def test_lists_recent_sessions_by_folder(self):
-        code, out = self.h.run(SCRIPT, "--no-usage")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         api, blog = "cd " + self.h.shown(self.api), "cd " + self.h.shown(self.blog)
         self.assertIn(api, out)
@@ -55,7 +55,7 @@ class RecentSessions(unittest.TestCase):
         self.assertIn("Hidden: 1 Desktop (show with --all)", out)
 
     def test_hours_and_all(self):
-        code, out = self.h.run(SCRIPT, "3d", "--all", "--no-usage")
+        code, out = self.h.run(SCRIPT, "--all-folders", "3d", "--all", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn(D, out)
         self.assertIn(E, out)
@@ -71,7 +71,7 @@ class RecentSessions(unittest.TestCase):
         self.h.session(self.work, folder, F, "Costly", 6, extra=[cost(F, 1.5), cost(F, 5.0095065)])
         self.h.session(self.work, folder, G, "Tiny", 7, extra=[cost(G, 0.0042)])
         self.h.session(self.work, folder, H, "Free", 8, extra=[cost(H, 0)])
-        code, out = self.h.run(SCRIPT, "--no-usage")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Costly · main · $5.01\n", out)
         self.assertIn("Tiny · main · <$0.01\n", out)
@@ -97,7 +97,7 @@ class RecentSessions(unittest.TestCase):
                                                     "webSearchRequests": 0, "costUSD": 5.0077}})
         self.h.session(self.work, folder, F, "Costly", 6, extra=[state])
         self.h.session(self.work, folder, G, "Cheap", 2, extra=[rec(type="cost-state", sessionId=G, totalCostUSD=0.25)])
-        code, out = self.h.run(SCRIPT, "--no-usage", "--by-cost", "--details")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage", "--by-cost", "--details")
         self.assertEqual(code, 0, out)
         self.assertIn("costliest first", out)
         cost, api, blog = ("cd " + self.h.shown(f) for f in (folder, self.api, self.blog))
@@ -140,12 +140,12 @@ class RecentSessions(unittest.TestCase):
         short, long_json = (json.loads(self.h.run(SCRIPT, *flags)[1]) for flags in (("-qj",), ("--no-usage", "--json")))
         short.pop("generated_at"), long_json.pop("generated_at")  # a second may pass between the runs
         self.assertEqual(short, long_json)
-        code, out = self.h.run(SCRIPT, "-qx")  # a letter that's no flag, as argparse reports it
+        code, out = self.h.run(SCRIPT, "--all-folders", "-qx")  # a letter that's no flag, as argparse reports it
         self.assertEqual(code, 2)
         self.assertIn("unrecognized arguments: -x", out)
 
     def test_newest_n_per_folder(self):
-        code, out = self.h.run(SCRIPT, "-n", "1", "--no-usage")
+        code, out = self.h.run(SCRIPT, "--all-folders", "-n", "1", "--no-usage")
         self.assertIn(A, out)
         self.assertNotIn(B, out)
         self.assertIn("+1  older session", out)
@@ -161,8 +161,32 @@ class RecentSessions(unittest.TestCase):
         self.assertIn(C, out)
         self.assertNotIn("in this folder", out)
 
+    def test_a_folder_with_no_sessions_gets_the_help(self):
+        # Run from a folder with none, the list is hatcheck's help and a note, not every other
+        # folder's sessions: --all-folders is for those, and --json keeps giving every folder's.
+        empty = self.h.folder("code", "empty")
+        code, out = self.h.run(SCRIPT, "--no-usage", cwd=empty)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out.startswith("🎩 hatcheck: Claude Code, Codex"), out[:80])
+        self.assertIn("\n    hatcheck usage ...", out)
+        # The commands suggested are spelled the way this run was: here, hatcheck sessions.
+        self.assertIn("\nNo sessions active in %s in the last 24h or open now; 3 in other folders, which hatcheck sessions "
+                      "--all-folders lists. A longer window, e.g. hatcheck sessions 72, looks further back.\n" % self.h.shown(empty), out)
+        self.assertIn("Hidden: 1 Desktop (show with --all)", out)
+        self.assertNotIn(A, out)
+        self.assertNotIn("cd ", out)
+        code, out = self.h.run(SCRIPT, "--no-usage", "3d", cwd=empty)  # 72 and up: no longer window suggested
+        self.assertIn("in the last 72h or open now; 4 in other folders, which hatcheck sessions --all-folders lists.\n", out)
+        code, out = self.h.run(SCRIPT, "--no-usage", "--all-folders", cwd=empty)
+        self.assertEqual(code, 0, out)
+        self.assertIn("cl work --resume " + A, out)
+        self.assertNotIn("No sessions active", out)
+        code, out = self.h.run(SCRIPT, "--no-usage", "--json", cwd=empty)
+        data = json.loads(out)
+        self.assertEqual((data["this_folder_only"], data["other_folders"], len(data["sessions"])), (False, 0, 3))
+
     def test_full_commands(self):
-        code, out = self.h.run(SCRIPT, "--no-usage", "--full")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage", "--full")
         if WINDOWS:
             expected = '$env:CLAUDE_CONFIG_DIR="$HOME\\.claude-work"; claude --resume %s; $env:CLAUDE_CONFIG_DIR=$null' % A
         else:
@@ -171,7 +195,7 @@ class RecentSessions(unittest.TestCase):
 
     def test_open_session_is_marked(self):
         self.h.register_open(self.work, A)
-        code, out = self.h.run(SCRIPT, "--no-usage")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage")
         self.assertIn("● open in pid %d (idle)" % os.getpid(), out)
 
     def test_open_session_with_another_start_time_is_not(self):
@@ -181,7 +205,7 @@ class RecentSessions(unittest.TestCase):
             text = fh.read()
         with open(path, "w", encoding="utf-8") as fh:  # a reused PID: same number, other process
             fh.write(re.sub(r'"(procStart|procStartFt)": "[^"]*"', r'"\1": "1"', text))
-        code, out = self.h.run(SCRIPT, "--no-usage")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage")
         self.assertNotIn("● open", out)
 
 
@@ -202,7 +226,7 @@ class Providers(unittest.TestCase):
         self.h.session(self.work, api, C, "On Claude", 3, model="claude-opus-5-5")
 
     def test_commands_and_model(self):
-        code, out = self.h.run(SCRIPT, "--no-usage")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("cl -k work --resume " + A, out)
         self.assertIn("claude-z --resume " + B, out)
@@ -212,7 +236,7 @@ class Providers(unittest.TestCase):
         self.assertNotIn("on claude", out)
 
     def test_full_commands(self):
-        code, out = self.h.run(SCRIPT, "--no-usage", "--full")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage", "--full")
         if WINDOWS:
             expected = '$env:CLAUDE_CONFIG_DIR="$HOME\\.claude-work"; claude-k --resume %s; $env:CLAUDE_CONFIG_DIR=$null' % A
         else:
@@ -238,17 +262,20 @@ class UsageComments(unittest.TestCase):
         self.h.session(self.work, self.api, A, "One", 1)
         self.h.session(self.work2, self.api, B, "Two", 2)
         self.h.session(self.personal, self.api, C, "Three", 3)
-        code, out = self.h.run(SCRIPT, "--cached")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--cached")
         self.assertEqual(code, 0, out)
-        first, second, third = self.lines(out)
-        self.assertRegex(first, "cl work --resume " + A + r" +# 5h 60% ███░░ ↻██░░░ 1h5\dm  week 90% ██████▎ ↻███░░░░ 2d23h$")
+        # The usage is a line of its own under the command: a shell comment at the same indent.
+        first, usage, second, third, usage3 = self.lines(out)
+        self.assertTrue(first.endswith("cl work --resume " + A), first)
+        self.assertRegex(usage, r"^ {8}# 5h 60% ███░░ ↻██░░░ 1h5\dm  week 90% ██████▎ ↻███░░░░ 2d23h$")
         self.assertTrue(second.endswith("cl work2 --resume " + B), second)  # same account: left out
-        self.assertIn("# 5h 60%", third)  # another account, though the numbers match
+        self.assertTrue(third.endswith("cl personal --resume " + C), third)
+        self.assertIn("# 5h 60%", usage3)  # another account, though the numbers match
         self.assertIn("Usage from Claude Code's last snapshot (--cached)", out)
 
     def test_no_usage(self):
         self.h.session(self.work, self.api, A, "One", 1)
-        code, out = self.h.run(SCRIPT, "--no-usage")
+        code, out = self.h.run(SCRIPT, "--all-folders", "--no-usage")
         self.assertNotIn("#", "".join(self.lines(out)))
 
 

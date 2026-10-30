@@ -668,7 +668,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .positional("hours", Count::Optional, &format!("how far back to look (default {DEFAULT_HOURS}); accepts 36, 1.5, 12h or 3d"))
         .option(&["-n", "--per-folder"], "per_folder", "N", "show only the newest N sessions per folder (default: all)")
         .flag(&["-a", "--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, the Antigravity app's conversations, Qwen Code sessions from its channels, scheduled tasks and other hosts, and Copilot sessions from clients other than its CLI")
-        .flag(&["-A", "--all-folders"], "all_folders", "list every folder, even when run from a folder that has sessions")
+        .flag(&["-A", "--all-folders"], "all_folders", "list every folder, from one that has sessions or one that has none")
         .flag(&["-f", "--full"], "full", "print CLAUDE_CONFIG_DIR=... claude instead of the cl shortcut, CODEX_HOME=... codex instead of cx, and KIMI_CODE_HOME=... kimi instead of ck")
         .flag(&["-C", "--cached"], "cached", "take plan usage from the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage, instead of the APIs")
         .flag(&["-d", "--details"], "details", "under each session, its turns and what it spent, by model and kind of token, with the durations its agent wrote down")
@@ -1075,6 +1075,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .cloned()
         .collect();
     let only_here = !mine.is_empty() && !all_folders;
+    // None here: the help and a note instead of every other folder's, below (text only).
+    let none_here = mine.is_empty() && !all_folders;
     let elsewhere = if only_here {
         shown.len() - mine.len()
     } else {
@@ -1165,6 +1167,37 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             priced,
             total,
         });
+    }
+
+    // Run from a folder with no sessions, the list says so under hatcheck's help, rather than
+    // list every other folder's: --all-folders is for that. Nothing is asked for usage first.
+    // --json keeps listing every folder, as a script expects data, not a help screen.
+    if none_here && !json_out {
+        let me = prog.split(' ').next().unwrap_or(prog);
+        crate::cli::print_help(me);
+        out::println("");
+        let folder = std::env::current_dir()
+            .map(|d| paths::shell_path(&d.to_string_lossy()))
+            .unwrap_or_else(|_| ".".into());
+        let window = format!("{}h", py::g(hours));
+        let others = match shown.len() {
+            0 => ", nor in any other folder".to_string(),
+            1 => format!("; 1 in another folder, which {prog} --all-folders lists"),
+            n => format!("; {n} in other folders, which {prog} --all-folders lists"),
+        };
+        let longer = if hours < 72.0 {
+            format!(" A longer window, e.g. {prog} 72, looks further back.")
+        } else {
+            String::new()
+        };
+        out::println(&format!(
+            "No sessions active in {folder} in the last {window} or open now{others}.{longer}"
+        ));
+        let notes = end_notes(0, &hidden, empty, unreadable);
+        if !notes.is_empty() {
+            out::println(&p("2", &notes.join("; ")));
+        }
+        return 0;
     }
 
     // Plan usage for the profiles behind the listed sessions, one request per account.
@@ -1327,17 +1360,6 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     } else {
         usage_cells(&results, now, &paint)
     };
-    // The usage comments line up after the longest resume command.
-    let command_width = folders
-        .iter()
-        .flat_map(|f| {
-            f.listed
-                .iter()
-                .map(|s| session_command(s, full).chars().count())
-        })
-        .max()
-        .unwrap_or(0);
-
     let window = format!("{}h", py::g(hours));
     let mut present = Vec::new();
     if !crate::config::ignores(Agent::Claude) {
@@ -1492,21 +1514,19 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 tail
             ));
             let plain = session_command(s, full);
-            let mut command = paint_program(&plain, s.agent, &paint);
+            let command = paint_program(&plain, s.agent, &paint);
+            out::println(&format!("{}{command}", " ".repeat(8)));
             let usage = cells.get(&s.profile).cloned();
             let this = (account.get(&s.profile).copied(), usage.clone());
-            // Left out when the session above uses the same account, even through another
-            // profile, so it would only repeat.
+            // The plan's usage on a line of its own under the command, as a shell comment, so
+            // a pasted block still runs just the command. Left out when the session above uses
+            // the same account, even through another profile, so it would only repeat.
             if let Some(text) = usage.as_ref().filter(|u| !u.is_empty()) {
                 if previous.as_ref() != Some(&this) {
-                    // A shell comment, so pasting the whole line still runs just the command,
-                    // padded by the plain command's width: the colour codes take no room.
-                    let pad = " ".repeat(command_width.saturating_sub(plain.chars().count()));
-                    command = format!("{command}{pad}  {} {text}", p("2", "#"));
+                    out::println(&format!("{}{} {text}", " ".repeat(8), p("2", "#")));
                 }
             }
             previous = Some(this);
-            out::println(&format!("{}{command}", " ".repeat(8)));
             if details {
                 for line in render(&blocks[block_at], &columns, &paint) {
                     out::println(&format!("{}{line}", " ".repeat(8)));
@@ -1597,6 +1617,20 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             &format!("No usage data ({why}): {}", items.join(", ")),
         ));
     }
+    let notes = end_notes(elsewhere, &hidden, empty, unreadable);
+    if !notes.is_empty() {
+        out::println(&p("2", &notes.join("; ")));
+    }
+    0
+}
+
+/// The notes that end the list: what it left out, and how to see it.
+fn end_notes(
+    elsewhere: usize,
+    hidden: &[(String, usize)],
+    empty: usize,
+    unreadable: usize,
+) -> Vec<String> {
     let mut notes = Vec::new();
     if elsewhere > 0 {
         notes.push(format!(
@@ -1604,7 +1638,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         ));
     }
     if !hidden.is_empty() {
-        let mut sorted = hidden.clone();
+        let mut sorted = hidden.to_vec();
         sorted.sort();
         notes.push(format!(
             "Hidden: {} (show with --all)",
@@ -1621,10 +1655,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     if unreadable > 0 {
         notes.push(format!("{unreadable} unreadable"));
     }
-    if !notes.is_empty() {
-        out::println(&p("2", &notes.join("; ")));
-    }
-    0
+    notes
 }
 
 #[cfg(test)]

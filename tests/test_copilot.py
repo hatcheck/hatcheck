@@ -94,7 +94,7 @@ class CopilotSessions(unittest.TestCase):
         return json.loads(out)["sessions"]
 
     def test_listing_and_json_metadata(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Copilot CLI sessions", out)
         self.assertIn(TITLE, out)
@@ -165,7 +165,7 @@ class CopilotSessions(unittest.TestCase):
         self.assertEqual({s["id"] for s in self.sessions()}, {C})
         listed = {s["id"]: s["entrypoint"] for s in self.sessions("--all")}
         self.assertEqual(listed, {C: "cli", sid(33): "github/copilot-app"})
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertNotIn("From the Copilot app", out)
 

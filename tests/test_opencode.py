@@ -65,7 +65,7 @@ class OpencodeSessions(unittest.TestCase):
         return json.loads(out)["sessions"]
 
     def test_listing_and_json_metadata(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("OpenCode CLI sessions", out)
         self.assertIn(TITLE, out)
@@ -84,13 +84,13 @@ class OpencodeSessions(unittest.TestCase):
     def test_a_cost_opencode_priced_shows_and_details_count_its_tokens(self):
         self.h.opencode_session(self.home, self.api, P, "Priced by opencode", 2, cost=0.1234,
                                 tokens=(6551, 83883, 42938, 12077475, 696121))
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Priced by opencode · $0.12\n", out)
         self.assertIn(TITLE + "\n", out)
         costs = {s["id"]: s["cost_usd"] for s in self.sessions()}
         self.assertEqual((costs[P], costs[O]), (0.1234, None))
-        code, out = self.h.run("sessions", "--no-usage", "--details")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage", "--details")
         self.assertEqual(code, 0, out)
         # The row counts the session's tokens for every model together, with no cost per model, so
         # the table has no cost column.

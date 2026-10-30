@@ -68,7 +68,7 @@ class Bind(unittest.TestCase):
         h.session(self.personal, self.src, S, "Done under the other account", 5)
         h.session(self.work, self.src, T, "Done under the bound one", 10)
         h.run("bind", "work", cwd=self.api)
-        code, out = h.run("sessions", "--no-usage")
+        code, out = h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         wrong = next(line for line in out.splitlines() if "Done under the other account" in line)
         self.assertIn("⚠ folder bound to " + h.shown(self.work), wrong)

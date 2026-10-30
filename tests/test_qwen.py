@@ -95,7 +95,7 @@ class QwenSessions(unittest.TestCase):
         return json.loads(out)["sessions"]
 
     def test_listing_and_json_metadata(self):
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertIn("Qwen CLI sessions", out)
         self.assertIn(TITLE, out)
@@ -171,7 +171,7 @@ class QwenSessions(unittest.TestCase):
         self.assertEqual({s["id"] for s in self.sessions()}, {Q, sid(35)})
         listed = {s["id"]: s["entrypoint"] for s in self.sessions("--all")}
         self.assertEqual(listed, {Q: "cli", sid(34): "channel", sid(35): "cli"})
-        code, out = self.h.run("sessions", "--no-usage")
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
         self.assertEqual(code, 0, out)
         self.assertNotIn("Telegram", out)
         code, out = self.h.run("show", sid(32)[:8], "--json")  # hidden from the list, still readable
