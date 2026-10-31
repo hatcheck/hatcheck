@@ -67,7 +67,7 @@ async function loadInstances() {
     $("instances").innerHTML = list.map((i) => `<button class="instance" data-instance="${esc(i.name)}" title="${esc(i.app)}">${
       i.running ? `<span class="open-dot">●</span> ` : ""}${esc(i.display)}</button>`).join("");
   } catch {
-    $("desktop-section").hidden = true; // not macOS, or no instances
+    $("desktop-section").hidden = true; // not macOS or Windows, or no instances
   }
 }
 

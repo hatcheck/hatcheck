@@ -368,7 +368,13 @@ async function start() {
   wire();
   loadSettings();
   const mac = navigator.userAgent.includes("Mac");
-  $("desktop-tab").hidden = !mac;
+  const windows = navigator.userAgent.includes("Windows");
+  $("desktop-tab").hidden = !mac && !windows;
+  if (windows) {
+    $("instance-note").innerHTML =
+      "Makes <code>Claude NAME</code> in the Start menu, a shortcut with an icon of that colour, and " +
+      "<code>~\\.claude-instances\\NAME</code> for its data.";
+  }
   try {
     $("about-version").textContent = (await version()).replace(/^\S+ /, "");
   } catch {

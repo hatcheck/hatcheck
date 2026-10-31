@@ -17,6 +17,7 @@ pub mod config;
 pub mod conv;
 pub mod copilot;
 pub mod desktop;
+pub mod desktop_windows;
 pub mod doctor;
 pub mod dsh;
 pub mod facts;

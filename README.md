@@ -39,9 +39,9 @@ and Gemini are trademarks of Google LLC; Kimi is Moonshot AI's, ZCode and GLM ar
 Harness is DeepSeek's, MiniMax Code is MiniMax's, Qwen Code is Alibaba Cloud's, GitHub Copilot is
 GitHub's and OpenCode is the OpenCode project's.*
 
-On macOS, `hatcheck desktop` runs **one Claude Desktop per account, side by side**: each with its
-own data folder and login, and a launcher in a colour you pick, which brings the running one
-forward rather than opening it twice.
+On macOS and Windows, `hatcheck desktop` runs **one Claude Desktop per account, side by side**:
+each with its own data folder and login, and a launcher in a colour you pick, which brings the
+running one forward rather than opening it twice.
 
 Running Claude Desktop with its own `--user-data-dir` is
 [Philipp Stracker's approach](https://gist.github.com/stracker-phil/9f84927a556632c7f9cc06663b534f14)
@@ -66,32 +66,35 @@ knowing which one each session ran on. See [Rules it keeps](#rules-it-keeps).
 
 |                                 | macOS | Linux | Windows |
 |---------------------------------|:-----:|:-----:|:-------:|
-| Claude Desktop instances        |  yes  | [untried](#roadmap): Claude Desktop for Linux is in beta | [planned](#roadmap) |
+| Claude Desktop instances        |  yes  | [untried](#roadmap): Claude Desktop for Linux is in beta |   yes   |
 | Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode tools |  yes  |  yes  |   yes   |
 
 ---
 
-## Claude Desktop instances (macOS)
+## Claude Desktop instances (macOS and Windows)
 
 `hatcheck desktop` makes them: each instance gets its own data folder, `~/.claude-instances/<name>`,
-and a launcher in `/Applications` with Claude's icon in a colour you pick. The launcher brings a
-running instance's window forward instead of starting a second one on the same folder.
+and a launcher with Claude's icon in a colour you pick: an app in `/Applications` on macOS, a
+shortcut in the Start menu on Windows. The launcher brings a running instance's window forward
+instead of starting a second one on the same folder.
 
 ```bash
-hatcheck desktop new a A --hue 190                # Claude A.app, blue
-hatcheck desktop new b B --hue -10                # Claude B.app, red-orange
-hatcheck desktop open a                           # or open it from Launchpad or the Dock
+hatcheck desktop new a A --hue 190                # Claude A.app, or Claude A in the Start menu: blue
+hatcheck desktop new b B --hue -10                # Claude B, red-orange
+hatcheck desktop open a                           # or open it from Launchpad, the Dock or the Start menu
 hatcheck desktop                                  # the instances, and which are running
 hatcheck desktop remove a                         # its launcher; --data deletes its data folder too
 ```
 
-Sign each one in to its account the first time it opens. The first time a launcher brings a window
-forward, macOS asks whether it may control System Events; allow it, once per launcher. `--hue`
+Sign each one in to its account the first time it opens. On macOS, the first time a launcher brings
+a window forward, macOS asks whether it may control System Events; allow it, once per launcher. On
+Windows, Claude Desktop (the Microsoft Store version) keeps one process per data folder itself, so
+the launcher is a plain shortcut. `--hue`
 turns the icon's colours by that many degrees (about 110 is green, 190 blue, 240 purple) and
-`--saturation` scales them. hatcheck recolours the icon itself, with macOS's `iconutil`, and a
-launcher it can't recolour keeps Claude's own icon. The name `default` makes a launcher for
-Claude's built-in data folder, which is only safe while nothing else runs on that folder, the stock
-Claude icon included. [docs/desktop-instances.md](docs/desktop-instances.md) has the rest: what
+`--saturation` scales them. hatcheck recolours the icon itself, with macOS's `iconutil` or, on
+Windows, from the artwork in Claude's own package, and a launcher it can't recolour keeps Claude's
+own icon. The name `default` makes a launcher for Claude's built-in data folder, which on macOS is
+only safe while nothing else runs on that folder, the stock Claude icon included. [docs/desktop-instances.md](docs/desktop-instances.md) has the rest: what
 the launcher does, and how to copy a login you already have into an instance.
 
 ---
@@ -180,7 +183,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's, mcode's, qwen's, copilot's and opencode's stay as they are |
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
 | [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest |
-| [`hatcheck desktop`](#claude-desktop-instances-macos) | Claude Desktop instances on macOS |
+| [`hatcheck desktop`](#claude-desktop-instances-macos-and-windows) | Claude Desktop instances on macOS and Windows |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |
 
 `hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`, `hat r` is `hat resume`.
@@ -338,10 +341,6 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 
 ## Roadmap
 
-- **Claude Desktop instances on Windows.** Claude Desktop is an Electron app there too, so a
-  separate `--user-data-dir` per account should work. A Windows version would create a shortcut per
-  instance with its own icon, and a launcher that brings a running instance forward instead of
-  opening a duplicate. It needs testing on a Windows machine first.
 - **Claude Desktop instances on Linux.** Claude Desktop for Linux is in beta, for Ubuntu and
   Debian. Whether its own `--user-data-dir` keeps an instance apart there, as on macOS, hasn't been
   tried; until it has, only the CLI tools apply on Linux.

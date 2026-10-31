@@ -250,6 +250,16 @@ still found Codex.
   `usage.rs` and `where_cmd.rs`.
 - Seen 1× (2026-10-29).
 
+**On Windows, an app hatcheck starts for the user is opened through the shell, never as a child
+process.** A child started with `Command` inherits every inheritable handle hatcheck has, its
+stdout pipe among them, so whoever reads hatcheck's output waits until that app quits: the terminal
+tool that ran `hatcheck desktop open` hung, and the desktop app's engine would have too.
+`ShellExecuteW` on the shortcut starts it as a click does, with nothing of hatcheck's.
+- Evidence: 2026-10-31, `hatcheck desktop open` against Claude Desktop 4.4212, run through a pipe:
+  Claude started, and the caller waited past its 90-second timeout. `open_shortcut` in
+  `desktop_windows.rs` returns in about a second and a half.
+- Seen 1× (2026-10-31).
+
 ## What hatcheck prints
 
 **A printed command is quoted for the shell that will run it, and a flag is never quoted.**

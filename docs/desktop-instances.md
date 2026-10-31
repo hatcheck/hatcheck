@@ -1,7 +1,9 @@
 # Claude Desktop instances
 
 What `hatcheck desktop` makes and how it behaves. This is the description the code was written
-from; the [README](../README.md#claude-desktop-instances-macos) has the short version.
+from; the [README](../README.md#claude-desktop-instances-macos-and-windows) has the short version.
+Everything up to [On Windows](#on-windows) is how it works on macOS; that section says what's
+different there.
 
 ## The problem
 
@@ -137,12 +139,66 @@ rsync -a --exclude 'Singleton*' --exclude 'Cache' --exclude 'Code Cache' --exclu
 The built-in folder is left as it was. The copy can be large: the Cowork runtime's `vm_bundles/`
 folder can run to many GB, and can be deleted from the copy, since it downloads again when needed.
 
+## On Windows
+
+The same idea, checked on Windows 11 with Claude Desktop 4.4212 from the Microsoft Store (an MSIX
+package) on 2026-10-31. These were checked against the real app:
+
+- **A second instance runs beside the first.** `claude-desktop.exe --user-data-dir=<folder>` starts
+  Claude Desktop on its own folder while the stock one keeps running. `claude-desktop.exe` is the
+  package's app execution alias in `%LOCALAPPDATA%\Microsoft\WindowsApps`, which stays put when an
+  update moves the package's own folder.
+- **Signing in lands in the instance that asked.** A second account signed in inside the instance,
+  and the stock instance's login was unchanged before and after. The sign-in came back without any
+  `claude://` link being opened, so Windows' handler for those links, which would have started the
+  stock instance, was never involved. The login is kept, encrypted, in the instance's own
+  `config.json`, with the key in its own `Local State`, and was still there after the instance was
+  closed and started again.
+- **Claude Desktop keeps one process per data folder itself.** A second launch on a folder that has
+  a process starts nothing, and the same holds for the built-in folder. So on Windows the launcher
+  is a plain shortcut: none of the macOS launcher's lock, process search or System Events.
+
+An instance there is the data folder, `%USERPROFILE%\.claude-instances\<name>`, and:
+
+```
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Claude <Display>.lnk
+    target       %LOCALAPPDATA%\Microsoft\WindowsApps\claude-desktop.exe
+    arguments    --user-data-dir="<the data folder>"   (none for default)
+    description  Claude Desktop instance <name>, made by hatcheck
+    icon         %APPDATA%\hatcheck\icons\Claude <Display>.ico
+```
+
+The description names the instance; `hatcheck desktop` lists the shortcuts in that folder whose
+description it wrote, and reads the data folder from the arguments. The shortcut is written by
+Windows' own `WScript.Shell`, through Windows PowerShell, and read back before it counts as made.
+Without the Store package, Claude's older installer (`%LOCALAPPDATA%\AnthropicClaude\claude.exe`) is
+the target; that one hasn't been tried.
+
+The icon is Claude's own artwork from the package's `assets` folder (the unplated
+`Square44x44Logo` images at 16, 24, 32, 48 and 256 pixels), recoloured with the same arithmetic as
+on macOS and kept as an `.ico` in hatcheck's config folder rather than in the package, so it
+survives Claude's updates. When the package's artwork can't be found, the shortcut has no icon of
+its own and shows Claude's.
+
+`hatcheck desktop open` opens the shortcut through the shell, as a click does. It doesn't start
+Claude Desktop as a child process: that child would inherit hatcheck's output pipe, and whatever
+reads hatcheck's output would wait until Claude Desktop quit. An instance is running when a main
+process (no `--type=`) of the package's `claude.exe` has its folder in its `--user-data-dir`, read
+from the process's command line.
+
+`default` is safe on Windows, since the stock icon and the launcher bring the same process forward.
+To copy a login you already have into an instance, the same steps as on macOS apply, with Claude
+Desktop fully quit (from its icon in the notification area, not just by closing the window) and
+`%APPDATA%\Claude` as the folder to copy.
+
 ## Limits
 
-- macOS only. Claude Desktop on Windows is an Electron app too, so the same idea should work with a
-  shortcut per instance; it hasn't been done here. Claude Desktop for Linux is in beta, for Ubuntu
-  and Debian, and hasn't been tried with a data folder of its own.
+- macOS and Windows. Claude Desktop for Linux is in beta, for Ubuntu and Debian, and hasn't been
+  tried with a data folder of its own.
 - The instances share the one Claude Desktop install, so they update together, and a running
-  instance can't carry its launcher's colour.
+  instance can't carry its launcher's colour. On Windows every instance is the one Store app, so
+  the taskbar most likely groups them under Claude's own button and icon; that hasn't been checked.
+- Windows' guarantee of one process per folder is Claude Desktop's own, checked with 4.4212; a
+  version that dropped it would bring back the macOS problem of a second, signed-out process.
 - Each instance keeps its own settings and MCP servers; nothing is shared between them unless you
   copy it.

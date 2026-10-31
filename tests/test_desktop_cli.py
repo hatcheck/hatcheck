@@ -15,6 +15,7 @@ import zlib
 from helpers import ENGINE, FakeHome, argv_of, write
 
 MAC = sys.platform == "darwin"
+WINDOWS = os.name == "nt"
 
 # What a launcher runs, faked for its tests: ps lists the processes in $FAKE_STATE/ps; open -n
 # starts Claude Desktop on its folder after FAKE_LAUNCH_DELAY seconds, as a process with a window
@@ -111,9 +112,9 @@ class DesktopCommand(unittest.TestCase):
                            encoding="utf-8")
         return p.returncode, p.stdout + p.stderr
 
-    @unittest.skipIf(MAC, "macOS has them")
-    def test_macos_only(self):
-        self.assertEqual(self.desktop(), (1, "Claude Desktop instances are macOS only for now\n"))
+    @unittest.skipIf(MAC or WINDOWS, "macOS and Windows have them")
+    def test_macos_and_windows_only(self):
+        self.assertEqual(self.desktop(), (1, "Claude Desktop instances are macOS and Windows only for now\n"))
 
     @unittest.skipUnless(MAC, "macOS only")
     def test_make_list_and_remove(self):
@@ -179,12 +180,120 @@ class DesktopCommand(unittest.TestCase):
             self.assertIn('DATA_DIR=""', fh.read())
         self.assertIn("argument --hue: invalid float value: 'abc'", self.desktop("new", "x", "X", "--hue", "abc")[1])
 
-    @unittest.skipUnless(MAC, "macOS only")
+    @unittest.skipUnless(MAC or WINDOWS, "macOS and Windows only")
     def test_dot_names_are_refused(self):
+        if WINDOWS:
+            self.windows_claude()
         for name in (".", ".."):
             self.assertEqual(self.desktop("new", name, "Dots"),
                              (1, "The name can't be '.' or '..': the instance's data folder is ~/.claude-instances/NAME\n"))
-        self.assertFalse(os.path.exists(os.path.join(self.apps, "Claude Dots.app")))
+        self.assertEqual([f for f in os.listdir(self.apps) if f.startswith("Claude Dots")], [])
+
+    # Windows: the launcher is a shortcut in the Start menu (here self.apps), and Claude Desktop the
+    # Store package's claude-desktop.exe, which a stand-in file in a package folder of its own plays,
+    # beside the assets folder the icon is made from. Nothing is opened.
+
+    def windows_claude(self, assets=True):
+        """A stand-in package: app\\claude-desktop.exe, and assets\\ with Claude's orange at each size."""
+        package = os.path.join(self.apps, "Claude")
+        self.claude = os.path.join(package, "app", "claude-desktop.exe")
+        write(self.claude, "not really Claude\n")
+        if assets:
+            os.makedirs(os.path.join(package, "assets"))
+            for size in (16, 24, 32, 48, 256):
+                write_png(os.path.join(package, "assets", "Square44x44Logo.targetsize-%d_altform-unplated.png" % size),
+                          size, (230, 120, 40, 255))
+        return package
+
+    def shortcut(self, path):
+        """A shortcut's fields, as Windows' own WScript.Shell reads them back."""
+        script = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:LNK); "
+                  "[pscustomobject]@{target=$s.TargetPath; arguments=$s.Arguments; description=$s.Description; "
+                  "icon=$s.IconLocation} | ConvertTo-Json")
+        p = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                           env=dict(os.environ, LNK=path), capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return json.loads(p.stdout)
+
+    def ico_pixel(self, path, size, x, y):
+        """A pixel of the image of that size in an .ico of PNG images."""
+        with open(path, "rb") as fh:
+            data = fh.read()
+        self.assertEqual(data[:4], b"\x00\x00\x01\x00")
+        count = struct.unpack("<H", data[4:6])[0]
+        for i in range(count):
+            width, _, _, _, _, _, length, offset = struct.unpack("<BBBBHHII", data[6 + 16 * i:22 + 16 * i])
+            if (width or 256) == size:
+                with tempfile.TemporaryDirectory() as tmp:
+                    png = os.path.join(tmp, "x.png")
+                    with open(png, "wb") as fh:
+                        fh.write(data[offset:offset + length])
+                    return png_pixel(png, x, y)
+        self.fail("no %d px image in %s" % (size, path))
+
+    @unittest.skipUnless(WINDOWS, "Windows only")
+    def test_windows_make_list_and_remove(self):
+        self.windows_claude()
+        code, out = self.desktop("new", "work", "Work")
+        lnk, data = os.path.join(self.apps, "Claude Work.lnk"), os.path.join(self.instances, "work")
+        icon = os.path.join(self.h.home, "AppData", "Roaming", "hatcheck", "icons", "Claude Work.ico")
+        self.assertEqual((code, out), (0, "✓ Made %s.\nIts data folder is %s: sign in there once, on first launch.\n"
+                                          "Open it from the Start menu, or with: hatcheck desktop open work\n" % (lnk, data)))
+        self.assertEqual(self.shortcut(lnk), {"target": self.claude, "arguments": '--user-data-dir="%s"' % data,
+                                              "description": "Claude Desktop instance work, made by hatcheck",
+                                              "icon": icon + ",0"})
+        self.assertEqual(self.ico_pixel(icon, 32, 5, 5), (230, 120, 40, 255))  # no --hue: Claude's own colours
+        code, out = self.desktop("--json")
+        self.assertEqual(json.loads(out), {"version": 1, "instances": [
+            {"name": "work", "display": "Work", "app": lnk, "data_dir": data, "legacy": False, "running": False}]})
+        self.assertEqual(self.desktop(), (0, "  %-20s %-12s %s\n" % ("Work", "work", lnk)))
+        self.assertEqual(self.desktop("new", "work", "Work"), (1, "%s exists already; --replace rebuilds it\n" % lnk))
+        # --replace with a colour: the shortcut stays, its icon turns blue.
+        code, out = self.desktop("new", "work", "Work", "--hue", "190", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with a recoloured icon", out)
+        # Orange turned 190 degrees, by Pillow's arithmetic: the blue the macOS icon gets, exactly.
+        self.assertEqual(self.ico_pixel(icon, 32, 5, 5), (41, 121, 230, 255))
+        self.assertEqual(self.ico_pixel(icon, 256, 100, 100), (41, 121, 230, 255))
+        # Someone else's shortcut that starts with Claude isn't an instance.
+        script = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:LNK); "
+                  "$s.TargetPath = $env:LNK_TARGET; $s.Description = 'Claude'; $s.Save()")
+        other = os.path.join(self.apps, "Claude.lnk")
+        subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                       env=dict(os.environ, LNK=other, LNK_TARGET=self.claude), check=True)
+        self.assertTrue(os.path.isfile(other))
+        self.assertEqual([i["name"] for i in json.loads(self.desktop("--json")[1])["instances"]], ["work"])
+        os.makedirs(data)
+        self.assertEqual(self.desktop("remove", "work"),
+                         (0, "✓ Removed %s.\nIts data folder, %s, is kept; --data deletes it too.\n" % (lnk, data)))
+        self.assertTrue(os.path.isdir(data))
+        self.assertFalse(os.path.exists(lnk) or os.path.exists(icon))  # the icon goes with it
+        self.desktop("new", "work", "Work")
+        self.assertEqual(self.desktop("remove", "Work", "--data"), (0, "✓ Removed %s, and its data folder.\n" % lnk))
+        self.assertFalse(os.path.exists(data))
+        self.assertTrue(os.path.isfile(other))
+        self.assertEqual(self.desktop("open", "nosuch"), (1, "No Claude Desktop instance named nosuch; hatcheck desktop lists them\n"))
+
+    @unittest.skipUnless(WINDOWS, "Windows only")
+    def test_windows_names_and_the_default_instance(self):
+        missing = os.path.join(self.apps, "Nope", "claude-desktop.exe")
+        self.assertEqual(self.desktop("new", "x", "X", claude=missing),
+                         (1, "Claude Desktop isn't at %s; install it from https://claude.com/download\n" % missing))
+        self.windows_claude(assets=False)
+        for display in ("A:B", "Who?", "Dot."):
+            self.assertEqual(self.desktop("new", "x", display),
+                             (1, "The display name can't hold \\ : * ? \" < > | or end with a dot: not %r\n" % display))
+        # No artwork to make an icon from: the shortcut has none of its own, and says so for a colour.
+        code, out = self.desktop("new", "x", "X", "--hue", "110")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the stock icon (it couldn't be recoloured)", out)
+        self.assertEqual(self.shortcut(os.path.join(self.apps, "Claude X.lnk"))["icon"], ",0")
+        code, out = self.desktop("new", "default", "Default")
+        self.assertEqual((code, out.splitlines()[1]), (0, "It runs Claude's built-in data folder, as the stock Claude icon does."))
+        lnk = os.path.join(self.apps, "Claude Default.lnk")
+        self.assertEqual(self.shortcut(lnk)["arguments"], "")
+        self.assertEqual([(i["name"], i["data_dir"]) for i in json.loads(self.desktop("--json")[1])["instances"]],
+                         [("default", None), ("x", os.path.join(self.instances, "x"))])
 
     def made_by_0_5_0(self, name, display):
         """A launcher as hatcheck 0.5.0 made one for a name it took then, such as '..': made for

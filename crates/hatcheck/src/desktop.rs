@@ -1,12 +1,14 @@
-//! hatcheck desktop ...: Claude Desktop instances on macOS, one per account, each with its own
-//! data folder and login, behind a launcher app of its own colour, as docs/desktop-instances.md
-//! describes them.
+//! hatcheck desktop ...: Claude Desktop instances on macOS and Windows, one per account, each
+//! with its own data folder and login, behind a launcher of its own colour, as
+//! docs/desktop-instances.md describes them. On macOS the launcher is an app; on Windows a Start
+//! menu shortcut, made and read by desktop_windows.rs.
 //!
 //! The launcher's icon is Claude's with its hues turned and its saturation scaled, done here
 //! with Pillow's own arithmetic for RGB and HSV, so it comes out as the Python version, which
 //! used Pillow, made it.
 
 use crate::args::{Count, Parser};
+use crate::desktop_windows as win;
 use crate::ospath::{self, Part};
 use crate::out;
 use crate::paths;
@@ -96,19 +98,50 @@ fn instances_dir() -> String {
     ospath::join(&paths::home(), ".claude-instances")
 }
 
+fn env(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
 /// Where Claude Desktop is and where launchers go; the tests point both at a folder of their own.
+/// On Windows Claude Desktop is the program a launcher runs: the Microsoft Store package's alias,
+/// claude-desktop.exe, which stays put when an update moves the package, or else the older
+/// installer's claude.exe.
 fn claude_app() -> String {
-    std::env::var("HATCHECK_CLAUDE_APP")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| "/Applications/Claude.app".into())
+    if let Some(app) = env("HATCHECK_CLAUDE_APP") {
+        return app;
+    }
+    if !ospath::WINDOWS {
+        return "/Applications/Claude.app".into();
+    }
+    let local = env("LOCALAPPDATA")
+        .unwrap_or_else(|| ospath::join_all(&paths::home(), &["AppData", "Local"]));
+    let alias = ospath::join_all(&local, &["Microsoft", "WindowsApps", "claude-desktop.exe"]);
+    let installer = ospath::join_all(&local, &["AnthropicClaude", "claude.exe"]);
+    if !ospath::lexists(&alias) && ospath::isfile(&installer) {
+        return installer;
+    }
+    alias
 }
 
 fn apps_dir() -> String {
-    std::env::var("HATCHECK_APPS_DIR")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| "/Applications".into())
+    if let Some(dir) = env("HATCHECK_APPS_DIR") {
+        return dir;
+    }
+    if !ospath::WINDOWS {
+        return "/Applications".into();
+    }
+    let roaming =
+        env("APPDATA").unwrap_or_else(|| ospath::join_all(&paths::home(), &["AppData", "Roaming"]));
+    ospath::join_all(
+        &roaming,
+        &["Microsoft", "Windows", "Start Menu", "Programs"],
+    )
+}
+
+/// Where a Windows launcher's icon is kept: in hatcheck's own folder, where an update of
+/// Claude's, which moves its package, can't take it away.
+fn icons_dir() -> String {
+    ospath::join(&paths::config_dir(), "icons")
 }
 
 fn read_plist(path: &str) -> Option<plist::Dictionary> {
@@ -138,10 +171,16 @@ pub struct Instance {
     pub data_dir: Option<String>,
     pub legacy: bool,
     pub running: bool,
+    /// A Windows launcher's icon, which goes with it.
+    pub icon: Option<String>,
 }
 
-/// The launcher apps: ours, and those the old script made.
+/// The launchers: on macOS the apps, ours and those the old script made; on Windows the Start
+/// menu shortcuts whose Description names an instance of ours.
 pub fn instances() -> Vec<Instance> {
+    if ospath::WINDOWS {
+        return windows_instances();
+    }
     let folders = [apps_dir(), ospath::join(&paths::home(), "Applications")];
     let mut apps: Vec<String> = folders
         .iter()
@@ -179,6 +218,49 @@ pub fn instances() -> Vec<Instance> {
             data_dir,
             legacy,
             running: false,
+            icon: None,
+        });
+    }
+    found
+}
+
+fn windows_instances() -> Vec<Instance> {
+    let mut links = ospath::glob(&apps_dir(), &[Part::Wild("Claude ", ".lnk")]);
+    links.sort();
+    let mut found = Vec::new();
+    for link in links {
+        let Some(shortcut) = fs::read(&link).ok().and_then(|d| win::read_shortcut(&d)) else {
+            continue;
+        };
+        let Some(name) = shortcut.description.as_deref().and_then(win::instance_of) else {
+            continue; // a shortcut of someone else's
+        };
+        let data_dir = shortcut
+            .arguments
+            .as_deref()
+            .and_then(|a| win::user_data_dir(&win::split_command_line(a)))
+            .or_else(|| (name != "default").then(|| ospath::join(&instances_dir(), name)));
+        let icon = shortcut.icon.as_deref().map(|i| {
+            // "path,index", as IconLocation keeps it.
+            i.rsplit_once(',')
+                .filter(|(_, n)| n.parse::<i32>().is_ok())
+                .map_or(i, |(p, _)| p)
+                .to_string()
+        });
+        let base = ospath::basename(&link);
+        let display = base
+            .strip_prefix("Claude ")
+            .and_then(|b| b.strip_suffix(".lnk"))
+            .unwrap_or(&base)
+            .to_string();
+        found.push(Instance {
+            name: name.to_string(),
+            display,
+            app: link,
+            data_dir,
+            legacy: false,
+            running: false,
+            icon,
         });
     }
     found
@@ -187,6 +269,18 @@ pub fn instances() -> Vec<Instance> {
 /// Mark each instance running or not, from its main process: Claude Desktop's own process with
 /// that --user-data-dir (none for the default instance), not one of its helpers.
 fn mark_running(found: &mut [Instance]) {
+    if ospath::WINDOWS {
+        let folders = win::running_folders(&win::claude_processes());
+        for inst in found.iter_mut() {
+            inst.running = match &inst.data_dir {
+                Some(dir) => folders
+                    .iter()
+                    .any(|f| f.as_deref().is_some_and(|f| win::same_dir(f, dir))),
+                None => folders.iter().any(Option::is_none),
+            };
+        }
+        return;
+    }
     let out = Command::new("ps")
         .args(["-axww", "-o", "command="])
         .output()
@@ -315,17 +409,35 @@ fn read_png(path: &Path) -> Option<(u32, u32, Vec<u8>)> {
     Some((info.width, info.height, rgba))
 }
 
+fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Option<Vec<u8>> {
+    let mut data = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut data, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().ok()?;
+        writer.write_image_data(rgba).ok()?;
+        writer.finish().ok()?;
+    }
+    Some(data)
+}
+
 fn write_png(path: &Path, width: u32, height: u32, rgba: &[u8]) -> bool {
-    let Ok(file) = fs::File::create(path) else {
-        return false;
-    };
-    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), width, height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder
-        .write_header()
-        .and_then(|mut w| w.write_image_data(rgba))
-        .is_ok()
+    encode_png(width, height, rgba).is_some_and(|data| fs::write(path, data).is_ok())
+}
+
+/// Turn every pixel's hue by hue degrees and scale its saturation, in place.
+fn recolour_rgba(rgba: &mut [u8], hue: f64, saturation: f64) {
+    let shift = (py::round(hue / 360.0 * 256.0) as i64).rem_euclid(256) as u16;
+    for px in rgba.as_chunks_mut::<4>().0 {
+        let (hh, ss, vv) = rgb2hsv(px[0], px[1], px[2]);
+        let hh = ((u16::from(hh) + shift) % 256) as u8;
+        let ss = (py::round(f64::from(ss) * saturation).clamp(0.0, 255.0)) as u8;
+        let (r, g, b) = hsv2rgb(hh, ss, vv);
+        px[0] = r;
+        px[1] = g;
+        px[2] = b;
+    }
 }
 
 /// A folder of its own under the system's temporary folder, deleted when dropped.
@@ -373,7 +485,6 @@ pub fn recolour(src: &str, dst: &str, hue: f64, saturation: f64) -> bool {
     if ospath::which("iconutil").is_none() {
         return false;
     }
-    let shift = (py::round(hue / 360.0 * 256.0) as i64).rem_euclid(256) as u16;
     let Ok(tmp) = TempDir::new("hatcheck-icon-") else {
         return false;
     };
@@ -388,15 +499,7 @@ pub fn recolour(src: &str, dst: &str, hue: f64, saturation: f64) -> bool {
         let Some((w, h, mut rgba)) = read_png(path) else {
             continue;
         };
-        for px in rgba.as_chunks_mut::<4>().0 {
-            let (hh, ss, vv) = rgb2hsv(px[0], px[1], px[2]);
-            let hh = ((u16::from(hh) + shift) % 256) as u8;
-            let ss = (py::round(f64::from(ss) * saturation).clamp(0.0, 255.0)) as u8;
-            let (r, g, b) = hsv2rgb(hh, ss, vv);
-            px[0] = r;
-            px[1] = g;
-            px[2] = b;
-        }
+        recolour_rgba(&mut rgba, hue, saturation);
         write_png(path, w, h, &rgba);
     }
     quiet("iconutil", &["-c", "icns", &iconset_s, "-o", dst]) && ospath::isfile(dst)
@@ -453,6 +556,16 @@ pub fn make_instance(
             "The display name can't be empty, start with a dot or hold a slash: not {}",
             py::repr(&json!(display))
         ));
+    }
+    if ospath::WINDOWS {
+        // What a Windows file name can't hold, or end with.
+        if display.contains(['\\', ':', '*', '?', '"', '<', '>', '|']) || display.ends_with('.') {
+            return Err(format!(
+                "The display name can't hold \\ : * ? \" < > | or end with a dot: not {}",
+                py::repr(&json!(display))
+            ));
+        }
+        return make_shortcut(name, &display, hue, saturation, replace);
     }
     let claude = claude_app();
     if !ospath::isdir(&claude) {
@@ -546,6 +659,80 @@ pub fn make_instance(
     })
 }
 
+/// Move a file made in a temporary folder to where it goes, over one there already.
+fn put_in_place(built: &Path, to: &str) -> Result<(), String> {
+    if let Some(parent) = Path::new(to).parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    if ospath::lexists(to) {
+        fs::remove_file(to).map_err(|e| e.to_string())?;
+    }
+    if fs::rename(built, to).is_err() {
+        fs::copy(built, to).map_err(|e| e.to_string())?; // another volume
+    }
+    Ok(())
+}
+
+/// The Windows launcher: the Start menu shortcut Claude DISPLAY.lnk, running Claude Desktop with
+/// the instance's data folder, and its icon, Claude's own artwork from the Store package's
+/// assets, recoloured. Both are made in a temporary folder and put in place only once the
+/// shortcut reads back as made, so a failure leaves a launcher there already as it was.
+fn make_shortcut(
+    name: &str,
+    display: &str,
+    hue: f64,
+    saturation: f64,
+    replace: bool,
+) -> Result<Made, String> {
+    let claude = claude_app();
+    if !ospath::lexists(&claude) {
+        return Err(format!(
+            "Claude Desktop isn't at {claude}; install it from https://claude.com/download"
+        ));
+    }
+    let lnk = ospath::join(&apps_dir(), &format!("Claude {display}.lnk"));
+    if ospath::lexists(&lnk) && !replace {
+        return Err(format!("{lnk} exists already; --replace rebuilds it"));
+    }
+    let data_dir = (name != "default").then(|| ospath::join(&instances_dir(), name));
+    // The alias names the package's claude.exe, whose folder's parent has the assets.
+    let program = win::alias_target(&claude).unwrap_or_else(|| claude.clone());
+    let assets = ospath::join(&ospath::dirname(&ospath::dirname(&program)), "assets");
+    let turned = hue.rem_euclid(360.0) != 0.0 || saturation != 1.0;
+    let images: Vec<(u32, Vec<u8>)> = win::ICON_SIZES
+        .iter()
+        .filter_map(|size| {
+            let (w, h, mut rgba) =
+                read_png(Path::new(&ospath::join(&assets, &win::asset_name(*size))))?;
+            if turned {
+                recolour_rgba(&mut rgba, hue, saturation);
+            }
+            Some((*size, encode_png(w, h, &rgba)?))
+        })
+        .collect();
+    let tmp = TempDir::new("hatcheck-instance-").map_err(|e| e.to_string())?;
+    let icon = ospath::join(&icons_dir(), &format!("Claude {display}.ico"));
+    let built_icon = tmp.0.join("icon.ico");
+    let has_icon = !images.is_empty() && fs::write(&built_icon, win::ico(&images)).is_ok();
+    let built = tmp.0.join("launcher.lnk");
+    win::write_shortcut(
+        &built.to_string_lossy(),
+        &claude,
+        &win::arguments_for(data_dir.as_deref()),
+        &win::description(name),
+        has_icon.then_some(icon.as_str()),
+    )?;
+    if has_icon {
+        put_in_place(&built_icon, &icon)?;
+    }
+    put_in_place(&built, &lnk)?;
+    Ok(Made {
+        app: lnk,
+        data_dir,
+        recoloured: turned && has_icon,
+    })
+}
+
 /// Whether dir is a folder of its own in instances, the only kind of data folder remove --data
 /// deletes. A launcher can name any folder: one hatcheck 0.5.0 made for the name .. had the
 /// home folder, and the old script's take their name from a config.sh.
@@ -564,7 +751,18 @@ pub fn remove_instance(inst: &Instance, data: bool) -> Result<bool, String> {
             "Nothing was removed: its data folder, {dir}, isn't a folder of its own in {instances}, so --data won't delete it. Without --data, only the launcher is removed."
         ));
     }
-    fs::remove_dir_all(&inst.app).map_err(|e| e.to_string())?;
+    if ospath::isdir(&inst.app) {
+        fs::remove_dir_all(&inst.app).map_err(|e| e.to_string())?;
+    } else {
+        fs::remove_file(&inst.app).map_err(|e| e.to_string())?;
+    }
+    // A Windows launcher's icon goes with it, when it's one of hatcheck's own.
+    if let Some(icon) = inst.icon.as_deref().filter(|i| {
+        let (parent, _) = ospath::split(i);
+        ospath::isfile(i) && paths::same_folder(&parent, &icons_dir())
+    }) {
+        let _ = fs::remove_file(icon);
+    }
     if let Some(dir) = dir.filter(|d| ospath::isdir(d)) {
         fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
         return Ok(true);
@@ -574,6 +772,26 @@ pub fn remove_instance(inst: &Instance, data: bool) -> Result<bool, String> {
 
 fn as_json(inst: &Instance) -> Value {
     json!({"name": inst.name, "display": inst.display, "app": inst.app, "data_dir": inst.data_dir, "legacy": inst.legacy, "running": inst.running})
+}
+
+/// Start a Windows instance as its shortcut does, or bring it forward: Claude Desktop keeps one
+/// process per data folder, and a second launch on a folder that has one shows that one.
+fn open_on_windows(inst: &Instance) -> i32 {
+    let claude = claude_app();
+    if !ospath::lexists(&claude) {
+        return out::fail(&format!(
+            "Claude Desktop isn't at {claude}; install it from https://claude.com/download"
+        ));
+    }
+    if let Some(dir) = &inst.data_dir {
+        if let Err(e) = fs::create_dir_all(dir) {
+            return out::fail(&format!("Couldn't make its data folder, {dir}: {e}"));
+        }
+    }
+    match win::open_shortcut(&inst.app) {
+        Ok(()) => 0,
+        Err(message) => out::fail(&message),
+    }
 }
 
 /// Python's float(text) for --hue and --saturation.
@@ -589,10 +807,10 @@ fn float_arg(parser: &Parser, name: &str, text: Option<&str>, default: f64) -> R
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Claude Desktop instances on macOS: one per account, each with its own data folder and a launcher of its own colour.")
+    let parser = Parser::new(prog, "Claude Desktop instances on macOS and Windows: one per account, each with its own data folder and a launcher of its own colour.")
         .flag(&["-j", "--json"], "json", "list the instances as JSON")
         .subcommands("action", &[
-            ("new", "make an instance's launcher, /Applications/Claude DISPLAY.app"),
+            ("new", "make an instance's launcher: Claude DISPLAY in Applications, or the Start menu on Windows"),
             ("open", "start an instance, or bring it forward"),
             ("remove", "delete an instance's launcher"),
         ]);
@@ -606,7 +824,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let (new_parser, open_parser, remove_parser) = (
         Parser::new(&sub("new"), "")
             .positional("name", Count::One, "the instance: letters, digits, dots, underscores and dashes; default for Claude's built-in data folder")
-            .positional("display", Count::One, "what the launcher is called, as in Claude Work.app")
+            .positional("display", Count::One, "what the launcher is called, as in Claude Work")
             .option(&["--hue"], "hue", "DEG", "turn the icon's hues by this many degrees: about 110 green, 190 blue, 240 purple, -10 red")
             .option(&["--saturation"], "saturation", "X", "scale the icon's saturation (1.0 keeps it)")
             .flag(&["--replace"], "replace", "rebuild a launcher that exists"),
@@ -648,8 +866,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     } else {
         (0.0, 1.0)
     };
-    if !cfg!(target_os = "macos") {
-        return out::fail("Claude Desktop instances are macOS only for now");
+    if !cfg!(any(target_os = "macos", windows)) {
+        return out::fail("Claude Desktop instances are macOS and Windows only for now");
     }
     match action.as_deref() {
         Some("new") => {
@@ -677,17 +895,28 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 Some(dir) => out::println(&format!(
                     "Its data folder is {dir}: sign in there once, on first launch."
                 )),
+                // Claude Desktop on Windows keeps one process per folder itself, so the stock
+                // icon and this one bring the same process forward.
+                None if ospath::WINDOWS => out::println(
+                    "It runs Claude's built-in data folder, as the stock Claude icon does.",
+                ),
                 None => out::warn(
                     "It runs Claude's built-in data folder; don't also use the stock Claude icon.",
                 ),
             }
             out::println(&format!(
-                "Open it from Launchpad, or with: {}",
+                "Open it from {}, or with: {}",
+                if ospath::WINDOWS {
+                    "the Start menu"
+                } else {
+                    "Launchpad"
+                },
                 paint.command(&format!("hatcheck desktop open {name}"))
             ));
             0
         }
         Some("open") => match find_instance(sub_args.value("name").unwrap_or(""), &instances()) {
+            Ok(inst) if ospath::WINDOWS => open_on_windows(&inst),
             // The launcher brings a running instance forward instead of starting another.
             Ok(inst) => Command::new("open")
                 .args(["-a", &inst.app])

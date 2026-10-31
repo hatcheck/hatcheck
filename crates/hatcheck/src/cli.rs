@@ -69,7 +69,8 @@ Usage:
                                        --wait sleeps until one has room
     hatcheck bind PROFILE ...          tie a folder to a profile, for cl, cx, ck and the list
     hatcheck unbind [FOLDER]           untie it again
-    hatcheck desktop ...               Claude Desktop instances on macOS: list, open, make one
+    hatcheck desktop ...               Claude Desktop instances on macOS and Windows: list,
+                                       open, make one
     hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
                                        claude-k, cl -z and cl -k
     hatcheck doctor                    every copy of hatcheck and the agents on your PATH,

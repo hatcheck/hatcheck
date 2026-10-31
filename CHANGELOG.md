@@ -6,6 +6,10 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 
 ## Unreleased
 
+### Added
+
+- **Claude Desktop instances on Windows.** `hatcheck desktop new NAME DISPLAY --hue DEG` makes `Claude DISPLAY` in the Start menu, a shortcut that runs Claude Desktop (the Microsoft Store version) on `~\.claude-instances\NAME`, with Claude's icon recoloured; `hatcheck desktop` lists them and which are running, and `open` and `remove` work as on macOS. Claude Desktop keeps one process per data folder on Windows itself, so a second click brings the running one forward. A second account signing in inside an instance, beside the first, was checked with Claude Desktop 4.4212. The desktop app's Desktop tab shows on Windows too.
+
 ### Fixed
 
 - **Antigravity CLI 1.4.10's usage reads right.** Its `/usage` now answers with a bucket per model and effort tier (`Gemini 4 Argon (High)`, `(Medium)`, `(Low)`, …), with no window and the epoch as the reset time of a limit nothing has been spent from, which hatcheck took for a reset that had already passed and showed as `?` for every one. Each is read as a limit with nothing used and no reset ahead; a bucket is named by its own name, without the group's.
