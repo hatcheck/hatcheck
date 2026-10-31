@@ -50,6 +50,14 @@ entry after the exact `CLAUDE_CONFIG_DIR` string, so `~/.claude-a` and `/Users/m
 are two logins. `cl` always spells it `~/.claude-<name>` expanded the same way.
 - Evidence: docs/agents.md, "`cl`: run Claude Code with a profile"; `cl` in `launch.rs`.
 
+**A folder someone names is matched as the agents record it, through its links.** An agent
+records the folder it runs in as the system resolves it, so one started in macOS's `/tmp` says it
+ran in `/private/tmp`, and `config.toml`'s own example, `folders = ["/tmp"]`, hid nothing there.
+- Evidence: 2026-10-31, a session recorded under `/private/tmp` was listed with `/tmp` ignored;
+  `through_links` and `leaves_out` in `config.rs`, and
+  `test_a_folder_named_through_a_link_is_left_out_too` in `tests/test_config.py`.
+- Seen 1× (2026-10-31).
+
 **Signed content is never rewritten.** Claude's thinking blocks carry a signature over their
 text; a path repointed inside one makes the next account reject the session.
 - Evidence: `repoint` in `move_cmd.rs` leaves `thinking` and `redacted_thinking` blocks alone;
@@ -194,13 +202,10 @@ canonical file stays an empty conversation; display rows are never merged to inv
   canonical history separate.
 - Seen 1× (2026-10-24).
 
-**A failed read means unknown, never empty.** A snapshot's limit that has reset since it was
-saved is shown as `?`, not as 100% or 0%; usage that couldn't be fetched is shown as cached with
-its age and the reason, never as fresh.
-- Evidence: `percent_left` returning `None` in `usage.rs`; `why` on every cached account. And
-  2026-10-24: `rank` in `best.rs` took a body with no limits it could read for an account with
-  room, so `hatcheck best` recommended it; it's `NO_DATA` now.
-- Seen 2× (2026-10-24).
+A failed read means unknown, never empty, seen three times (`percent_left` in `usage.rs`; `rank`
+in `best.rs`, 2026-10-24; and 2026-10-31, `hatcheck unbind --hook` and `hatcheck doctor`, which said
+no hook was left while they hadn't looked in the homes of an agent `config.toml` leaves out), is a
+standard in [AGENTS.md](../AGENTS.md) now.
 
 **An agent's new version is checked when it comes out, not when something breaks.** The tests
 read fixtures shaped like the versions they were written against, so they pass whatever an agent
@@ -239,16 +244,20 @@ naming the old folder, was then where neither that run nor the undo command look
   check before anything moves for the data folder too.
 - Seen 1× (2026-10-24).
 
-**A rule about which agents exist is applied wherever their homes are found, and the test that
-pins it runs every command.** An agent's homes are found in three places: `paths::find_*` for
-the list, `best`, `open`, `move` and `relocate`; `usage::find_profiles` and `find_codex_homes`
+**A rule about which agents exist is applied wherever their homes are found or named, and the
+test that pins it runs every command.** An agent's homes are found in three places: `paths::find_*`
+for the list, `best`, `open`, `move` and `relocate`; `usage::find_profiles` and `find_codex_homes`
 for `usage`, which also take a folder with a login and no sessions; and `where`'s own search of
 `~/.codex*`. `config.toml`'s `ignore.agents` guarded the first, and `hat usage` and `hat where`
-still found Codex.
+still found Codex. A home named on the command line, `codex:work` or `--from codex`, goes through
+`find::place` instead, which no rule guarded, so `hat move` would still carry a session into a
+Codex home the file left out.
 - Evidence: 2026-10-29, `test_an_agent_left_out_is_looked_for_nowhere` in `tests/test_config.py`,
   which runs the list, `usage` and `where`; `unless_ignored` in `paths.rs`, and the guards in
-  `usage.rs` and `where_cmd.rs`.
-- Seen 1× (2026-10-29).
+  `usage.rs` and `where_cmd.rs`. 2026-10-31, `test_an_agent_left_out_isnt_reached_by_name_either`
+  in the same file, which names one to `move`, `fork`, `show`, `open`, `best` and `bind`;
+  `place_seen` in `find.rs`.
+- Seen 2× (2026-10-29, 2026-10-31).
 
 **On Windows, an app hatcheck starts for the user is opened through the shell, never as a child
 process.** A child started with `Command` inherits every inheritable handle hatcheck has, its

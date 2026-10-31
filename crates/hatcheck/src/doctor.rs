@@ -494,7 +494,11 @@ fn examine() -> Report {
         found => found,
     };
     let mut agents = Vec::new();
-    for agent in Agent::ALL {
+    // An agent config.toml leaves out isn't looked for here either; the config's lines say so.
+    for agent in Agent::ALL
+        .into_iter()
+        .filter(|a| !crate::config::ignores(*a))
+    {
         let copies: Vec<AgentCopy> = find(agent.program())
             .into_iter()
             .map(|f| {
@@ -814,6 +818,10 @@ fn describe(r: &Report) {
                 state
             ));
         }
+    }
+    let unseen = bind::hook_agents_left_out();
+    if !unseen.is_empty() {
+        out::println(&paint.p("2", &format!("  {}.", bind::hooks_unseen_note(&unseen))));
     }
     let config = crate::config::current();
     if config.found {

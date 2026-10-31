@@ -63,6 +63,10 @@ there.
 - `--json` output is stable: absolute paths, UTC times, no colours; fields can be added at any
   time, and `version` goes up only when one changes meaning or goes away.
 - `--dry-run` runs every check the real run does and writes nothing.
+- A read that failed, or a place not looked in, is unknown, never empty: a limit that has reset
+  since its snapshot is `?`, usage that couldn't be fetched is shown as cached with its age and the
+  reason, an account with no limits hatcheck can read has no data rather than room, and a report
+  that skipped an agent's folders says so rather than that they hold nothing.
 - Paths work on Windows too, where they have `\`, which JSON doubles, and either separator. A
   test compares a path with parsed values or `json.dumps(path)[1:-1]`, and expects this system's
   separator (`os.sep`, `ospath::SEP`); code that trims or splits a path someone typed takes `/` as

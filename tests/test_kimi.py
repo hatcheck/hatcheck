@@ -290,7 +290,7 @@ class KimiUsage(unittest.TestCase):
         home = h.kimi_home(signed_in=True)
         api = h.folder("code", "api")
         h.kimi_session(home, api, K, "Fix the uploader with kimi", 1)
-        code, out = h.run("sessions", "--all-folders", "--all-folders")
+        code, out = h.run("sessions", "--all-folders")
         self.assertEqual(code, 0, out)
         self.assertIn("kimi --session session_" + K, out)
         self.assertIn("No usage data (token expired; run kimi in this home to renew it): " + h.shown(home), out)

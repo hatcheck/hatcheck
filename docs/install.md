@@ -162,8 +162,8 @@ some of the names and not others. `hatcheck doctor` finds every copy, says how i
 pipx, Homebrew, cargo, winget, the release installer or a build from a clone, told by what each
 links to and by the version each prints) and which runs, and prints the line that removes each of
 the others, as in the table above. It changes nothing. It also lists every `claude`, `codex`, `agy`,
-`kimi`, `zcode`, `dsh`, `mcode`, `qwen`, `copilot` and `opencode` on your `PATH` with its version
-and where it came from, since `cl`, `cx`, `ck` and the resume, login or DSH web commands run the
+`kimi`, `zcode`, `dsh`, `mcode`, `qwen`, `copilot` and `opencode` on your `PATH`, but for the agents
+hatcheck's config file leaves out, with its version and where it came from, since `cl`, `cx`, `ck` and the resume, login or DSH web commands run the
 first one, and the hooks `hatcheck bind --hook` added, flagging one that runs a hatcheck that has
 gone, and hatcheck's own [config file](commands.md#configtoml-the-lists-defaults-and-what-to-leave-out),
 `~/.config/hatcheck/config.toml`, with what it sets, or that there is none. Doctor stays PATH-based: an installed `~/.minimax-code/bin/mcode` isn't found merely because

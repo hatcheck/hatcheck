@@ -1,10 +1,10 @@
 //! hatcheck's own config file: the session list's defaults, and the agents and folders to leave
-//! out. It's ~/.config/hatcheck/config.toml ($XDG_CONFIG_HOME's, or %APPDATA%\hatcheck\config.toml
-//! on Windows), beside the bindings, or the file HATCHECK_CONFIG names. cli.rs reads it before
-//! every subcommand, and a file that can't be read stops the command, since one silently ignored
-//! would seem to apply. It's a plain subset of TOML, read here: comments, [tables], and
-//! key = value with strings, numbers, booleans and arrays of them.
-//! docs/commands.md's `config.toml` section documents it.
+//! out, which every command leaves out whatever its flags. It's ~/.config/hatcheck/config.toml
+//! ($XDG_CONFIG_HOME's, or %APPDATA%\hatcheck\config.toml on Windows), beside the bindings, or
+//! the file HATCHECK_CONFIG names. cli.rs reads it before every subcommand, and a file that
+//! can't be read stops the command, since one silently ignored would seem to apply. It's a plain
+//! subset of TOML, read here: comments, [tables], and key = value with strings, numbers, booleans
+//! and arrays of them. docs/commands.md's `config.toml` section documents it.
 
 use crate::agent::Agent;
 use crate::ospath;
@@ -32,6 +32,10 @@ pub struct Config {
     /// folder it names and every folder under it.
     pub list_folders: Vec<String>,
     pub ignore_folders: Vec<String>,
+    /// The same patterns through the links in the part before their first wildcard, where that
+    /// differs: macOS's /tmp is /private/tmp, which is where an agent started in /tmp says it ran.
+    pub list_resolved: Vec<String>,
+    pub ignore_resolved: Vec<String>,
     pub ignore_agents: Vec<Agent>,
 }
 
@@ -92,10 +96,39 @@ pub fn ignores(agent: Agent) -> bool {
     with(|c| c.ignore_agents.contains(&agent))
 }
 
-/// Whether the file leaves a session's folder out of the list: not among the folders it lists,
-/// when it lists any, or among those it ignores, which win.
+/// Whether the file leaves a folder out: not among the folders it lists, when it lists any, or
+/// among those it ignores, which win.
 pub fn folder_left_out(folder: &str) -> bool {
     with(|c| c.leaves_out(folder))
+}
+
+/// Whether the file leaves any folder out, so a session's folder has to be known to show it.
+pub fn leaves_folders_out() -> bool {
+    with(|c| !c.list_folders.is_empty() || !c.ignore_folders.is_empty())
+}
+
+/// Whether the file leaves out a session started from cwd, which every command then acts as if
+/// it weren't there, whatever its flags. One with no folder recorded counts as in the home
+/// folder, under which the session list shows it.
+pub fn session_left_out(cwd: Option<&str>) -> bool {
+    leaves_folders_out()
+        && folder_left_out(
+            &cwd.filter(|c| !c.is_empty())
+                .map_or_else(paths::home, String::from),
+        )
+}
+
+/// The file as a message names it: ~/.config/hatcheck/config.toml, or the one HATCHECK_CONFIG
+/// names.
+pub fn shown_path() -> String {
+    let named = with(|c| c.path.clone());
+    paths::shell_path(&if named.is_empty() { path() } else { named })
+}
+
+/// What a command says when it's asked for an agent the file leaves out: hatcheck looks in
+/// none of its folders, even one named on the command line.
+pub fn agent_left_out(agent: Agent) -> String {
+    format!("{} leaves {} out", shown_path(), agent.name())
 }
 
 /// Whether a pattern names a folder, or one above it: the pattern's parts, with * for any run
@@ -148,11 +181,21 @@ fn wild_match(pattern: &str, text: &str) -> bool {
 }
 
 impl Config {
-    /// Whether a folder is left out of the list: see folder_left_out.
+    /// Whether a folder is left out: see folder_left_out. A pattern covers the folder as it's
+    /// recorded or through its links, as written or through its own.
     pub fn leaves_out(&self, folder: &str) -> bool {
-        let covered = |patterns: &[String]| patterns.iter().any(|p| pattern_covers(p, folder));
-        (!self.list_folders.is_empty() && !covered(&self.list_folders))
-            || covered(&self.ignore_folders)
+        if self.list_folders.is_empty() && self.ignore_folders.is_empty() {
+            return false;
+        }
+        let real = ospath::realpath(folder);
+        let covered = |patterns: &[String], resolved: &[String]| {
+            patterns
+                .iter()
+                .chain(resolved)
+                .any(|p| pattern_covers(p, folder) || pattern_covers(p, &real))
+        };
+        (!self.list_folders.is_empty() && !covered(&self.list_folders, &self.list_resolved))
+            || covered(&self.ignore_folders, &self.ignore_resolved)
     }
 
     /// What the file sets, a line each, for hatcheck doctor.
@@ -249,6 +292,28 @@ fn folder_patterns(value: &Value, setting: &str) -> Result<Vec<String>, String> 
         patterns.push(ospath::abspath(&ospath::expanduser(pattern)));
     }
     Ok(patterns)
+}
+
+/// Each pattern that leads somewhere else through a link in the part before its first wildcard,
+/// as it reads through that link: /tmp/* as /private/tmp/* on macOS.
+fn through_links(patterns: &[String]) -> Vec<String> {
+    patterns
+        .iter()
+        .filter_map(|pattern| {
+            let wild = pattern.find(['*', '?']).unwrap_or(pattern.len());
+            let end = if wild == pattern.len() {
+                wild
+            } else {
+                pattern[..wild].rfind(ospath::is_sep)?
+            };
+            let (fixed, rest) = pattern.split_at(end);
+            if fixed.is_empty() {
+                return None;
+            }
+            let real = ospath::realpath(fixed);
+            (real != fixed).then(|| format!("{real}{rest}"))
+        })
+        .collect()
 }
 
 /// The config a parsed file makes, or what's wrong with a setting.
@@ -349,11 +414,13 @@ fn from_table(table: &Map<String, Value>) -> Result<Config, String> {
             }
         }
     }
+    config.list_resolved = through_links(&config.list_folders);
+    config.ignore_resolved = through_links(&config.ignore_folders);
     Ok(config)
 }
 
 /// Items as a sentence lists them: a, b and c.
-fn and_list(items: &[&str]) -> String {
+pub(crate) fn and_list(items: &[&str]) -> String {
     match items.len() {
         0 => String::new(),
         1 => items[0].to_string(),
@@ -702,6 +769,32 @@ mod tests {
         ] {
             assert_eq!(config(text).unwrap_err(), error, "{text:?}");
         }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_pattern_covers_a_folder_through_a_link() {
+        // As /tmp leads to /private/tmp on macOS, where an agent started in /tmp says it ran.
+        let dir = std::env::temp_dir().join(format!("hatcheck-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("real").join("x")).unwrap();
+        std::os::unix::fs::symlink(dir.join("real"), dir.join("link")).unwrap();
+        let base = ospath::realpath(&dir.to_string_lossy());
+        let at = |p: &str| format!("{base}/{p}");
+        let ignoring = |pattern: &str| {
+            let ignore = vec![pattern.to_string()];
+            Config {
+                ignore_resolved: through_links(&ignore),
+                ignore_folders: ignore,
+                ..Default::default()
+            }
+        };
+        assert!(ignoring(&at("link")).leaves_out(&at("real/x")));
+        assert!(ignoring(&at("link/*")).leaves_out(&at("real/x")));
+        assert!(ignoring(&at("real")).leaves_out(&at("link/x")));
+        assert!(!ignoring(&at("link/y*")).leaves_out(&at("real/x")));
+        assert!(!ignoring(&at("link")).leaves_out(&base));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

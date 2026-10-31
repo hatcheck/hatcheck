@@ -49,6 +49,9 @@ the database, `data_folder` is `null` and `archived` comes from its row. Its ID 
 after `ses_`, which can be pasted along with it; resume it with `opencode --session ses_<id>` from
 its folder.
 
+A session in a folder [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out, or of an
+agent it leaves out, isn't found: `where` exits 1, as for an ID that matches nothing.
+
 ## `hatcheck`: what to resume
 
 `hat` is the short name: `hat`, `hat usage`, `hat move …` and so on work the same. `hat check` is the name
@@ -78,7 +81,9 @@ folder plain opencode uses, `~/.local/share/opencode` or `XDG_DATA_HOME`'s. Sess
 active in the last 24 hours or are still open, grouped by folder and
 newest first. Run from a folder that has sessions, it lists just that folder's; from one that has
 none, it prints hatcheck's help and says so, with how many sessions other folders have
-(`--all-folders` lists every folder's, from anywhere). Each one comes with the command that
+(`--all-folders` lists every folder's, from anywhere). The folders and agents
+[`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out never show, whatever the flags, and
+from a folder it leaves out, the help comes with a line saying so. Each one comes with the command that
 resumes it (for DSH, opens its web session history) and, on the line under it, what's left of
 that profile's plan:
 
@@ -394,6 +399,9 @@ Resume it now in ~/.claude-a? [y/N]
 - A session that's open in a terminal is refused: quit it first, so it stops changing. So is a
   move or copy onto a copy that's open in the profile it would go to, which would be written over
   while it's open (a fork has a new ID, and goes ahead). `hatcheck` marks those `● open`.
+- A session in a folder [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out isn't found,
+  so it isn't carried, and an agent it leaves out is no place to carry one to or take one from,
+  even named: `codex:work` or `--from codex` says the file leaves Codex out.
 - `hatcheck move`, with nothing, moves the newest session started from this folder to the best
   account of its agent now, the one [`hatcheck best`](#hatcheck-best-which-account-to-use-now)
   picks: the first with room in its ranking, other than the session's own. It says where the
@@ -874,7 +882,9 @@ Resume them from ~/code/api2. To undo: hatcheck relocate ~/code/api2 ~/code/api
 - It refuses, and changes nothing, when a session is open, was written in the last minute, is a
   link rather than a file, is already filed under the new folder (its subagent and tool-output
   folder included), or has a line naming the folder
-  that isn't JSON; and when NEW doesn't exist, is OLD, or is inside OLD. `--dry-run` shows what
+  that isn't JSON; and when NEW doesn't exist, is OLD, or is inside OLD; and when
+  [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves OLD out, which it says. A session in a
+  folder the file leaves out, under OLD, stays as it is and isn't listed. `--dry-run` shows what
   would move and what would be skipped, and changes nothing. Running it the other way round,
   `hatcheck relocate NEW OLD`, undoes it, byte for byte.
 - `--json` prints the sessions moved and skipped, the binding and the undo command, which names
@@ -896,7 +906,9 @@ cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
   including `DSH_HOME`, `MINIMAX_DATA_DIR`, `MAVIS_DATA_DIR`, `QWEN_HOME` and `COPILOT_HOME`, and in
   Antigravity CLI's, ZCode's and OpenCode's folders. When more than one profile has a copy, it takes
   the one used last; `--from <profile>`
-  picks one.
+  picks one. A session in a folder [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out
+  isn't found, nor is one of an agent it leaves out, which `--from` and `--login` refuse by name;
+  with no ID, from a folder the file leaves out, it says so.
 - The command is the one `hatcheck` prints: `cl` or `claude`, `cx` or `codex`, `agy --conversation`,
   `ck` or `kimi --session`, `zcode --resume`, `dsh web`, `mcode --session`, `qwen --resume`,
   `copilot --resume`, `opencode --session`, and
@@ -1016,6 +1028,9 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
   Antigravity conversation, a Kimi session, a ZCode session, a DeepSeek Harness session, a MiniMax
   Code session, a Qwen Code session, a GitHub Copilot CLI session or an OpenCode session is shown
   the same way, from its own file, log or rows.
+- It finds the session as [`hatcheck open`](#hatcheck-open-resume-a-session-in-a-new-terminal)
+  does, so never one in a folder or of an agent [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out)
+  leaves out.
 - A DSH session comes from the selected current v4 log, raw JSONL or concatenated Zstandard
   frames; an unsupported or corrupt newest generation isn't passed over for an older one. Its
   current surface supplies direct `source.kind=user` prompts, assistant text and tool calls, tool
@@ -1051,7 +1066,9 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
 
 The best account now, shown as `hatcheck usage` shows it, and the `hatcheck move` command that
 carries a session to it: the newest session started from this folder, or the one `--for` names.
-It's the account `hatcheck move` with nothing picks.
+It's the account `hatcheck move` with nothing picks. Neither session is ever one in a folder
+[`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out, and `--wait` refuses an agent it
+leaves out.
 
 ```console
 $ hatcheck best                   # in ~/code/api, where session 9a8b7c6d ran last
@@ -1163,6 +1180,10 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
   `--mcode`, `--qwen`, `--copilot` or `--opencode` replaces it.
 - `hatcheck` marks sessions that ran in a bound folder under another profile:
   `⚠ folder bound to ~/.claude-a`.
+- An agent [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out isn't bound or shown:
+  `--codex` and the others refuse it, and a binding keeps what it already says for it, untouched
+  and unshown. A folder the file leaves out can still be bound, as `cl`, `cx` and `ck` follow a
+  binding without reading the file.
 - `--hook` adds a `SessionStart` hook, `hatcheck bind --check`, to every profile's `settings.json`
   and every Codex home's `hooks.json`. When a session starts in a bound folder under another
   profile, it shows a warning and nothing is blocked:
@@ -1170,7 +1191,10 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
   and run cl a here instead.` For a resumed session it gives the `hatcheck move` command instead.
   The hook runs the `hatcheck` that `--hook` found on your `PATH`, by its path. Run `--hook` again
   after installing hatcheck another way, and it points the hooks at the new one. No hook is added
-  for kimi, zcode, DSH, mcode, qwen, copilot or opencode.
+  for kimi, zcode, DSH, mcode, qwen, copilot or opencode, or for an agent
+  [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out. A hook added there before stays
+  quiet, and `unbind --hook` and `hatcheck doctor` say they didn't look in its folders rather
+  than that it has none.
   - **Claude Code:** tested with the real `claude` (2.1.301). It shows the warning in the interactive
     UI; `claude -p` doesn't display it.
   - **Codex:** Codex runs a new hook only once you trust it with `/hooks` in `codex`, once per home.
@@ -1190,7 +1214,7 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
 hatcheck reads one config file of its own, `~/.config/hatcheck/config.toml` (`$XDG_CONFIG_HOME`'s,
 or `%APPDATA%\hatcheck\config.toml` on Windows), beside the bindings `hatcheck bind` keeps, or the
 file `HATCHECK_CONFIG` names. Without one, nothing changes. It sets what the session list does by
-default, and names agents and folders to leave out:
+default, and names agents and folders to leave out of every command:
 
 ```toml
 # What hat does by default; each setting has a flag that undoes it for one run.
@@ -1202,33 +1226,45 @@ per_folder = 3       # hat -n 3; -n 0 lists them all
 full = false         # CLAUDE_CONFIG_DIR=… claude … instead of cl; --no-full undoes it
 all_folders = false  # every folder, wherever hat runs; --this-folder undoes it
 usage = true         # false leaves plan usage out, as --no-usage does; --usage puts it back
-folders = ["~/repos/*"]   # only these folders; left out or empty, every folder
+folders = ["~/repos/*"]   # only these folders, for every command; left out or empty, every folder
 
 [ignore]
 agents = ["copilot", "opencode"]   # of claude, codex, agy, kimi, zcode, dsh, mcode, qwen, copilot, opencode
 folders = ["~/orca/workspaces/*", "/tmp"]   # never these, even among the ones listed
 ```
 
-- **Precedence is one line:** hatcheck's own defaults, then the file, then the command line. Every
-  setting the file can make has a flag that undoes it for one run, named above, so the file never
-  takes a choice away; a flag and its opposite together are refused.
+- **Precedence is one line:** hatcheck's own defaults, then the file, then the command line. Each
+  `[list]` setting but `folders` has a flag that undoes it for one run, named above, and a flag and
+  its opposite together are refused. The agents and folders the file leaves out are the exception:
+  no flag brings them back, `--all` and `--all-folders` included. To see them again, take them out
+  of the file.
 - **An agent left out is one hatcheck doesn't look for:** no command finds its profiles or homes,
-  so it's missing from the list and its heading, from `usage` and `best`, from `where`, and from
-  the profiles `move` and `fork` can carry a session to. `hatcheck doctor` still says which file
-  leaves it out.
-- **Folders are chosen both ways:** `[list] folders` names the only folders to list, and
-  `[ignore] folders` folders never to list, which wins where they overlap. A session in any other
-  folder is hidden, counted with the rest hidden (`Hidden: 5 by config (show with --all)`), so
-  nothing vanishes silently, and `--all` shows them. A pattern is a path, with `~`, `*` for any
-  part of a name and `?` for one character, and covers the folder it names and every folder under
-  it: `~/orca/workspaces` and `~/orca/workspaces/*` both mean everything there. Only the list
-  reads them: `where`, `show`, `open` and `resume` still find a session there by its ID.
+  even one named on the command line, so it's missing from the list and its heading, from `usage`
+  and `best`, from `where`, `show`, `open` and `resume`, and from the profiles `move` and `fork`
+  can carry a session to or take one from. Named, as in `codex:work`, `--from codex`,
+  `open --login codex`, `best --wait codex` or `bind --codex`, it's refused, and the message says
+  the file leaves it out. `hatcheck doctor` doesn't check its program either; its config lines say
+  which file leaves it out. A hook `bind --hook` added before stays quiet, and `unbind --hook` and
+  `doctor` say they didn't look in its folders, since they can't say it has none.
+- **Folders are chosen both ways:** `[list] folders` names the only folders to show, and
+  `[ignore] folders` folders never to show, which wins where they overlap. Every command acts as
+  if a session in any other folder weren't there, whatever its flags: the list doesn't show or
+  count it, even with `--all`, and `where`, `show`, `open`, `resume`, `best`, `move`, `fork` and
+  `relocate` don't find it, by its ID or from its folder. Run from such a folder, the list, `open`,
+  `resume` and `move` say the file leaves it out, as `relocate` does for an OLD it leaves out. A
+  session with no folder recorded counts as in the home folder, where the list shows it. A pattern is a path, with `~`, `*` for any part of a name and `?` for one character,
+  and covers the folder it names and every folder under it, reached through a link or not:
+  `~/orca/workspaces` and `~/orca/workspaces/*` both mean everything there, and `/tmp` covers
+  macOS's `/private/tmp`, where an agent started in `/tmp` says it ran. A folder left out can
+  still be bound with `hatcheck bind`, since `cl`, `cx` and `ck` don't read the file.
 - **The file is a plain subset of TOML,** read by hatcheck itself: comments, `[table]` headers,
   and `key = value` with `"strings"`, numbers, `true` or `false`, and arrays of them, over several
   lines where an array has to be. A file that can't be read, or that names a setting or an agent
   that doesn't exist, stops every command and says where (`hatcheck:
   ~/.config/hatcheck/config.toml, line 4: expected key = value`), since a file silently ignored
-  would seem to apply.
+  would seem to apply. Only `hatcheck --help`, `--version` and the launchers (`cl`, `cx`, `ck`,
+  `claude-z` and `claude-k`) run without reading it, so a mistake in it never keeps you from an
+  agent.
 - `hatcheck doctor` shows the file and what it sets, and its `--json` has it as `config`.
 
 ## `--json`: for scripts, status bars and apps

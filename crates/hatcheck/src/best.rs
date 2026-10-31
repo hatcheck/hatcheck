@@ -493,7 +493,10 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let waiting = match args.value("wait") {
         None => None,
         Some(spec) if !spec.is_empty() => {
-            let (agent, profile) = find::place(spec);
+            let (agent, profile) = match find::place_seen(spec) {
+                Ok(place) => place,
+                Err(why) => return out::fail(&why),
+            };
             Some(Waiting {
                 agent,
                 profile: Some(profile),

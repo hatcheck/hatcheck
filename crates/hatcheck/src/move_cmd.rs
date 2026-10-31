@@ -1361,7 +1361,7 @@ impl Target {
             Target::Fixed(agent, path) => vec![(*agent, path.clone())],
             Target::Bare(name) => Agent::ALL
                 .iter()
-                .filter(|a| a.has_profiles())
+                .filter(|a| a.has_profiles() && !crate::config::ignores(**a))
                 .map(|a| (*a, paths::profile_folder(*a, name)))
                 .collect(),
         }
@@ -1376,7 +1376,9 @@ impl Target {
                 let claude = paths::profile_folder(Agent::Claude, name);
                 if agent != Agent::Claude && agent.has_profiles() {
                     let own = paths::profile_folder(agent, name);
-                    match (ospath::isdir(&own), ospath::isdir(&claude)) {
+                    let claude_there =
+                        ospath::isdir(&claude) && !crate::config::ignores(Agent::Claude);
+                    match (ospath::isdir(&own), claude_there) {
                         (true, true) => return Err((own, claude)),
                         (true, false) => return Ok((agent, own)),
                         _ => {}
@@ -1473,6 +1475,12 @@ fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
     let mut copies: Vec<(Agent, String)> = Vec::new();
     if a.session.is_empty() {
         let Some(s) = crate::find::newest_here(&cwd, false) else {
+            if crate::config::session_left_out(Some(&cwd)) {
+                return Err(format!(
+                    "{} leaves this folder out. Give a session's ID: {prog} <session> <profile>",
+                    crate::config::shown_path()
+                ));
+            }
             return Err(format!(
                 "No session was started from this folder. Give its ID: {prog} <session> <profile>"
             ));
@@ -3133,6 +3141,17 @@ fn find_sessions(sources: &[(Agent, String)], prefix: &str) -> Vec<((Agent, Stri
             }
         }
     }
+    // A copy in a folder config.toml leaves out isn't there to carry, or to be in the way.
+    if crate::config::leaves_folders_out() {
+        for ((agent, _), places) in found.iter_mut() {
+            for (folder, files) in places.iter_mut() {
+                files.retain(|f| !crate::find::left_out(*agent, folder, f));
+            }
+            places.retain(|(_, files)| !files.is_empty());
+        }
+        found.retain(|(_, places)| !places.is_empty());
+        crate::facts::save_cache();
+    }
     found
 }
 
@@ -3149,6 +3168,14 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
     let show = paths::shell_path;
     out::setup_console();
     let wanted = Target::parse(&a.profile);
+    // An agent config.toml leaves out is no place to carry a session to, or to take one from.
+    for spec in std::iter::once(&a.profile).chain(&a.source) {
+        if let Target::Fixed(agent, _) = Target::parse(spec) {
+            if crate::config::ignores(agent) {
+                return Err(crate::config::agent_left_out(agent));
+            }
+        }
+    }
     // Look in every profile, home and folder but where it may go, or just in --from.
     let excluded: Vec<String> = wanted
         .candidates()
@@ -3240,6 +3267,9 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
             choose_target(agent, &a.profile, &own, &claude, report)?
         }
     };
+    if crate::config::ignores(target_agent) {
+        return Err(crate::config::agent_left_out(target_agent));
+    }
     if target_agent == Agent::Agy && agy::is_app_root(&target) {
         return Err(format!(
             "{} is the Antigravity app's folder, which only the app writes; convert the session for agy instead: {prog} {} agy",

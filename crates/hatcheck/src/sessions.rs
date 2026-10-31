@@ -1037,14 +1037,13 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let mut hidden: Vec<(String, usize)> = Vec::new();
     for key in &found.order {
         let s = found.by_key[key].1.clone();
-        if all {
-            shown.push(s);
+        // A folder config.toml leaves out, or doesn't list, stays out whatever the flags, and
+        // isn't counted: hatcheck acts as if its sessions weren't there.
+        if crate::config::session_left_out(s.cwd.as_deref()) {
             continue;
         }
-        // A folder config.toml leaves out, or doesn't list, counted with the rest hidden, which
-        // --all shows.
-        if s.cwd.as_deref().is_some_and(crate::config::folder_left_out) {
-            count_hidden(&mut hidden, "by config");
+        if all {
+            shown.push(s);
             continue;
         }
         let entrypoint = s.entrypoint_text();
@@ -1176,23 +1175,48 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         let me = prog.split(' ').next().unwrap_or(prog);
         crate::cli::print_help(me);
         out::println("");
-        let folder = std::env::current_dir()
-            .map(|d| paths::shell_path(&d.to_string_lossy()))
-            .unwrap_or_else(|_| ".".into());
+        let cwd = std::env::current_dir()
+            .ok()
+            .map(|d| d.to_string_lossy().into_owned());
+        let folder = cwd.as_deref().map_or_else(|| ".".into(), paths::shell_path);
         let window = format!("{}h", py::g(hours));
-        let others = match shown.len() {
-            0 => ", nor in any other folder".to_string(),
-            1 => format!("; 1 in another folder, which {prog} --all-folders lists"),
-            n => format!("; {n} in other folders, which {prog} --all-folders lists"),
+        // How many other folders have, said after a sentence that names sessions or one that
+        // doesn't.
+        let elsewhere = |named: bool| match shown.len() {
+            0 => None,
+            1 => Some(format!(
+                "1 {}in another folder, which {prog} --all-folders lists",
+                if named { "" } else { "session " }
+            )),
+            n => Some(format!(
+                "{n} {}in other folders, which {prog} --all-folders lists",
+                if named { "" } else { "sessions " }
+            )),
         };
-        let longer = if hours < 72.0 {
-            format!(" A longer window, e.g. {prog} 72, looks further back.")
+        if cwd.is_some() && crate::config::session_left_out(cwd.as_deref()) {
+            // Said as it is: no window or flag brings this folder's sessions back.
+            let others = elsewhere(false).map_or_else(
+                || format!(", and no other folder has sessions active in the last {window} or open now"),
+                |e| format!("; {e}"),
+            );
+            out::println(&format!(
+                "{} leaves {folder} out{others}.",
+                crate::config::shown_path()
+            ));
         } else {
-            String::new()
-        };
-        out::println(&format!(
-            "No sessions active in {folder} in the last {window} or open now{others}.{longer}"
-        ));
+            let others = elsewhere(true).map_or_else(
+                || ", nor in any other folder".to_string(),
+                |e| format!("; {e}"),
+            );
+            let longer = if hours < 72.0 {
+                format!(" A longer window, e.g. {prog} 72, looks further back.")
+            } else {
+                String::new()
+            };
+            out::println(&format!(
+                "No sessions active in {folder} in the last {window} or open now{others}.{longer}"
+            ));
+        }
         let notes = end_notes(0, &hidden, empty, unreadable);
         if !notes.is_empty() {
             out::println(&p("2", &notes.join("; ")));

@@ -1,6 +1,7 @@
 //! Finding sessions by ID or by folder, for hatcheck open, show and best: every copy of a
 //! session across the profiles and homes, the newest one started from a folder, and whether
-//! one is open, and the profile or home a PROFILE argument names.
+//! one is open, and the profile or home a PROFILE argument names. A session in a folder
+//! config.toml leaves out isn't found, nor is an agent's it leaves out.
 
 use crate::agent::Agent;
 use crate::facts::{self, Summary};
@@ -72,6 +73,25 @@ pub fn place(spec: &str) -> (Agent, String) {
         return (agent, path);
     }
     (Agent::Claude, paths::profile_folder(Agent::Claude, spec))
+}
+
+/// place, refused for an agent config.toml leaves out: hatcheck looks in none of its folders,
+/// even one named on the command line.
+pub fn place_seen(spec: &str) -> Result<(Agent, String), String> {
+    let (agent, folder) = place(spec);
+    if crate::config::ignores(agent) {
+        return Err(crate::config::agent_left_out(agent));
+    }
+    Ok((agent, folder))
+}
+
+/// Whether config.toml leaves out the folder a session was started from, so hatcheck acts as
+/// if the session weren't there: `file` is the session as session_copies gives it. Nothing is
+/// read when the file leaves no folder out.
+pub fn left_out(agent: Agent, home: &str, file: &str) -> bool {
+    crate::config::leaves_folders_out()
+        && facts::summarize(agent, home, file)
+            .is_some_and(|s| crate::config::session_left_out(s.cwd.as_deref()))
 }
 
 /// A session's copies: its (agent, ID), and each (profile or home, file) that has one.
@@ -169,6 +189,15 @@ pub fn session_copies(prefix: &str) -> Vec<Copies> {
             add((Agent::Opencode, x.row.id), (home.clone(), reference));
         }
     }
+    // A copy in a folder config.toml leaves out isn't there, for every command that finds a
+    // session by its ID.
+    if crate::config::leaves_folders_out() {
+        for ((agent, _), places) in found.iter_mut() {
+            places.retain(|(home, file)| !left_out(*agent, home, file));
+        }
+        found.retain(|(_, places)| !places.is_empty());
+        facts::save_cache();
+    }
     found
 }
 
@@ -181,7 +210,8 @@ pub fn codex_cwd(path: &str) -> Option<String> {
 }
 
 /// The newest session started from folder, in any profile or home, or None. Only terminal
-/// sessions, as the list shows by default, unless everything.
+/// sessions, as the list shows by default, unless everything; none from a folder config.toml
+/// leaves out, whatever everything says.
 pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
     let here = ospath::realpath(folder);
     let mut best: Option<Summary> = None;
@@ -192,6 +222,7 @@ pub fn newest_here(folder: &str, everything: bool) -> Option<Summary> {
                 .is_some_and(|c| !c.is_empty() && paths::same_folder(c, &here))
             && s.entrypoint_text() != "subagent"
             && (everything || s.entrypoint_text() == "cli")
+            && !crate::config::session_left_out(s.cwd.as_deref())
             && best.as_ref().is_none_or(|b| s.when > b.when)
     };
     let mut names = vec![paths::encode_project(folder)];

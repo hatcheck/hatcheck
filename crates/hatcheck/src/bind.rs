@@ -50,9 +50,11 @@ fn name_of(agent: Agent, spec: &str) -> (String, String) {
     (path.clone(), path)
 }
 
+/// What a binding binds, but for the agents config.toml leaves out, which aren't shown.
 fn describe(binding: &Value) -> String {
     let parts: Vec<String> = Agent::ALL
         .iter()
+        .filter(|agent| !crate::config::ignores(**agent))
         .filter_map(|agent| {
             let name = s(get(binding, agent.key())).filter(|n| !n.is_empty())?;
             Some(format!(
@@ -67,6 +69,51 @@ fn describe(binding: &Value) -> String {
     } else {
         parts.join(" · ")
     }
+}
+
+/// Whether a binding binds any agent config.toml doesn't leave out: one that binds only those
+/// it leaves out is, for hatcheck, no binding.
+fn binds_any(binding: &Value) -> bool {
+    Agent::ALL.iter().any(|agent| {
+        !crate::config::ignores(*agent)
+            && s(get(binding, agent.key())).is_some_and(|n| !n.is_empty())
+    })
+}
+
+/// The agents --hook would reach that config.toml leaves out: hatcheck doesn't look in their
+/// folders, for a hook or anything else.
+pub fn hook_agents_left_out() -> Vec<Agent> {
+    [Agent::Claude, Agent::Codex, Agent::Agy]
+        .into_iter()
+        .filter(|agent| crate::config::ignores(*agent))
+        .collect()
+}
+
+/// What a report of the hooks adds when config.toml leaves some of their agents out: that
+/// their folders weren't looked in, so it can't say they have none.
+pub fn hooks_unseen_note(left_out: &[Agent]) -> String {
+    let names: Vec<&str> = left_out.iter().map(|a| a.name()).collect();
+    format!(
+        "{} leaves {} out, so {} folders weren't looked in",
+        crate::config::shown_path(),
+        crate::config::and_list(&names),
+        if left_out.len() == 1 { "its" } else { "their" }
+    )
+}
+
+/// The agents --hook reaches, as its messages name them: Claude Code, Codex and agy, but for
+/// those config.toml leaves out.
+fn hook_names() -> String {
+    let names: Vec<&str> = [
+        (Agent::Claude, "Claude Code"),
+        (Agent::Codex, "Codex"),
+        (Agent::Agy, "agy"),
+    ]
+    .into_iter()
+    .filter(|(agent, _)| !crate::config::ignores(*agent))
+    .map(|(_, name)| name)
+    .collect();
+    crate::config::and_list(&names)
 }
 
 /// The JSON object in a settings file ({} when there's no file), or why it can't be used.
@@ -363,6 +410,23 @@ fn bind(
     opencode: Option<&str>,
 ) -> i32 {
     let show = paths::shell_path;
+    // An agent config.toml leaves out isn't bound, even when named: hatcheck doesn't look at it.
+    for (agent, named) in [
+        (Agent::Claude, profile),
+        (Agent::Codex, codex),
+        (Agent::Agy, agy),
+        (Agent::Kimi, kimi),
+        (Agent::Zcode, zcode),
+        (Agent::Dsh, dsh),
+        (Agent::Mcode, mcode),
+        (Agent::Qwen, qwen),
+        (Agent::Copilot, copilot),
+        (Agent::Opencode, opencode),
+    ] {
+        if named.is_some() && crate::config::ignores(agent) {
+            return out::fail(&crate::config::agent_left_out(agent));
+        }
+    }
     let folder = ospath::realpath(&ospath::expanduser(
         &folder.map(String::from).unwrap_or_else(ospath::cwd),
     ));
@@ -415,6 +479,7 @@ fn bind(
         s(binding.get(Agent::Claude.key()).unwrap_or(py::null())) == Some(*p)
             && !p.contains('/')
             && !p.contains(ospath::SEP)
+            && !crate::config::ignores(Agent::Codex)
     }) {
         let path = paths::profile_folder(Agent::Codex, spec); // the home named like the profile
         if ospath::isdir(&path) {
@@ -610,6 +675,15 @@ fn bind(
     {
         binding.insert(Agent::Opencode.key().into(), json!("default"));
     }
+    // An agent config.toml leaves out keeps what it was bound to, untouched and unshown.
+    for agent in Agent::ALL {
+        if crate::config::ignores(agent) {
+            binding.shift_remove(agent.key());
+            if let Some(was) = old.get(agent.key()) {
+                binding.insert(agent.key().into(), was.clone());
+            }
+        }
+    }
     let binding = Value::Object(binding);
     bindings.insert(folder.clone(), binding.clone());
     if let Err(e) = save_bindings(&bindings) {
@@ -625,7 +699,7 @@ fn bind(
     }
     let bound = |agent: Agent| {
         s(get(&binding, agent.key()))
-            .filter(|n| !n.is_empty())
+            .filter(|n| !n.is_empty() && !crate::config::ignores(agent))
             .map(String::from)
     };
     let mut here = Vec::new();
@@ -662,12 +736,14 @@ fn bind(
     if !here.is_empty() {
         out::println(&format!("Here, {}.", here.join(" and ")));
     }
-    if !hook_files()
-        .iter()
-        .any(|(_, _, path)| read_settings(path).is_ok_and(|s| has_hook(&s)))
+    let names = hook_names();
+    if !names.is_empty()
+        && !hook_files()
+            .iter()
+            .any(|(_, _, path)| read_settings(path).is_ok_and(|s| has_hook(&s)))
     {
         out::println(&format!(
-            "{} adds a warning to Claude Code, Codex and agy when a session starts here under another profile.",
+            "{} adds a warning to {names} when a session starts here under another profile.",
             out::Paint::new().command("hatcheck bind --hook")
         ));
     }
@@ -677,7 +753,9 @@ fn bind(
 fn show_here() -> i32 {
     let bindings = paths::load_bindings();
     let cwd = ospath::cwd();
-    let Some(folder) = paths::bound_folder(Some(&cwd), &bindings) else {
+    let Some(folder) =
+        paths::bound_folder(Some(&cwd), &bindings).filter(|f| binds_any(&bindings[f]))
+    else {
         let command = out::Paint::new().command("hatcheck bind <profile>");
         out::println(&format!("This folder isn't bound. Bind it with: {command}"));
         return 0;
@@ -695,7 +773,8 @@ fn show_here() -> i32 {
 }
 
 fn list_bindings() -> i32 {
-    let bindings = paths::load_bindings();
+    let mut bindings = paths::load_bindings();
+    bindings.retain(|_, binding| binds_any(binding));
     if bindings.is_empty() {
         let command = out::Paint::new().command("hatcheck bind <profile>");
         out::println(&format!(
@@ -744,6 +823,13 @@ fn which(agent: Agent, folder: Option<&str>) -> i32 {
     }
 }
 fn add_hooks() -> i32 {
+    let names = hook_names();
+    if names.is_empty() {
+        return out::fail(&format!(
+            "{} leaves out Claude Code, Codex and agy, every agent the hook works with",
+            crate::config::shown_path()
+        ));
+    }
     let command = hook_command();
     let paint = out::Paint::new();
     let mut codex = false;
@@ -803,12 +889,24 @@ fn add_hooks() -> i32 {
         out::success(&format!("  {show}  added, in {}", ospath::basename(&path)));
         codex |= agent == Agent::Codex;
     }
+    // How another agent's hook names it, for those config.toml doesn't leave out.
+    let named: Vec<(&str, &str)> = [(Agent::Codex, "codex", "Codex"), (Agent::Agy, "agy", "agy")]
+        .into_iter()
+        .filter(|(agent, _, _)| !crate::config::ignores(*agent))
+        .map(|(_, key, name)| (key, name))
+        .collect();
+    let after = if named.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " (with {} after it for {})",
+            named.iter().map(|n| n.0).collect::<Vec<_>>().join(" or "),
+            crate::config::and_list(&named.iter().map(|n| n.1).collect::<Vec<_>>())
+        )
+    };
+    out::println(&format!("They run: {}{after}", paint.command(&command)));
     out::println(&format!(
-        "They run: {} (with codex or agy after it for Codex and agy)",
-        paint.command(&command)
-    ));
-    out::println(&format!(
-        "Claude Code, Codex and agy warn when a session starts in a bound folder under another profile. {} removes them.",
+        "{names} warn when a session starts in a bound folder under another profile. {} removes them.",
         paint.command("hatcheck unbind --hook")
     ));
     if codex {
@@ -841,7 +939,16 @@ fn remove_hooks() -> i32 {
             out::success(&format!("  {}  removed", paths::shell_path(&folder)));
         }
     }
-    out::println("No profile, home or folder runs the hook now.");
+    let unseen = hook_agents_left_out();
+    if unseen.is_empty() {
+        out::println("No profile, home or folder runs the hook now.");
+    } else {
+        // Said as it is: a folder not looked in may have one still.
+        out::println(&format!(
+            "No profile, home or folder hatcheck looks in runs the hook now; {}.",
+            hooks_unseen_note(&unseen)
+        ));
+    }
     0
 }
 
@@ -851,6 +958,9 @@ fn remove_hooks() -> i32 {
 fn check(agent: Agent) -> i32 {
     let mut text = String::new();
     let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut text);
+    if crate::config::ignores(agent) {
+        return 0; // a hook left in an agent config.toml leaves out stays quiet
+    }
     let Ok(data) = serde_json::from_str::<Value>(if text.is_empty() { "{}" } else { &text }) else {
         return 0;
     };
@@ -1032,11 +1142,15 @@ pub fn unbind_main(argv: &[String], prog: &str) -> i32 {
         if let Err(e) = save_bindings(&bindings) {
             return out::fail(&e.to_string());
         }
-        out::success(&format!(
-            "Unbound {} (it was bound to {}).",
-            show(&folder),
-            describe(&binding)
-        ));
+        if binds_any(&binding) {
+            out::success(&format!(
+                "Unbound {} (it was bound to {}).",
+                show(&folder),
+                describe(&binding)
+            ));
+        } else {
+            out::success(&format!("Unbound {}.", show(&folder)));
+        }
         return 0;
     }
     if let Some(parent) = paths::bound_folder(Some(&folder), &bindings) {

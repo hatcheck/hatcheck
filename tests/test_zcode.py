@@ -196,7 +196,7 @@ class ZcodeElsewhere(unittest.TestCase):
         self.assertEqual((z["profiles"], z["plan"], z["source"], z["limits"]), ([self.root], "ZCode", "none", []))
         api = self.h.folder("code", "api")
         self.h.zcode_session(self.root, api, Z, "Fix the uploader with zcode", 1)
-        code, out = self.h.run("sessions", "--all-folders", "--all-folders")
+        code, out = self.h.run("sessions", "--all-folders")
         self.assertIn("No usage data (zcode has no usage command; see z.ai/manage-apikey/subscription for the plan): "
                       + self.h.shown(self.root), out)
 

@@ -5,8 +5,9 @@
 //! that's gone. This moves each profile's project folder to its new name, rewrites the cwd
 //! the lines record, and brings Claude Code's sessions-index.json along; a Codex session,
 //! filed by date, has the cwd in its session_meta and turn_context lines rewritten. Folders
-//! under OLD come along too. Running it the other way round undoes it. docs/commands.md's
-//! `hatcheck relocate` section says what it refuses.
+//! under OLD come along too. Running it the other way round undoes it. A session in a folder
+//! config.toml leaves out stays as it is, unmentioned. docs/commands.md's `hatcheck relocate`
+//! section says what it refuses.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -135,8 +136,10 @@ fn entries_of(dir: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The sessions that ran in old, in every profile and home, and what to do with them.
+/// The sessions that ran in old, in every profile and home, and what to do with them: none in
+/// a folder config.toml leaves out, which hatcheck acts as if weren't there.
 fn plan(old: &str, new: &str) -> Plan {
+    let hidden = |cwd: Option<&str>| crate::config::session_left_out(cwd);
     let mut spellings = vec![old.to_string()];
     if ospath::isdir(old) {
         let real = ospath::realpath(old);
@@ -183,6 +186,9 @@ fn plan(old: &str, new: &str) -> Plan {
                     continue;
                 };
                 let cwd = claude_cwd(path);
+                if hidden(cwd.as_deref()) {
+                    continue;
+                }
                 let Some(cwd_to) = cwd.as_deref().and_then(|c| mapped(c, old, new)) else {
                     plan.skips.push(Skip {
                         agent: Agent::Claude,
@@ -273,6 +279,9 @@ fn plan(old: &str, new: &str) -> Plan {
             let Some(cwd_to) = mapped(&cwd, old, new) else {
                 continue;
             };
+            if hidden(Some(&cwd)) {
+                continue;
+            }
             plan.moves.push(Move {
                 agent: Agent::Codex,
                 profile: home.clone(),
@@ -288,11 +297,9 @@ fn plan(old: &str, new: &str) -> Plan {
     // Antigravity CLI keeps the folder inside its database, so its sessions stay as they are.
     for root in paths::find_agy_stores() {
         for row in crate::agy::rows(&root) {
-            let ran_there = row
-                .workspaces
-                .first()
-                .is_some_and(|w| mapped(w, old, new).is_some());
-            if ran_there {
+            let first = row.workspaces.first().map(String::as_str);
+            let ran_there = first.is_some_and(|w| mapped(w, old, new).is_some());
+            if ran_there && !hidden(first) {
                 plan.skips.push(Skip {
                     agent: Agent::Agy,
                     profile: root.clone(),
@@ -306,8 +313,9 @@ fn plan(old: &str, new: &str) -> Plan {
     // index; ZCode keeps it in its database. Both stay as they are.
     for home in paths::find_kimi_homes() {
         for x in crate::kimi::sessions(&home) {
-            let ran_there = s(get(&x.state, "cwd")).is_some_and(|c| mapped(c, old, new).is_some());
-            if ran_there {
+            let cwd = s(get(&x.state, "cwd"));
+            let ran_there = cwd.is_some_and(|c| mapped(c, old, new).is_some());
+            if ran_there && !hidden(cwd) {
                 plan.skips.push(Skip {
                     agent: Agent::Kimi,
                     profile: home.clone(),
@@ -319,7 +327,7 @@ fn plan(old: &str, new: &str) -> Plan {
     }
     for root in paths::find_zcode_roots() {
         for row in crate::zcode::rows(&root) {
-            if mapped(&row.directory, old, new).is_some() {
+            if mapped(&row.directory, old, new).is_some() && !hidden(Some(&row.directory)) {
                 plan.skips.push(Skip {
                     agent: Agent::Zcode,
                     profile: root.clone(),
@@ -332,7 +340,8 @@ fn plan(old: &str, new: &str) -> Plan {
     // DSH's header cwd and project key are immutable, and its workspace state is beside the log.
     for home in paths::find_dsh_homes() {
         for x in crate::dsh::sessions(&home) {
-            if s(get(&x.header, "cwd")).is_some_and(|cwd| mapped(cwd, old, new).is_some()) {
+            let cwd = s(get(&x.header, "cwd"));
+            if cwd.is_some_and(|c| mapped(c, old, new).is_some()) && !hidden(cwd) {
                 plan.skips.push(Skip {
                     agent: Agent::Dsh,
                     profile: home.clone(),
@@ -345,7 +354,7 @@ fn plan(old: &str, new: &str) -> Plan {
     // MCode shares SQLite state and absolute manifest paths with related assets; neither is rewritten.
     for home in paths::find_mcode_homes() {
         for x in crate::mcode::sessions(&home) {
-            if mapped(&x.row.directory, old, new).is_some() {
+            if mapped(&x.row.directory, old, new).is_some() && !hidden(Some(&x.row.directory)) {
                 plan.skips.push(Skip {
                     agent: Agent::Mcode,
                     profile: home.clone(),
@@ -362,6 +371,7 @@ fn plan(old: &str, new: &str) -> Plan {
             if x.cwd
                 .as_deref()
                 .is_some_and(|cwd| mapped(cwd, old, new).is_some())
+                && !hidden(x.cwd.as_deref())
             {
                 plan.skips.push(Skip {
                     agent: Agent::Qwen,
@@ -379,6 +389,7 @@ fn plan(old: &str, new: &str) -> Plan {
             if x.cwd
                 .as_deref()
                 .is_some_and(|cwd| mapped(cwd, old, new).is_some())
+                && !hidden(x.cwd.as_deref())
             {
                 plan.skips.push(Skip {
                     agent: Agent::Copilot,
@@ -391,7 +402,7 @@ fn plan(old: &str, new: &str) -> Plan {
     }
     for home in paths::find_opencode_homes() {
         for x in crate::opencode::sessions(&home) {
-            if mapped(&x.row.directory, old, new).is_some() {
+            if mapped(&x.row.directory, old, new).is_some() && !hidden(Some(&x.row.directory)) {
                 plan.skips.push(Skip {
                     agent: Agent::Opencode,
                     profile: home.clone(),
@@ -889,6 +900,13 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         paths::shell_path(&old)
     );
     let undo_json = format!("{prog} {} {}", paths::quote(&new), paths::quote(&old));
+    if plan.moves.is_empty() && plan.skips.is_empty() && crate::config::folder_left_out(&old) {
+        return fail(&format!(
+            "{} leaves {} out, so hatcheck leaves its sessions as they are",
+            crate::config::shown_path(),
+            paths::shell_path(&old)
+        ));
+    }
     if plan.moves.is_empty() {
         if !json_out {
             for skip in &plan.skips {

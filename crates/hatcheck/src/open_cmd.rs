@@ -23,10 +23,17 @@ pub struct Pick<'a> {
 }
 
 /// The session to open: by its ID or the start of it, or the newest started from this folder.
+/// None in a folder config.toml leaves out, nor in an agent's it leaves out.
 pub fn pick(args: &Pick) -> Result<Summary, String> {
+    let source = args.source.map(find::place_seen).transpose()?;
     let Some(prefix) = args.session else {
-        return find::newest_here(&ospath::cwd(), args.all).ok_or_else(|| {
-            "No session was started from this folder. Give its ID (hatcheck open <id>), or list them with: hatcheck --all-folders".to_string()
+        let cwd = ospath::cwd();
+        return find::newest_here(&cwd, args.all).ok_or_else(|| {
+            if crate::config::session_left_out(Some(&cwd)) {
+                format!("{} leaves this folder out. Give a session's ID (hatcheck open <id>), or list them with: hatcheck --all-folders", crate::config::shown_path())
+            } else {
+                "No session was started from this folder. Give its ID (hatcheck open <id>), or list them with: hatcheck --all-folders".to_string()
+            }
         });
     };
     let mut copies = find::session_copies(prefix);
@@ -59,8 +66,7 @@ pub fn pick(args: &Pick) -> Result<Summary, String> {
         ));
     }
     let ((agent, sid), mut places) = copies.remove(0);
-    if let Some(source) = args.source {
-        let (_, folder) = find::place(source);
+    if let Some((_, folder)) = source {
         let mine: Vec<(String, String)> = places
             .iter()
             .filter(|(p, _)| paths::same_folder(p, &folder))
@@ -545,7 +551,10 @@ pub(crate) fn run_here(cwd: &str, command: &str) -> i32 {
 /// --login: a terminal running cl, cx login, ck login, agy, zcode or dsh web, so signing in
 /// stays with the agent. DSH's official web UI supplies its account flow; no login subcommand is invented.
 fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&str>) -> i32 {
-    let (agent, folder) = find::place(profile);
+    let (agent, folder) = match find::place_seen(profile) {
+        Ok(place) => place,
+        Err(why) => return out::fail(&why),
+    };
     let line = |shell: &paths::Shell| {
         let mut command = shell.start_command(agent, &folder, full || !launcher_on_path(agent));
         if matches!(

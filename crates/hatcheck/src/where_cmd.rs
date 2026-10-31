@@ -2,10 +2,12 @@
 //! each agent's transcript or readable store and any session-owned data folder; for DSH, the
 //! selected v4 log and its session directory, for mcode the active messages.jsonl and session
 //! directory, for qwen the transcript, for copilot the session's events file and for opencode
-//! the database its rows share. Exits 1 when nothing matches. --json prints copies as data.
+//! the database its rows share. Exits 1 when nothing matches. --json prints copies as data. A
+//! session in a folder config.toml leaves out isn't found, as find.rs's lookups don't find one.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
+use crate::find::left_out;
 use crate::ospath::{self, Part};
 use crate::{out, paths, py};
 use serde_json::{json, Value};
@@ -23,6 +25,15 @@ pub fn find(prefix: &str) -> Vec<String> {
             ],
         );
         matches.sort();
+        // A transcript, or the data folder beside it, judged by the transcript's folder.
+        matches.retain(|m| {
+            let transcript = if m.ends_with(".jsonl") {
+                m.clone()
+            } else {
+                format!("{m}.jsonl")
+            };
+            !left_out(Agent::Claude, &profile, &transcript)
+        });
         found.extend(matches);
     }
     let home = paths::home();
@@ -65,14 +76,20 @@ pub fn find(prefix: &str) -> Vec<String> {
         ));
         files.sort();
         for path in files {
-            if paths::codex_file_id(&path).is_some_and(|id| id.starts_with(&lower)) {
+            if paths::codex_file_id(&path).is_some_and(|id| id.starts_with(&lower))
+                && !left_out(Agent::Codex, &h, &path)
+            {
                 found.push(path);
             }
         }
     }
     for root in paths::find_agy_stores() {
         for row in crate::agy::rows_starting_with(&root, prefix) {
-            found.push(crate::agy::conversation_path(&root, &row.id));
+            let conversation = crate::agy::conversation_path(&root, &row.id);
+            if left_out(Agent::Agy, &root, &conversation) {
+                continue;
+            }
+            found.push(conversation);
             let brain = crate::agy::brain_path(&root, &row.id);
             if ospath::isdir(&brain) {
                 found.push(brain);
@@ -81,14 +98,19 @@ pub fn find(prefix: &str) -> Vec<String> {
     }
     for home_dir in paths::find_kimi_homes() {
         for x in crate::kimi::sessions_starting_with(&home_dir, prefix) {
-            found.push(x.dir);
+            if !left_out(Agent::Kimi, &home_dir, &x.dir) {
+                found.push(x.dir);
+            }
         }
     }
     // A ZCode session is a row: its database, then its folder of tool results when it has one.
     for root in paths::find_zcode_roots() {
         for row in crate::zcode::rows_starting_with(&root, prefix) {
-            found.push(crate::zcode::db_path(&root));
             let artifacts = crate::zcode::artifacts_path(&root, &row.id);
+            if left_out(Agent::Zcode, &root, &artifacts) {
+                continue;
+            }
+            found.push(crate::zcode::db_path(&root));
             if ospath::isdir(&artifacts) {
                 found.push(artifacts);
             }
@@ -96,30 +118,42 @@ pub fn find(prefix: &str) -> Vec<String> {
     }
     for home in paths::find_dsh_homes() {
         for x in crate::dsh::sessions_starting_with(&home, prefix) {
-            found.push(x.dir);
+            if !left_out(Agent::Dsh, &home, &x.dir) {
+                found.push(x.dir);
+            }
         }
     }
     for home in paths::find_mcode_homes() {
         for x in crate::mcode::sessions_starting_with(&home, prefix) {
-            found.push(x.dir);
+            if !left_out(Agent::Mcode, &home, &x.dir) {
+                found.push(x.dir);
+            }
         }
     }
     for home in paths::find_qwen_homes() {
         for x in crate::qwen::sessions_starting_with(&home, prefix) {
-            found.push(x.file);
+            if !left_out(Agent::Qwen, &home, &x.file) {
+                found.push(x.file);
+            }
         }
     }
     for home in paths::find_copilot_homes() {
         for x in crate::copilot::sessions_starting_with(&home, prefix) {
-            found.push(x.file);
+            if !left_out(Agent::Copilot, &home, &x.file) {
+                found.push(x.file);
+            }
         }
     }
     // An opencode session is a row: its database, once per match, as ZCode's.
     for home in paths::find_opencode_homes() {
-        for _ in crate::opencode::sessions_starting_with(&home, prefix) {
-            found.push(crate::opencode::db_path(&home));
+        for x in crate::opencode::sessions_starting_with(&home, prefix) {
+            let reference = crate::opencode::session_ref(&home, &x.row.id);
+            if !left_out(Agent::Opencode, &home, &reference) {
+                found.push(crate::opencode::db_path(&home));
+            }
         }
     }
+    crate::facts::save_cache();
     found
 }
 
@@ -171,6 +205,9 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
     for root in paths::find_zcode_roots() {
         for row in crate::zcode::rows_starting_with(&root, prefix) {
             let artifacts = crate::zcode::artifacts_path(&root, &row.id);
+            if left_out(Agent::Zcode, &root, &artifacts) {
+                continue;
+            }
             copies.push(json!({"agent": Agent::Zcode.key(), "id": row.id, "profile": root, "file": crate::zcode::db_path(&root),
                                "data_folder": if ospath::isdir(&artifacts) { Value::from(artifacts) } else { Value::Null },
                                "archived": row.archived}));
@@ -178,6 +215,9 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
     }
     for home in paths::find_dsh_homes() {
         for x in crate::dsh::sessions_starting_with(&home, prefix) {
+            if left_out(Agent::Dsh, &home, &x.dir) {
+                continue;
+            }
             copies.push(
                 json!({"agent": Agent::Dsh.key(), "id": x.id, "profile": home, "file": x.log,
                                "data_folder": x.dir, "archived": false}),
@@ -186,6 +226,9 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
     }
     for home in paths::find_mcode_homes() {
         for x in crate::mcode::sessions_starting_with(&home, prefix) {
+            if left_out(Agent::Mcode, &home, &x.dir) {
+                continue;
+            }
             copies.push(
                 json!({"agent": Agent::Mcode.key(), "id": x.row.id, "profile": home, "file": x.messages,
                                "data_folder": x.dir, "archived": x.row.archived}),
@@ -195,6 +238,13 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
     // opencode's sessions are rows too, so they come from the database.
     for home in paths::find_opencode_homes() {
         for x in crate::opencode::sessions_starting_with(&home, prefix) {
+            if left_out(
+                Agent::Opencode,
+                &home,
+                &crate::opencode::session_ref(&home, &x.row.id),
+            ) {
+                continue;
+            }
             copies.push(
                 json!({"agent": Agent::Opencode.key(), "id": x.row.id, "profile": home, "file": crate::opencode::db_path(&home),
                                "data_folder": null, "archived": x.row.archived}),
