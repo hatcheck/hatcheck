@@ -188,8 +188,6 @@ class ConfigFile(unittest.TestCase):
         self.assertIn("is bound to", self.codex_hook(other, payload))
         h.config("[ignore]\nagents = [\"codex\"]\n")
         self.assertEqual(self.codex_hook(other, payload), "")
-        self.assertIn("This folder isn't bound", h.run("bind", cwd=self.api)[1])  # Codex's binding isn't shown
-        self.assertIn("No folders are bound", h.run("bind", "--list")[1])
         unseen = "config.toml leaves Codex out, so its folders weren't looked in."
         code, out = h.run("unbind", "--hook")
         self.assertEqual(code, 0, out)
@@ -197,13 +195,44 @@ class ConfigFile(unittest.TestCase):
         self.assertIn(unseen, out)
         self.assertTrue(os.path.exists(os.path.join(other, "hooks.json")))  # not looked in, so left as it was
         self.assertIn(unseen, h.run("doctor")[1])
-        # Bound again, the folder keeps what Codex was bound to, untouched and unshown.
+
+    def test_a_binding_a_launcher_still_uses_is_shown_though_its_agent_is_left_out(self):
+        """cl, cx and ck don't read the file, so a folder's binding for an agent it leaves out still
+        steers them: bind says so, as cx does. A part no launcher uses stays unshown."""
+        h = self.h
+        work = h.codex_home("work")
+        self.assertEqual(h.run("bind", "--codex", "default", cwd=self.api)[0], 0)
+        self.assertEqual(h.run("bind", "--codex", "work", cwd=self.blog)[0], 0)
+        config = h.shown(h.config("[ignore]\nagents = [\"codex\"]\n"))
+        used = "Codex %s, which %s leaves out but cx still uses" % (h.shown(self.codex), config)
+        self.assertIn("This folder is bound to %s.\n" % used, h.run("bind", cwd=self.api)[1])
+        out = h.run("--as", "cx", cwd=self.api, PATH=h.root)[1]  # no codex there: cx stops after saying so
+        self.assertIn("cx: this folder is bound to default", out)
+        code, out = h.run("bind", "--list")
+        self.assertEqual(code, 0, out)
+        self.assertIn("  Codex %s (cx only)\n" % h.shown(self.codex), out)
+        self.assertIn("  Codex %s (cx only)\n" % h.shown(work), out)
+        self.assertIn("%s leaves Codex out, but cx still uses its bindings.\n" % config, out)
+        # Bound again, the folder keeps what Codex was bound to, untouched, and says so.
         code, out = h.run("bind", "work", cwd=self.api)
         self.assertEqual(code, 0, out)
-        self.assertNotIn("Codex", out)
+        self.assertIn("It stays bound to %s.\n" % used, out)
+        self.assertIn("This folder is bound to Claude Code %s, and to %s.\n" % (h.shown(self.work), used),
+                      h.run("bind", cwd=self.api)[1])
         base = os.path.join(h.home, "AppData", "Roaming") if os.name == "nt" else os.path.join(h.home, ".config")
-        with open(os.path.join(base, "hatcheck", "bindings.json"), encoding="utf-8") as fh:
+        bindings = os.path.join(base, "hatcheck", "bindings.json")
+        with open(bindings, encoding="utf-8") as fh:
             self.assertEqual(json.load(fh)["folders"][self.api], {"claude": "work", "codex": "default"})
+        code, out = h.run("unbind", cwd=self.blog)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Unbound %s (it was bound to Codex %s, which %s leaves out but cx was using)."
+                      % (h.shown(self.blog), h.shown(work), config), out)
+        # qwen has no launcher, so nothing follows its binding while the file leaves it out.
+        with open(bindings, "w", encoding="utf-8") as fh:
+            json.dump({"version": 1, "folders": {self.blog: {"qwen": "default"}}}, fh)
+        h.config("[ignore]\nagents = [\"qwen\"]\n")
+        self.assertIn("This folder isn't bound.", h.run("bind", cwd=self.blog)[1])
+        self.assertIn("No folders are bound.", h.run("bind", "--list")[1])
 
     def test_a_file_that_cant_be_read_stops_every_command(self):
         for text, message in [

@@ -1181,9 +1181,12 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
 - `hatcheck` marks sessions that ran in a bound folder under another profile:
   `⚠ folder bound to ~/.claude-a`.
 - An agent [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out isn't bound or shown:
-  `--codex` and the others refuse it, and a binding keeps what it already says for it, untouched
-  and unshown. A folder the file leaves out can still be bound, as `cl`, `cx` and `ck` follow a
-  binding without reading the file.
+  `--codex` and the others refuse it, and a binding keeps what it already says for it, untouched.
+  But `cl`, `cx` and `ck` follow a binding without reading the file, so where one of them still
+  uses that part, `bind` shows it and names the file: `This folder is bound to Codex
+  ~/.codex-work, which ~/.config/hatcheck/config.toml leaves out but cx still uses.` `bind --list`
+  marks it `(cx only)`, and `bind NAME` and `unbind` mention it too. A part no launcher uses, such
+  as agy's, stays hidden. For the same reason, a folder the file leaves out can still be bound.
 - `--hook` adds a `SessionStart` hook, `hatcheck bind --check`, to every profile's `settings.json`
   and every Codex home's `hooks.json`. When a session starts in a bound folder under another
   profile, it shows a warning and nothing is blocked:
@@ -1245,7 +1248,9 @@ folders = ["~/orca/workspaces/*", "/tmp"]   # never these, even among the ones l
   `open --login codex`, `best --wait codex` or `bind --codex`, it's refused, and the message says
   the file leaves it out. `hatcheck doctor` doesn't check its program either; its config lines say
   which file leaves it out. A hook `bind --hook` added before stays quiet, and `unbind --hook` and
-  `doctor` say they didn't look in its folders, since they can't say it has none.
+  `doctor` say they didn't look in its folders, since they can't say it has none. A folder's
+  binding for it stays as it was, and where `cl`, `cx` or `ck` still uses it, since they don't
+  read the file, `hatcheck bind` shows it and says so.
 - **Folders are chosen both ways:** `[list] folders` names the only folders to show, and
   `[ignore] folders` folders never to show, which wins where they overlap. Every command acts as
   if a session in any other folder weren't there, whatever its flags: the list doesn't show or

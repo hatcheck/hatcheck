@@ -50,6 +50,15 @@ fn name_of(agent: Agent, spec: &str) -> (String, String) {
     (path.clone(), path)
 }
 
+/// One agent's part of a binding, as bind shows it: Codex ~/.codex-a.
+fn part(agent: Agent, name: &str) -> String {
+    format!(
+        "{} {}",
+        agent.name(),
+        paths::shell_path(&paths::profile_folder(agent, name))
+    )
+}
+
 /// What a binding binds, but for the agents config.toml leaves out, which aren't shown.
 fn describe(binding: &Value) -> String {
     let parts: Vec<String> = Agent::ALL
@@ -57,11 +66,7 @@ fn describe(binding: &Value) -> String {
         .filter(|agent| !crate::config::ignores(**agent))
         .filter_map(|agent| {
             let name = s(get(binding, agent.key())).filter(|n| !n.is_empty())?;
-            Some(format!(
-                "{} {}",
-                agent.name(),
-                paths::shell_path(&paths::profile_folder(*agent, name))
-            ))
+            Some(part(*agent, name))
         })
         .collect();
     if parts.is_empty() {
@@ -72,12 +77,67 @@ fn describe(binding: &Value) -> String {
 }
 
 /// Whether a binding binds any agent config.toml doesn't leave out: one that binds only those
-/// it leaves out is, for hatcheck, no binding.
+/// it leaves out is, for hatcheck, no binding, but for what a launcher still uses of it.
 fn binds_any(binding: &Value) -> bool {
     Agent::ALL.iter().any(|agent| {
         !crate::config::ignores(*agent)
             && s(get(binding, agent.key())).is_some_and(|n| !n.is_empty())
     })
+}
+
+/// The launchers that use a folder's binding, and their agents. They don't read config.toml,
+/// so they use a binding of an agent it leaves out as they use any other.
+const LAUNCHED: [(Agent, &str); 3] = [
+    (Agent::Claude, "cl"),
+    (Agent::Codex, "cx"),
+    (Agent::Kimi, "ck"),
+];
+
+/// The parts of a binding for agents config.toml leaves out that a launcher still uses, with
+/// the launcher: (agent, launcher, part). Hidden like the rest of those agents, they'd have bind
+/// say a folder isn't bound where cx says it is.
+fn used_left_out(binding: &Value) -> Vec<(Agent, &'static str, String)> {
+    LAUNCHED
+        .into_iter()
+        .filter(|(agent, _)| crate::config::ignores(*agent))
+        .filter_map(|(agent, launcher)| {
+            let name = s(get(binding, agent.key())).filter(|n| !n.is_empty())?;
+            Some((agent, launcher, part(agent, name)))
+        })
+        .collect()
+}
+
+/// What bind says of those parts: Codex ~/.codex-a, which ~/.config/hatcheck/config.toml leaves
+/// out but cx still uses (was using, past, once unbind has taken it away).
+fn used_left_out_text(used: &[(Agent, &str, String)], past: bool) -> String {
+    let parts: Vec<&str> = used.iter().map(|(_, _, part)| part.as_str()).collect();
+    let launchers: Vec<&str> = used.iter().map(|(_, launcher, _)| *launcher).collect();
+    let verb = match (past, launchers.len() == 1) {
+        (false, true) => "still uses",
+        (false, false) => "still use",
+        (true, true) => "was using",
+        (true, false) => "were using",
+    };
+    format!(
+        "{}, which {} leaves out but {} {verb}",
+        parts.join(" · "),
+        crate::config::shown_path(),
+        crate::config::and_list(&launchers)
+    )
+}
+
+/// What a folder is bound to, as bind and unbind say it: the parts it shows, and then those of
+/// the agents config.toml leaves out that a launcher still uses; None when there are neither.
+fn bound_to(binding: &Value, past: bool) -> Option<String> {
+    let mut what = Vec::new();
+    if binds_any(binding) {
+        what.push(describe(binding));
+    }
+    let used = used_left_out(binding);
+    if !used.is_empty() {
+        what.push(used_left_out_text(&used, past));
+    }
+    (!what.is_empty()).then(|| what.join(", and to "))
 }
 
 /// The agents --hook would reach that config.toml leaves out: hatcheck doesn't look in their
@@ -697,6 +757,14 @@ fn bind(
     for note in notes {
         out::warn(&note);
     }
+    let used = used_left_out(&binding);
+    if !used.is_empty() {
+        // Kept as it was, since bind leaves an agent config.toml leaves out alone.
+        out::println(&format!(
+            "It stays bound to {}.",
+            used_left_out_text(&used, false)
+        ));
+    }
     let bound = |agent: Agent| {
         s(get(&binding, agent.key()))
             .filter(|n| !n.is_empty() && !crate::config::ignores(agent))
@@ -753,8 +821,9 @@ fn bind(
 fn show_here() -> i32 {
     let bindings = paths::load_bindings();
     let cwd = ospath::cwd();
-    let Some(folder) =
-        paths::bound_folder(Some(&cwd), &bindings).filter(|f| binds_any(&bindings[f]))
+    // The deepest bound folder, which the launchers take too, with what they use of it.
+    let Some((folder, what)) = paths::bound_folder(Some(&cwd), &bindings)
+        .and_then(|f| bound_to(&bindings[&f], false).map(|what| (f, what)))
     else {
         let command = out::Paint::new().command("hatcheck bind <profile>");
         out::println(&format!("This folder isn't bound. Bind it with: {command}"));
@@ -765,16 +834,13 @@ fn show_here() -> i32 {
     } else {
         format!("This folder is under {}, which", paths::shell_path(&folder))
     };
-    out::println(&format!(
-        "{where_} is bound to {}.",
-        describe(&bindings[&folder])
-    ));
+    out::println(&format!("{where_} is bound to {what}."));
     0
 }
 
 fn list_bindings() -> i32 {
     let mut bindings = paths::load_bindings();
-    bindings.retain(|_, binding| binds_any(binding));
+    bindings.retain(|_, binding| bound_to(binding, false).is_some());
     if bindings.is_empty() {
         let command = out::Paint::new().command("hatcheck bind <profile>");
         out::println(&format!(
@@ -793,17 +859,47 @@ fn list_bindings() -> i32 {
         .unwrap_or(0);
     let mut folders: Vec<&String> = bindings.keys().collect();
     folders.sort_by_key(|f| f.to_lowercase());
-    for folder in folders {
+    for folder in &folders {
+        let binding = &bindings[*folder];
+        let mut what = Vec::new();
+        if binds_any(binding) {
+            what.push(describe(binding));
+        }
+        for (_, launcher, part) in used_left_out(binding) {
+            what.push(format!("{part} ({launcher} only)"));
+        }
         let line = format!(
             "  {:<width$}  {}",
             paths::shell_path(folder),
-            describe(&bindings[folder])
+            what.join(" · ")
         );
         if ospath::isdir(folder) {
             out::println(&line);
         } else {
             out::warn(&format!("{line}  (folder missing)"));
         }
+    }
+    // Why some are marked: the file leaves their agents out, and the launchers don't read it.
+    let marked: Vec<(Agent, &str)> = LAUNCHED
+        .into_iter()
+        .filter(|(agent, _)| {
+            folders
+                .iter()
+                .any(|f| used_left_out(&bindings[*f]).iter().any(|u| u.0 == *agent))
+        })
+        .collect();
+    if !marked.is_empty() {
+        let agents: Vec<&str> = marked.iter().map(|(agent, _)| agent.name()).collect();
+        let launchers: Vec<&str> = marked.iter().map(|(_, launcher)| *launcher).collect();
+        let one = marked.len() == 1;
+        out::note(&format!(
+            "{} leaves {} out, but {} still {} {} bindings.",
+            crate::config::shown_path(),
+            crate::config::and_list(&agents),
+            crate::config::and_list(&launchers),
+            if one { "uses" } else { "use" },
+            if one { "its" } else { "their" }
+        ));
     }
     0
 }
@@ -1142,14 +1238,12 @@ pub fn unbind_main(argv: &[String], prog: &str) -> i32 {
         if let Err(e) = save_bindings(&bindings) {
             return out::fail(&e.to_string());
         }
-        if binds_any(&binding) {
-            out::success(&format!(
-                "Unbound {} (it was bound to {}).",
-                show(&folder),
-                describe(&binding)
-            ));
-        } else {
-            out::success(&format!("Unbound {}.", show(&folder)));
+        match bound_to(&binding, true) {
+            Some(what) => out::success(&format!(
+                "Unbound {} (it was bound to {what}).",
+                show(&folder)
+            )),
+            None => out::success(&format!("Unbound {}.", show(&folder))),
         }
         return 0;
     }

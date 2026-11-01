@@ -290,6 +290,16 @@ nothing, so what it says is what would happen.
 Claude Code in the engine's place.
 - Evidence: 64f475f "fix: never run a launcher from hatcheck serve"; `served` in `cli.rs`.
 
+**What a report hides is checked against what still acts on it.** `config.toml`'s
+`ignore.agents` hid a folder's Codex binding from `hatcheck bind`, which then said the folder
+wasn't bound, while `cx`, which doesn't read the file, went on using the binding and said it was.
+Hide what nothing acts on; what a launcher still follows is shown, with the reason.
+- Evidence: 2026-10-31, in a throwaway home: `hat bind` said "This folder isn't bound" and `cx`
+  "cx: this folder is bound to work". `used_left_out` in `bind.rs`, and
+  `test_a_binding_a_launcher_still_uses_is_shown_though_its_agent_is_left_out` in
+  `tests/test_config.py`.
+- Seen 1× (2026-10-31).
+
 ## Tests
 
 Windows paths, seen three times (fc1c21f, `test_sessions_come_along` and agy's
