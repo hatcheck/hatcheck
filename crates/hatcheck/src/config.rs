@@ -731,7 +731,12 @@ mod tests {
             listed.list_folders,
             [ospath::abspath(&ospath::expanduser("~/repos/*"))]
         );
-        assert_eq!(listed.describe(), ["list: folders ~/repos/*"]);
+        // Shown as this system writes it: ~\repos\* on Windows.
+        let sep = ospath::SEP;
+        assert_eq!(
+            listed.describe(),
+            [format!("list: folders ~{sep}repos{sep}*")]
+        );
         // Only the folders listed are in, when any are, and those ignored are out either way.
         let both = Config {
             list_folders: vec!["/home/me/repos".into()],
@@ -749,8 +754,8 @@ mod tests {
         assert_eq!(
             c.describe(),
             [
-                "list: details, by time, 36, 2 per folder, no usage",
-                "ignore: agents codex, agy; folders ~/tmp/*"
+                "list: details, by time, 36, 2 per folder, no usage".to_string(),
+                format!("ignore: agents codex, agy; folders ~{sep}tmp{sep}*")
             ]
         );
         assert_eq!(Config::default().describe(), ["nothing set"]);

@@ -155,7 +155,7 @@ class ConfigFile(unittest.TestCase):
         self.h.config("[list]\nfolders = []\n")  # empty: every folder, as without the setting
         self.assertNotIn("Hidden", self.h.run("sessions", "--all-folders", "--no-usage")[1])
         self.h.config("[list]\nfolders = [\"~/code/*\"]\n")
-        self.assertIn("  list: folders ~/code/*", self.h.run("doctor")[1])
+        self.assertIn("  list: folders " + self.h.shown(os.path.join(self.h.home, "code", "*")), self.h.run("doctor")[1])
 
     def test_an_agent_left_out_isnt_reached_by_name_either(self):
         self.h.config("[ignore]\nagents = [\"codex\"]\n")
@@ -273,7 +273,8 @@ class ConfigFile(unittest.TestCase):
         code, out = self.h.run("doctor")
         self.assertIn("Config: " + ("~/.config/hatcheck/config.toml" if os.name != "nt" else "config.toml"), out)
         self.assertIn("  list: details, by cost, 3 per folder", out)
-        self.assertIn("  ignore: agents codex, agy; folders ~/orca/workspaces/*", out)
+        self.assertIn("  ignore: agents codex, agy; folders " + self.h.shown(os.path.join(self.h.home, "orca", "workspaces", "*")),
+                      out)
         data = json.loads(self.h.run("doctor", "--json")[1])["config"]
         self.assertTrue(data["found"])
         self.assertEqual((data["list"]["details"], data["list"]["hours"], data["list"]["per_folder"]), (True, None, 3))
