@@ -26,7 +26,7 @@
   </nav>
   <main class="wrap page">
     <h1>Every command</h1>
-    <p>What <code>hatcheck --help</code> prints, then each command's own <code>--help</code>, as <!-- help:version -->0.7.0<!-- /help:version --> prints them, each with its short form beside it (<a href="index.html#short">every command in a few letters</a>). The <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/commands.md">docs</a> have each command as it is, with examples and its <code>--json</code>.</p>
+    <p>What <code>hatcheck --help</code> prints, then each command's own <code>--help</code>, as <!-- help:version -->0.7.1<!-- /help:version --> prints them, each with its short form beside it (<a href="index.html#short">every command in a few letters</a>). The <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/commands.md">docs</a> have each command as it is, with examples and its <code>--json</code>.</p>
 <pre><code><!-- help:hatcheck -->🎩 hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
 Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode accounts on one
 computer, each kept apart. Lists recent sessions with the command that resumes
@@ -57,7 +57,8 @@ Usage:
                                        --wait sleeps until one has room
     hatcheck bind PROFILE ...          tie a folder to a profile, for cl, cx, ck and the list
     hatcheck unbind [FOLDER]           untie it again
-    hatcheck desktop ...               Claude Desktop instances on macOS: list, open, make one
+    hatcheck desktop ...               Claude Desktop instances on macOS and Windows: list,
+                                       open, make one
     hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
                                        claude-k, cl -z and cl -k
     hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
@@ -411,13 +412,13 @@ options:
       <details><summary><code>hatcheck desktop</code><span>or <code>hat d</code>: Claude Desktop instances on macOS and Windows</span></summary>
 <pre><code><!-- help:desktop -->usage: hatcheck desktop [-h] [-j] {new,open,remove} ...
 
-Claude Desktop instances on macOS: one per account, each with its own data
-folder and a launcher of its own colour.
+Claude Desktop instances on macOS and Windows: one per account, each with its
+own data folder and a launcher of its own colour.
 
 positional arguments:
   {new,open,remove}
-    new              make an instance's launcher, /Applications/Claude
-                     DISPLAY.app
+    new              make an instance's launcher: Claude DISPLAY in
+                     Applications, or the Start menu on Windows
     open             start an instance, or bring it forward
     remove           delete an instance's launcher
 
