@@ -29,6 +29,6 @@ Commands:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/hatcheck/hatcheck/releases/download/v0.7.1/hatcheck-x86_64-pc-windows-msvc.zip
-    InstallerSha256: 9B1F49D8D00B7CCD7C54A9A655755333E0A4AB0DD902AB2A2C195E62EEAD1B50
+    InstallerSha256: 80E79FC1CA4ABD67D7B100CE3C3D1A33B3463DDA338FD2C11169D9A820E1D0DC
 ManifestType: installer
 ManifestVersion: 1.12.0
