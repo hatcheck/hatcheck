@@ -268,10 +268,10 @@ class ConfigFile(unittest.TestCase):
         code, out = self.h.run("doctor")
         self.assertIn("Config: none (", out)
         self.assertIn("config.toml would set the list's defaults and what to leave out", out)
-        self.h.config("[list]\ndetails = true\nby_cost = true\nper_folder = 3\n[ignore]\nagents = [\"codex\", \"agy\"]\n"
-                      "folders = [\"~/orca/workspaces/*\"]\n")
+        path = self.h.config("[list]\ndetails = true\nby_cost = true\nper_folder = 3\n[ignore]\nagents = [\"codex\", \"agy\"]\n"
+                             "folders = [\"~/orca/workspaces/*\"]\n")
         code, out = self.h.run("doctor")
-        self.assertIn("Config: " + ("~/.config/hatcheck/config.toml" if os.name != "nt" else "config.toml"), out)
+        self.assertIn("Config: " + self.h.shown(path), out)  # under %APPDATA% on Windows
         self.assertIn("  list: details, by cost, 3 per folder", out)
         self.assertIn("  ignore: agents codex, agy; folders " + self.h.shown(os.path.join(self.h.home, "orca", "workspaces", "*")),
                       out)

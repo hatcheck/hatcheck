@@ -303,7 +303,7 @@ class Commands(unittest.TestCase):
             os.remove(os.path.join(target, "claude-where.cmd"))
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "hatcheck.cmd"), "where", ID[:8]])
             self.assertIn(self.transcript, out)
-            code, out = self.run_command(["cmd", "/c", os.path.join(target, "hatcheck.cmd"), "--no-usage"])
+            code, out = self.run_command(["cmd", "/c", os.path.join(target, "hatcheck.cmd"), "--all-folders", "--no-usage"])
             self.assertIn("cl work --resume " + ID, out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "hat.cmd"), "--help"])
             self.assertIn("hat is the short name for hatcheck.", out)
