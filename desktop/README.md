@@ -31,8 +31,8 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
   - *Plans:* every account's limits.
   - *Profiles:* every profile or home, and **Sign in** or **Add one**, which runs the agent's own
     sign-in through `hatcheck open --login`, so the login stays with the agent.
-  - *Desktop* (macOS): the Claude Desktop instances, and **Make one** with its own colour
-    (`hatcheck desktop new`), and remove them.
+  - *Desktop* (macOS and Windows): the Claude Desktop instances, and **Make one** with its own
+    colour (`hatcheck desktop new`), and remove them.
   - *Settings:* live usage, how often to refresh, notifications, which terminal Resume opens, and
     **Check for updates**.
 

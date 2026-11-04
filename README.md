@@ -8,14 +8,14 @@
 # Hatcheck
 
 Several Claude accounts on one computer, each kept apart: work and personal, a team seat and your
-own plan. On macOS each gets its own Claude Desktop, with its own login and an icon in its own
-colour; anywhere, each gets its own Claude Code profile, with recent sessions, plan usage and
-resume commands across all of them in one list. OpenAI's Codex CLI and Moonshot's Kimi Code CLI
-get the same treatment, Google's Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them,
-and DeepSeek Harness (`dsh`), MiniMax Code (`mcode`), Qwen Code (`qwen`), GitHub Copilot CLI
-(`copilot`) and OpenCode (`opencode`) join as read-only agents. Sessions can be carried between
-all ten: as a file the agent is started on for those without an importer, and through their own
-importers for copilot and opencode.
+own plan. On macOS and Windows each gets its own Claude Desktop, with its own login and an icon in
+its own colour; anywhere, each gets its own Claude Code profile, with recent sessions, plan usage
+and resume commands across all of them in one list. OpenAI's Codex CLI and Moonshot's Kimi Code CLI
+get the same treatment, Google's Antigravity CLI (`agy`) and Z.ai's ZCode are read beside them, and
+DeepSeek Harness (`dsh`), MiniMax Code (`mcode`), Qwen Code (`qwen`), GitHub Copilot CLI (`copilot`)
+and OpenCode (`opencode`) join as read-only agents. Sessions can be carried between all ten: as a
+file the agent is started on for those without an importer, and through their own importers for
+copilot and opencode.
 
 Hatcheck never asks for, stores, copies or moves a login, is never between an agent and its model,
 runs nothing in the background, and never switches accounts on its own: see
