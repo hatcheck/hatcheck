@@ -195,8 +195,12 @@ tags ([desktop/README.md](../desktop/README.md#releases)).
      `hatcheck-x86_64-pc-windows-msvc.zip` and its `.sha256` from the release, check that
      `shasum -a 256` of the zip gives the published hash and `unzip -l` lists the seven `.exe`
      files at its top, put the hash in `InstallerSha256` (upper case, as the earlier ones), and
-     run `python3 -m unittest discover -s tests -p test_packaging.py`. The manifests are ready for
-     a winget submission, which hasn't been made yet.
+     run `python3 -m unittest discover -s tests -p test_packaging.py`. The three files then go to
+     [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) as they are, in
+     `manifests/h/hatcheck/Hatcheck/CLI/X.Y.Z/`, as a pull request from a fork that fills in its
+     template, and that repo's licence-agreement bot needs the account's agreement once. The first,
+     0.7.1, is [#470191](https://github.com/microsoft/winget-pkgs/pull/470191), opened 2026-11-03;
+     `winget install hatcheck.Hatcheck.CLI` works once one is merged.
    - `docs: bring the site up to X.Y.Z`: `cargo build --release && python3 site/refresh.py`
      rewrites the site's help blocks and samples from the release binary; read the diff, then
      `site/deploy.sh` ships it.
