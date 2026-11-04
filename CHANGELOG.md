@@ -12,6 +12,7 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 
 ### Fixed
 
+- **`hatcheck best --wait` answers on time after the computer has slept.** It slept the whole wait at once, on a clock that stops while the computer is asleep (`mach_absolute_time` on macOS, `CLOCK_MONOTONIC` on Linux), so a lid closed for two hours of a five-hour wait made it answer two hours after the reset. It now reads the computer's clock at least once a minute and answers within a minute of waking; the usage is still read only when a wait is over.
 - **Antigravity CLI 1.4.10's usage reads right.** Its `/usage` now answers with a bucket per model and effort tier (`Gemini 4 Argon (High)`, `(Medium)`, `(Low)`, …), with no window and the epoch as the reset time of a limit nothing has been spent from, which hatcheck took for a reset that had already passed and showed as `?` for every one. Each is read as a limit with nothing used and no reset ahead; a bucket is named by its own name, without the group's.
 
 ### Changed

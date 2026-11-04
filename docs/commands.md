@@ -1130,7 +1130,9 @@ No room yet; waiting for ~/.claude-a until Tue 12:00pm (in 2d14h)…
   `copilot:NAME`, `opencode`) that one
   profile or home. It sleeps until the soonest reset the numbers name, says so on stderr, then
   looks again; when nothing says when an account will have room, as with DSH's, mcode's, qwen's,
-  copilot's and opencode's no-data accounts, it stops with an error instead of polling. For a script:
+  copilot's and opencode's no-data accounts, it stops with an error instead of polling. It goes by
+  the computer's clock, reading it (not the usage) at least once a minute, so a computer that slept
+  through the reset answers within a minute of waking, not as late as it slept. For a script:
   `hatcheck best --wait a && cl a`.
 - The numbers are the ones `hatcheck usage` shows, live when it can be, with a snapshot's age
   otherwise; `--cached` skips the APIs.

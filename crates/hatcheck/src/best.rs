@@ -21,9 +21,12 @@ use serde_json::{json, Value};
 
 /// After the Fable bands and the accounts without a Fable limit: those with no usage data.
 const NO_DATA: u8 = NO_FABLE + 1;
-/// The longest one sleep while waiting: the numbers are read again after it, whatever they
+/// The longest wait between looks at the numbers: they're read again after it, whatever they
 /// said before.
-const LONGEST_SLEEP: f64 = 7.0 * 86400.0;
+const LONGEST_WAIT: f64 = 7.0 * 86400.0;
+/// While waiting, the clock is read at least this often, so a computer that slept through the
+/// reset answers within this long of waking up.
+const CLOCK_EVERY: f64 = 60.0;
 
 /// (short name, % left, next reset, kind) for an account's limits.
 type Meter = (String, f64, Option<f64>, Value);
@@ -461,6 +464,20 @@ fn wait_state(
     }
 }
 
+/// Sleeps until `clock` says `until`, reading it at least every CLOCK_EVERY seconds. One sleep
+/// of the whole wait would end late by as long as the computer slept, since the clock a sleep
+/// counts on stops while it's asleep (`mach_absolute_time` on macOS, `CLOCK_MONOTONIC` on
+/// Linux); the wall clock keeps going.
+fn sleep_until(until: f64, clock: impl Fn() -> f64, mut sleep: impl FnMut(f64)) {
+    loop {
+        let left = until - clock();
+        if left <= 0.0 {
+            return;
+        }
+        sleep(left.min(CLOCK_EVERY));
+    }
+}
+
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "The best account now, shown as hatcheck usage shows it, and the hatcheck move command that carries a session to it: the newest started from this folder, or --for's. Advice only: it never starts, moves or switches anything.")
         .option(&["--for"], "session", "SESSION", "the session to carry: its ID, or the start of it (default: the newest session started from this folder)")
@@ -541,17 +558,19 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
                 };
                 // A little past the reset; when that has gone by on this clock and the
                 // numbers still say no (the clocks differ), a minute between looks.
-                let sleep = if t <= now {
-                    60.0
+                let until = if t <= now {
+                    now + 60.0
                 } else {
-                    (t - now + 2.0).min(LONGEST_SLEEP)
+                    (t + 2.0).min(now + LONGEST_WAIT)
                 };
                 out::eprint(&format!(
                     "No room yet; waiting for {whom} until {} (in {})…\n",
-                    times::clock(now + sleep, now),
-                    times::duration(sleep)
+                    times::clock(until, now),
+                    times::duration(until - now)
                 ));
-                std::thread::sleep(std::time::Duration::from_secs_f64(sleep));
+                sleep_until(until, times::now, |s| {
+                    std::thread::sleep(std::time::Duration::from_secs_f64(s))
+                });
                 now = times::now();
             }
         }
@@ -783,5 +802,40 @@ mod tests {
         let (key, room) = rank(five_hours_out.0.as_ref(), None, now);
         let back = back_at(&(key, room, entry, five_hours_out), now);
         assert!((back.unwrap() - (now + 3600.0)).abs() < 1.0);
+    }
+
+    #[test]
+    fn a_wait_goes_by_the_wall_clock() {
+        use std::cell::Cell;
+        let start = 1_800_000_000.0;
+        // Awake throughout: a minute at most between looks at the clock, then what's left.
+        let clock = Cell::new(start);
+        let mut naps = Vec::new();
+        sleep_until(
+            start + 150.0,
+            || clock.get(),
+            |s| {
+                naps.push(s);
+                clock.set(clock.get() + s);
+            },
+        );
+        assert_eq!(naps, [60.0, 60.0, 30.0]);
+        // The computer sleeps six hours into a five-hour wait's first minute: the wall clock is
+        // past the reset when it wakes, so the wait ends there, not five hours later.
+        let clock = Cell::new(start);
+        let mut naps = Vec::new();
+        sleep_until(
+            start + 5.0 * 3600.0,
+            || clock.get(),
+            |s| {
+                naps.push(s);
+                clock.set(clock.get() + s + 6.0 * 3600.0);
+            },
+        );
+        assert_eq!(naps, [60.0]);
+        // A moment gone by already: no sleep at all.
+        let mut naps = Vec::new();
+        sleep_until(start - 1.0, || start, |s| naps.push(s));
+        assert!(naps.is_empty());
     }
 }
