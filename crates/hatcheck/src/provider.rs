@@ -30,8 +30,10 @@ pub const PROVIDERS: [Provider; 2] = [
         url: "https://api.kimi.ai/coding/",
         key_from: "the Kimi Code Console, https://www.kimi.com/code (Create API Key)",
         models: &["MODEL"],
-        // As Kimi's model list names them (checked 2026-10-24); a plan below Pro or
-        // Allegretto gets 256k of the 1M models.
+        // As Kimi's model list names them (checked 2026-10-24), with [1m] wherever Kimi's
+        // Claude Code guide gives a model 1M of context (checked 2026-11-04): K3.1 Pro and K3
+        // on Pro or Allegretto and up (256k below), K3.1 Pro Highspeed on every plan that has
+        // it, and K2.8 Preview on every plan. K2.7 Code Highspeed has 256k.
         choices: &[
             (
                 "k3.1-pro[1m]",
@@ -44,9 +46,9 @@ pub const PROVIDERS: [Provider; 2] = [
                 &["k3.1-pro"],
             ),
             (
-                "k3.1-pro-highspeed",
-                "K3.1 Pro, 2-3x faster, 256k context (Pro or Allegretto and up)",
-                &["k3.1-pro-highspeed"],
+                "k3.1-pro-highspeed[1m]",
+                "K3.1 Pro, 2-3x faster, 1M context (Pro or Allegretto and up)",
+                &["k3.1-pro-highspeed[1m]"],
             ),
             (
                 "k3[1m]",
@@ -55,9 +57,9 @@ pub const PROVIDERS: [Provider; 2] = [
             ),
             ("k3", "K3, 256k context (Plus or Moderato and up)", &["k3"]),
             (
-                "kimi-for-coding",
-                "K2.8 Preview, 256k context (every coding plan)",
-                &["kimi-for-coding"],
+                "kimi-for-coding[1m]",
+                "K2.8 Preview, 1M context (every coding plan)",
+                &["kimi-for-coding[1m]"],
             ),
             (
                 "kimi-for-coding-highspeed",

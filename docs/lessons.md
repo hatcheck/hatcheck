@@ -218,6 +218,17 @@ changes; only a session the new version wrote, read by hatcheck, shows the chang
   `claude-k` still called it K2.7 Code. `started_in_first` in `agy.rs`, `rows` in `zcode.rs`.
 - Seen 1× (2026-10-24).
 
+**A provider's figures for a model are copied from its row for that model.** `claude-k`'s menu
+gave K3.1 Pro Highspeed and K2.8 Preview 256k of context, so Claude Code compacted their sessions
+at a quarter of what Kimi gives them, while Kimi's model page, the day the menu was written, gave
+both up to 1M, beside the 256k of `k3-256k` and K2.7 Code Highspeed. The maintenance check
+compares the models' names only; their context and plans are read by hand from the provider's
+table, a row at a time.
+- Evidence: 2026-11-04, Kimi's model page and its Claude Code guide's table by plan, and the model
+  page as the Wayback Machine kept it on 2026-10-24 (snapshot `20261024221901`); `choices` in
+  `provider.rs`, and `test_kimi_models_with_1m_of_context_arent_capped` in `tests/test_provider.py`.
+- Seen 1× (2026-11-04).
+
 ## What hatcheck changes
 
 **A folder is deleted only once it's checked, where it's deleted, to be one of hatcheck's own.**

@@ -4,6 +4,12 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
+## Unreleased
+
+### Fixed
+
+- **`claude-k` and `cl -k` give K3.1 Pro Highspeed and K2.8 Preview their 1M of context.** `claude-k reconfig` offered both with 256k, so Claude Code compacted their sessions at a quarter of what Kimi gives them: 1M for Highspeed on every plan that has it (Pro or Allegretto and up), and for K2.8 Preview (`kimi-for-coding`) on every plan, as Kimi's model page already said when the menu was written. They're `k3.1-pro-highspeed[1m]` and `kimi-for-coding[1m]` now. One saved without `[1m]` is kept, as any saved model is; pick it again in `claude-k reconfig` for the 1M.
+
 ## 0.7.1 - 2026-11-03
 
 Claude Desktop instances come to Windows: `hatcheck desktop new` makes one per account in the Start menu, each with its own login and its own colour. The session list shows what each session cost, with `--details` for its turns and tokens and `--by-cost` for the costliest first, and a config file of hatcheck's own, `config.toml`, sets the list's defaults and the agents and folders no command shows. `hatcheck best --wait` answers on time after the computer has slept, and Antigravity CLI 1.4.10's usage reads right.

@@ -594,13 +594,17 @@ cl a --resume <session-id>          # …and later back on its account's Claude 
   It saves them in `~/.config/claude-z/config` or `~/.config/claude-k/config` (`%APPDATA%\claude-z\config`
   on Windows), the files the [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup
   made with those works as is. `hatcheck provider` shows what's set up.
-- Models, as each provider's Claude Code guide and model list had them on 2026-10-24: on Z.ai
-  `glm-5.3[1m]` (the default, with `glm-5.3-flash[1m]` for quick tasks) or `glm-5.3-flash[1m]`;
-  on Kimi `k3.1-pro[1m]` (K3.1 Pro, the default), `k3.1-pro`, `k3.1-pro-highspeed`, `k3[1m]`,
-  `k3`, `kimi-for-coding` (K2.8 Preview) or `kimi-for-coding-highspeed` (K2.7 Code Highspeed).
-  `[1m]` turns on the 1M-token context window, which Kimi gives Pro and Allegretto plans and up;
-  the others run with 256k. A model saved earlier, such as `glm-4.7`, is used as it is. Each was
-  run through Claude Code 2.1.310, which sends K3.1 Pro the thinking it requires.
+- Models, as each provider's Claude Code guide and model list had them on 2026-10-24, with Kimi's
+  context windows checked again on 2026-11-04: on Z.ai `glm-5.3[1m]` (the default, with
+  `glm-5.3-flash[1m]` for quick tasks) or `glm-5.3-flash[1m]`; on Kimi `k3.1-pro[1m]` (K3.1 Pro,
+  the default), `k3.1-pro`, `k3.1-pro-highspeed[1m]` (K3.1 Pro Highspeed), `k3[1m]`, `k3`,
+  `kimi-for-coding[1m]` (K2.8 Preview) or `kimi-for-coding-highspeed` (K2.7 Code Highspeed).
+  `[1m]` turns on the 1M-token context window, which Kimi gives K3.1 Pro and K3 on Pro and
+  Allegretto plans and up, Highspeed on every plan that has it (the same ones), and K2.8 Preview on
+  every plan; the others run with 256k. A model saved earlier, such as `glm-4.7` or
+  `k3.1-pro-highspeed`, is used as it is, so one saved without `[1m]` keeps 256k until
+  `claude-k reconfig` picks it again. Each was run through Claude Code 2.1.310, which sends K3.1 Pro
+  the thinking it requires; Highspeed and K2.8 Preview were run then without `[1m]`.
 - Kimi is reached at `https://api.kimi.ai/coding/`, the address of Kimi's English guide; a key that
   works at `https://api.kimi.com/coding/`, the Chinese guide's, worked at both on 2026-10-24.
   `CK_BASE_URL` in the config names another address.

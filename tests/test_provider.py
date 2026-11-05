@@ -115,7 +115,26 @@ class Provider(unittest.TestCase):
         self.assertIn("paste just the key", out)
         self.assertIn("Type a number from the list", out)
         with open(path, encoding="utf-8") as fh:
-            self.assertEqual(fh.read(), 'CK_API_KEY="kimi-new"\nCK_MAX_TOKENS=""\nCK_MODEL="kimi-for-coding"\n')
+            self.assertEqual(fh.read(), 'CK_API_KEY="kimi-new"\nCK_MAX_TOKENS=""\nCK_MODEL="kimi-for-coding[1m]"\n')
+
+    def test_kimi_models_with_1m_of_context_arent_capped(self):
+        # Kimi's Claude Code guide, 2026-11-04: K3.1 Pro Highspeed has 1M on every plan that has
+        # it, and K2.8 Preview on every plan.
+        for choice, model in (("3", "k3.1-pro-highspeed[1m]"), ("6", "kimi-for-coding[1m]")):
+            path = self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
+            code, out = self.setup_with("k", "\n%s\n\n" % choice)
+            self.assertEqual(code, 0, out)
+            with open(path, encoding="utf-8") as fh:
+                self.assertIn('CK_MODEL="%s"' % model, fh.read())
+            env = self.env("k")
+            self.assertEqual(env["ANTHROPIC_MODEL"], model)
+            self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "1048576")
+            self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "1048576")
+        # One saved without [1m] from an earlier menu is used as it is, with 256k.
+        self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_MODEL="k3.1-pro-highspeed"\n')
+        env = self.env("k")
+        self.assertEqual(env["ANTHROPIC_MODEL"], "k3.1-pro-highspeed")
+        self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "262144")
 
     def test_setup_needs_a_key(self):
         code, out = self.setup_with("k", "")
