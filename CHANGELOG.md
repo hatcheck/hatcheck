@@ -2,13 +2,20 @@
 
 <!-- One line per paragraph and per bullet: a release's section here becomes its notes on GitHub, where a line break shows. -->
 
-What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z` and `claude-k`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
+What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z`, `claude-k`, `claude-m` and `claude-d`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
 ## Unreleased
 
 ### Added
 
+- **`claude-m` and `claude-d` run Claude Code on MiniMax's and DeepSeek's models**, as `claude-z` and `claude-k` do on Z.ai's and Kimi's, and `cl -m <profile>` and `cl -D <profile>` do it in a profile. `claude-m reconfig` and `claude-d reconfig` ask for the key, MiniMax's M Plan API key or a DeepSeek Platform key, and save it in `~/.config/claude-m/config` or `~/.config/claude-d/config`. The settings are the providers' Claude Code guides' of 2026-11-05: on MiniMax `MiniMax-M3.1-Flash[1m]`, compacting at 512K; on DeepSeek `deepseek-v4-pro[1m]`, its flagship and the default, or `deepseek-flash[1m]`, with `deepseek-flash` for the haiku tier and subagents, compacting at 768K. Neither has been run through Claude Code with them yet. DeepSeek's flag for `cl` is a capital `-D`, leaving `-d` to Claude Code's `--debug`, so a debug run can't send a session to DeepSeek. A session whose last reply came from MiniMax or DeepSeek resumes with `claude-m` or `claude-d`, or `cl -m` or `cl -D`, as one from Z.ai or Kimi does; `hatcheck provider` and `doctor`, the installers and the winget and PyPI packages have the two new commands.
 - **`hatcheck move -y` and `fork -y` ask nothing.** `hat m -y` moves the newest session started from this folder to the best account of its agent now, after showing both as it does before asking, and resumes it there at once; with the session and the profile named, `-y` answers just the offer to resume. Without a terminal it goes ahead with what it picked, where a script had to name both, and starts nothing, and nor does `--json`. Of several copies it takes the one used last, as a script does, and a name that is two homes (`codex:work` or `claude:work`) still has to be spelled out. `hatcheck resume` had `-y` already.
+
+### Changed
+
+- **`claude-z`, `claude-k`, `claude-m` and `claude-d` start Claude Code at `max` effort**, the highest each provider has, by putting `--effort max` in front of Claude Code's arguments, unless they name an `--effort` of their own. `reconfig` asks for another level (`low`, `medium`, `high`, `xhigh`) or `auto`, which leaves it to Claude Code, saved as `CK_EFFORT` and so on. As an argument it's where a session starts, and `/effort` still changes it, where `CLAUDE_CODE_EFFORT_LEVEL` would hold the session to it. `cl -z`, `-k`, `-m` and `-D` do the same, and `hatcheck provider` shows the effort.
+- **A provider's launcher sets itself up.** Run on a terminal with no key saved, it asks for the key, model and effort first and then starts Claude Code, where it used to stop and say to run `reconfig`; and when the models saved aren't on its menu any more, such as `glm-4.7` or `k3`, it asks again, Enter keeping the key and choosing the flagship. Off a terminal it stops as before without a key, and runs a model no longer offered as saved, saying so on stderr; `hatcheck provider` marks it `(not offered now)`. In `reconfig`, Enter keeps the models saved only while they're on the menu, and otherwise takes the flagship.
+- **Every provider's menu has its current models, its flagship first and the default**, as their guides and model lists had them on 2026-11-05: `claude-k` offers Kimi's new `k3-256k`, K3 at 256k for half `k3`'s quota, in place of plain `k3`, and `claude-d` starts on DeepSeek V4 Pro, its flagship, with V4.1 Flash the other choice.
 
 ### Fixed
 

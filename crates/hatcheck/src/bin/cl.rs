@@ -1,4 +1,5 @@
-//! cl: Claude Code with a ~/.claude-<profile> folder, or on Z.ai or Kimi with -z or -k.
+//! cl: Claude Code with a ~/.claude-<profile> folder, or on Z.ai, Kimi, MiniMax or DeepSeek with
+//! -z, -k, -m or -D.
 fn main() {
     let args = std::env::args_os()
         .skip(1)

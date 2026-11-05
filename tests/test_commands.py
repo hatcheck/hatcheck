@@ -1,4 +1,4 @@
-"""cl, cx, ck, claude-z and claude-k, the hatcheck command and the installers. The launchers are
+"""cl, cx, ck and claude-z, -k, -m and -d, the hatcheck command and the installers. The launchers are
 the binaries built beside hatcheck, as every install has them; AsNames runs them through
 hatcheck itself, as a link named cl does. A fake claude stands in for Claude Code, a fake
 codex for Codex, and a fake kimi for Kimi Code CLI."""
@@ -6,12 +6,13 @@ import os
 import subprocess
 import unittest
 
-from helpers import ENGINE, REPO, WINDOWS, FakeHome, write
+from helpers import ENGINE, REPO, WINDOWS, FakeHome, in_terminal, write
 
 ID = "abcdef12-0000-4000-8000-000000000001"
 CODEX_ID = "019f0000-aaaa-7000-8000-000000000001"
 POWERSHELL = ["powershell", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
-SHOWN = ("CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL")
+SHOWN = ("CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",
+         "ANTHROPIC_DEFAULT_HAIKU_MODEL")
 HATCHECK = [ENGINE]
 EXE = ".exe" if WINDOWS else ""
 
@@ -69,7 +70,7 @@ class Commands(unittest.TestCase):
         return self.run_command([launcher("ck")] + list(args), **kw)
 
     def claude_on(self, name, *args, **kw):
-        """claude-z or claude-k."""
+        """claude-z, claude-k, claude-m or claude-d."""
         return self.run_command([launcher(name)] + list(args), **kw)
 
     def where(self, *args):
@@ -86,15 +87,44 @@ class Commands(unittest.TestCase):
         for args in ((), ("--resume", ID), ("-k",)):
             code, out = self.cl(*args)
             self.assertEqual(code, 2, out)
-            self.assertIn("usage: cl [-z|-k] <profile>", out)
+            self.assertIn("usage: cl [-z|-k|-m|-D] <profile>", out)
 
     def test_cl_with_a_provider(self):
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         code, out = self.cl("-k", "work", "--resume", ID, extra_env={"ANTHROPIC_API_KEY": "sk-ant-from-the-shell"})
         self.assertEqual(code, 0, out)
-        for line in ("args=--resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
+        for line in ("args=--effort max --resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
                      "ANTHROPIC_BASE_URL=https://api.kimi.ai/coding/", "ANTHROPIC_AUTH_TOKEN=kimi-test-key",
                      "ANTHROPIC_API_KEY=unset", "ANTHROPIC_MODEL=k3.1-pro[1m]"):
+            self.assertIn(line, out)
+
+    def test_minimax_and_deepseek(self):
+        self.h.provider_config("m", 'CM_API_KEY="minimax-test-key"\n')
+        self.h.provider_config("d", 'CD_API_KEY="deepseek-test-key"\n')
+        code, out = self.cl("-m", "work", "--resume", ID)
+        self.assertEqual(code, 0, out)
+        for line in ("args=--effort max --resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
+                     "ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic", "ANTHROPIC_AUTH_TOKEN=minimax-test-key",
+                     "ANTHROPIC_API_KEY=unset", "ANTHROPIC_MODEL=MiniMax-M3.1-Flash[1m]"):
+            self.assertIn(line, out)
+        code, out = self.claude_on("claude-d", "-p", "hi")
+        self.assertEqual(code, 0, out)
+        for line in ("args=--effort max -p hi", "CLAUDE_CONFIG_DIR=unset",
+                     "ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic", "ANTHROPIC_AUTH_TOKEN=deepseek-test-key",
+                     "ANTHROPIC_MODEL=deepseek-v4-pro[1m]", "ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash"):
+            self.assertIn(line, out)
+        code, out = self.cl("-D", "work", "-d")
+        self.assertEqual(code, 0, out)
+        self.assertIn("ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic", out)
+        self.assertIn("args=--effort max -d", out)
+        # -d stays Claude Code's --debug, so a debug run in a bound folder is the profile's own,
+        # on its Claude plan, and goes to no other provider.
+        api = self.h.folder("code", "api")
+        self.run_command(HATCHECK + ["bind", "work"], cwd=api)
+        code, out = self.cl("-d", "--resume", ID, cwd=api)
+        self.assertEqual(code, 0, out)
+        for line in ("args=-d --resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
+                     "ANTHROPIC_BASE_URL=unset"):
             self.assertIn(line, out)
 
     def test_cx_runs_codex_with_the_home(self):
@@ -188,7 +218,7 @@ class Commands(unittest.TestCase):
     def test_claude_z_and_k_keep_the_config_dir(self):
         code, out = self.claude_on("claude-z", "--resume", ID)
         self.assertEqual(code, 0, out)
-        for line in ("args=--resume " + ID, "CLAUDE_CONFIG_DIR=unset", "ANTHROPIC_MODEL=glm-5.3[1m]",
+        for line in ("args=--effort max --resume " + ID, "CLAUDE_CONFIG_DIR=unset", "ANTHROPIC_MODEL=glm-5.3[1m]",
                      "ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic", "ANTHROPIC_AUTH_TOKEN=zai-test-key"):
             self.assertIn(line, out)
         mine = os.path.join(self.h.home, ".claude-work")
@@ -196,10 +226,70 @@ class Commands(unittest.TestCase):
         self.assertIn("CLAUDE_CONFIG_DIR=" + mine, out)
 
     def test_provider_not_set_up(self):
+        # Off a terminal there's no one to ask, so it says how to set it up.
         code, out = self.claude_on("claude-k")
         self.assertEqual(code, 1, out)
         self.assertIn("Kimi isn't set up yet. Run: claude-k reconfig", out)
         self.assertNotIn("args=", out)  # claude didn't run
+
+    def test_effort(self):
+        # max unless the config names another, auto leaves it to Claude Code, and one typed wins.
+        self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
+        for args, shown in ((["-p", "hi"], "args=--effort max -p hi"),
+                            (["--effort", "low", "-p", "hi"], "args=--effort low -p hi"),
+                            (["--effort=high", "-p", "hi"], "args=--effort=high -p hi"),
+                            (["mcp", "list"], "args=--effort max mcp list")):  # before Claude Code's commands
+            code, out = self.claude_on("claude-k", *args)
+            self.assertEqual(code, 0, out)
+            self.assertIn(shown + "\n", out)
+        for saved, shown in (("high", "args=--effort high -p hi"), ("auto", "args=-p hi")):
+            self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_EFFORT="%s"\n' % saved)
+            code, out = self.cl("-k", "work", "-p", "hi")
+            self.assertIn(shown + "\n", out)
+
+    def test_models_no_longer_offered_run_as_saved_off_a_terminal(self):
+        self.h.provider_config("z", 'CZ_API_KEY="zai-test-key"\nCZ_MODEL_OPUS="glm-5.3[1m]"\nCZ_MODEL_HAIKU="glm-4.7"\n')
+        code, out = self.claude_on("claude-z", "-p", "hi")
+        self.assertEqual(code, 0, out)
+        self.assertIn("claude-z: glm-5.3[1m] (haiku glm-4.7) isn't among the models offered now; "
+                      "claude-z reconfig picks one", out)
+        self.assertIn("ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-4.7", out)
+
+    @unittest.skipIf(WINDOWS, "a pseudo-terminal")
+    def test_set_up_on_a_terminal_the_first_time_and_when_models_are_no_longer_offered(self):
+        env = dict(self.h.env(), PATH=self.bin + os.pathsep + "/bin:/usr/bin")
+        # The first time: the key, then Enter for the flagship, max effort and Claude Code's limit.
+        code, out = in_terminal([launcher("claude-d"), "-p", "hi"],
+                                [(b"API key: ", b"deepseek-typed-key\n"), (b"Enter for 1, deepseek-v4-pro[1m]: ", b"\n"),
+                                 (b"(Enter keeps max): ", b"\n"), (b"Max output tokens", b"\n")],
+                                env, self.h.root)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Claude Code on DeepSeek isn't set up yet: the key and model first.", out)
+        self.assertNotIn("deepseek-typed-key", out.split("args=")[0])  # not echoed
+        self.assertIn("Saved. Starting Claude Code on DeepSeek; claude-d reconfig changes these.", out)
+        for line in ("args=--effort max -p hi", "ANTHROPIC_AUTH_TOKEN=deepseek-typed-key",
+                     "ANTHROPIC_MODEL=deepseek-v4-pro[1m]", "ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash"):
+            self.assertIn(line, out)
+        # Models no longer offered: the setup again, Enter keeping the key and taking the flagship.
+        path = self.h.provider_config("z", 'CZ_API_KEY="zai-test-key"\nCZ_MODEL_OPUS="glm-5.3[1m]"\n'
+                                           'CZ_MODEL_SONNET="glm-5.3-flash[1m]"\nCZ_MODEL_HAIKU="glm-4.7"\n')
+        code, out = in_terminal([launcher("cl"), "-z", "work", "--resume", ID],
+                                [(b"(Enter keeps \xe2\x80\xa6-key): ", b"\n"), (b"Enter for 1, glm-5.3[1m]: ", b"\n"),
+                                 (b"(Enter keeps max): ", b"\n"), (b"Max output tokens", b"\n")],
+                                env, self.h.root)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Claude Code on Z.ai: glm-5.3[1m] (sonnet glm-5.3-flash[1m], haiku glm-4.7), saved in "
+                      "~/.config/claude-z/config, isn't among the models offered now. Choose again", out)
+        for line in ("args=--effort max --resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
+                     "ANTHROPIC_AUTH_TOKEN=zai-test-key", "ANTHROPIC_MODEL=glm-5.3[1m]",
+                     "ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.3-flash[1m]"):
+            self.assertIn(line, out)
+        with open(path, encoding="utf-8") as fh:
+            self.assertIn('CZ_MODEL_HAIKU="glm-5.3-flash[1m]"\nCZ_EFFORT="max"\n', fh.read())
+        # Set up and current: no questions.
+        code, out = in_terminal([launcher("claude-z"), "-p", "hi"], [], env, self.h.root)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out.startswith("args=--effort max -p hi"), out)
 
     def test_reconfig(self):
         code, out = self.claude_on("claude-k", "reconfig")  # nothing typed
@@ -280,7 +370,7 @@ class Commands(unittest.TestCase):
 
     def test_installer(self):
         target = os.path.join(self.h.root, "installed")
-        names = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k"]
+        names = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k", "claude-m", "claude-d"]
         built = os.path.realpath(os.path.dirname(ENGINE))  # as the installers spell it
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         if WINDOWS:

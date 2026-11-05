@@ -71,8 +71,8 @@ Usage:
     hatcheck unbind [FOLDER]           untie it again
     hatcheck desktop ...               Claude Desktop instances on macOS and Windows: list,
                                        open, make one
-    hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
-                                       claude-k, cl -z and cl -k
+    hatcheck provider ...              the Z.ai, Kimi, MiniMax and DeepSeek keys and models
+                                       behind claude-z, -k, -m and -d, and cl -z, -k, -m, -D
     hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
                                        which runs, and how to remove the rest
 
@@ -115,7 +115,7 @@ fn is_hours(word: &str) -> bool {
 }
 
 /// Run hatcheck with argv (without the program's name), called as argv0: as a launcher when
-/// that's cl, cx, ck, claude-z or claude-k.
+/// that's cl, cx, ck, claude-z, claude-k, claude-m or claude-d.
 pub fn main(argv0: &str, argv: Vec<String>) -> i32 {
     run(argv0, argv, true)
 }

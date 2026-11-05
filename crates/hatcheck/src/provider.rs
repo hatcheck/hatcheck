@@ -1,6 +1,7 @@
-//! hatcheck provider ...: the settings for running Claude Code on Z.ai (GLM models) or Kimi
-//! instead of Anthropic, behind claude-z, claude-k, cl -z and cl -k. docs/agents.md's `claude-z`,
-//! `claude-k` section describes the config files and what's sent where.
+//! hatcheck provider ...: the settings for running Claude Code on Z.ai (GLM models), Kimi,
+//! MiniMax or DeepSeek instead of Anthropic, behind claude-z, claude-k, claude-m, claude-d and
+//! cl -z, -k, -m and -D. docs/agents.md's `claude-z`, `claude-k`, `claude-m`, `claude-d` section
+//! describes the config files and what's sent where.
 
 use crate::args::{Count, Parser};
 use crate::ospath;
@@ -10,34 +11,42 @@ use crate::py;
 use serde_json::{Map, Value};
 use std::io::{BufRead, Write};
 
-/// A provider: its name, the prefix of its config fields, its endpoint, where to get a key,
-/// its model slots, and the model choices, each filling all the slots.
+/// A provider: the flag cl takes for it, its name, the prefix of its config fields, its endpoint,
+/// where to get a key, its model slots, the model choices, each filling all the slots, the first
+/// being its flagship and the default, and where Claude Code compacts a session on one of its
+/// [1m] models, as the provider's Claude Code guide sets it.
 pub struct Provider {
     pub key: &'static str,
+    /// -z, -k and -m, but -D for DeepSeek: cl leaves -d to Claude Code, whose -d is --debug, so
+    /// that a debug run typed as cl -d can't send a session to another provider.
+    pub cl_flag: &'static str,
     pub name: &'static str,
     pub prefix: &'static str,
     pub url: &'static str,
     pub key_from: &'static str,
     pub models: &'static [&'static str],
     pub choices: &'static [(&'static str, &'static str, &'static [&'static str])],
+    pub compact_at: &'static str,
 }
 
-pub const PROVIDERS: [Provider; 2] = [
+pub const PROVIDERS: [Provider; 4] = [
     Provider {
         key: "k",
+        cl_flag: "-k",
         name: "Kimi",
         prefix: "CK_",
         url: "https://api.kimi.ai/coding/",
         key_from: "the Kimi Code Console, https://www.kimi.com/code (Create API Key)",
         models: &["MODEL"],
-        // As Kimi's model list names them (checked 2026-10-24), with [1m] wherever Kimi's
-        // Claude Code guide gives a model 1M of context (checked 2026-11-04): K3.1 Pro and K3
-        // on Pro or Allegretto and up (256k below), K3.1 Pro Highspeed on every plan that has
-        // it, and K2.8 Preview on every plan. K2.7 Code Highspeed has 256k.
+        // Kimi's six model IDs, as its model list and its Claude Code guide's table by plan had
+        // them on 2026-11-05, with [1m] wherever the guide gives a model 1M of context: K3.1 Pro
+        // and K3 on Pro or Allegretto and up (256k below), K3.1 Pro Highspeed on every plan that
+        // has it, and K2.8 Preview on every plan. k3-256k, K3 at 256k, takes half k3's quota, so
+        // it replaced plain k3; K2.7 Code Highspeed has 256k and no effort setting.
         choices: &[
             (
                 "k3.1-pro[1m]",
-                "K3.1 Pro, 1M context (Pro or Allegretto plan and up)",
+                "K3.1 Pro, the flagship, 1M context (Pro or Allegretto plan and up)",
                 &["k3.1-pro[1m]"],
             ),
             (
@@ -47,7 +56,7 @@ pub const PROVIDERS: [Provider; 2] = [
             ),
             (
                 "k3.1-pro-highspeed[1m]",
-                "K3.1 Pro, 2-3x faster, 1M context (Pro or Allegretto and up)",
+                "K3.1 Pro, 2-3x faster at twice the quota, 1M context (Pro or Allegretto and up)",
                 &["k3.1-pro-highspeed[1m]"],
             ),
             (
@@ -55,7 +64,11 @@ pub const PROVIDERS: [Provider; 2] = [
                 "K3, 1M context (Pro or Allegretto plan and up)",
                 &["k3[1m]"],
             ),
-            ("k3", "K3, 256k context (Plus or Moderato and up)", &["k3"]),
+            (
+                "k3-256k",
+                "K3, 256k context, half k3's quota (Plus or Moderato and up)",
+                &["k3-256k"],
+            ),
             (
                 "kimi-for-coding[1m]",
                 "K2.8 Preview, 1M context (every coding plan)",
@@ -63,19 +76,23 @@ pub const PROVIDERS: [Provider; 2] = [
             ),
             (
                 "kimi-for-coding-highspeed",
-                "K2.7 Code Highspeed, faster output (Pro or Allegretto and up)",
+                "K2.7 Code Highspeed, about 6x faster at 3x the quota, 256k (Pro or Allegretto and up)",
                 &["kimi-for-coding-highspeed"],
             ),
         ],
+        compact_at: "1048576",
     },
     Provider {
         key: "z",
+        cl_flag: "-z",
         name: "Z.ai",
         prefix: "CZ_",
         url: "https://api.z.ai/api/anthropic",
         key_from: "https://z.ai/manage-apikey/apikey-list",
         models: &["MODEL_OPUS", "MODEL_SONNET", "MODEL_HAIKU"],
-        // As Z.ai's Claude Code guide pairs them (checked 2026-10-24).
+        // As Z.ai's Claude Code guide pairs them (checked 2026-11-05): GLM-5.3 and GLM-5.3-Flash
+        // are the two models every GLM Coding Plan has; its model list's glm-5.3-flashx isn't
+        // on the plan, and older names are served by these two.
         choices: &[
             (
                 "glm-5.3[1m]",
@@ -92,16 +109,68 @@ pub const PROVIDERS: [Provider; 2] = [
                 ],
             ),
         ],
+        compact_at: "1000000",
+    },
+    Provider {
+        key: "m",
+        cl_flag: "-m",
+        name: "MiniMax",
+        prefix: "CM_",
+        url: "https://api.minimax.io/anthropic",
+        key_from:
+            "the MiniMax console, https://platform.minimax.io/console/plan (the M Plan API key)",
+        models: &["MODEL"],
+        // As MiniMax's Claude Code guide sets it (checked 2026-11-05): M3.1 Flash, the M Plan's
+        // one text model on every tier, with 1M of context, compacting at 512K, which MiniMax
+        // recommends for everyday coding. Its models page also lists MiniMax-M3, the generation
+        // before, which isn't on the M Plan.
+        choices: &[(
+            "MiniMax-M3.1-Flash[1m]",
+            "M3.1 Flash, 1M context, compacting at 512K (every M Plan tier)",
+            &["MiniMax-M3.1-Flash[1m]"],
+        )],
+        compact_at: "524288",
+    },
+    Provider {
+        key: "d",
+        cl_flag: "-D",
+        name: "DeepSeek",
+        prefix: "CD_",
+        url: "https://api.deepseek.com/anthropic",
+        key_from: "the DeepSeek Platform, https://platform.deepseek.com/api_keys",
+        models: &["MODEL", "MODEL_HAIKU"],
+        // DeepSeek's two models, as its models page and its Claude Code guide had them on
+        // 2026-11-05: the model, with deepseek-flash for the haiku tier and subagents, as the
+        // guide sets them, compacting at 768K of the 1M both have. The guide names Flash alone;
+        // V4 Pro, the flagship, is what it maps Claude's opus models to.
+        choices: &[
+            (
+                "deepseek-v4-pro[1m]",
+                "DeepSeek V4 Pro, the flagship, 1M context, with Flash for quick tasks",
+                &["deepseek-v4-pro[1m]", "deepseek-flash"],
+            ),
+            (
+                "deepseek-flash[1m]",
+                "DeepSeek V4.1 Flash, 1M context, a quarter to a third of Pro's price",
+                &["deepseek-flash[1m]", "deepseek-flash"],
+            ),
+        ],
+        compact_at: "786432",
     },
 ];
 
-/// The providers in the order the setup and the status list them: z, then k.
-fn in_order() -> [&'static Provider; 2] {
-    [&PROVIDERS[1], &PROVIDERS[0]]
+/// The providers in the order the setup and the status list them: z, k, m, d.
+fn in_order() -> [&'static Provider; 4] {
+    [&PROVIDERS[1], &PROVIDERS[0], &PROVIDERS[2], &PROVIDERS[3]]
 }
 
 pub fn provider(key: &str) -> Option<&'static Provider> {
     PROVIDERS.iter().find(|p| p.key == key)
+}
+
+/// The provider cl's first argument names: -z, -k, -m or -D.
+pub fn by_cl_flag(arg: &str) -> Option<&'static Provider> {
+    PROVIDERS.iter().find(|p| p.cl_flag == arg)
 }
 
 /// ~/.config/claude-z/config, or %APPDATA%\claude-z\config on Windows.
@@ -186,6 +255,44 @@ pub fn models(p: &Provider, values: &Map<String, Value>) -> Vec<String> {
         .collect()
 }
 
+/// Claude Code's effort levels, as --effort takes them.
+const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+
+/// The effort the launchers start Claude Code at: the config's, max when it names none, and None
+/// for auto, which leaves it to Claude Code. Every provider here takes max: Kimi and Z.ai map
+/// xhigh to it and medium to high, and MiniMax and DeepSeek set it in their guides.
+pub fn effort(p: &Provider, values: &Map<String, Value>) -> Option<String> {
+    match field(p, values, "EFFORT").to_lowercase().as_str() {
+        "" => Some("max".into()),
+        "auto" => None,
+        level => Some(level.into()),
+    }
+}
+
+/// Whether the models saved are none of the choices offered now, such as a model the provider
+/// has since replaced. A slot not saved takes the default's model, so a config with no models is
+/// the default.
+pub fn outdated(p: &Provider, values: &Map<String, Value>) -> bool {
+    let chosen = models(p, values);
+    !p.choices.iter().any(|(_, _, slots)| chosen == *slots)
+}
+
+/// Claude Code's arguments with --effort first, before any command of Claude Code's, unless they
+/// name one already. As an argument it's the session's starting point, which /effort changes;
+/// CLAUDE_CODE_EFFORT_LEVEL would hold every session to it, /effort saying "Not applied".
+pub fn with_effort(p: &Provider, values: &Map<String, Value>, args: Vec<String>) -> Vec<String> {
+    let named = args
+        .iter()
+        .any(|a| a == "--effort" || a.starts_with("--effort="));
+    match effort(p, values) {
+        Some(level) if !named => ["--effort".to_string(), level]
+            .into_iter()
+            .chain(args)
+            .collect(),
+        _ => args,
+    }
+}
+
 /// [(name, value)] for Claude Code; a value of None means unset it.
 pub fn environment(
     p: &Provider,
@@ -215,27 +322,33 @@ pub fn environment(
             ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", Some("1".into())),
         ]);
         if opus.contains("[1m]") {
-            env.push(("CLAUDE_CODE_AUTO_COMPACT_WINDOW", Some("1000000".into())));
+            env.push(("CLAUDE_CODE_AUTO_COMPACT_WINDOW", Some(p.compact_at.into())));
         }
     } else {
+        // The model in every slot, but for DeepSeek's lighter one in the haiku tier and for
+        // subagents, as its guide sets them.
         let model = chosen[0].clone();
+        let quick = chosen.get(1).cloned().unwrap_or_else(|| model.clone());
         for name in [
             "ANTHROPIC_MODEL",
             "ANTHROPIC_DEFAULT_FABLE_MODEL",
             "ANTHROPIC_DEFAULT_OPUS_MODEL",
             "ANTHROPIC_DEFAULT_SONNET_MODEL",
-            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-            "CLAUDE_CODE_SUBAGENT_MODEL",
         ] {
             env.push((name, Some(model.clone())));
         }
-        let window = if model.ends_with("[1m]") {
-            "1048576"
-        } else {
-            "262144"
-        };
-        env.push(("CLAUDE_CODE_AUTO_COMPACT_WINDOW", Some(window.into())));
-        env.push(("CLAUDE_CODE_MAX_CONTEXT_TOKENS", Some(window.into())));
+        env.push(("ANTHROPIC_DEFAULT_HAIKU_MODEL", Some(quick.clone())));
+        env.push(("CLAUDE_CODE_SUBAGENT_MODEL", Some(quick)));
+        let long = model.ends_with("[1m]");
+        if p.key == "k" {
+            // Kimi's guide sets both to the context the plan gives: 1M, or 256k.
+            let window = if long { p.compact_at } else { "262144" };
+            env.push(("CLAUDE_CODE_AUTO_COMPACT_WINDOW", Some(window.into())));
+            env.push(("CLAUDE_CODE_MAX_CONTEXT_TOKENS", Some(window.into())));
+        } else if long {
+            // MiniMax's and DeepSeek's set where to compact, short of the 1M that [1m] gives.
+            env.push(("CLAUDE_CODE_AUTO_COMPACT_WINDOW", Some(p.compact_at.into())));
+        }
     }
     if !get("MAX_TOKENS").is_empty() {
         env.push(("CLAUDE_CODE_MAX_OUTPUT_TOKENS", Some(get("MAX_TOKENS"))));
@@ -282,13 +395,18 @@ fn print_env(p: &Provider, as_json: bool) -> i32 {
     0
 }
 
-/// The main model, then any other slot that differs from it.
-fn describe(chosen: &[String]) -> String {
-    let others: Vec<String> = ["sonnet", "haiku"]
+/// The main model, then any other slot that differs from it, by its tier: sonnet or haiku.
+fn describe(p: &Provider, chosen: &[String]) -> String {
+    let others: Vec<String> = p
+        .models
         .iter()
-        .zip(chosen.iter().skip(1))
+        .zip(chosen)
+        .skip(1)
         .filter(|(_, m)| **m != chosen[0])
-        .map(|(slot, m)| format!("{slot} {m}"))
+        .map(|(slot, m)| {
+            let tier = slot.trim_start_matches("MODEL_").to_lowercase();
+            format!("{tier} {m}")
+        })
         .collect();
     if others.is_empty() {
         chosen[0].clone()
@@ -307,8 +425,8 @@ fn status() -> i32 {
             format!("not set up; run claude-{} reconfig", p.key)
         };
         out::println(&format!(
-            "{} (claude-{}, or cl -{} <profile>): {place}",
-            p.name, p.key, p.key
+            "{} (claude-{}, or cl {} <profile>): {place}",
+            p.name, p.key, p.cl_flag
         ));
         if let Some(values) = values {
             let key = field(p, &values, "API_KEY");
@@ -326,13 +444,19 @@ fn status() -> i32 {
                 .and_then(Value::as_str)
                 .filter(|b| !b.is_empty());
             out::println(&format!(
-                "  key {} · {}{}{}",
+                "  key {} · {}{} · effort {}{}{}",
                 if key.is_empty() {
                     "missing".to_string()
                 } else {
                     format!("…{tail}")
                 },
-                describe(&models(p, &values)),
+                describe(p, &models(p, &values)),
+                if outdated(p, &values) {
+                    " (not offered now)"
+                } else {
+                    ""
+                },
+                effort(p, &values).unwrap_or_else(|| "auto".into()),
                 if tokens.is_empty() {
                     String::new()
                 } else {
@@ -345,9 +469,9 @@ fn status() -> i32 {
     0
 }
 
-/// Read a line without showing it, from a terminal.
+/// Read a line without showing it, from a terminal. The prompt shows once echo is off, since
+/// turning it off drops what was typed before: what's typed after the prompt is kept.
 fn read_hidden(prompt: &str) -> Option<String> {
-    out::print(prompt);
     #[cfg(unix)]
     {
         // SAFETY: termios on stdin, which is a terminal here; the old settings come back after.
@@ -357,6 +481,7 @@ fn read_hidden(prompt: &str) -> Option<String> {
                 let mut quiet = old;
                 quiet.c_lflag &= !libc::ECHO;
                 libc::tcsetattr(0, libc::TCSAFLUSH, &quiet);
+                out::print(prompt);
                 let line = read_line();
                 libc::tcsetattr(0, libc::TCSAFLUSH, &old);
                 out::println("");
@@ -375,6 +500,7 @@ fn read_hidden(prompt: &str) -> Option<String> {
             let mut mode = 0;
             if GetConsoleMode(handle, &mut mode) != 0 {
                 SetConsoleMode(handle, mode & !ENABLE_ECHO_INPUT);
+                out::print(prompt);
                 let line = read_line();
                 SetConsoleMode(handle, mode);
                 out::println("");
@@ -382,6 +508,7 @@ fn read_hidden(prompt: &str) -> Option<String> {
             }
         }
     }
+    out::print(prompt);
     read_line()
 }
 
@@ -457,17 +584,83 @@ fn write_config(path: &str, lines: &[String], updates: &[(String, String)]) -> s
     Ok(())
 }
 
+/// Why the setup runs: asked for, with reconfig or hatcheck provider setup, or from a launcher,
+/// which runs it first on a terminal when there's no key yet, or when the models saved aren't
+/// among those offered now.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Why {
+    Asked,
+    FirstRun,
+    Outdated,
+}
+
 /// Ask for the API key, the model and the output limit, and save them.
 pub fn setup(p: &Provider) -> i32 {
+    setup_for(p, Why::Asked)
+}
+
+/// The config a launcher runs Claude Code with. On a terminal, one with no key gets the setup
+/// first, and one whose models aren't offered now gets it again, Enter choosing the flagship;
+/// elsewhere the first is refused with how to set it up, and the second runs as saved, saying so.
+pub fn ready(p: &Provider, me: &str) -> Result<Map<String, Value>, i32> {
+    let path = config_path(p);
+    let values = read_config(&path).0;
+    let why = match &values {
+        Some(v) if field(p, v, "API_KEY").is_empty() => Why::FirstRun,
+        Some(v) if outdated(p, v) => Why::Outdated,
+        Some(v) => return Ok(v.clone()),
+        None => Why::FirstRun,
+    };
+    if crate::move_cmd::interactive() {
+        return match setup_for(p, why) {
+            0 => Ok(read_config(&path).0.unwrap_or_default()),
+            code => Err(code),
+        };
+    }
+    match values {
+        None => Err(out::fail(&format!(
+            "{} isn't set up yet. Run: claude-{} reconfig",
+            p.name, p.key
+        ))),
+        Some(_) if why == Why::FirstRun => Err(out::fail(&format!(
+            "No {} API key in {}. Run: claude-{} reconfig",
+            p.name,
+            shown(&path),
+            p.key
+        ))),
+        Some(v) => {
+            out::eprint(&format!(
+                "{}\n",
+                out::Paint::stderr().warning(&format!(
+                    "{me}: {} isn't among the models offered now; claude-{} reconfig picks one",
+                    describe(p, &models(p, &v)),
+                    p.key
+                ))
+            ));
+            Ok(v)
+        }
+    }
+}
+
+fn setup_for(p: &Provider, why: Why) -> i32 {
     let path = config_path(p);
     let (values, lines) = read_config(&path);
     let values = values.unwrap_or_default();
     let pre = p.prefix;
-    out::heading(&format!(
-        "Claude Code on {}. Settings go in {}",
-        p.name,
-        shown(&path)
-    ));
+    out::heading(&match why {
+        Why::FirstRun => format!(
+            "Claude Code on {} isn't set up yet: the key and model first. Settings go in {}",
+            p.name,
+            shown(&path)
+        ),
+        Why::Outdated => format!(
+            "Claude Code on {}: {}, saved in {}, isn't among the models offered now. Choose again",
+            p.name,
+            describe(p, &models(p, &values)),
+            shown(&path)
+        ),
+        Why::Asked => format!("Claude Code on {}. Settings go in {}", p.name, shown(&path)),
+    });
     let current = field(p, &values, "API_KEY");
     out::println(&format!("Get an API key from {}", p.key_from));
     let key = loop {
@@ -501,18 +694,37 @@ pub fn setup(p: &Provider) -> i32 {
         }
         out::println("That has spaces, quotes or backslashes in it; paste just the key.");
     };
-    let mut chosen: Vec<String> = models(p, &values);
-    out::heading("Model:");
-    for (n, (label, about, _)) in p.choices.iter().enumerate() {
-        out::println(&format!("  {}) {label:<26} {about}", n + 1));
+    // The models saved, kept on Enter while they're among the choices; otherwise, or with none
+    // saved, Enter takes the first, the flagship.
+    let saved = p
+        .models
+        .iter()
+        .any(|slot| !field(p, &values, slot).is_empty());
+    let flagship: Vec<String> = p.choices[0].2.iter().map(|m| m.to_string()).collect();
+    let mut chosen: Vec<String> = if outdated(p, &values) {
+        flagship.clone()
+    } else {
+        models(p, &values)
+    };
+    let keeps = saved && !outdated(p, &values);
+    if p.choices.len() == 1 {
+        // One model to offer: nothing to ask.
+        let (label, about, _) = p.choices[0];
+        out::println(&format!("Model: {label}  {about}"));
+    } else {
+        out::heading("Model:");
+        for (n, (label, about, _)) in p.choices.iter().enumerate() {
+            out::println(&format!("  {}) {label:<26} {about}", n + 1));
+        }
     }
-    loop {
+    while p.choices.len() > 1 {
+        let enter = if keeps {
+            format!("Enter to keep {}", describe(p, &chosen))
+        } else {
+            format!("Enter for 1, {}", p.choices[0].0)
+        };
         let answer = ask(
-            &format!(
-                "Choose 1-{}, or Enter to keep {}: ",
-                p.choices.len(),
-                describe(&chosen)
-            ),
+            &format!("Choose 1-{}, or {enter}: ", p.choices.len()),
             false,
         );
         if answer.is_empty() {
@@ -525,6 +737,21 @@ pub fn setup(p: &Provider) -> i32 {
             break;
         }
         out::println("Type a number from the list, or press Enter.");
+    }
+    let mut level = effort(p, &values).unwrap_or_else(|| "auto".into());
+    loop {
+        let answer = ask(
+            &format!("Reasoning effort: low, medium, high, xhigh or max, or auto for Claude Code's own (Enter keeps {level}): "),
+            false,
+        )
+        .to_lowercase();
+        if EFFORTS.contains(&answer.as_str()) || answer == "auto" {
+            level = answer;
+        } else if !answer.is_empty() {
+            out::println("Type one of low, medium, high, xhigh, max or auto, or press Enter.");
+            continue;
+        }
+        break;
     }
     let mut tokens = field(p, &values, "MAX_TOKENS");
     loop {
@@ -551,21 +778,29 @@ pub fn setup(p: &Provider) -> i32 {
             .zip(chosen)
             .map(|(slot, m)| (format!("{pre}{slot}"), m)),
     );
+    updates.push((format!("{pre}EFFORT"), level));
     updates.push((format!("{pre}MAX_TOKENS"), tokens));
     if let Err(e) = write_config(&path, &lines, &updates) {
         return out::fail(&e.to_string());
     }
-    out::success(&format!(
-        "Saved. Start Claude Code on {} with claude-{}, or with a profile: cl -{} <profile>",
-        p.name, p.key, p.key
-    ));
+    out::success(&if why == Why::Asked {
+        format!(
+            "Saved. Start Claude Code on {} with claude-{}, or with a profile: cl {} <profile>",
+            p.name, p.key, p.cl_flag
+        )
+    } else {
+        format!(
+            "Saved. Starting Claude Code on {}; claude-{} reconfig changes these.",
+            p.name, p.key
+        )
+    });
     0
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(
         prog,
-        "Settings for running Claude Code on Z.ai (z) or Kimi (k) instead of Anthropic.",
+        "Settings for running Claude Code on Z.ai (z), Kimi (k), MiniMax (m) or DeepSeek (d) instead of Anthropic.",
     )
     .subcommands(
         "command",
@@ -585,7 +820,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let sub = |name: &str, json: bool| {
         let p = Parser::new(&format!("{prog} {name}"), "").positional_as(
             "provider",
-            "{k,z}",
+            "{z,k,m,d}",
             Count::One,
             "",
         );
@@ -604,7 +839,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         provider(key).ok_or_else(|| {
             parser
                 .error(&format!(
-                    "argument provider: invalid choice: '{key}' (choose from 'k', 'z')"
+                    "argument provider: invalid choice: '{key}' (choose from 'z', 'k', 'm', 'd')"
                 ))
                 .exit_code()
         })

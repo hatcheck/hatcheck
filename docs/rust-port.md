@@ -75,7 +75,7 @@ colour to human-facing output; the JSON and raw-output compatibility described h
 | `opencode.rs` | OpenCode: its data folder, the read-only database's session and message rows, and the session data written for its own importer | new in the Rust version |
 | `relocate.rs` | `hatcheck relocate`: a moved project folder's sessions brought along | new in the Rust version |
 | `conv.rs` | a session as a conversation, for `show` and `move` | `move.py` |
-| `launch.rs`, `src/bin/` | `cl`, `cx`, `ck`, `claude-z` and `claude-k`, each also a binary of its own | `launch.py`, `cl`, `cx` |
+| `launch.rs`, `src/bin/` | `cl`, `cx`, `ck` and `claude-z`, `-k`, `-m` and `-d`, each also a binary of its own | `launch.py`, `cl`, `cx` |
 | `desktop.rs` | Claude Desktop instances, their launchers and recoloured icons | `desktop.py` |
 | `serve.rs` | `hatcheck serve`, the desktop app's line-by-line JSON protocol | `cli.py` |
 | `best.rs`, `bind.rs`, `provider.rs` | `best`; `bind`, `unbind` and the hook; `provider` | `best.py`, `bind.py`, `provider.py` |
@@ -111,7 +111,7 @@ can't do safely, and a command can end its process, which only the engine should
   builds a wheel for each of five platforms and the sdist, and publishes them through PyPI's
   trusted publisher, which names that file.
 - **The release binaries.** cargo-dist (`dist-workspace.toml`) writes `v-release.yml`, which builds
-  the seven commands for six targets into the GitHub release, with shell and PowerShell installers
+  the nine commands for six targets into the GitHub release, with shell and PowerShell installers
   and a Homebrew formula it publishes to `hatcheck/homebrew-tap`. The CLI's winget manifests
   (`packaging/winget/cli/`) install from that release's Windows zip. `install.sh` and
   `install.ps1` build the binaries from a clone with cargo and link them.

@@ -4,7 +4,7 @@ Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, Min
 lists the recent sessions in every Claude Code profile (`~/.claude-<name>`), Codex home
 (`~/.codex-<name>`), Kimi home (`~/.kimi-code-<name>`), DeepSeek Harness home (`~/.dsh-<name>`), MiniMax Code home (`~/.minimax-<name>`), Qwen Code home (`~/.qwen-<name>`) and GitHub Copilot CLI home (`~/.copilot-<name>`), and in Antigravity CLI's, ZCode's and OpenCode's
 folders, each with the command that resumes it or opens DSH's session history, and what's left of its account's plan. It carries a session to another account, converts it between the other agents, and makes Claude Desktop instances on macOS and Windows. `cl`, `cx` and `ck` run Claude Code, Codex and
-Kimi Code CLI with a profile, and `claude-z` and `claude-k` run Claude Code on Z.ai's or Kimi's models.
+Kimi Code CLI with a profile, and `claude-z`, `claude-k`, `claude-m` and `claude-d` run Claude Code on Z.ai's, Kimi's, MiniMax's or DeepSeek's models.
 
 *Unofficial: not made by, affiliated with or endorsed by Anthropic, OpenAI, Google, Moonshot AI, Z.ai, DeepSeek, MiniMax, Alibaba Cloud, GitHub or the OpenCode project.*
 
@@ -15,7 +15,8 @@ cargo binstall hatcheck   # the binaries from the GitHub release
 cargo install hatcheck    # or build them
 ```
 
-Either way you get `hatcheck` (`hat` for short), `cl`, `cx`, `ck`, `claude-z` and `claude-k`. Homebrew,
+Either way you get `hatcheck` (`hat` for short), `cl`, `cx`, `ck`, `claude-z`, `claude-k`, `claude-m`
+and `claude-d`. Homebrew,
 PyPI and the install scripts are in [docs/install.md](https://github.com/hatcheck/hatcheck/blob/main/docs/install.md).
 
 ## Commands
@@ -39,7 +40,8 @@ hatcheck where SESSION             where a session is stored
 hatcheck bind PROFILE              tie a folder to a profile, for cl, cx, ck and the list
 hatcheck doctor                    every copy of hatcheck and the agents on your PATH
 hatcheck desktop                   Claude Desktop instances on macOS and Windows
-hatcheck provider                  the Z.ai and Kimi keys and models behind claude-z and claude-k
+hatcheck provider                  the Z.ai, Kimi, MiniMax and DeepSeek keys and models behind
+                                   claude-z, -k, -m and -d
 cl a --resume <id>                 Claude Code with ~/.claude-a
 cx a resume <id>                   Codex with ~/.codex-a
 ck a --session <id>                Kimi Code CLI with ~/.kimi-code-a

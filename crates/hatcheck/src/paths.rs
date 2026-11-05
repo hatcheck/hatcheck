@@ -399,7 +399,8 @@ impl Shell {
     }
 
     /// The command that runs Claude Code with a profile, then tail: claude for ~/.claude,
-    /// cl <name> for ~/.claude-<name>, claude-z or claude-k on Z.ai or Kimi.
+    /// cl <name> for ~/.claude-<name>, claude-z, -k, -m or -d (cl -z, -k, -m or -D) on Z.ai,
+    /// Kimi, MiniMax or DeepSeek.
     pub fn claude_command(
         &self,
         profile: &str,
@@ -419,7 +420,9 @@ impl Shell {
         let (parent, name) = self.parent_and_name(profile);
         if !full && parent == self.home {
             if let Some(short) = name.strip_prefix(".claude-") {
-                let flag = provider.map_or(String::new(), |p| format!("-{p} "));
+                let flag = provider
+                    .and_then(crate::provider::provider)
+                    .map_or(String::new(), |p| format!("{} ", p.cl_flag));
                 return format!("cl {flag}{}{tail}", self.quote(short));
             }
         }
@@ -688,13 +691,17 @@ pub fn tilde_path(path: &str) -> String {
     }
 }
 
-/// z or k when the model is served by Z.ai (GLM) or Kimi, else None.
+/// z, k, m or d when the model is served by Z.ai (GLM), Kimi, MiniMax or DeepSeek, else None.
 pub fn provider_of(model: Option<&str>) -> Option<&'static str> {
     let model = model.unwrap_or("").to_lowercase();
     if model.starts_with("glm") {
         Some("z")
     } else if model.starts_with("k2") || model.starts_with("k3") || model.starts_with("kimi") {
         Some("k")
+    } else if model.starts_with("minimax") {
+        Some("m")
+    } else if model.starts_with("deepseek") {
+        Some("d")
     } else {
         None
     }
@@ -994,6 +1001,8 @@ mod tests {
         assert_eq!(encode_project("/Users/me/code/api"), "-Users-me-code-api");
         assert_eq!(provider_of(Some("GLM-5.3")), Some("z"));
         assert_eq!(provider_of(Some("k3")), Some("k"));
+        assert_eq!(provider_of(Some("MiniMax-M3.1-Flash")), Some("m"));
+        assert_eq!(provider_of(Some("deepseek-v4-pro")), Some("d"));
         assert_eq!(provider_of(Some("claude-opus-5-5")), None);
     }
 
@@ -1040,7 +1049,7 @@ mod tests {
             resume("D:\\p\\.claude-x", false, None),
             format!("$env:CLAUDE_CONFIG_DIR='D:\\p\\.claude-x'; claude --resume {ID}; $env:CLAUDE_CONFIG_DIR=$null")
         );
-        // On Z.ai or Kimi
+        // On Z.ai, Kimi or DeepSeek, whose cl flag is -D: -d is Claude Code's --debug.
         assert_eq!(
             resume("C:\\Users\\me\\.claude", false, Some("z")),
             format!("claude-z --resume {ID}")
@@ -1048,6 +1057,14 @@ mod tests {
         assert_eq!(
             resume("C:\\Users\\me\\.claude-work", false, Some("k")),
             format!("cl -k work --resume {ID}")
+        );
+        assert_eq!(
+            resume("C:\\Users\\me\\.claude-work", false, Some("d")),
+            format!("cl -D work --resume {ID}")
+        );
+        assert_eq!(
+            resume("C:\\Users\\me\\.claude", false, Some("d")),
+            format!("claude-d --resume {ID}")
         );
         assert_eq!(
             resume("C:\\Users\\me\\.claude-work", true, Some("k")),

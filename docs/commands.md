@@ -2,7 +2,7 @@
 
 What each `hatcheck` command does, as it is, with its options; the agents and their launchers (`cl`,
 `cx`, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub
-Copilot CLI, OpenCode, `claude-z` and `claude-k`) are in [agents.md](agents.md), and installing,
+Copilot CLI, OpenCode, and `claude-z`, `claude-k`, `claude-m` and `claude-d`) are in [agents.md](agents.md), and installing,
 switching and `hatcheck doctor` in [install.md](install.md). The [README](../README.md) has the
 short tour.
 
@@ -189,8 +189,8 @@ No sessions active in ~/code/new in the last 24h or open now; 7 in other folders
   reset since the saved snapshot it came from.
 - A command without the comment, like the second one in `~/notes`, uses the same account as the
   command above it, even through another profile, so its usage is the same.
-- A session whose newest reply came from Z.ai or Kimi shows that model, like `on k3` above, and its
-  command resumes it there (`claude-k` for `~/.claude`). Use `cl a` instead to go back to Claude;
+- A session whose newest reply came from Z.ai, Kimi, MiniMax or DeepSeek shows that model, like `on k3`
+  above, and its command resumes it there (`claude-k` for `~/.claude`). Use `cl a` instead to go back to Claude;
   its comment is still the profile's Claude plan.
 - Codex sessions resume with `codex resume <id>`, or `cx <name> resume <id>` for a `~/.codex-<name>`
   home. Their comment shows the ChatGPT plan's Codex limits (see `hatcheck usage` below). Sessions
@@ -428,8 +428,8 @@ Resume it now in ~/.claude-a? [y/N]
   rejects the signatures on earlier thinking, Claude Code drops those thinking blocks and carries
   on.
 - The plan file stays in the old profile, since sessions can share one.
-- If the session's last reply came from Z.ai or Kimi, it also prints the `cl -z` or `cl -k` command
-  that carries on there instead of on the new profile's Claude plan.
+- If the session's last reply came from Z.ai, Kimi, MiniMax or DeepSeek, it also prints the `cl -z`,
+  `-k`, `-m` or `-D` command that carries on there instead of on the new profile's Claude plan.
 
 ### When the profile already has a copy
 
@@ -923,7 +923,7 @@ cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
 - The command is the one `hatcheck` prints: `cl` or `claude`, `cx` or `codex`, `agy --conversation`,
   `ck` or `kimi --session`, `zcode --resume`, `dsh web`, `mcode --session`, `qwen --resume`,
   `copilot --resume`, `opencode --session`, and
-  `cl -z`/`cl -k` for a session whose last reply came from Z.ai or Kimi. Without `cl`, `cx` or `ck`
+  `cl -z`, `-k`, `-m` or `-D` for a session whose last reply came from Z.ai, Kimi, MiniMax or DeepSeek. Without `cl`, `cx` or `ck`
   on the `PATH` it's the full form (`CLAUDE_CONFIG_DIR=… claude …`), as `--full` gives.
 - For DSH, the default home uses `dsh web`; a named or custom home uses `DSH_HOME=… dsh web`, or
   `$env:DSH_HOME=…; dsh web; $env:DSH_HOME=$null` in PowerShell. From the session's recorded folder
@@ -1280,8 +1280,8 @@ folders = ["~/orca/workspaces/*", "/tmp"]   # never these, even among the ones l
   lines where an array has to be. A file that can't be read, or that names a setting or an agent
   that doesn't exist, stops every command and says where (`hatcheck:
   ~/.config/hatcheck/config.toml, line 4: expected key = value`), since a file silently ignored
-  would seem to apply. Only `hatcheck --help`, `--version` and the launchers (`cl`, `cx`, `ck`,
-  `claude-z` and `claude-k`) run without reading it, so a mistake in it never keeps you from an
+  would seem to apply. Only `hatcheck --help`, `--version` and the launchers (`cl`, `cx`, `ck` and
+  `claude-z`, `-k`, `-m` and `-d`) run without reading it, so a mistake in it never keeps you from an
   agent.
 - `hatcheck doctor` shows the file and what it sets, and its `--json` has it as `config`.
 

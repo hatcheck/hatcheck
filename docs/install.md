@@ -1,13 +1,13 @@
 # Installing hatcheck
 
-Every way of installing the seven commands, from a clone, switching between installs and
+Every way of installing the nine commands, from a clone, switching between installs and
 removing one, and `hatcheck doctor`, which lists every copy on your `PATH`. The commands
 themselves are in [commands.md](commands.md) and the agents in [agents.md](agents.md).
 
 ## Install
 
 One binary per platform, with no Python needed. Each of these installs `hatcheck`, `hat`, `cl`,
-`cx`, `ck`, `claude-z` and `claude-k`.
+`cx`, `ck`, `claude-z`, `claude-k`, `claude-m` and `claude-d`.
 
 DeepSeek Harness support uses your own `dsh`; no DSH launcher or installer alias is installed.
 MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode support likewise use your own `mcode`,
@@ -74,11 +74,11 @@ also called `cl`, and whichever comes first on `PATH` wins.
 
 ```bash
 # cl a --resume <id>  ==  CLAUDE_CONFIG_DIR=~/.claude-a claude --resume <id>
-# cl -k a ... runs the installed claude-k instead (-z: claude-z)
+# cl -k a ... runs the installed claude-k instead (-z: claude-z, -m: claude-m, -D: claude-d)
 cl() {
   local run=claude
-  case $1 in -z|-k) run=claude$1; shift ;; esac
-  [ -n "$1" ] || { echo "usage: cl [-z|-k] <profile> [claude args...]  (uses ~/.claude-<profile>)" >&2; return 2; }
+  case $1 in -z|-k|-m) run=claude$1; shift ;; -D) run=claude-d; shift ;; esac
+  [ -n "$1" ] || { echo "usage: cl [-z|-k|-m|-D] <profile> [claude args...]  (uses ~/.claude-<profile>)" >&2; return 2; }
   CLAUDE_CONFIG_DIR="$HOME/.claude-$1" "$run" "${@:2}"
 }
 
@@ -101,7 +101,7 @@ same thing. `hatcheck` needs the install; without it,
 
 ### Removing it, or switching how it's installed
 
-Each way of installing puts the seven commands in a folder of its own, and the copy that comes first
+Each way of installing puts the nine commands in a folder of its own, and the copy that comes first
 on your `PATH` is the one that runs: `which -a hatcheck` (`where.exe hatcheck` on Windows) lists
 them all. A copy left in `~/.local/bin`, which is often first, hides one from Homebrew, and
 Homebrew warns about it. So remove the old install when you switch:
@@ -109,7 +109,7 @@ Homebrew warns about it. So remove the old install when you switch:
 | Installed with | Removed with |
 |---|---|
 | `install.sh` or `install.ps1`, from a clone | `./install.sh --uninstall` or `.\install.ps1 -Uninstall`, which remove only the links and launchers they made |
-| the installer scripts from a release | deleting the seven commands from `~/.local/bin`: `rm ~/.local/bin/{hatcheck,hat,cl,cx,ck,claude-z,claude-k}` (on Windows, the `.exe` files in `~\.local\bin`) |
+| the installer scripts from a release | deleting the nine commands from `~/.local/bin`: `rm ~/.local/bin/{hatcheck,hat,cl,cx,ck,claude-z,claude-k,claude-m,claude-d}` (on Windows, the `.exe` files in `~\.local\bin`) |
 | Homebrew | `brew uninstall hatcheck` |
 | uv or pipx | `uv tool uninstall hatcheck` or `pipx uninstall hatcheck` |
 | cargo | `cargo uninstall hatcheck` |
@@ -136,8 +136,8 @@ Homebrew warns about it. So remove the old install when you switch:
 $ hatcheck doctor
 This is hatcheck 0.3.0, installed with uv: ~/.local/share/uv/tools/hatcheck/bin/hatcheck
 Installs of hatcheck on your PATH, the first of each name running:
-  1. uv: ~/.local/bin -> ~/.local/share/uv/tools/hatcheck/bin               0.3.0  all seven commands; runs
-  2. Homebrew: /opt/homebrew/bin -> /opt/homebrew/Cellar/hatcheck/0.3.0/bin  0.3.0  all seven commands; shadowed
+  1. uv: ~/.local/bin -> ~/.local/share/uv/tools/hatcheck/bin               0.3.0  all nine commands; runs
+  2. Homebrew: /opt/homebrew/bin -> /opt/homebrew/Cellar/hatcheck/0.3.0/bin  0.3.0  all nine commands; shadowed
   To remove Homebrew's: brew uninstall hatcheck
 The agents:
   Claude Code      2.1.303 (Claude Code)    ~/.local/bin/claude -> ~/.local/share/claude/versions/2.1.303  (the native installer, runs, and cl runs it)
@@ -156,7 +156,7 @@ Hooks from hatcheck bind --hook:
 ⚠ To fix: 2 installs of hatcheck are on your PATH; keep one.
 ```
 
-Each way of installing puts hatcheck's seven commands in a folder of its own, and the first copy of
+Each way of installing puts hatcheck's nine commands in a folder of its own, and the first copy of
 each name on your `PATH` is the one that runs, so a second install sits there unused, or runs for
 some of the names and not others. `hatcheck doctor` finds every copy, says how it got there (uv,
 pipx, Homebrew, cargo, winget, the release installer or a build from a clone, told by what each
@@ -172,7 +172,7 @@ installer, and a `qwen` wrapper in `~/.local/bin` or under `qwen-code` as Qwen C
 in `~/.local/bin` as the Copilot CLI installer's, and an `opencode` under `~/.opencode/bin` as
 OpenCode's installer's (which puts an `opencode2` shim beside it, a leftover name that runs
 `opencode`). A link to a file that's gone, which a shell may find first, a shell function `cl()` or
-`cx()` in `~/.zshrc` or `~/.bashrc`, which wins over the command, and one of the seven commands that
+`cx()` in `~/.zshrc` or `~/.bashrc`, which wins over the command, and one of the nine commands that
 isn't on your `PATH` at all are named too. The exit status is 1 when there's something to fix and 0
 otherwise, and `--json` prints what it found as data. What it says about the agents is for you to
 act on: Claude Code's `claude doctor` and Codex's `codex doctor` know their own installs best. The

@@ -1,6 +1,6 @@
-# The PyPI package: the Rust binaries (hatcheck, hat, cl, cx, ck, claude-z, claude-k), built by
-# maturin into one wheel per platform, the way ruff and uv ship. No Python code; the version
-# comes from Cargo.toml. Build one with: uvx maturin build --release
+# The PyPI package: the Rust binaries (hatcheck, hat, cl, cx, ck, claude-z, claude-k, claude-m,
+# claude-d), built by maturin into one wheel per platform, the way ruff and uv ship. No Python
+# code; the version comes from Cargo.toml. Build one with: uvx maturin build --release
 [build-system]
 requires = ["maturin>=1.9,<2"]
 build-backend = "maturin"

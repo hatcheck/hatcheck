@@ -1474,7 +1474,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             if let Some(model) = py::s(&s.model)
                 .filter(|m| s.agent == Agent::Claude && !m.is_empty() && !m.starts_with("claude"))
             {
-                meta.push((format!("on {model}"), "35")); // e.g. GLM or Kimi, through claude-z or claude-k
+                meta.push((format!("on {model}"), "35")); // e.g. GLM or Kimi, through claude-z or claude-k, or MiniMax or DeepSeek
             }
             if let (Some(cost), Some(code)) = (s.cost, &cost_code) {
                 meta.push((dollars(cost), code)); // what it cost, as the agent worked it out

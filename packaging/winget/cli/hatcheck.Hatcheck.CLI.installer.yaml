@@ -18,6 +18,10 @@ NestedInstallerFiles:
     PortableCommandAlias: claude-z
   - RelativeFilePath: claude-k.exe
     PortableCommandAlias: claude-k
+  - RelativeFilePath: claude-m.exe
+    PortableCommandAlias: claude-m
+  - RelativeFilePath: claude-d.exe
+    PortableCommandAlias: claude-d
 Commands:
   - hatcheck
   - hat
@@ -26,6 +30,8 @@ Commands:
   - ck
   - claude-z
   - claude-k
+  - claude-m
+  - claude-d
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/hatcheck/hatcheck/releases/download/v0.7.1/hatcheck-x86_64-pc-windows-msvc.zip

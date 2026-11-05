@@ -2,7 +2,8 @@
 
 How Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen
 Code, GitHub Copilot CLI and OpenCode keep their profiles, homes and folders, and the launchers that
-run them with one: `cl`, `cx`, `ck`, and `claude-z` and `claude-k` for Claude Code on Z.ai and Kimi.
+run them with one: `cl`, `cx`, `ck`, and `claude-z`, `claude-k`, `claude-m` and `claude-d` for Claude
+Code on Z.ai, Kimi, MiniMax and DeepSeek.
 The commands are in [commands.md](commands.md), and installing hatcheck in [install.md](install.md).
 
 ## Getting the agents
@@ -94,7 +95,7 @@ the program, and the other two have no repository.
 cl a                              # Claude Code with ~/.claude-a (sign in on first run)
 cl a --resume <session-id>        # resume one of that profile's sessions
 cl b --continue                   # any claude option works
-cl -k a --resume <session-id>     # that session on Kimi; -z for Z.ai (see below)
+cl -k a --resume <session-id>     # that session on Kimi; -z Z.ai, -m MiniMax, -D DeepSeek (see below)
 ```
 
 Plain `claude` keeps using `~/.claude`. Claude Code names each profile's Keychain entry after its
@@ -575,49 +576,90 @@ first run, and isn't read. What hatcheck reads, checked against opencode 2.1.4:
   prints `default` or the bound path. An agent-only binding command with no PROFILE keeps the
   existing opencode binding unless `--opencode` replaces it. No hook is added for opencode.
 
-## `claude-z`, `claude-k`: Claude Code on Z.ai or Kimi
+## `claude-z`, `claude-k`, `claude-m`, `claude-d`: Claude Code on Z.ai, Kimi, MiniMax or DeepSeek
 
-`claude-z` and `claude-k` start Claude Code on [Z.ai](https://z.ai)'s GLM models or
-[Kimi](https://www.kimi.com/code)'s, with your plan there, instead of on Anthropic's. `cl -z <name>` and
-`cl -k <name>` do the same in a profile, so a session can switch between Claude and those models and
-stay in its profile:
+`claude-z`, `claude-k`, `claude-m` and `claude-d` start Claude Code on [Z.ai](https://z.ai)'s GLM
+models, [Kimi](https://www.kimi.com/code)'s, [MiniMax](https://platform.minimax.io)'s or
+[DeepSeek](https://platform.deepseek.com)'s, with your plan or balance there, instead of on
+Anthropic's. `cl -z <name>`, `cl -k <name>`, `cl -m <name>` and `cl -D <name>` do the same in a
+profile, so a session can switch between Claude and those models and stay in its profile:
 
 ```bash
-claude-k reconfig                   # once: your Kimi API key and model (claude-z reconfig for Z.ai)
-claude-k                            # Claude Code on Kimi, with ~/.claude
+claude-k                            # Claude Code on Kimi, with ~/.claude; the first time, it asks for the key
+claude-k reconfig                   # your Kimi API key, model and effort again (claude-z, -m or -d for the others)
 cl -k a --resume <session-id>       # carry on a session in ~/.claude-a on Kimi…
 cl a --resume <session-id>          # …and later back on its account's Claude plan
 ```
 
-- Setup asks for the API key (from [z.ai](https://z.ai/manage-apikey/apikey-list) or the
-  [Kimi Code Console](https://www.kimi.com/code)), the model, and an optional cap on output tokens.
-  It saves them in `~/.config/claude-z/config` or `~/.config/claude-k/config` (`%APPDATA%\claude-z\config`
-  on Windows), the files the [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup
-  made with those works as is. `hatcheck provider` shows what's set up.
-- Models, as each provider's Claude Code guide and model list had them on 2026-10-24, with Kimi's
-  context windows checked again on 2026-11-04: on Z.ai `glm-5.3[1m]` (the default, with
-  `glm-5.3-flash[1m]` for quick tasks) or `glm-5.3-flash[1m]`; on Kimi `k3.1-pro[1m]` (K3.1 Pro,
-  the default), `k3.1-pro`, `k3.1-pro-highspeed[1m]` (K3.1 Pro Highspeed), `k3[1m]`, `k3`,
-  `kimi-for-coding[1m]` (K2.8 Preview) or `kimi-for-coding-highspeed` (K2.7 Code Highspeed).
-  `[1m]` turns on the 1M-token context window, which Kimi gives K3.1 Pro and K3 on Pro and
-  Allegretto plans and up, Highspeed on every plan that has it (the same ones), and K2.8 Preview on
-  every plan; the others run with 256k. A model saved earlier, such as `glm-4.7` or
-  `k3.1-pro-highspeed`, is used as it is, so one saved without `[1m]` keeps 256k until
-  `claude-k reconfig` picks it again. Each was run through Claude Code 2.1.310, which sends K3.1 Pro
-  the thinking it requires; Highspeed and K2.8 Preview were run then without `[1m]`.
+- Setup asks for the API key (from [z.ai](https://z.ai/manage-apikey/apikey-list), the
+  [Kimi Code Console](https://www.kimi.com/code), the
+  [MiniMax console](https://platform.minimax.io/console/plan), whose M Plan API key it is, or the
+  [DeepSeek Platform](https://platform.deepseek.com/api_keys)), the model, the reasoning effort and
+  an optional cap on output tokens. It saves them in `~/.config/claude-z/config`,
+  `~/.config/claude-k/config`, `~/.config/claude-m/config` or `~/.config/claude-d/config`
+  (`%APPDATA%\claude-z\config` and so on, on Windows); claude-z's and claude-k's are the files the
+  [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup made with those works as
+  is. Enter keeps what's saved, and the first model, each provider's flagship, when nothing is.
+  MiniMax has one model to offer, so its setup doesn't ask. `hatcheck provider` shows what's set up.
+- A launcher sets itself up: run on a terminal with no key saved, it asks the setup's questions
+  first and then starts Claude Code, and when the models saved aren't among those its menu offers
+  now, such as `glm-4.7` or `k3`, it asks them again, Enter keeping the key and taking the flagship.
+  Off a terminal, with no one to ask, one with no key stops and says to run `claude-k reconfig`, and
+  one with a model no longer offered runs it as saved and says so on stderr. `hatcheck provider`
+  marks such a model `(not offered now)`.
+- Models, as each provider's Claude Code guide and model list had them on 2026-11-05, the first
+  being the default: on Z.ai `glm-5.3[1m]` (GLM-5.3, with `glm-5.3-flash[1m]` for quick tasks) or
+  `glm-5.3-flash[1m]`, the two every GLM Coding Plan has; on Kimi its six model IDs,
+  `k3.1-pro[1m]` (K3.1 Pro), `k3.1-pro` (at 256k), `k3.1-pro-highspeed[1m]` (K3.1 Pro Highspeed,
+  2-3x faster at twice the quota), `k3[1m]`, `k3-256k` (K3 at 256k, for half `k3`'s quota),
+  `kimi-for-coding[1m]` (K2.8 Preview) or `kimi-for-coding-highspeed` (K2.7 Code Highspeed). `[1m]`
+  turns on the 1M-token context window, which Kimi gives K3.1 Pro and K3 on Pro and Allegretto
+  plans and up, Highspeed on every plan that has it (the same ones), and K2.8 Preview on every
+  plan; the others run with 256k. `hatcheck provider env` uses a model saved earlier, such as
+  `k3.1-pro-highspeed`, as it is, so one saved without `[1m]` keeps 256k. The Kimi models but
+  `k3-256k` were run through Claude Code 2.1.310, which sends K3.1 Pro the thinking it requires;
+  Highspeed and K2.8 Preview were run then without `[1m]`.
+- On MiniMax, `MiniMax-M3.1-Flash[1m]` (M3.1 Flash, the M Plan's one text model, on every tier;
+  MiniMax-M3, the generation before, isn't on the M Plan); on DeepSeek, `deepseek-v4-pro[1m]` (V4
+  Pro, the flagship) or `deepseek-flash[1m]` (V4.1 Flash, at a quarter to a third of Pro's price),
+  each with plain `deepseek-flash` for Claude Code's haiku tier and its subagents. That's as
+  MiniMax's and DeepSeek's Claude Code guides and model pages had them on 2026-11-05, but for V4
+  Pro, which DeepSeek's guide names only as what Claude's opus models map to, and its models page
+  gives 1M of context too. Claude Code compacts their 1M at 512K on MiniMax, which it recommends
+  for everyday coding, and at 768K on DeepSeek, as its guide sets. Neither provider's models have
+  been run through Claude Code with these launchers yet: the settings are their guides'.
 - Kimi is reached at `https://api.kimi.ai/coding/`, the address of Kimi's English guide; a key that
   works at `https://api.kimi.com/coding/`, the Chinese guide's, worked at both on 2026-10-24.
-  `CK_BASE_URL` in the config names another address.
+  MiniMax is reached at `https://api.minimax.io/anthropic` and DeepSeek at
+  `https://api.deepseek.com/anthropic`. `CK_BASE_URL`, `CM_BASE_URL` or `CD_BASE_URL` in the config
+  names another address.
+- The launchers start Claude Code at `max` effort, the highest every one of these providers has:
+  `--effort max` goes in front of Claude Code's arguments, unless they name an `--effort` of their
+  own, so `claude-k --effort low` is low. Setup takes another level instead (`low`, `medium`,
+  `high` or `xhigh`, saved as `CK_EFFORT` and so on), or `auto`, which passes none and leaves it to
+  Claude Code. Kimi and Z.ai have low, high and max, taking medium as high and xhigh as max, and
+  K2.7 Code Highspeed has no effort setting; Claude Code 2.1.318 sends the level to any model when
+  only `ANTHROPIC_BASE_URL` points elsewhere. It's an argument rather than the
+  `CLAUDE_CODE_EFFORT_LEVEL=max` MiniMax's and DeepSeek's guides set, since while that variable is
+  set `/effort` does nothing in a session (Claude Code answers "Not applied"); after `--effort`,
+  `/effort` changes the session's. `hatcheck provider env` has no effort for that reason.
+- `--model` on the command line is Claude Code's own too, ahead of the launcher's `ANTHROPIC_MODEL`
+  for that session, but the rest stays the saved model's: the haiku tier, subagents and, on Kimi,
+  the context window, so a 256k model named that way over a saved `[1m]` one runs with 1M.
+- DeepSeek's flag for `cl` is a capital `-D`: `-d` stays Claude Code's own, short for `--debug`, so
+  `cl -d` in a folder bound to a profile debugs that profile's session on its Claude plan, and a
+  slip of either letter never sends a conversation to another provider. Claude Code has no
+  capital-letter flags of its own.
 - The key reaches Claude Code as `ANTHROPIC_AUTH_TOKEN`, which it always uses ahead of the profile's
   claude.ai login and never asks about, and `ANTHROPIC_API_KEY` is cleared. Claude Code asks once per
   profile whether to use an `ANTHROPIC_API_KEY`, with No preselected, and after a No it sends the
   profile's claude.ai login token to the provider instead.
 - The model is pinned with `ANTHROPIC_MODEL`, so a `"model"` in the profile's `settings.json`, such
-  as `"fable"`, can't send a Claude model name to Z.ai or Kimi.
+  as `"fable"`, can't send a Claude model name to the provider.
 - Resuming a session on another provider sends it the whole conversation so far, so check that
   what's in it may go there first.
-- `hatcheck usage` and the comments in `hatcheck` show the Claude and ChatGPT plans, not Z.ai's or
-  Kimi's.
+- `hatcheck usage` and the comments in `hatcheck` show the Claude and ChatGPT plans, not Z.ai's,
+  Kimi's, MiniMax's or DeepSeek's.
 
 Coming from the claude-z repo: `./install.sh` replaces the copies its installers put in
 `~/.local/bin`, and your config stays. On Windows, delete `%LOCALAPPDATA%\claude-z` (and `\claude-k`)

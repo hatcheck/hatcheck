@@ -43,6 +43,14 @@ path = "src/bin/claude-z.rs"
 name = "claude-k"
 path = "src/bin/claude-k.rs"
 
+[[bin]]
+name = "claude-m"
+path = "src/bin/claude-m.rs"
+
+[[bin]]
+name = "claude-d"
+path = "src/bin/claude-d.rs"
+
 [dependencies]
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }

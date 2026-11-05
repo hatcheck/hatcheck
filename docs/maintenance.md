@@ -15,9 +15,10 @@ python3 scripts/upstream.py --providers
 It changes nothing and runs no agent but `--version`. It prints, for each agent, the version
 installed here, the latest release and the versions the docs cite; each desktop app's Homebrew
 cask and whether it's deprecated; every link in the README, `docs/` and `site/` that doesn't
-answer 200 or now redirects, install scripts included; and, with `--providers`, Kimi's and Z.ai's
-model lists beside the menus of `claude-k` and `claude-z` (asked with the keys in their config
-files, sent only to those providers' model-list endpoints). It ends with what needs a look: a
+answer 200 or now redirects, install scripts included; and, with `--providers`, Kimi's, Z.ai's,
+MiniMax's and DeepSeek's model lists beside the menus of `claude-k`, `claude-z`, `claude-m` and
+`claude-d` (asked with the keys in their config files, sent only to those providers' model-list
+endpoints). It ends with what needs a look: a
 latest release that isn't a version the docs cite, a cask the docs say to install that's
 deprecated or gone, a link that doesn't answer 200, and a menu's model its provider no longer
 lists. An agent added to hatcheck gets a row in its `AGENTS`.
@@ -31,7 +32,7 @@ while anything needs a look: rewritten when the list changes, closed once a run 
 Then read each maker's install page and each provider's Claude Code guide for what a list can't
 show: a renamed app, a new install command, a plan renamed, a model's context or a setting it
 needs. The addresses are in [agents.md](agents.md#getting-the-agents) and the `claude-z`,
-`claude-k` section. The makers' data-use pages the rules page links are among the links the
+`claude-k`, `claude-m`, `claude-d` section. The makers' data-use pages the rules page links are among the links the
 script checks; what they say is for the reader, and hatcheck's pages never summarise it, since
 the terms differ by product, plan and region, and change.
 
@@ -80,8 +81,8 @@ that ask for one word, so nothing of yours is sent anywhere, and an account of y
   `session`, `message` and `part`, the migrations (`schema_migration` in `~/.zcode/cli/db/db.sqlite`
   names those applied), and the flags hatcheck prints (`--resume`, `--attach`, `--mode`, `-p`,
   `-c`).
-- **claude-k and claude-z:** `python3 scripts/provider_probe.py` runs each model of their menus
-  through Claude Code once.
+- **claude-k, claude-z, claude-m and claude-d:** `python3 scripts/provider_probe.py` runs each model
+  of their menus through Claude Code once.
 
 ## 3. Clean up
 
@@ -139,7 +140,8 @@ Every probe leaves something in a real home. Look for what changed since the mar
   helpers in `tests/helpers.py` take what each version writes).
 - **Docs:** each "checked against" names the version and date it was checked again, and only what
   was; dated evidence of a probe that wasn't run again stays as it was. Installers, apps, models
-  and plans in [agents.md](agents.md#getting-the-agents) and the `claude-z`, `claude-k` section;
+  and plans in [agents.md](agents.md#getting-the-agents) and the `claude-z`, `claude-k`, `claude-m`,
+  `claude-d` section;
   a changed format in [formats.md](formats.md) too.
 - **Site:** `site/agents.html`'s table and its install commands and app cards; at a release,
   `python3 site/refresh.py` for the help blocks and samples (it runs the release binary; for the
@@ -178,7 +180,7 @@ tags ([desktop/README.md](../desktop/README.md#releases)).
    ```
 
    Three workflows run on it, each on its own. **Release** (`v-release.yml`, written by cargo-dist
-   from `dist-workspace.toml`) builds the seven commands for the six targets, the shell and
+   from `dist-workspace.toml`) builds the nine commands for the six targets, the shell and
    PowerShell installers and the Homebrew formula, pushes the formula to `hatcheck/homebrew-tap`
    and makes the GitHub release, with the changelog section as its notes. **PyPI** (`release.yml`)
    builds a wheel for each of five platforms and the sdist, and publishes them through PyPI's
@@ -193,7 +195,7 @@ tags ([desktop/README.md](../desktop/README.md#releases)).
 4. **After it**, each commit's body saying what was run:
    - `chore: give the CLI's winget manifest X.Y.Z's zip SHA-256`: download
      `hatcheck-x86_64-pc-windows-msvc.zip` and its `.sha256` from the release, check that
-     `shasum -a 256` of the zip gives the published hash and `unzip -l` lists the seven `.exe`
+     `shasum -a 256` of the zip gives the published hash and `unzip -l` lists the nine `.exe`
      files at its top, put the hash in `InstallerSha256` (upper case, as the earlier ones), and
      run `python3 -m unittest discover -s tests -p test_packaging.py`. The three files then go to
      [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) as they are, in
@@ -207,7 +209,7 @@ tags ([desktop/README.md](../desktop/README.md#releases)).
    - A correction to the notes on GitHub goes in `CHANGELOG.md` first, then
      `gh release edit vX.Y.Z --notes-file <file>` with the section's text.
    - `cargo binstall hatcheck --no-track --install-path <empty folder>` fetches the release's
-     archive for this machine and unpacks the seven commands: the crate's `binstall` metadata still
+     archive for this machine and unpacks the nine commands: the crate's `binstall` metadata still
      matches what cargo-dist packed.
 
 ## Runs

@@ -19,6 +19,7 @@
 #   cx                      codex with a ~/.codex-<name> home: cx work resume <id>
 #   ck                      kimi with a ~/.kimi-code-<name> home: ck work --session <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic
+#   claude-m, claude-d      claude on MiniMax or DeepSeek instead of Anthropic
 #
 # Links this script made before, to the Python hatcheck and the sh launchers, are replaced.
 # Links to the commands hatcheck replaced (claude-recent-sessions, claude-usage,
@@ -51,7 +52,7 @@ else
     FROM="$SCRIPT_DIR/target/release"
 fi
 
-COMMANDS="hatcheck hat cl cx ck claude-z claude-k"
+COMMANDS="hatcheck hat cl cx ck claude-z claude-k claude-m claude-d"
 # command:file it ran:hatcheck subcommand that replaced it
 REPLACED="claude-recent-sessions:claude-recent-sessions.py: claude-usage:claude-usage.py:usage
 claude-where:claude-where:where claude-move-session:claude-move-session.py:move

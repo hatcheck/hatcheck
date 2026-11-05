@@ -11,9 +11,10 @@ docs/maintenance.md, run every week or two and before a release, and every Monda
    the docs and site say to install, each of which must still be there.
 3. Every link in the README, docs/ and site/, and each install script the site gives: its status,
    and where it redirects now.
-4. With --providers: Kimi's and Z.ai's model lists, asked with the keys in claude-k's and
-   claude-z's config files (sent only to those providers' own model-list endpoints, as claude-k
-   and claude-z send them), beside the menus in crates/hatcheck/src/provider.rs.
+4. With --providers: Kimi's, Z.ai's, MiniMax's and DeepSeek's model lists, asked with the keys in
+   claude-k's, claude-z's, claude-m's and claude-d's config files (sent only to those providers'
+   own model-list endpoints, as the launchers send them), beside the menus in
+   crates/hatcheck/src/provider.rs.
 
 Last, what needs a look: a latest release that isn't a version the docs cite, or that couldn't be
 read; a cask the docs give that's deprecated or gone; a link that doesn't answer 200; and with
@@ -199,10 +200,10 @@ def casks_named():
 
 
 def menus():
-    """The model choices claude-k and claude-z offer, from provider.rs: {"k": [...], "z": [...]}."""
+    """The model choices claude-k, -z, -m and -d offer, from provider.rs: {"k": [...], "z": [...], ...}."""
     text = open(os.path.join(REPO, "crates", "hatcheck", "src", "provider.rs"), encoding="utf-8").read()
     return {m.group(1): re.findall(r'\(\s*"([\w.\-\[\]]+)",', m.group(2))
-            for m in re.finditer(r'key: "(\w)".*?choices: &\[(.*?)\n        \],', text, re.S)}
+            for m in re.finditer(r'key: "(\w)".*?choices: &\[(.*?)\n\s*compact_at:', text, re.S)}
 
 
 def config_key(provider):
@@ -218,7 +219,9 @@ def providers():
     """Print each provider's models beside its menu, and return the menu's models it no longer lists."""
     gone = []
     for key, name, url in (("k", "Kimi", "https://api.kimi.ai/coding/v1/models"),
-                           ("z", "Z.ai", "https://api.z.ai/api/anthropic/v1/models")):
+                           ("z", "Z.ai", "https://api.z.ai/api/anthropic/v1/models"),
+                           ("m", "MiniMax", "https://api.minimax.io/anthropic/v1/models"),
+                           ("d", "DeepSeek", "https://api.deepseek.com/models")):
         secret = config_key(key)
         if not secret:
             print("  %s: claude-%s isn't set up here" % (name, key))
@@ -250,7 +253,7 @@ def issue_text(findings):
 def main():
     parser = argparse.ArgumentParser(description="What has changed upstream since the docs were last checked.")
     parser.add_argument("--providers", action="store_true",
-                        help="also compare Kimi's and Z.ai's model lists with claude-k's and claude-z's menus")
+                        help="also compare Kimi's, Z.ai's, MiniMax's and DeepSeek's model lists with claude-k's, -z's, -m's and -d's menus")
     parser.add_argument("--findings", metavar="FILE", help="write what needs a look to FILE, as an issue's text")
     args = parser.parse_args()
     findings = []
@@ -303,7 +306,7 @@ def main():
     print("  every other link answered 200" if broken == 0 else "  %d didn't answer 200" % broken)
 
     if args.providers:
-        print("\nProvider models (claude-k, claude-z):")
+        print("\nProvider models (claude-k, claude-z, claude-m, claude-d):")
         findings += providers()
 
     print("\nWhat needs a look:" if findings else "\nNothing needs a look.")

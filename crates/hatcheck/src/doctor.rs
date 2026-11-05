@@ -17,7 +17,9 @@ use serde_json::{json, Value};
 use std::time::Duration;
 
 /// hatcheck's commands, as the installers put them on the PATH.
-pub const COMMANDS: [&str; 7] = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k"];
+pub const COMMANDS: [&str; 9] = [
+    "hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k", "claude-m", "claude-d",
+];
 /// How long a program may take to say its version.
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -652,7 +654,7 @@ fn describe(r: &Report) {
     }
     let n = |names: &[String]| {
         if names.len() == COMMANDS.len() {
-            "all seven commands".to_string()
+            "all nine commands".to_string()
         } else {
             names.join(", ")
         }

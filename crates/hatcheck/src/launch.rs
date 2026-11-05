@@ -1,24 +1,28 @@
-//! cl, cx, ck, claude-z and claude-k: Claude Code with a profile's folder (or on Z.ai or
-//! Kimi), Codex with a home's, and Kimi Code CLI with a home's:
+//! cl, cx, ck, claude-z, claude-k, claude-m and claude-d: Claude Code with a profile's folder
+//! (or on Z.ai, Kimi, MiniMax or DeepSeek), Codex with a home's, and Kimi Code CLI with a home's:
 //!
 //! ```text
-//! cl [-z|-k] <profile> [claude args...]    Claude Code with ~/.claude-<profile>
-//! claude-z [claude args...]                Claude Code on Z.ai, with ~/.claude or
-//! claude-k [claude args...]                CLAUDE_CONFIG_DIR (claude-k: Kimi);
-//!                                          claude-z reconfig sets up the key
-//! cx <profile> [codex args...]             Codex with ~/.codex-<profile>
-//! ck <profile> [kimi args...]              Kimi Code CLI with ~/.kimi-code-<profile>
+//! cl [-z|-k|-m|-D] <profile> [claude args...]  Claude Code with ~/.claude-<profile>
+//! claude-z [claude args...]                    Claude Code on Z.ai, with ~/.claude or
+//! claude-k [claude args...]                    CLAUDE_CONFIG_DIR (claude-k: Kimi,
+//! claude-m [claude args...]                    claude-m: MiniMax, claude-d: DeepSeek);
+//! claude-d [claude args...]                    the first run asks for the key, and
+//!                                              claude-z reconfig asks again
+//! cx <profile> [codex args...]                 Codex with ~/.codex-<profile>
+//! ck <profile> [kimi args...]                  Kimi Code CLI with ~/.kimi-code-<profile>
 //! ```
 //!
 //! Without a profile name, in a folder tied to one with hatcheck bind, they use that one.
 //! The hatcheck binary runs as one of them when it's called by its name (a link named cl)
-//! or with --as cl; the cl, cx, ck, claude-z and claude-k binaries are only this.
+//! or with --as cl; the cl, cx, ck and claude-* binaries are only this.
 
 use crate::agent::Agent;
 use crate::{ospath, out, paths, provider, py};
 
 /// The launchers' names.
-pub const NAMES: [&str; 5] = ["cl", "cx", "ck", "claude-z", "claude-k"];
+pub const NAMES: [&str; 7] = [
+    "cl", "cx", "ck", "claude-z", "claude-k", "claude-m", "claude-d",
+];
 
 /// Codex's own commands, which cx doesn't take for a home's name unless ~/.codex-<it> exists.
 const CODEX_COMMANDS: [&str; 29] = [
@@ -88,6 +92,8 @@ pub fn main(name: &str, args: Vec<String>) -> i32 {
         "ck" => ck(args),
         "claude-z" => cl(args, "claude-z", Some("z")),
         "claude-k" => cl(args, "claude-k", Some("k")),
+        "claude-m" => cl(args, "claude-m", Some("m")),
+        "claude-d" => cl(args, "claude-d", Some("d")),
         _ => cl(args, "cl", None),
     }
 }
@@ -153,16 +159,18 @@ fn run(me: &str, program: &str, args: &[String], changes: &Changes) -> i32 {
     }
 }
 
-/// cl [-z|-k] <profile> [claude args...], and claude-z and claude-k (provider z or k).
+/// cl [-z|-k|-m|-D] <profile> [claude args...], and claude-z, claude-k, claude-m and claude-d
+/// (provider z, k, m or d). -D is DeepSeek, since -d is Claude Code's --debug.
 fn cl(mut args: Vec<String>, me: &str, mut provider: Option<&'static str>) -> i32 {
     let mut changes = Changes::new();
     if let Some(key) = provider {
         if args.first().is_some_and(|a| a == "reconfig") {
-            return provider::setup(provider::provider(key).expect("z and k are providers"));
+            return provider::setup(provider::provider(key).expect("a provider's launcher"));
         }
     } else {
-        if matches!(args.first().map(String::as_str), Some("-z" | "-k")) {
-            provider = Some(if args.remove(0) == "-z" { "z" } else { "k" });
+        if let Some(p) = args.first().and_then(|a| provider::by_cl_flag(a)) {
+            provider = Some(p.key);
+            args.remove(0);
         }
         if args
             .first()
@@ -170,7 +178,7 @@ fn cl(mut args: Vec<String>, me: &str, mut provider: Option<&'static str>) -> i3
         {
             let Some(name) = bound(Agent::Claude) else {
                 out::error(
-                    "usage: cl [-z|-k] <profile> [claude args...]  (uses ~/.claude-<profile>)\n   \
+                    "usage: cl [-z|-k|-m|-D] <profile> [claude args...]  (uses ~/.claude-<profile>)\n   \
                      or tie this folder to a profile with: hatcheck bind <profile>\n",
                 );
                 return 2;
@@ -185,29 +193,16 @@ fn cl(mut args: Vec<String>, me: &str, mut provider: Option<&'static str>) -> i3
         }
     }
     if let Some(key) = provider {
-        let p = provider::provider(key).expect("z and k are providers");
-        let path = provider::config_path(p);
-        let Some(values) = provider::read_config(&path).0 else {
-            return out::fail(&format!(
-                "{} isn't set up yet. Run: claude-{key} reconfig",
-                p.name
-            ));
+        // Set up first on a terminal when there's no key, or the models saved aren't offered now.
+        let p = provider::provider(key).expect("a provider's launcher");
+        let values = match provider::ready(p, me) {
+            Ok(values) => values,
+            Err(code) => return code,
         };
-        let api_key = values
-            .get(&format!("{}API_KEY", p.prefix))
-            .and_then(serde_json::Value::as_str)
-            .map(py::strip)
-            .unwrap_or("");
-        if api_key.is_empty() {
-            return out::fail(&format!(
-                "No {} API key in {}. Run: claude-{key} reconfig",
-                p.name,
-                provider::shown(&path)
-            ));
-        }
         for (name, value) in provider::environment(p, &values) {
             changes.push((name.to_string(), value));
         }
+        args = provider::with_effort(p, &values, args);
     }
     run(me, "claude", &args, &changes)
 }

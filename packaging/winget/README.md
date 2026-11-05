@@ -1,6 +1,6 @@
 # winget manifests
 
-`cli/` holds the hatcheck CLI's (`hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z` and `claude-k`),
+`cli/` holds the hatcheck CLI's (`hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z`, `claude-k`, `claude-m` and `claude-d`),
 package `hatcheck.Hatcheck.CLI`, which go to
 [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) as
 `manifests/h/hatcheck/Hatcheck/CLI/<version>/`, the three files as they are here. The package

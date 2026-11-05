@@ -19,6 +19,7 @@
 #   cx                      codex with a ~\.codex-<name> home: cx work resume <id>
 #   ck                      kimi with a ~\.kimi-code-<name> home: ck work --session <id>
 #   claude-z, claude-k      claude on Z.ai or Kimi instead of Anthropic
+#   claude-m, claude-d      claude on MiniMax or DeepSeek instead of Anthropic
 #
 # Launchers this script made before, for the Python hatcheck and the PowerShell cl and cx, are
 # replaced. Those it made for the commands hatcheck replaced (claude-recent-sessions,
@@ -39,7 +40,7 @@ $markers = @($marker, "rem made by claude-multi-account install.ps1")
 $build = -not $From
 $From = if ($From) { (Resolve-Path -LiteralPath $From).Path } else { Join-Path $repo "target\release" }
 $commands = [ordered]@{}
-foreach ($name in "hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k") {
+foreach ($name in "hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k", "claude-m", "claude-d") {
     $commands[$name] = "`"$(Join-Path $From "$name.exe")`" %*"
 }
 # The commands hatcheck replaced, and its subcommand that does their job.

@@ -8,7 +8,7 @@ import unittest
 
 from helpers import ENGINE, WINDOWS, FakeHome, write
 
-SIX = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k"]
+COMMANDS = ["hatcheck", "hat", "cl", "cx", "ck", "claude-z", "claude-k", "claude-m", "claude-d"]
 
 
 class Doctor(unittest.TestCase):
@@ -24,7 +24,7 @@ class Doctor(unittest.TestCase):
         """~/.local/bin/<name> -> ~/.local/share/uv/tools/hatcheck/bin/<name>, each the binary under test."""
         h = self.h
         tools = os.path.join(h.home, ".local", "share", "uv", "tools", "hatcheck", "bin")
-        for name in SIX:
+        for name in COMMANDS:
             self.link(os.path.join(tools, name), ENGINE)
             self.link(os.path.join(h.home, ".local", "bin", name), os.path.join(tools, name))
         return os.path.join(h.home, ".local", "bin")
@@ -32,7 +32,7 @@ class Doctor(unittest.TestCase):
     def brew_install(self):
         """<brew>/bin/<name> -> ../Cellar/hatcheck/0.3.0/bin/<name>, as Homebrew links a formula."""
         brew = os.path.join(self.h.root, "homebrew")
-        for name in SIX:
+        for name in COMMANDS:
             self.link(os.path.join(brew, "Cellar", "hatcheck", "0.3.0", "bin", name), ENGINE)
             self.link(os.path.join(brew, "bin", name), os.path.join("..", "Cellar", "hatcheck", "0.3.0", "bin", name))
         return os.path.join(brew, "bin")
@@ -47,8 +47,8 @@ class Doctor(unittest.TestCase):
         self.assertEqual(code, 1, out)  # something to fix
         self.assertRegex(out, r"^This is hatcheck \d+\.\d+\.\d+, built in ")
         self.assertIn("Installs of hatcheck on your PATH, the first of each name running:", out)
-        self.assertRegex(out, r"1\. uv: ~/\.local/bin -> ~/\.local/share/uv/tools/hatcheck/bin +\d+\.\d+\.\d+ +all seven commands; runs")
-        self.assertRegex(out, r"2\. Homebrew: \S+/homebrew/bin -> \S+/Cellar/hatcheck/0\.3\.0/bin +\d+\.\d+\.\d+ +all seven commands; shadowed")
+        self.assertRegex(out, r"1\. uv: ~/\.local/bin -> ~/\.local/share/uv/tools/hatcheck/bin +\d+\.\d+\.\d+ +all nine commands; runs")
+        self.assertRegex(out, r"2\. Homebrew: \S+/homebrew/bin -> \S+/Cellar/hatcheck/0\.3\.0/bin +\d+\.\d+\.\d+ +all nine commands; shadowed")
         self.assertIn("To remove Homebrew's: brew uninstall hatcheck", out)
         self.assertIn("To fix: 2 installs of hatcheck are on your PATH; keep one.", out)
         code, out = self.doctor([brew, uv])  # the other way round
@@ -145,7 +145,7 @@ class Doctor(unittest.TestCase):
         self.assertEqual(d["hooks"], [])
         if not WINDOWS:
             self.assertEqual(code, 0, out)
-            self.assertEqual((d["installs"][0]["install"], d["installs"][0]["commands"], d["installs"][0]["runs"]), ("uv", SIX, SIX))
+            self.assertEqual((d["installs"][0]["install"], d["installs"][0]["commands"], d["installs"][0]["runs"]), ("uv", COMMANDS, COMMANDS))
             self.assertEqual(d["installs"][0]["remove"], "uv tool uninstall hatcheck")
             self.assertEqual(d["problems"], [])
 

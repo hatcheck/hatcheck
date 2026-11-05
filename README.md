@@ -135,7 +135,7 @@ which hatcheck reads; they resume directly with `opencode --session ses_<id>`. S
 ### Install
 
 One binary per platform, with no Python needed. Each of these installs `hatcheck`, `hat`, `cl`,
-`cx`, `ck`, `claude-z` and `claude-k`:
+`cx`, `ck`, `claude-z`, `claude-k`, `claude-m` and `claude-d`:
 
 ```bash
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
@@ -168,7 +168,7 @@ Each is documented as it is, with its options and what it prints, in
 
 | Command | What it does |
 |---|---|
-| [`cl a --resume <id>`](docs/agents.md#cl-run-claude-code-with-a-profile) | Claude Code with `~/.claude-a`; `cl -z` and `cl -k` run it on Z.ai or Kimi there |
+| [`cl a --resume <id>`](docs/agents.md#cl-run-claude-code-with-a-profile) | Claude Code with `~/.claude-a`; `cl -z`, `-k`, `-m` and `-D` run it on Z.ai, Kimi, MiniMax or DeepSeek there |
 | [`cx a resume <id>`](docs/agents.md#cx-run-codex-with-a-home-per-account) | Codex with `~/.codex-a` |
 | [`ck a --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-a` |
 | [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day in this folder, or every folder with `-A`, each with its resume or open command, what it cost and what's left of its plan; `-d` adds each one's turns and spend by model, `-c` puts the costliest first, and [`config.toml`](docs/commands.md#configtoml-the-lists-defaults-and-what-to-leave-out) sets the defaults and the agents and folders every command leaves out |
@@ -201,9 +201,9 @@ resumes its own. [GitHub Copilot CLI](docs/agents.md#github-copilot-cli-copilot)
 [OpenCode](docs/agents.md#opencode-opencode) sessions are listed and shown from their stores and
 converted both ways, through their own importers: a session converted for either is a file its
 `sessions import` or `session import` takes, and `copilot --resume <id>` and
-`opencode --session ses_<id>` resume their own. [`claude-z` and
-`claude-k`](docs/agents.md#claude-z-claude-k-claude-code-on-zai-or-kimi)
-run Claude Code on Z.ai's or Kimi's models in any profile.
+`opencode --session ses_<id>` resume their own. [`claude-z`, `claude-k`, `claude-m` and
+`claude-d`](docs/agents.md#claude-z-claude-k-claude-m-claude-d-claude-code-on-zai-kimi-minimax-or-deepseek)
+run Claude Code on Z.ai's, Kimi's, MiniMax's or DeepSeek's models in any profile.
 
 
 ## Rules it keeps
@@ -211,8 +211,8 @@ run Claude Code on Z.ai's or Kimi's models in any profile.
 Each rule names the code that keeps it, so it can be checked rather than taken on trust.
 
 - **Not in the path.** Nothing of Hatcheck sits between an agent and its model. `cl`, `cx` and
-  `ck` set `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `KIMI_CODE_HOME` (and, for `cl -z` and `cl -k`, the
-  provider variables you set up) and run the agent in their place; nothing stays running
+  `ck` set `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `KIMI_CODE_HOME` (and, for `cl -z`, `-k`, `-m` and
+  `-D`, the provider variables you set up) and run the agent in their place; nothing stays running
   ([`launch.rs`](crates/hatcheck/src/launch.rs), `run`).
 - **No agent's config is rewritten**, except when you ask: `hatcheck bind --hook` adds one
   session-start hook to each profile's `settings.json`, each Codex home's `hooks.json` and
@@ -237,8 +237,9 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   model list agy fetches first to say it's signed in. `CODEX_USAGE_URL` in `usage.rs` and
   `DEFAULT_USAGE_URL` and `GLOBAL_USAGE_URL` in `kimi.rs` are the only addresses the binary itself
   calls; DSH, mcode, qwen, copilot and opencode add none. `--cached` and `--no-usage` make none. The
-  Z.ai and Kimi endpoints in [`provider.rs`](crates/hatcheck/src/provider.rs) are handed to Claude
-  Code, which calls them only when you run `cl -z` or `cl -k`.
+  Z.ai, Kimi, MiniMax and DeepSeek endpoints in [`provider.rs`](crates/hatcheck/src/provider.rs) are
+  handed to Claude Code, which calls them only when you run `claude-z`, `claude-k`, `claude-m` or
+  `claude-d`, or `cl` with `-z`, `-k`, `-m` or `-D`.
 - **What the agents send is theirs to govern.** Hatcheck adds no data path of its own. What each
   agent sends to its maker, and whether that is kept or used to train models, depends on the
   maker's terms for your product and plan, which differ between them and change; check them for
@@ -300,7 +301,7 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 
 - **`crates/hatcheck/`**: hatcheck in Rust, the commands and the launchers. Its `src/` has a file per
   subcommand (`sessions.rs`, `usage.rs`, `move_cmd.rs`, `open_cmd.rs`, `desktop.rs` and the rest),
-  `launch.rs` for `cl`, `cx`, `ck`, `claude-z` and `claude-k`, `agy.rs`, `kimi.rs`, `zcode.rs`,
+  `launch.rs` for `cl`, `cx`, `ck` and `claude-z`, `-k`, `-m` and `-d`, `agy.rs`, `kimi.rs`, `zcode.rs`,
   `dsh.rs`, `mcode.rs`, `qwen.rs`, `copilot.rs` and `opencode.rs` for what it reads and writes of
   Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot
   CLI and OpenCode, `doctor.rs` for `hatcheck doctor`, and
@@ -337,7 +338,8 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   GitHub Actions runs both on macOS, Linux and Windows (`.github/workflows/tests.yml`).
 - **`scripts/`**: `upstream.py`, the read-only first step of [maintenance.md](docs/maintenance.md),
   which `.github/workflows/upstream.yml` runs every Monday, keeping an issue open for what it
-  finds; and `provider_probe.py`, which runs each `claude-k` and `claude-z` model once.
+  finds; and `provider_probe.py`, which runs each `claude-k`, `claude-z`, `claude-m` and `claude-d`
+  model once.
 
 ## Roadmap
 
@@ -400,7 +402,8 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 - **Z.ai and Kimi:** the provider settings in `crates/hatcheck/src/provider.rs` (endpoints, model slots, context
   windows and the config files) come from [claude-z](https://github.com/sam-fakhreddine/claude-z) by
   Kerim ([lettt325](https://github.com/lettt325)), MIT-licensed, and Yi Wang's
-  [fork](https://github.com/yiwang/claude-z) of it, which added Kimi.
+  [fork](https://github.com/yiwang/claude-z) of it, which added Kimi. MiniMax's and DeepSeek's are
+  their own Claude Code guides'.
 
 ## License
 

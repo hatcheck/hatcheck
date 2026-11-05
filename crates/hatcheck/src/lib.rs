@@ -1,5 +1,5 @@
 //! hatcheck: Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax
-//! Code, Qwen Code, GitHub Copilot CLI and OpenCode accounts on one computer, each kept apart. The hatcheck and hat commands, the cl, cx, claude-z and claude-k
+//! Code, Qwen Code, GitHub Copilot CLI and OpenCode accounts on one computer, each kept apart. The hatcheck and hat commands, the cl, cx, ck and claude-z, -k, -m and -d
 //! launchers, and hatcheck serve, the engine the desktop app runs. It was ported from a Python
 //! version, with the same output, which the command tests in tests/ still hold it to
 //! (docs/rust-port.md).
