@@ -499,12 +499,12 @@ fn copy_lines(copies: &[SessionCopy], agent: Agent) -> Vec<String> {
 }
 
 /// Which copy to take when several profiles have the session: the one used last, unless you
-/// pick another at the prompt. A script, a pipe or --json gets the one used last.
+/// pick another at the prompt. A script, a pipe, --json or --yes gets the one used last.
 fn choose_source(
     sid: &str,
     places: &[(String, Vec<String>)],
     agent: Agent,
-    json_out: bool,
+    unasked: bool,
     report: &mut Map<String, Value>,
 ) -> Result<String, Stop> {
     let copies = copies_used_last_first(places);
@@ -514,7 +514,7 @@ fn choose_source(
     );
     report.insert("source_choice".into(), json!("used last"));
     let id8 = py::head(sid, 8);
-    if json_out || !interactive() {
+    if unasked || !interactive() {
         let others = copies[1..]
             .iter()
             .map(|c| paths::shell_path(&c.folder))
@@ -1609,12 +1609,12 @@ fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
             py::head(&a.session, 8)
         ));
     }
-    if a.dry_run {
+    if a.dry_run || a.yes {
         return Ok(());
     }
     if a.json || !interactive() {
         return Err(format!(
-            "Say which session and where, when there's no terminal to ask: {prog} <session> <profile>"
+            "Say which session and where, when there's no terminal to ask: {prog} <session> <profile>, or give --yes"
         ));
     }
     let to = settled.map_or(a.profile.clone(), |(_, t)| show(&t));
@@ -1648,6 +1648,8 @@ struct Ask {
     brief: bool,
     dry_run: bool,
     json: bool,
+    /// --yes: nothing is asked. What it picked goes ahead, and in a terminal it resumes after.
+    yes: bool,
 }
 
 /// What the first line says was done, or would be.
@@ -3028,8 +3030,8 @@ fn convert(
 }
 
 /// The fork command for what was asked, which a move that stops prints: hatcheck fork (or hat
-/// fork) with the same session, profile, --from and --dry-run. The values are quoted for the
-/// shell the command is printed for; the flags stay bare.
+/// fork) with the same session, profile, --from, --brief, --dry-run and --yes. The values are
+/// quoted for the shell the command is printed for; the flags stay bare.
 fn fork_command(prog: &str, a: &Ask) -> String {
     let me = prog.rsplit_once(' ').map_or(prog, |(me, _)| me);
     let mut words = vec![
@@ -3046,6 +3048,9 @@ fn fork_command(prog: &str, a: &Ask) -> String {
     }
     if a.dry_run {
         words.push("--dry-run".into());
+    }
+    if a.yes {
+        words.push("--yes".into());
     }
     words.join(" ")
 }
@@ -3253,7 +3258,8 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
     let (target_agent, target) = match wanted.resolve(agent) {
         Ok(t) => t,
         Err((own, claude)) => {
-            if a.json || !interactive() {
+            // A move or a conversion: --yes answers questions, it doesn't choose between them.
+            if a.json || a.yes || !interactive() {
                 return Err(format!(
                     "{} is both {} and {}; say {}:{} or claude:{}",
                     a.profile,
@@ -3352,7 +3358,7 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
         }
     }
     let source = if places.len() > 1 {
-        choose_source(&sid, &places, agent, a.json, report)?
+        choose_source(&sid, &places, agent, a.json || a.yes, report)?
     } else {
         places[0].0.clone()
     };
@@ -3462,7 +3468,7 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking.")
+    let parser = Parser::new(prog, "Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session to another profile, to carry on with it there, or convert it for another agent. With a profile alone, the newest session started from this folder goes to it; with nothing, or a session alone, to the best account of its agent now, as hatcheck best picks it; either after asking, unless --yes.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
         .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, mcode for ~/.minimax, mcode:NAME for ~/.minimax-NAME, copilot for ~/.copilot, copilot:NAME for ~/.copilot-NAME or opencode for ~/.local/share/opencode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
@@ -3472,6 +3478,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         // now, and --fork is hatcheck fork, which keeps the original as --fork always did.
         .hidden(&["--no-keep"], "no_keep", Takes::Nothing)
         .hidden(&["--fork"], "fork", Takes::Nothing)
+        .flag(&["-y", "--yes"], "yes", "don't ask: go ahead with the session and account it picks, and in a terminal resume it right after")
         .flag(&["--dry-run"], "dry_run", "show what would be moved, copied, converted and deleted, and change nothing")
         .flag(&["-j", "--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
     let args = match parser.parse(argv) {
@@ -3491,6 +3498,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         brief: args.flag("brief"),
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
+        yes: args.flag("yes"),
     };
     if let Err(stop) = fill_in(&mut a, prog) {
         return if stop == "Nothing changed." {
@@ -3505,11 +3513,12 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
 /// hatcheck fork SESSION PROFILE ...: bring a session into another profile as a new one, with its
 /// own ID, and keep the original; for the other agent, convert it, as move does.
 pub fn fork_main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking.")
+    let parser = Parser::new(prog, "Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session into another profile: bring it in as a new session with its own ID, beside any copy already there, and keep the original. For another agent, it's converted. With a profile alone, the newest session started from this folder goes into it; with nothing, or a session alone, into the best account of its agent now, as hatcheck best picks it; either after asking, unless --yes.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder; one word that names a profile is PROFILE)")
         .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, mcode for ~/.minimax, mcode:NAME for ~/.minimax-NAME, copilot for ~/.copilot, copilot:NAME for ~/.copilot-NAME or opencode for ~/.local/share/opencode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--brief"], "brief", "for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last turns")
+        .flag(&["-y", "--yes"], "yes", "don't ask: go ahead with the session and account it picks, and in a terminal resume the new session right after")
         .flag(&["--dry-run"], "dry_run", "show what would be copied or converted, and change nothing")
         .flag(&["-j", "--json"], "json", "say what was or would be done as JSON, and never ask to resume it");
     let args = match parser.parse(argv) {
@@ -3528,6 +3537,7 @@ pub fn fork_main(argv: &[String], prog: &str) -> i32 {
         brief: args.flag("brief"),
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
+        yes: args.flag("yes"),
     };
     if let Err(stop) = fill_in(&mut a, prog) {
         return if stop == "Nothing changed." {
@@ -3540,7 +3550,7 @@ pub fn fork_main(argv: &[String], prog: &str) -> i32 {
 }
 
 /// Do what move or fork was asked: the text as it goes, or with --json the report at the end; then
-/// in a terminal, the offer to resume it.
+/// in a terminal, the offer to resume it, or with --yes resuming it.
 fn answer(a: &Ask, prog: &str) -> i32 {
     let mut report = Map::new();
     report.insert("version".into(), json!(1));
@@ -3566,27 +3576,43 @@ fn answer(a: &Ask, prog: &str) -> i32 {
             target_agent,
             target,
         }) => {
-            // In a terminal, offer to run that now. Never when piped, so scripts don't stop to ask.
+            // In a terminal, offer to run that now, or with --yes run it. Never when piped, so
+            // scripts don't stop to ask, and nothing starts an agent without a terminal for it.
             if let (Some(sid), Some(cwd)) = (session, cwd) {
                 if !a.dry_run && ospath::isdir(&cwd) && interactive() {
-                    let answer = read_answer(&match target_agent {
-                        Agent::Agy | Agent::Zcode | Agent::Qwen => format!(
-                            "Start it now with {}, in {}? [y/N] ",
-                            target_agent.program(),
-                            paths::shell_path(&cwd)
-                        ),
-                        _ => format!("Resume it now in {}? [y/N] ", paths::shell_path(&target)),
-                    });
-                    if answer.is_none() {
-                        out::println("");
-                    }
-                    if matches!(
-                        answer
-                            .as_deref()
-                            .map(|x| py::strip(x).to_lowercase())
-                            .as_deref(),
-                        Some("y" | "yes")
-                    ) {
+                    let starts = matches!(target_agent, Agent::Agy | Agent::Zcode | Agent::Qwen);
+                    let program = target_agent.program();
+                    let go = if a.yes {
+                        out::println(&if starts {
+                            format!(
+                                "Starting it now with {program}, in {}.",
+                                paths::shell_path(&cwd)
+                            )
+                        } else {
+                            format!("Resuming it now in {}.", paths::shell_path(&target))
+                        });
+                        true
+                    } else {
+                        let answer = read_answer(&if starts {
+                            format!(
+                                "Start it now with {program}, in {}? [y/N] ",
+                                paths::shell_path(&cwd)
+                            )
+                        } else {
+                            format!("Resume it now in {}? [y/N] ", paths::shell_path(&target))
+                        });
+                        if answer.is_none() {
+                            out::println("");
+                        }
+                        matches!(
+                            answer
+                                .as_deref()
+                                .map(|x| py::strip(x).to_lowercase())
+                                .as_deref(),
+                            Some("y" | "yes")
+                        )
+                    };
+                    if go {
                         return resume_now(&target, &sid, &cwd, target_agent);
                     }
                 }
@@ -3799,6 +3825,7 @@ mod tests {
             brief: false,
             dry_run: false,
             json: false,
+            yes: false,
         };
         assert_eq!(
             fork_command("hatcheck move", &a),
@@ -3810,6 +3837,12 @@ mod tests {
         assert_eq!(
             fork_command("hat move", &a),
             "hat fork 11111111 b --from 'my profile' --dry-run"
+        );
+        // A move that wasn't to ask leaves a fork that won't.
+        (a.dry_run, a.yes) = (false, true);
+        assert_eq!(
+            fork_command("hat move", &a),
+            "hat fork 11111111 b --from 'my profile' --yes"
         );
     }
 

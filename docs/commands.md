@@ -409,13 +409,21 @@ Resume it now in ~/.claude-a? [y/N]
   bars and resets included, flags the folder's binding when that's another profile (`⚠ folder
   bound to ~/.claude-a`), and asks. A session alone (`hatcheck move 9a8b7c6d`) goes the same
   way. When the session is already in the best account, or no account has room, it stops and says
-  so; a script, a pipe or `--json` has to say both.
+  so; a script, a pipe or `--json` has to say both, or give `--yes`.
 - `hatcheck move NAME`, with a profile alone, moves the newest session started from this folder
   to `~/.claude-NAME`, after asking; `hatcheck fork NAME` forks it there the same way. A word that
   starts a session's ID and names a profile that exists too is asked for more.
 - Resume it with the printed command, from the directory it ran in, or answer `y` when it asks and
   it starts Claude Code there with the new profile. It only asks in a terminal, so scripts never
-  wait on it. The conversation comes across whole; the account and its plan limits, settings,
+  wait on it.
+- `-y` (`--yes`) asks nothing: it goes ahead with the session and account it picked, after showing
+  them as it does before asking, and in a terminal resumes the session at once (`Resuming it now in
+  ~/.claude-a.`), so `hat m -y` carries on the newest session here on the best account in one
+  command. Without a terminal, or with `--json`, it starts nothing. Of several copies it takes the
+  one used last, as a script does, and a name that is two homes still has to be spelled out
+  (`codex:work` or `claude:work`): which of a move and a conversion is meant isn't a yes or a no.
+  A move that stops prints the `fork` command with `--yes` too.
+- The conversation comes across whole; the account and its plan limits, settings,
   permissions, MCP servers, plugins and project memory are the new profile's. If the new account
   rejects the signatures on earlier thinking, Claude Code drops those thinking blocks and carries
   on.
@@ -477,8 +485,8 @@ Session 4215508b is in 3 profiles:
 Which one? [1]
 ```
 
-A number, a profile's name or Enter picks one. When the output isn't a terminal, as in a script or
-with `--json`, the copy used last is taken and a line says so; `--from` always decides.
+A number, a profile's name or Enter picks one. When the output isn't a terminal, as in a script, or
+with `--json` or `--yes`, the copy used last is taken and a line says so; `--from` always decides.
 
 ### With Codex
 
@@ -767,10 +775,11 @@ to or `--from`; there are no named OpenCode homes.
 | Option           | What it does                                                                 |
 |------------------|------------------------------------------------------------------------------|
 | `SESSION`        | the session ID, or the start of it; left out, the newest session started from this folder. One word alone that names a profile or home that exists, and starts no session's ID, is `PROFILE` (`hatcheck move NAME`), with the session the newest started from this folder; a word that is both is asked for more |
-| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, `qwen` for `~/.qwen`, `qwen:NAME` for `~/.qwen-NAME`, `dsh` for `~/.dsh`, `dsh:NAME` for `~/.dsh-NAME`, `mcode` for `~/.minimax`, `mcode:NAME` for `~/.minimax-NAME`, `copilot` for `~/.copilot`, `copilot:NAME` for `~/.copilot-NAME`, `opencode` for `~/.local/share/opencode`, or a path; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking |
-| `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script or `--json` gets that one |
+| `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, `qwen` for `~/.qwen`, `qwen:NAME` for `~/.qwen-NAME`, `dsh` for `~/.dsh`, `dsh:NAME` for `~/.dsh-NAME`, `mcode` for `~/.minimax`, `mcode:NAME` for `~/.minimax-NAME`, `copilot` for `~/.copilot`, `copilot:NAME` for `~/.copilot-NAME`, `opencode` for `~/.local/share/opencode`, or a path; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking, unless `--yes` |
+| `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script, `--json` or `--yes` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
 | `--brief`        | for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last six turns within 12,000 characters |
+| `-y`, `--yes`    | don't ask: go ahead with the session and account it picks, and in a terminal resume it right after; never with `--json` |
 | `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
 
 With nothing, `hatcheck move` (or `hat m`) moves the newest session started from this folder,
@@ -786,8 +795,9 @@ Best Claude Code account now: ~/.claude-a  team max 5x · live
 Move session 3f1c2a9e "Fix flaky login test" from ~/.claude-b to ~/.claude-a? [y/N] y
 ```
 
-`--dry-run` says what it would do without asking, and a script, a pipe or `--json` has to say
-both the session and the profile. `--no-keep`, which a move needed before it was the default, is
+`--dry-run` says what it would do without asking; `hat m -y` shows the same, then moves the
+session without asking and resumes it there; and a script, a pipe or `--json` has to say both
+the session and the profile, or give `--yes`. `--no-keep`, which a move needed before it was the default, is
 still accepted, and so is `--fork`, which does what
 [`hatcheck fork`](#hatcheck-fork-a-session-as-a-new-one-in-another-profile) does.
 
@@ -834,6 +844,7 @@ Resume it now in ~/.claude? [y/N]
 | `PROFILE`        | where it goes, as for [`move`](#hatcheck-move-carry-on-a-session-with-another-profile); left out, the best account now, as for `move` |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it, as for `move` |
 | `--brief`        | for a conversion, hand over a brief in place of the whole conversation, as for `move` |
+| `-y`, `--yes`    | don't ask, as for `move`: go ahead with the session and account it picks, and in a terminal resume the new session right after |
 | `--dry-run`      | show what would be copied or converted, and change nothing                   |
 
 ## `hatcheck relocate`: a project folder that moved

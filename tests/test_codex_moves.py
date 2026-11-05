@@ -110,6 +110,10 @@ class Moves(unittest.TestCase):
         code, out = h.run(MOVE, X[:13], "work", "--dry-run")
         self.assertEqual(code, 1, out)
         self.assertIn("work is both %s and %s; say codex:work or claude:work" % (shown(codex_work), shown(self.work)), out)
+        if not WINDOWS:  # --yes answers questions; a move or a conversion is said, even at a terminal
+            code, out = in_terminal(argv_of(MOVE) + [X[:13], "work", "--dry-run", "-y"], [], h.env(), h.root)
+            self.assertEqual(code, 1, out)
+            self.assertIn("work is both %s and %s; say codex:work or claude:work" % (shown(codex_work), shown(self.work)), out)
         code, out = h.run(MOVE, X[:13], "codex:work", "--dry-run")
         self.assertEqual(code, 0, out)
         self.assertIn("Would move Codex session %s" % X[:8], out)

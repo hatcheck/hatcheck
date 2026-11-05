@@ -6,6 +6,10 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 
 ## Unreleased
 
+### Added
+
+- **`hatcheck move -y` and `fork -y` ask nothing.** `hat m -y` moves the newest session started from this folder to the best account of its agent now, after showing both as it does before asking, and resumes it there at once; with the session and the profile named, `-y` answers just the offer to resume. Without a terminal it goes ahead with what it picked, where a script had to name both, and starts nothing, and nor does `--json`. Of several copies it takes the one used last, as a script does, and a name that is two homes (`codex:work` or `claude:work`) still has to be spelled out. `hatcheck resume` had `-y` already.
+
 ### Fixed
 
 - **`claude-k` and `cl -k` give K3.1 Pro Highspeed and K2.8 Preview their 1M of context.** `claude-k reconfig` offered both with 256k, so Claude Code compacted their sessions at a quarter of what Kimi gives them: 1M for Highspeed on every plan that has it (Pro or Allegretto and up), and for K2.8 Preview (`kimi-for-coding`) on every plan, as Kimi's model page already said when the menu was written. They're `k3.1-pro-highspeed[1m]` and `kimi-for-coding[1m]` now. One saved without `[1m]` is kept, as any saved model is; pick it again in `claude-k reconfig` for the 1M.

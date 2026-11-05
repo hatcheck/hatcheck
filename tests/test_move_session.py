@@ -321,6 +321,12 @@ class MoveSession(unittest.TestCase):
             code, out = run((ask, keys))
             self.assertEqual(code, 1, out)
             self.assertTrue(out.rstrip().endswith("Nothing changed."), out)
+        code, out = run(args=("--dry-run", "-y"))  # --yes: the one used last, as a script gets it
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("Which one?", out)
+        self.assertIn("Session %s is in %s too. Taking the copy in %s, used last; --from picks another."
+                      % (S2[:8], self.h.shown(self.b), self.h.shown(self.default)), out)
+        self.assertIn('Would move session %s "In default"' % S2[:8], out)
         code, out = run((ask, b"default\n"), (b"[y/N] ", b"\n"), args=())
         self.assertEqual(code, 0, out)
         self.assertIn('Moved session %s "In default"' % S2[:8], out)
@@ -395,6 +401,18 @@ class ResumeNow(unittest.TestCase):
         code, out = run([S1[:8], "default", "--from", "b"], b"y\n", dict(self.env, CLAUDE_CONFIG_DIR=self.default))
         self.assertEqual(code, 0, out)
         self.expect(out, "unset")
+
+    @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
+    def test_yes_resumes_without_asking(self):
+        code, out = in_terminal(argv_of(SCRIPT) + [S1[:8], "b", "--keep", "-y"], [], self.env, self.h.root)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("[y/N]", out)
+        self.assertIn("Resuming it now in %s.\n" % self.h.shown(self.b), out)
+        self.expect(out, self.b)
+        # --json is a script's report, terminal or not: nothing starts.
+        code, out = in_terminal(argv_of(SCRIPT) + [S1[:8], "b", "--keep", "-y", "--json"], [], self.env, self.h.root)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("args=", out)
 
 
 if __name__ == "__main__":
@@ -523,3 +541,35 @@ class MoveWithoutArguments(unittest.TestCase):
         self.assertIn('Move session 11111111 "Newest here" from %s to %s? [y/N]' % (h.shown(self.work), h.shown(self.default)), out)
         self.assertIn("Moved session 11111111", out)
         self.assertTrue(os.path.exists(os.path.join(self.default, "projects", re.sub(r"[^A-Za-z0-9]", "-", self.api), S1 + ".jsonl")))
+
+    def test_yes_goes_ahead_without_a_terminal(self):
+        # What it picks, where a script without --yes has to say both; and nothing starts.
+        h = self.h
+        code, out = h.run(SCRIPT, cwd=self.api)
+        self.assertIn("Say which session and where, when there's no terminal to ask: "
+                      "hatcheck move <session> <profile>, or give --yes", out)
+        code, out = h.run("fork", S2[:8], "-y", "--json", cwd=self.api)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(json.loads(out)["new_session"])
+        code, out = h.run(SCRIPT, "--yes", cwd=self.api)
+        self.assertEqual(code, 0, out)
+        self.assertIn('Moved session 11111111 "Newest here" from %s to %s' % (h.shown(self.work), h.shown(self.default)), out)
+        self.assertNotIn("[y/N]", out)
+        self.assertNotIn("Resuming", out)
+        self.assertTrue(os.path.exists(os.path.join(self.default, "projects", re.sub(r"[^A-Za-z0-9]", "-", self.api), S1 + ".jsonl")))
+
+    @unittest.skipIf(WINDOWS, "needs a pseudo-terminal")
+    def test_yes_asks_nothing_and_resumes_in_a_terminal(self):
+        h = self.h
+        bindir = os.path.join(h.root, "fakebin")
+        # Claude Code for the resume only: asked for usage, it fails, so the snapshots decide.
+        write(os.path.join(bindir, "claude"), '#!/bin/sh\ncase "$1" in --resume) '
+              'echo "CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR-unset} cwd=$(pwd) args=$*";; *) exit 1;; esac\n')
+        os.chmod(os.path.join(bindir, "claude"), 0o755)
+        code, out = in_terminal(argv_of(SCRIPT) + ["-y"], [], dict(h.env(), PATH=bindir + os.pathsep + "/bin"), self.api)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Best Claude Code account now: %s  " % h.shown(self.default), out)  # still shown first
+        self.assertNotIn("[y/N]", out)
+        self.assertIn('Moved session 11111111 "Newest here" from %s to %s' % (h.shown(self.work), h.shown(self.default)), out)
+        self.assertIn("Resuming it now in %s.\n" % h.shown(self.default), out)
+        self.assertIn("CLAUDE_CONFIG_DIR=unset cwd=%s args=--resume %s" % (self.api, S1), out)
