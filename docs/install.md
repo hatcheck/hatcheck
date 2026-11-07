@@ -178,3 +178,13 @@ otherwise, and `--json` prints what it found as data. What it says about the age
 act on: Claude Code's `claude doctor` and Codex's `codex doctor` know their own installs best. The
 release installers end by naming it, and `install.sh` and `install.ps1` say when another hatcheck
 comes first on your `PATH`.
+
+It also says how long each Claude Code profile keeps its transcripts, under `Transcripts:`, since
+what Claude Code deletes is gone for hatcheck too: `search`, `show` and `move` find only what's
+still there. Claude Code deletes a transcript `cleanupPeriodDays` after it was last written, 30
+unless the profile's `settings.json` sets it (`90 days (cleanupPeriodDays)` when it does, `30 days
+(the default)` when it doesn't), and keeps Claude Desktop's until `desktopSessionCleanupPeriodDays`
+caps them, which 0, the default, doesn't; both as Claude Code 2.1.319 describes them. A
+`settings.json` that can't be read shows `?` with why, and counts as something to fix, since Claude
+Code pauses its cleanup over it too. `--json` has them as `transcripts`, each with `profile`,
+`days`, `set`, `desktop_days` and `unread`.

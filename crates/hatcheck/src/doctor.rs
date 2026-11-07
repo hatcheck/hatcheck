@@ -407,7 +407,51 @@ struct Report {
     functions: Vec<(String, String)>,
     agents: Vec<(Agent, Vec<AgentCopy>)>,
     hooks: Vec<(Agent, String, String, bool)>,
+    /// How long each Claude Code profile keeps its transcripts.
+    transcripts: Vec<Retention>,
     problems: Vec<String>,
+}
+
+/// How long a Claude Code profile keeps its transcripts: Claude Code deletes a transcript
+/// cleanupPeriodDays after it was last written (30 unless its settings.json says otherwise;
+/// Claude Code 2.1.319), and keeps Claude Desktop's until desktopSessionCleanupPeriodDays caps
+/// them (0, no cap, by default).
+struct Retention {
+    profile: String,
+    /// None when the settings file couldn't be read, with why in `unread`.
+    days: Option<u64>,
+    /// Whether cleanupPeriodDays is set in the profile's settings.json.
+    set: bool,
+    desktop_days: Option<u64>,
+    unread: Option<String>,
+}
+
+/// Claude Code's default for cleanupPeriodDays.
+const DEFAULT_CLEANUP_DAYS: u64 = 30;
+
+fn retention(profile: &str) -> Retention {
+    let path = ospath::join(profile, "settings.json");
+    match bind::read_settings_object(&path) {
+        Ok(settings) => {
+            let days = settings.get("cleanupPeriodDays").and_then(Value::as_u64);
+            Retention {
+                profile: profile.to_string(),
+                days: Some(days.unwrap_or(DEFAULT_CLEANUP_DAYS)),
+                set: days.is_some(),
+                desktop_days: settings
+                    .get("desktopSessionCleanupPeriodDays")
+                    .and_then(Value::as_u64),
+                unread: None,
+            }
+        }
+        Err(why) => Retention {
+            profile: profile.to_string(),
+            days: None,
+            set: false,
+            desktop_days: None,
+            unread: Some(why),
+        },
+    }
 }
 
 fn examine() -> Report {
@@ -578,6 +622,18 @@ fn examine() -> Report {
             ));
         }
     }
+    let transcripts: Vec<Retention> = usage::find_profiles()
+        .iter()
+        .map(|p| retention(p))
+        .collect();
+    for r in &transcripts {
+        if let Some(why) = &r.unread {
+            problems.push(format!(
+                "{}: {why}, so Claude Code can't tell how long to keep its transcripts there",
+                show(&r.profile)
+            ));
+        }
+    }
     Report {
         me: (exe, mine, my_folder),
         groups,
@@ -586,6 +642,7 @@ fn examine() -> Report {
         functions,
         agents,
         hooks,
+        transcripts,
         problems,
     }
 }
@@ -623,12 +680,20 @@ fn as_json(r: &Report) -> Value {
             json!({"agent": agent.key(), "profile": ospath::abspath(folder), "runs": program, "exists": there})
         })
         .collect();
+    let transcripts: Vec<Value> = r
+        .transcripts
+        .iter()
+        .map(|x| {
+            json!({"profile": ospath::abspath(&x.profile), "days": x.days, "set": x.set,
+                   "desktop_days": x.desktop_days, "unread": x.unread})
+        })
+        .collect();
     json!({
         "version": 1,
         "this": {"path": ospath::abspath(&r.me.0), "version": cli::version(), "install": r.me.1.key(), "folder": ospath::abspath(&r.me.2)},
         "installs": groups, "missing": r.missing, "others": others,
         "shell_functions": r.functions.iter().map(|(n, rc)| json!({"command": n, "file": ospath::abspath(rc)})).collect::<Vec<_>>(),
-        "agents": agents, "hooks": hooks, "problems": r.problems,
+        "agents": agents, "hooks": hooks, "transcripts": transcripts, "problems": r.problems,
         "config": crate::config::current().to_json(),
     })
 }
@@ -797,6 +862,33 @@ fn describe(r: &Report) {
                 out::println(&paint.error(&line));
             }
         }
+    }
+    if !r.transcripts.is_empty() {
+        out::heading(&format!(
+            "Transcripts: Claude Code deletes a profile's {DEFAULT_CLEANUP_DAYS} days after they were last written, unless cleanupPeriodDays in its settings.json says otherwise:"
+        ));
+        for x in &r.transcripts {
+            let kept = match (x.days, &x.unread) {
+                (Some(d), _) if x.set => format!(
+                    "{d} day{} (cleanupPeriodDays)",
+                    if d == 1 { "" } else { "s" }
+                ),
+                (Some(d), _) => format!("{d} days (the default)"),
+                (None, Some(why)) => paint.error(&format!("? ({why})")),
+                (None, None) => "?".to_string(),
+            };
+            let desktop = match x.desktop_days {
+                Some(0) | None => String::new(),
+                Some(d) => {
+                    format!(", Claude Desktop's after {d} (desktopSessionCleanupPeriodDays)")
+                }
+            };
+            out::println(&format!("  {:<24} {kept}{desktop}", show(&x.profile)));
+        }
+        out::println(&paint.p(
+            "2",
+            "  Sessions from Claude Desktop are kept past that unless desktopSessionCleanupPeriodDays caps them. What's deleted is gone for hatcheck too: search, show and move find only what's still there.",
+        ));
     }
     if r.hooks.is_empty() {
         out::heading("Hooks from hatcheck bind --hook: none.");

@@ -130,6 +130,26 @@ class Doctor(unittest.TestCase):
         self.assertIn("is a link to a file that's gone; a shell may find it first", out)
         self.assertIn("which is gone", out)
 
+    def test_how_long_each_profile_keeps_its_transcripts(self):
+        h = self.h
+        work = h.profile("work")
+        write(os.path.join(work, "settings.json"), json.dumps({"cleanupPeriodDays": 90, "desktopSessionCleanupPeriodDays": 14}))
+        h.profile("home")
+        bad = h.profile("bad")
+        write(os.path.join(bad, "settings.json"), "{broken")
+        code, out = h.run("doctor")
+        self.assertEqual(code, 1, out)  # the broken file is something to fix
+        self.assertIn("Transcripts: Claude Code deletes a profile's 30 days after they were last written, unless cleanupPeriodDays in its settings.json says otherwise:\n", out)
+        self.assertIn("  ~/.claude-work           90 days (cleanupPeriodDays), Claude Desktop's after 14 (desktopSessionCleanupPeriodDays)\n", out)
+        self.assertIn("  ~/.claude-home           30 days (the default)\n", out)
+        self.assertIn("  ~/.claude-bad            ? (can't read its settings.json (not valid JSON))\n", out)
+        self.assertIn("~/.claude-bad: can't read its settings.json (not valid JSON), so Claude Code can't tell how long to keep its transcripts there", out)
+        data = json.loads(h.run("doctor", "--json")[1])
+        by_profile = {x["profile"]: x for x in data["transcripts"]}
+        self.assertEqual((by_profile[work]["days"], by_profile[work]["set"], by_profile[work]["desktop_days"]), (90, True, 14))
+        self.assertEqual((by_profile[bad]["days"], by_profile[bad]["set"]), (None, False))
+        self.assertIn("not valid JSON", by_profile[bad]["unread"])
+
     def test_json(self):
         h = self.h
         dirs = [] if WINDOWS else [self.uv_install()]

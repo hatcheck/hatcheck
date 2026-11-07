@@ -185,7 +185,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck profiles [A B]`](docs/commands.md#hatcheck-profiles-what-each-profile-is-set-up-with) | what each profile and home is set up with: skills, agents, commands, plugins, hooks, MCP servers, permissions and settings; with two named, what differs between them |
 | [`hatcheck statusline --install PROFILE`](docs/commands.md#hatcheck-statusline-which-account-a-session-is-on-in-claude-codes-status-line) | a status line for Claude Code with the profile the session runs in and what's left of its plan: `work · Opus 5.5 · 5h 62% ↻2h41m · wk 30% ↻3d2h · ctx 23% · $1.23` |
 | [`hatcheck completions SHELL`](docs/commands.md#hatcheck-completions-for-zsh-bash-fish-and-powershell) | the completions for zsh, bash, fish or PowerShell: subcommands, options, profiles and recent sessions |
-| [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest |
+| [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest, and how long each profile keeps its transcripts |
 | [`hatcheck desktop`](#claude-desktop-instances-macos-and-windows) | Claude Desktop instances on macOS and Windows |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |
 
