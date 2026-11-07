@@ -59,8 +59,8 @@ in two words, so it's `hat` again: `hat check` lists sessions and `hat check usa
 
 A subcommand can be cut to its first letters, after `hat` or `hatcheck`: `hat m …` is `hat move …`
 and `hat f …` is `hat fork …`. Where two share a letter, it goes to the one used more: `b` is
-`best`, `s` is `show`, `u` is `usage`, `d` is `desktop` and `r` is `resume`, so `bind`, `unbind`
-and `doctor` take two letters, `bi`, `un` and `do`, and `relocate` three, `rel`. What it prints,
+`best`, `s` is `show`, `se` is `search`, `u` is `usage`, `d` is `desktop` and `r` is `resume`, so
+`bind`, `unbind` and `doctor` take two letters, `bi`, `un` and `do`, and `relocate` three, `rel`. What it prints,
 and the commands it suggests, use the whole name.
 
 On a terminal, human-facing reports use one style: `✓` for a completed change, `◇` for a dry run
@@ -1073,6 +1073,66 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
 - `--last N` shows only the last N turns, `--from PROFILE` picks the copy to read when several
   profiles have one, and `--json` prints the turns as data.
 
+## `hatcheck search`: the sessions that mention something
+
+Finds the sessions whose title or conversation has every word given, in every profile and home of
+every agent, and shows each with the command that resumes it and the turns the words are in. For
+"which account did I work on the rate limiter in?":
+
+```
+$ hatcheck search rate limiter
+Sessions with "rate" and "limiter" (by folder, newest first)
+cd ~/code/api
+    3m  Harden the login endpoint · main
+        cl work --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+        You: Add a rate limiter to /login so a script can't hammer it
+        Claude: The limiter keeps a token bucket per IP, refilled at 5 a second.
+   20m  Build cache and rate limiter · main
+        codex resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e
+2 sessions in 1 folder, of 312 looked in; 1 more from other hosts may have them (1 Desktop), which --all searches.
+```
+
+- Every word has to be in the session's title or its conversation, in either case, and as part of
+  a longer word too: `rate` finds `rates`. The words are looked for separately, so a phrase in
+  quotes is its words, not the phrase. The conversation is what `hatcheck show` prints: your
+  messages, the replies and the tool calls, with each call's input and the start of its output;
+  not what the agent adds itself (Claude Code's system reminders, Codex's environment context),
+  and not Claude's thinking.
+- Under each session, the command that resumes it, as the session list prints it (`--full` for the
+  long form), then up to two of its turns with the words, the ones with the most of them: each cut
+  to the terminal's width around the first word it has, with some of what comes before for
+  context, and the words in bold; `and N more turns with them` counts the rest.
+- Newest first, grouped by folder. `--max N` (`-m`) shows the N newest sessions (20 unless said;
+  0 for every one), and the line at the end says how many weren't shown. `--since HOURS` looks
+  only at sessions active since then, as the list's HOURS (`36`, `1.5`, `12h`, `3d`); `--here` only
+  at sessions started from this folder; `--from PROFILE` only in that profile or home, named as
+  `move` names one (`work`, `codex:work`, `kimi`, a path). `-a`/`--all` searches the sessions from
+  Claude Desktop, the SDK, the Codex app and the other hosts the list hides without `--all` too;
+  without it they aren't searched, and the line at the end says how many of them may have the
+  words (their file holds them) and that `--all` searches them.
+- How it reads: Claude Code's transcripts and Codex's session files, by far the most and the
+  largest, are looked through as bytes first, lowercased, for the words JSON writes as they are
+  (ASCII, without `"` or `\`), and only a file that holds every one of them is read as a
+  conversation; the other agents' sessions are read from their stores, as `show` reads them. What
+  the session list knows of each transcript is cached as it is for the list, so the first search
+  over an old profile is the slow one. On 16 GB of transcripts, a word in none of them answers in
+  about four seconds, and a word in most of them in as long as reading them takes. Nothing is
+  written but that cache.
+- A session in a folder [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out)
+  leaves out isn't searched or counted, an agent it leaves out isn't looked in, even named with
+  `--from`, and `--here` from a folder it leaves out is refused.
+- The exit status is 0 when a session was found and 1 when none was, as `where`'s; the `No
+  session has …` line goes to stdout, and `--json` prints its data either way.
+- `--json`: `{"version": 1, "generated_at", "words", "since_hours", "this_folder_only",
+  "searched", "matched", "more", "hidden": {label: count}, "sessions": [{"agent", "id",
+  "profile", "title", "cwd", "last_active", "entrypoint", "branch", "model", "cost_usd", "resume",
+  "turns_matched", "matches": [{"role", "time", "text"}]}]}`: `searched` is how many sessions
+  were looked in, `matched` how many have the words, `more` how many of those `--max` left out,
+  `hidden` the ones from other hosts that may have them, and each match's `text` is the turn
+  around its first word, up to 160 columns.
+
+`hat se` is the short form: `se` goes to `search`, since `sessions`, the default, needs no word.
+
 ## `hatcheck best`: which account to use now
 
 The best account now, shown as `hatcheck usage` shows it, and the `hatcheck move` command that
@@ -1267,9 +1327,10 @@ folders = ["~/orca/workspaces/*", "/tmp"]   # never these, even among the ones l
 - **Folders are chosen both ways:** `[list] folders` names the only folders to show, and
   `[ignore] folders` folders never to show, which wins where they overlap. Every command acts as
   if a session in any other folder weren't there, whatever its flags: the list doesn't show or
-  count it, even with `--all`, and `where`, `show`, `open`, `resume`, `best`, `move`, `fork` and
-  `relocate` don't find it, by its ID or from its folder. Run from such a folder, the list, `open`,
-  `resume` and `move` say the file leaves it out, as `relocate` does for an OLD it leaves out. A
+  count it, even with `--all`, and `where`, `show`, `search`, `open`, `resume`, `best`, `move`,
+  `fork` and `relocate` don't find it, by its ID, its words or its folder. Run from such a folder,
+  the list, `open`, `resume`, `move` and `search --here` say the file leaves it out, as `relocate`
+  does for an OLD it leaves out. A
   session with no folder recorded counts as in the home folder, where the list shows it. A pattern is a path, with `~`, `*` for any part of a name and `?` for one character,
   and covers the folder it names and every folder under it, reached through a link or not:
   `~/orca/workspaces` and `~/orca/workspaces/*` both mean everything there, and `/tmp` covers

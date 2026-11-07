@@ -36,6 +36,7 @@ pub mod py;
 pub mod qwen;
 pub mod relocate;
 pub mod resume;
+pub mod search;
 pub mod serve;
 pub mod sessions;
 pub mod show;

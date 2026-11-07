@@ -329,7 +329,7 @@ class Commands(unittest.TestCase):
         self.assertIn("usage: hat fork", out)
         # Cut to its first letters: the one it starts, or of two, the one used more.
         for short, name in (("m", "move"), ("f", "fork"), ("b", "best"), ("bi", "bind"), ("u", "usage"),
-                            ("un", "unbind"), ("s", "show"), ("r", "resume"), ("rel", "relocate")):
+                            ("un", "unbind"), ("s", "show"), ("se", "search"), ("r", "resume"), ("rel", "relocate")):
             code, out = self.run_command(hat + [short, "--help"])
             self.assertEqual(code, 0, out)
             self.assertIn("usage: hat %s " % name, out)

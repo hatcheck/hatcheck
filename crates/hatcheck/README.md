@@ -36,6 +36,8 @@ hatcheck open [SESSION]            resume a session in a new terminal, or open D
 hatcheck resume [SESSION]          carry on the newest session started here, or open DSH,
                                    after asking (hat r)
 hatcheck show SESSION              a session's conversation, read-only
+hatcheck search WORDS...           the sessions whose title or conversation has every word,
+                                   in every profile and home, with the turns they're in
 hatcheck where SESSION             where a session is stored
 hatcheck bind PROFILE              tie a folder to a profile, for cl, cx, ck and the list
 hatcheck doctor                    every copy of hatcheck and the agents on your PATH

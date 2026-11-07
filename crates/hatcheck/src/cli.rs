@@ -1,13 +1,13 @@
 //! The hatcheck command: picks the subcommand and runs it, or the launcher it's called as.
 
 use crate::{
-    best, bind, desktop, doctor, move_cmd, open_cmd, out, provider, relocate, resume, sessions,
-    show, usage, where_cmd,
+    best, bind, desktop, doctor, move_cmd, open_cmd, out, provider, relocate, resume, search,
+    sessions, show, usage, where_cmd,
 };
 
 pub const SUBCOMMANDS: &[&str] = &[
-    "sessions", "usage", "where", "move", "fork", "open", "resume", "show", "best", "bind",
-    "unbind", "desktop", "provider", "relocate", "doctor",
+    "sessions", "usage", "where", "move", "fork", "open", "resume", "show", "search", "best",
+    "bind", "unbind", "desktop", "provider", "relocate", "doctor",
 ];
 
 /// The letters two subcommands start with, each given to the one used more. The other takes two
@@ -15,6 +15,7 @@ pub const SUBCOMMANDS: &[&str] = &[
 const SHARED_LETTERS: &[(&str, &str)] = &[
     ("b", "best"),
     ("s", "show"),
+    ("se", "search"),
     ("u", "usage"),
     ("d", "desktop"),
     ("r", "resume"),
@@ -64,6 +65,8 @@ Usage:
     hatcheck resume [SESSION]          carry on the newest session started here, in this
                                        terminal, after asking; hat r for short
     hatcheck show SESSION              a session's conversation, read-only
+    hatcheck search WORDS...           the sessions whose title or conversation has every
+                                       word, in every profile and home, newest first
     hatcheck best [--for SESSION]      the best account now, in full, and the move command
                                        that carries the newest session started here to it;
                                        --wait sleeps until one has room
@@ -76,8 +79,8 @@ Usage:
     hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
                                        which runs, and how to remove the rest
 
-hatcheck, usage, where, show, desktop, move, fork, relocate and doctor take --json,
-for scripts, status bars and the desktop app.
+hatcheck, usage, where, show, search, desktop, move, fork, relocate and doctor
+take --json, for scripts, status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
@@ -85,8 +88,8 @@ and so on. cl, cx and ck run Claude Code, Codex and Kimi Code CLI with a profile
 
 A subcommand can be cut to its first letters: hat m is hat move, hat f is hat
 fork. Where two share a letter, it goes to the one used more: b is best, s is
-show, u is usage, d is desktop and r is resume, so bind, unbind and doctor take
-two letters, bi, un and do, and relocate three, rel.";
+show, se is search, u is usage, d is desktop and r is resume, so bind, unbind
+and doctor take two letters, bi, un and do, and relocate three, rel.";
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -201,6 +204,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "open" => open_cmd::main(&argv, &prog),
         "resume" => resume::main(&argv, &prog),
         "show" => show::main(&argv, &prog),
+        "search" => search::main(&argv, &prog),
         "desktop" => desktop::main(&argv, &prog),
         "best" => best::main(&argv, &prog),
         "bind" => bind::main(&argv, &prog),
@@ -238,11 +242,16 @@ mod tests {
     fn a_subcommand_can_be_cut_to_its_first_letters() {
         for name in SUBCOMMANDS {
             // A start that's one subcommand's alone names it; re, which relocate and resume
-            // share, names both, so hat re is asked for more.
+            // share, names both, so hat re is asked for more; se, which sessions and search
+            // share, is search's, since sessions needs no word.
             for n in 2..=name.len() {
                 let start = &name[..n];
-                let alone = SUBCOMMANDS.iter().filter(|s| s.starts_with(start)).count() == 1;
                 let named = subcommands_named(start);
+                if let Some(&(_, given)) = SHARED_LETTERS.iter().find(|(l, _)| *l == start) {
+                    assert_eq!(named, [given], "{start}");
+                    continue;
+                }
+                let alone = SUBCOMMANDS.iter().filter(|s| s.starts_with(start)).count() == 1;
                 if alone {
                     assert_eq!(named, [*name], "{start}");
                 } else {
@@ -255,6 +264,9 @@ mod tests {
         for (letter, name) in [
             ("b", "best"),
             ("s", "show"),
+            ("se", "search"),
+            ("sea", "search"),
+            ("ses", "sessions"),
             ("u", "usage"),
             ("m", "move"),
             ("f", "fork"),
