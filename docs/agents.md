@@ -130,7 +130,7 @@ cx b exec "run the tests"         # any codex command works
 [Antigravity CLI](https://antigravity.google/docs/cli/) keeps its conversations, settings and login
 under `~/.gemini/antigravity-cli`, and nothing but `HOME` points it anywhere else, so hatcheck reads
 that one folder, and there are no `agy` profiles or a launcher for them yet (see
-[Roadmap](../README.md#roadmap)). What it reads, checked against agy 1.4.7 on 2026-10-24 (first
+[What isn't done yet](#what-isnt-done-yet)). What it reads, checked against agy 1.4.7 on 2026-10-24 (first
 against 1.4.2):
 
 - `conversation_summaries.db`, agy's index of its conversations: each one's title, folder and
@@ -259,7 +259,7 @@ resume, beside `--session`, which hatcheck prints:
 [ZCode](https://zcode.z.ai/en) keeps its sessions in a SQLite database, `~/.zcode/cli/db/db.sqlite`,
 shared with the ZCode desktop app, and nothing but `HOME` moves it (`ZCODE_STORAGE_DIR` and
 `ZCODE_DATA_BASE_DIR` move other parts of `~/.zcode`), so hatcheck reads that one folder, and there
-are no ZCode profiles or a launcher for them (see [Roadmap](../README.md#roadmap)). What it
+are no ZCode profiles or a launcher for them (see [What isn't done yet](#what-isnt-done-yet)). What it
 reads, checked against ZCode 0.16.9, the CLI in the ZCode 3.15.3 app. The CLI in ZCode 3.16.3,
 0.17.0, was compared with it on 2026-10-24 without being run, so as not to move the shared
 database on: it adds the soft delete below and a table of its own, and takes the same flags.
@@ -667,3 +667,44 @@ and take it off your `PATH` by hand, but keep `%APPDATA%\claude-z`, which holds 
 uninstallers delete both. The permission mode its installers asked for isn't used (the old launchers
 only ever applied `dangerously-skip-permissions`): set `permissions.defaultMode` in the profile's
 `settings.json`, or pass `--permission-mode`. OpenRouter (`claude-o`) isn't included.
+
+## What isn't done yet
+
+What each agent still lacks, and what would close it. The README's [Roadmap](../README.md#roadmap)
+has the rest: Claude Desktop instances on Linux, the releases and signing.
+
+- **Antigravity CLI profiles.** agy keeps one login per home folder, so a second account needs a
+  home folder of its own (`HOME=~/.agy-a agy`), which every command the agent runs would see
+  too. Whether hatcheck should make such folders, and a launcher for them, is still open; until
+  then it reads `~/.gemini/antigravity-cli` only. The Antigravity app has the same one login,
+  in the system keyring, shared with agy, so an instance of it with its own data folder would
+  still be the same account; nothing for hatcheck to make until Google separates logins.
+- **ZCode.** Profiles need a variable from Z.ai that moves the session database (only `HOME` does
+  today), usage needs a usage command zcode doesn't have, and a session is never written into its
+  database, which the desktop app shares: a converted session is a file zcode is started on. If
+  Z.ai documents the import its desktop app uses or adds a `zcode import` command, hatcheck should
+  use that ([the proposal](proposals/kimi-zcode.md) has the reasoning).
+- **DeepSeek Harness.** A direct per-session open needs an official web deep link or resume
+  command, a handover in one step needs a first prompt `dsh web` doesn't take, and plan usage needs
+  a documented quota API. Until then hatcheck opens `dsh web` and its session history, prints the
+  prompt to paste for a converted session, and never writes DSH's store. Sessions before v4 aren't read; later ones need their own reader.
+- **MiniMax Code.** A converted session is a file mcode's terminal UI is started on, as agy's,
+  since mcode has no importer; plan quota needs a no-refresh design and maintainer approval before
+  the regional endpoint is used. Until then hatcheck reads the v2 store and shows no quota data. An idle selected TUI has no durable marker, so only an active writer lease blocks
+  opening and conversion.
+- **Qwen Code.** A session converted for qwen is a file qwen is started on, as agy's and ZCode's
+  are, since qwen has no importer (`qwen sessions` lists sessions and imports none); one written
+  into its store would need one. Moving a session between qwen homes would copy its transcript,
+  file history and side state, which hasn't been done. Plan usage needs a command or endpoint qwen
+  doesn't have (its `usage/` files count the tokens a session spent, not what a plan has left).
+  `QWEN_RUNTIME_DIR`, which moves the session data alone and leaves the login behind, isn't
+  followed: only `QWEN_HOME`, which moves the home whole.
+- **GitHub Copilot CLI.** Its `/usage` runs only inside a session, so plan usage would need an
+  endpoint and maintainer approval before any request is made; until then its homes show no data.
+  Whether its system credential store keeps one login per `COPILOT_HOME` hasn't been checked:
+  hatcheck never reads a login, and the probe is in [maintenance.md](maintenance.md).
+  Sessions aren't copied between its homes.
+- **OpenCode.** One data folder: a second store needs `XDG_DATA_HOME` or `OPENCODE_DB` and
+  `--standalone`, since its background service keeps the store it started with, and which of those
+  a named profile should mean is a decision not taken; until then hatcheck reads the folder plain
+  opencode uses. Nothing marks a session open. Plan usage is its providers' own.

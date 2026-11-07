@@ -104,33 +104,29 @@ the launcher does, and how to copy a login you already have into an instance.
 Claude Code (the `claude` CLI) keeps its settings, history and session transcripts in `~/.claude`
 (plus `~/.claude.json`), and its login in the macOS Keychain, or on Linux and Windows in
 `~/.claude/.credentials.json`. Point `CLAUDE_CONFIG_DIR` at another folder and you get a separate
-profile with its own login, so you can keep one per account:
-`~/.claude-a`, `~/.claude-b`, and so on. These are separate from the Desktop instances
-above, though sessions from Desktop's Code tab can be filed in them too (the session list
-hides those unless you pass `--all`). Codex works the same way with `CODEX_HOME`: see
-[`cx`](docs/agents.md#cx-run-codex-with-a-home-per-account). Antigravity CLI keeps everything under
-`~/.gemini/antigravity-cli`, which only `HOME` moves, so hatcheck reads that one folder: see
-[Antigravity CLI](docs/agents.md#antigravity-cli-agy). Kimi Code CLI works like Codex, with
-`KIMI_CODE_HOME` and one home per account (`~/.kimi-code-a`), which [`ck`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account)
-runs it with, and ZCode keeps its sessions in a database under `~/.zcode`, which only `HOME`
-moves: see [Kimi Code CLI](docs/agents.md#kimi-code-cli-kimi) and [ZCode](docs/agents.md#zcode-zcode).
-DeepSeek Harness keeps sessions under `~/.dsh`, moved whole by `DSH_HOME`, so hatcheck reads
-`~/.dsh`, `~/.dsh-NAME` and the variable's folder. DSH's own profiles are plugin stacks, not these
-account homes, and there is no hatcheck DSH launcher: its command is the official `dsh web`, whose
-session history you choose the session in. See [DeepSeek Harness](docs/agents.md#deepseek-harness-dsh).
-MiniMax Code's current data home is `~/.minimax`, selected by `MINIMAX_DATA_DIR`, or by
-`MAVIS_DATA_DIR` when that's unset; `~/.minimax-code` is the installer, not a profile. Hatcheck
-reads its v2 SQLite catalog and canonical JSONL, and sessions resume directly with
-`mcode --session mvs_<id>`. See [MiniMax Code](docs/agents.md#minimax-code-mcode). Qwen Code
-keeps everything under `~/.qwen`, moved whole by `QWEN_HOME`, so hatcheck reads `~/.qwen`,
-`~/.qwen-NAME` and the variable's folder: each project's transcripts, which resume directly with
-`qwen --resume <id>`. See [Qwen Code](docs/agents.md#qwen-code-qwen). GitHub Copilot CLI keeps
-everything under `~/.copilot`, moved whole by `COPILOT_HOME`, so hatcheck reads `~/.copilot`,
-`~/.copilot-NAME` and the variable's folder: each session's events, which resume directly with
-`copilot --resume <id>`. See [GitHub Copilot CLI](docs/agents.md#github-copilot-cli-copilot).
-OpenCode 2 keeps every project's sessions in one database, `~/.local/share/opencode/opencode.db`,
-which hatcheck reads; they resume directly with `opencode --session ses_<id>`. See
-[OpenCode](docs/agents.md#opencode-opencode).
+profile with its own login, so you can keep one per account: `~/.claude-a`, `~/.claude-b`, and so
+on. These are separate from the Desktop instances above, though sessions from Desktop's Code tab
+can be filed in them too (the session list hides those unless you pass `--all`). The other agents
+keep theirs as the table says; [docs/agents.md](docs/agents.md) has each one's folders, what
+hatcheck reads of them, and the version that was checked against.
+
+| Agent | Its folder | A home per account | A session carried to it | Plan usage |
+|---|---|---|---|---|
+| Claude Code | `~/.claude` | `CLAUDE_CONFIG_DIR`, with [`cl`](docs/agents.md#cl-run-claude-code-with-a-profile) | written into the profile | Claude Code's own `/usage` |
+| Codex | `~/.codex` | `CODEX_HOME`, with [`cx`](docs/agents.md#cx-run-codex-with-a-home-per-account) | written into the home | ChatGPT's usage endpoint |
+| [Antigravity CLI](docs/agents.md#antigravity-cli-agy) | `~/.gemini/antigravity-cli` | none: only `HOME` moves it | a file `agy` is started on | agy's own `/usage` |
+| [Kimi Code CLI](docs/agents.md#kimi-code-cli-kimi) | `~/.kimi-code` | `KIMI_CODE_HOME`, with [`ck`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | written into the home | Kimi's usage endpoint |
+| [ZCode](docs/agents.md#zcode-zcode) | `~/.zcode`, a database | none: only `HOME` moves it | a file `zcode` is started on | none to read |
+| [DeepSeek Harness](docs/agents.md#deepseek-harness-dsh) | `~/.dsh` | `DSH_HOME` | a prompt to paste into `dsh web` | none to read |
+| [MiniMax Code](docs/agents.md#minimax-code-mcode) | `~/.minimax` | `MINIMAX_DATA_DIR`, or `MAVIS_DATA_DIR` | a file `mcode` is started on | not wired yet |
+| [Qwen Code](docs/agents.md#qwen-code-qwen) | `~/.qwen` | `QWEN_HOME` | a file `qwen` is started on | none to read |
+| [GitHub Copilot CLI](docs/agents.md#github-copilot-cli-copilot) | `~/.copilot` | `COPILOT_HOME` | `copilot sessions import` | none to read |
+| [OpenCode](docs/agents.md#opencode-opencode) | `~/.local/share/opencode`, one database | not yet | `opencode session import` | its providers' own |
+
+Every agent's sessions are listed and shown, and can be carried to any of the others, each in the
+way the table's fourth column says. Claude Code's, Codex's and Kimi Code CLI's also move between
+two homes of the same agent; ZCode's database and DeepSeek Harness's, MiniMax Code's, Qwen
+Code's, Copilot's and OpenCode's stores are only ever read.
 
 ### Install
 
@@ -186,24 +182,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck desktop`](#claude-desktop-instances-macos-and-windows) | Claude Desktop instances on macOS and Windows |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |
 
-`hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`, `hat r` is `hat resume`; the list's flags have single letters that bundle, so `hat -dc` is `hat --details --by-cost`.
-[Antigravity CLI](docs/agents.md#antigravity-cli-agy) sessions are listed, shown and converted
-from its one folder, with what its `/usage` reports; [Kimi Code CLI](docs/agents.md#kimi-code-cli-kimi)
-sessions are listed, shown, converted and moved between its homes, and [ZCode](docs/agents.md#zcode-zcode)'s
-are listed, shown and converted from its database. [DeepSeek Harness](docs/agents.md#deepseek-harness-dsh)
-sessions are listed and shown from raw or compressed v4 logs and converted out, never written;
-`dsh web` opens its session history. [MiniMax Code](docs/agents.md#minimax-code-mcode) sessions
-are listed and shown from its v2 catalog and canonical JSONL and converted out, never written;
-`mcode --session mvs_<id>` resumes them directly. [Qwen Code](docs/agents.md#qwen-code-qwen)
-sessions are listed and shown from its transcripts and converted both ways, its store never
-written: a session converted for qwen is a file qwen is started on, and `qwen --resume <id>`
-resumes its own. [GitHub Copilot CLI](docs/agents.md#github-copilot-cli-copilot) and
-[OpenCode](docs/agents.md#opencode-opencode) sessions are listed and shown from their stores and
-converted both ways, through their own importers: a session converted for either is a file its
-`sessions import` or `session import` takes, and `copilot --resume <id>` and
-`opencode --session ses_<id>` resume their own. [`claude-z`, `claude-k`, `claude-m` and
-`claude-d`](docs/agents.md#claude-z-claude-k-claude-m-claude-d-claude-code-on-zai-kimi-minimax-or-deepseek)
-run Claude Code on Z.ai's, Kimi's, MiniMax's or DeepSeek's models in any profile.
+`hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`, `hat r` is `hat resume`; the list's flags have single letters that bundle, so `hat -dc` is `hat --details --by-cost`. [`claude-z`, `claude-k`, `claude-m` and `claude-d`](docs/agents.md#claude-z-claude-k-claude-m-claude-d-claude-code-on-zai-kimi-minimax-or-deepseek) run Claude Code on Z.ai's, Kimi's, MiniMax's or DeepSeek's models in any profile.
 
 
 ## Rules it keeps
@@ -299,92 +278,39 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 
 ## Files in this repo
 
-- **`crates/hatcheck/`**: hatcheck in Rust, the commands and the launchers. Its `src/` has a file per
-  subcommand (`sessions.rs`, `usage.rs`, `move_cmd.rs`, `open_cmd.rs`, `desktop.rs` and the rest),
-  `launch.rs` for `cl`, `cx`, `ck` and `claude-z`, `-k`, `-m` and `-d`, `agy.rs`, `kimi.rs`, `zcode.rs`,
-  `dsh.rs`, `mcode.rs`, `qwen.rs`, `copilot.rs` and `opencode.rs` for what it reads and writes of
-  Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot
-  CLI and OpenCode, `doctor.rs` for `hatcheck doctor`, and
-  `src/bin/` for those binaries and `hat`.
-  Its own README is the crate's page on crates.io. It was ported from a Python version with the
-  same output; see [docs/rust-port.md](docs/rust-port.md).
-- **`CHANGELOG.md`**: what changed in each release of the CLI; a release's notes on GitHub are its
-  section there, and [docs/maintenance.md](docs/maintenance.md#releasing-the-cli) has the steps of
-  a release.
-- **`install.sh`** / **`install.ps1`**: build the commands from a clone and put them on your `PATH`
-  (`~/.local/bin` by default).
-- **`pyproject.toml`**: the PyPI package, the binaries as wheels built with maturin.
-  **`dist-workspace.toml`**: the release builds, installers and Homebrew formula, made by cargo-dist.
-  **`packaging/`**: the app's Homebrew cask, and the winget manifests for the app and the CLI.
-- **`desktop/`**: the desktop app: Tauri, with the CLI inside it ([its README](desktop/README.md)).
-- **`site/`**: the site, four pages sharing one stylesheet, with the images beside them, served at [hatcheck.dev](https://hatcheck.dev)
-  from Cloudflare as static assets; `site/deploy.sh` ships it. The logo lives there too:
-  `logo.svg` and `logo-dark.svg` (the mark), `logo-wordmark.svg` and `logo-wordmark-dark.svg`, `favicon.svg`.
-- **`docs/proposals/`**: the plans these came from: [the CLI features](docs/proposals/cli-features.md),
-  [the desktop app](docs/proposals/desktop-app.md), [Antigravity CLI](docs/proposals/antigravity.md)
-  and [Kimi Code CLI and ZCode](docs/proposals/kimi-zcode.md).
+- **`crates/hatcheck/`**: the CLI in Rust: a file per subcommand in `src/` and one per agent
+  (`agy.rs`, `kimi.rs`, `zcode.rs` and the rest), with the launchers in `launch.rs` and `src/bin/`.
+  It was ported from a Python version with the same output ([docs/rust-port.md](docs/rust-port.md)).
+- **`desktop/`**: the desktop app, Tauri with the CLI inside it ([its README](desktop/README.md)).
 - **`docs/`**: [commands.md](docs/commands.md), [agents.md](docs/agents.md) and
   [install.md](docs/install.md), each command, agent and way of installing as it is;
-  [desktop-instances.md](docs/desktop-instances.md) for the Desktop instances;
-  [rust-port.md](docs/rust-port.md) on the port from Python; [formats.md](docs/formats.md), each
-  agent's session format side by side and how a conversion works; [maintenance.md](docs/maintenance.md)
-  on checking each agent's newest version every week or two.
-- **`AGENTS.md`** and **`docs/lessons.md`**: notes for coding agents (`CLAUDE.md` imports them): how
-  to build and check, the rules the code keeps, and what earlier work got wrong, with the rule that
-  would have caught it.
-- **`tests/`**: the command tests, which run the binary against throwaway home folders:
-  `python3 -m unittest discover -s tests`, which builds it with cargo first, and the crate's own
-  tests with `cargo test -p hatcheck`. They never read your real profiles, Keychain or the network.
-  GitHub Actions runs both on macOS, Linux and Windows (`.github/workflows/tests.yml`).
-- **`scripts/`**: `upstream.py`, the read-only first step of [maintenance.md](docs/maintenance.md),
-  which `.github/workflows/upstream.yml` runs every Monday, keeping an issue open for what it
-  finds; and `provider_probe.py`, which runs each `claude-k`, `claude-z`, `claude-m` and `claude-d`
-  model once.
+  [formats.md](docs/formats.md), each agent's session format side by side;
+  [maintenance.md](docs/maintenance.md), the check of each agent's newest version every week or
+  two, and the release steps; [desktop-instances.md](docs/desktop-instances.md); and
+  [proposals/](docs/proposals/), the plans these came from.
+- **`tests/`**: the command tests, which run the binary against throwaway home folders and never
+  read your real profiles, the Keychain or the network: `python3 -m unittest discover -s tests`,
+  beside the crate's own `cargo test -p hatcheck`. GitHub Actions runs both on macOS, Linux and
+  Windows.
+- **`AGENTS.md`** and **`docs/lessons.md`**: notes for coding agents (`CLAUDE.md` imports them),
+  and what earlier work got wrong, with the rule that would have caught it.
+- **`CHANGELOG.md`**, each release's notes; **`install.sh`** and **`install.ps1`**, to build from a
+  clone; **`pyproject.toml`** and **`dist-workspace.toml`**, the PyPI wheels and the release
+  builds; **`packaging/`**, the app's cask and the winget manifests; **`scripts/`**, `upstream.py`
+  (the Monday check) and `provider_probe.py`; and **`site/`**, [hatcheck.dev](https://hatcheck.dev)
+  and the logo.
 
 ## Roadmap
 
 - **Claude Desktop instances on Linux.** Claude Desktop for Linux is in beta, for Ubuntu and
   Debian. Whether its own `--user-data-dir` keeps an instance apart there, as on macOS, hasn't been
   tried; until it has, only the CLI tools apply on Linux.
-- **Antigravity CLI profiles.** agy keeps one login per home folder, so a second account needs a
-  home folder of its own (`HOME=~/.agy-a agy`), which every command the agent runs would see
-  too. Whether hatcheck should make such folders, and a launcher for them, is still open; until
-  then it reads `~/.gemini/antigravity-cli` only. The Antigravity app has the same one login,
-  in the system keyring, shared with agy, so an instance of it with its own data folder would
-  still be the same account; nothing for hatcheck to make until Google separates logins.
-- **ZCode.** Profiles need a variable from Z.ai that moves the session database (only `HOME` does
-  today), usage needs a usage command zcode doesn't have, and a session is never written into its
-  database, which the desktop app shares: a converted session is a file zcode is started on. If
-  Z.ai documents the import its desktop app uses or adds a `zcode import` command, hatcheck should
-  use that ([the proposal](docs/proposals/kimi-zcode.md) has the reasoning).
-- **DeepSeek Harness.** A direct per-session open needs an official web deep link or resume
-  command, a handover in one step needs a first prompt `dsh web` doesn't take, and plan usage needs
-  a documented quota API. Until then hatcheck opens `dsh web` and its session history, prints the
-  prompt to paste for a converted session, and never writes DSH's store. Sessions before v4 aren't read; later ones need their own reader.
-- **MiniMax Code.** A converted session is a file mcode's terminal UI is started on, as agy's,
-  since mcode has no importer; plan quota needs a no-refresh design and maintainer approval before
-  the regional endpoint is used. Until then hatcheck reads the v2 store and shows no quota data. An idle selected TUI has no durable marker, so only an active writer lease blocks
-  opening and conversion.
-- **Qwen Code.** A session converted for qwen is a file qwen is started on, as agy's and ZCode's
-  are, since qwen has no importer (`qwen sessions` lists sessions and imports none); one written
-  into its store would need one. Moving a session between qwen homes would copy its transcript,
-  file history and side state, which hasn't been done. Plan usage needs a command or endpoint qwen
-  doesn't have (its `usage/` files count the tokens a session spent, not what a plan has left).
-  `QWEN_RUNTIME_DIR`, which moves the session data alone and leaves the login behind, isn't
-  followed: only `QWEN_HOME`, which moves the home whole.
-- **GitHub Copilot CLI.** Its `/usage` runs only inside a session, so plan usage would need an
-  endpoint and maintainer approval before any request is made; until then its homes show no data.
-  Whether its system credential store keeps one login per `COPILOT_HOME` hasn't been checked:
-  hatcheck never reads a login, and the probe is in [maintenance.md](docs/maintenance.md).
-  Sessions aren't copied between its homes.
-- **OpenCode.** One data folder: a second store needs `XDG_DATA_HOME` or `OPENCODE_DB` and
-  `--standalone`, since its background service keeps the store it started with, and which of those
-  a named profile should mean is a decision not taken; until then hatcheck reads the folder plain
-  opencode uses. Nothing marks a session open. Plan usage is its providers' own.
 - **Releases:** the CLI is on GitHub, the Homebrew tap, PyPI and crates.io from 0.2.0
   ([CHANGELOG.md](CHANGELOG.md)). Next are winget, then the app's installers, once its release
   workflow has its signing and updater secrets (`desktop.yml` lists them).
 - **Signing:** a Developer ID for the macOS app, and a certificate for the Windows one.
+- **Each agent's gaps**, from Antigravity CLI profiles to a second OpenCode store, with what
+  would close each: [docs/agents.md](docs/agents.md#what-isnt-done-yet).
 
 ## Credits
 
