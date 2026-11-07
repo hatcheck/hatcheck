@@ -45,6 +45,7 @@ hatcheck profiles [A B]            what each profile and home is set up with, an
 hatcheck statusline --install A    a status line for Claude Code: the profile a session runs
                                    in, and what's left of its plan
 hatcheck doctor                    every copy of hatcheck and the agents on your PATH
+hatcheck completions SHELL         the completions for zsh, bash, fish or PowerShell
 hatcheck desktop                   Claude Desktop instances on macOS and Windows
 hatcheck provider                  the Z.ai, Kimi, MiniMax and DeepSeek keys and models behind
                                    claude-z, -k, -m and -d

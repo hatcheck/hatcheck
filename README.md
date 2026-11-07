@@ -148,7 +148,10 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/hatcheck/hatcheck/
 ```
 
 The installer scripts put the commands in `~/.local/bin` and add that folder to your `PATH`; set
-`HATCHECK_NO_MODIFY_PATH=1` first to keep your shell's startup files as they are. Each release, made
+`HATCHECK_NO_MODIFY_PATH=1` first to keep your shell's startup files as they are. Completions
+for zsh, bash, fish and PowerShell come from
+[`hatcheck completions`](docs/commands.md#hatcheck-completions-for-zsh-bash-fish-and-powershell):
+`eval "$(hatcheck completions zsh)"` after `compinit`, and the others as that section says. Each release, made
 from a tag such as `v0.2.0`, has them and the binaries for each platform, and PyPI gets the same
 binaries as wheels. The release builds start after 0.1.0, which is the Python version.
 
@@ -181,6 +184,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
 | [`hatcheck profiles [A B]`](docs/commands.md#hatcheck-profiles-what-each-profile-is-set-up-with) | what each profile and home is set up with: skills, agents, commands, plugins, hooks, MCP servers, permissions and settings; with two named, what differs between them |
 | [`hatcheck statusline --install PROFILE`](docs/commands.md#hatcheck-statusline-which-account-a-session-is-on-in-claude-codes-status-line) | a status line for Claude Code with the profile the session runs in and what's left of its plan: `work · Opus 5.5 · 5h 62% ↻2h41m · wk 30% ↻3d2h · ctx 23% · $1.23` |
+| [`hatcheck completions SHELL`](docs/commands.md#hatcheck-completions-for-zsh-bash-fish-and-powershell) | the completions for zsh, bash, fish or PowerShell: subcommands, options, profiles and recent sessions |
 | [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest |
 | [`hatcheck desktop`](#claude-desktop-instances-macos-and-windows) | Claude Desktop instances on macOS and Windows |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |

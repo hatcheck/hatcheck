@@ -1,8 +1,8 @@
 //! The hatcheck command: picks the subcommand and runs it, or the launcher it's called as.
 
 use crate::{
-    best, bind, desktop, doctor, move_cmd, open_cmd, out, profiles, provider, relocate, resume,
-    search, sessions, show, statusline, usage, where_cmd,
+    best, bind, completions, desktop, doctor, move_cmd, open_cmd, out, profiles, provider,
+    relocate, resume, search, sessions, show, statusline, usage, where_cmd,
 };
 
 pub const SUBCOMMANDS: &[&str] = &[
@@ -24,6 +24,7 @@ pub const SUBCOMMANDS: &[&str] = &[
     "statusline",
     "relocate",
     "doctor",
+    "completions",
 ];
 
 /// The letters two subcommands start with, each given to the one used more. The other takes two
@@ -100,6 +101,7 @@ Usage:
                                        what's left of its plan; --install PROFILE adds it
     hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
                                        which runs, and how to remove the rest
+    hatcheck completions SHELL         the completions for zsh, bash, fish or PowerShell
 
 hatcheck, usage, where, show, search, profiles, desktop, move, fork, relocate and
 doctor take --json, for scripts, status bars and the desktop app.
@@ -179,6 +181,10 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
     if argv.len() == 1 && argv[0] == "serve" {
         return crate::serve::run();
     }
+    if argv.first().is_some_and(|w| w == "complete") {
+        // What the completion scripts ask for as they run: never a subcommand of its own.
+        return completions::complete(&argv[1..]);
+    }
     let named = argv.first().map_or(Vec::new(), |w| subcommands_named(w));
     let (command, prog) = match (named.as_slice(), argv.first().map(String::as_str)) {
         ([c], _) => {
@@ -230,6 +236,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "search" => search::main(&argv, &prog),
         "profiles" => profiles::main(&argv, &prog),
         "statusline" => statusline::main(&argv, &prog),
+        "completions" => completions::main(&argv, &prog),
         "desktop" => desktop::main(&argv, &prog),
         "best" => best::main(&argv, &prog),
         "bind" => bind::main(&argv, &prog),

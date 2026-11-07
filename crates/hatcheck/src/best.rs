@@ -241,7 +241,7 @@ fn back_at(account: &Ranked, now: f64) -> Option<f64> {
 }
 
 /// How hatcheck move names a profile or home: default, NAME, codex, codex:NAME, or a path.
-fn place_name(agent: Agent, profile: &str) -> String {
+pub fn place_name(agent: Agent, profile: &str) -> String {
     let home_dir = paths::home();
     let home = crate::ospath::join(&home_dir, agent.base());
     if paths::same_folder(profile, &home) {

@@ -1431,6 +1431,33 @@ $ hatcheck bind --hook                  # warn in Claude Code, Codex and Antigra
     to another agy folder with `--agy`. Tested with the real `agy` (1.4.2) in print mode: it ran
     the hook as a conversation started, and the model quoted the message back.
 
+## `hatcheck completions`: for zsh, bash, fish and PowerShell
+
+```
+eval "$(hatcheck completions zsh)"                                  # in ~/.zshrc, after compinit
+eval "$(hatcheck completions bash)"                                 # in ~/.bashrc
+hatcheck completions fish > ~/.config/fish/completions/hatcheck.fish   # and the same as hat.fish
+hatcheck completions powershell | Out-String | Invoke-Expression    # in $PROFILE
+```
+
+- What completes, for `hatcheck` and `hat` alike: the subcommands, each with a line of help; each
+  subcommand's options, taken from the subcommand's own parser as the script is printed, so a
+  script matches the hatcheck that printed it (print it again after an update); and the values,
+  where a word is one hatcheck can name. A `PROFILE` offers the profiles and homes as `move`
+  names them (`work`, `default`, `codex:work`, `kimi`), each with its folder; a `SESSION` the
+  sessions active in the last week from every folder, newest first, each with its title; a
+  folder, folders; `completions` its shells; and an option with fixed choices, those. `desktop`'s
+  and `provider`'s own subcommands complete too, with their options.
+- The profiles and sessions are asked of hatcheck as you type, by `hatcheck complete profiles`
+  and `hatcheck complete sessions`, which print them one per line, tab-separated. Neither is a
+  command of its own: they're what the scripts call, and run nothing but the finders and the
+  session list (a week back, without usage), so they read no login and ask nothing over the
+  network.
+- The zsh script is a `#compdef` file as well: `hatcheck completions zsh > ~/.zfunc/_hatcheck`
+  works with `fpath+=~/.zfunc` before `compinit`. The scripts were checked with `zsh -n` and
+  `bash -n`; fish's and PowerShell's are written to each shell's `complete` and
+  `Register-ArgumentCompleter` forms.
+
 ## `config.toml`: the list's defaults, and what to leave out
 
 hatcheck reads one config file of its own, `~/.config/hatcheck/config.toml` (`$XDG_CONFIG_HOME`'s,

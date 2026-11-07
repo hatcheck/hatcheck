@@ -105,6 +105,21 @@ impl Stop {
     }
 }
 
+thread_local! {
+    /// While the completions are made: every parser that parses, as its spec.
+    static RECORDING: std::cell::RefCell<Option<Vec<serde_json::Value>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Run f with every parser that parses meanwhile recorded: their specs, in order.
+pub fn recorded<T>(f: impl FnOnce() -> T) -> (T, Vec<serde_json::Value>) {
+    let outer = RECORDING.with(|r| r.borrow_mut().replace(Vec::new()));
+    let result = f();
+    let specs = RECORDING
+        .with(|r| std::mem::replace(&mut *r.borrow_mut(), outer))
+        .unwrap_or_default();
+    (result, specs)
+}
+
 /// argparse's width: the terminal's, less two.
 fn width() -> usize {
     crate::out::columns(80).saturating_sub(2).max(11)
@@ -387,9 +402,32 @@ impl Parser {
         Ok(args)
     }
 
+    /// What the parser takes, as data, for the shell completions: its prog, positionals
+    /// (name, metavar, count, help), options (flags, what each takes, metavar, help, hidden,
+    /// choices) and subcommands.
+    pub fn spec(&self) -> serde_json::Value {
+        use serde_json::json;
+        json!({
+            "prog": self.prog,
+            "description": self.description,
+            "positionals": self.pos.iter().map(|p| json!({"name": p.name, "metavar": p.metavar.unwrap_or(p.name),
+                "count": match p.count { Count::One => "one", Count::Optional => "optional", Count::Any => "any" },
+                "help": p.help})).collect::<Vec<_>>(),
+            "options": self.opts.iter().map(|o| json!({"flags": o.flags, "takes": match o.takes {
+                    Takes::Nothing => "nothing", Takes::Value => "value", Takes::Maybe(_) => "maybe" },
+                "metavar": o.metavar, "help": o.help, "hidden": o.hidden, "choices": o.choices})).collect::<Vec<_>>(),
+            "subcommands": self.subs.as_ref().map(|(_, subs)| subs.iter().map(|(n, h)| json!({"name": n, "help": h})).collect::<Vec<_>>()),
+        })
+    }
+
     /// parse_known_args: what the words said, and the words it didn't know, which a
     /// subcommand's parser leaves to its parent to report.
     pub fn parse_known(&self, argv: &[String]) -> Result<(Args, Vec<String>), Stop> {
+        RECORDING.with(|r| {
+            if let Some(specs) = r.borrow_mut().as_mut() {
+                specs.push(self.spec());
+            }
+        });
         let mut seen_in_group: Vec<(usize, &'static str)> = Vec::new();
         let mut args = Args::default();
         let mut words: Vec<String> = Vec::new();
