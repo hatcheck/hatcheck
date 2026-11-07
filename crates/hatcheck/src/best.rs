@@ -179,6 +179,35 @@ pub fn summary(result: &Usage, now: f64, room: bool) -> String {
     }
 }
 
+/// summary, with how fast the limit it leads with is being used up, from hatcheck's own
+/// readings: `using 3.2%/h over 2h, runs out Thu 2pm`, when there are readings to tell.
+pub fn summary_with_trend(entry: &Entry, result: &Usage, now: f64, room: bool) -> String {
+    let base = summary(result, now, room);
+    let (usage, saved_at, _) = result;
+    let Some(u) = usage.as_ref().filter(|u| truthy(u)) else {
+        return base;
+    };
+    let rows = usage::usage_rows(u);
+    let left_of = |r: &usage::Row| {
+        usage::percent_left(&r.used, &r.resets_at, *saved_at, now).map_or(100.0, py::Num::f)
+    };
+    // The limit the summary leads with: Fable's, else the tightest that isn't per model.
+    let lead = rows
+        .iter()
+        .find(|r| s(&r.kind) == Some("weekly_scoped") && r.label.to_lowercase().contains("fable"))
+        .or_else(|| {
+            rows.iter()
+                .filter(|r| r.labeled && !scoped(&r.kind))
+                .min_by(|a, b| left_of(a).total_cmp(&left_of(b)))
+        });
+    match lead
+        .and_then(|r| crate::history::trend(&crate::history::account_key(entry), &r.label, now))
+    {
+        Some(t) => format!("{base} · {}", crate::history::text(&t, now)),
+        None => base,
+    }
+}
+
 /// An account as best ranks it: its sort key, whether it has room now, and its usage.
 pub type Ranked = ((u8, f64, f64), bool, Entry, Usage);
 
@@ -324,10 +353,11 @@ pub fn print_account(paint: &Paint, lead: &str, account: &Ranked, now: f64) {
         usage::account_header(paint, entry, result, now, false)
     ));
     let (body, saved_at, _) = result;
-    let rows = body
+    let mut rows = body
         .as_ref()
         .filter(|u| truthy(u))
         .map_or_else(Vec::new, usage::usage_rows);
+    crate::history::annotate(&mut rows, &crate::history::account_key(entry), now);
     let width = rows
         .iter()
         .map(|r| r.label.chars().count())
@@ -596,7 +626,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         let own = ranking(s.agent);
         let state = holding(own, &s.profile).first().map_or_else(
             || "no usage data".to_string(),
-            |&k| summary(&own[k].3, now, own[k].1),
+            |&k| summary_with_trend(&own[k].2, &own[k].3, now, own[k].1),
         );
         out::println(&format!(
             "Session {} \"{}\"{} is in {}: {state}.",

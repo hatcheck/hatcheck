@@ -1386,7 +1386,7 @@ fn iso(t: Option<f64>) -> Value {
 /// An account's limits for --json: what the text shows, as numbers. left_percent is null for
 /// a snapshot's limit that has reset since it was saved; pace is what's left per hour until
 /// the reset (see `pace`), null without one.
-pub fn limits_json(usage: &Value, saved_at: Option<f64>, now: f64) -> Value {
+pub fn limits_json(usage: &Value, saved_at: Option<f64>, now: f64, account: &str) -> Value {
     let mut out = Vec::new();
     let pace_of = |left: Option<Num>, resets_at: &Value| -> Value {
         left.and_then(|l| pace(l.f(), s(resets_at).and_then(times::parse_time), now))
@@ -1400,7 +1400,8 @@ pub fn limits_json(usage: &Value, saved_at: Option<f64>, now: f64) -> Value {
                             "left_percent": left.map_or(Value::Null, Num::value),
                             "resets_at": iso(s(get(r, "resets_at")).and_then(times::parse_time)), "window_seconds": row_window(r),
                             "severity": get(r, "severity"), "per_model": py::str_of(get(r, "kind")).ends_with("_scoped") && !get(r, "kind").is_null(),
-                            "pace": pace_of(left, get(r, "resets_at"))}));
+                            "pace": pace_of(left, get(r, "resets_at")),
+                            "trend": crate::history::to_json(crate::history::trend(account, &row_label(r, false), now).as_ref())}));
         }
     }
     for row in usage_rows(usage).into_iter().filter(|r| !r.labeled) {
@@ -1448,7 +1449,12 @@ pub fn account_json(entry: &Entry, result: &Usage, now: f64, email: bool) -> Val
     out.insert(
         "limits".into(),
         if has_usage {
-            limits_json(usage.as_ref().unwrap(), *saved_at, now)
+            limits_json(
+                usage.as_ref().unwrap(),
+                *saved_at,
+                now,
+                &crate::history::account_key(entry),
+            )
         } else {
             json!([])
         },
@@ -1812,7 +1818,9 @@ pub fn load_usage(
     if let Some(n) = &note {
         out::eprint(&format!("\r{}\r", " ".repeat(n.chars().count())));
     }
-    entries.into_iter().zip(results).collect()
+    let loaded: Vec<(Entry, Usage)> = entries.into_iter().zip(results).collect();
+    crate::history::record(&loaded, times::now()); // every reading, for the trend
+    loaded
 }
 
 /// Whether a live run asks over the network for this account's numbers, as the readers above
@@ -2070,10 +2078,14 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             let (usage, saved_at, _) = result;
             (
                 account_header(&paint, entry, result, now, args.flag("email")),
-                usage
-                    .as_ref()
-                    .filter(|u| truthy(u))
-                    .map_or_else(Vec::new, usage_rows),
+                {
+                    let mut rows = usage
+                        .as_ref()
+                        .filter(|u| truthy(u))
+                        .map_or_else(Vec::new, usage_rows);
+                    crate::history::annotate(&mut rows, &crate::history::account_key(entry), now);
+                    rows
+                },
                 extra_usage_text(usage.as_ref().unwrap_or(&json!({}))),
                 *saved_at,
             )

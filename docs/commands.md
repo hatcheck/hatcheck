@@ -368,6 +368,19 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   asked again. One hatcheck asks agy at a time: a second run while another is asking, as when the
   desktop app's engine and the CLI coincide, waits for it and takes its reading the same way. See
   [Antigravity CLI](agents.md#antigravity-cli-agy) for how it's run and what's kept.
+- From hatcheck's own readings over time, a limit's row ends with how fast it's being used up and
+  whether, at that pace, it runs out before it resets: `using 3.2%/h over 2h, runs out Thu 2pm`,
+  or `lasts to the reset`. Every reading hatcheck takes of a limit, here, in the session list and
+  in `best`, live or from an agent's snapshot (at the snapshot's time), goes into
+  `usage-history.jsonl` in hatcheck's cache folder (`~/Library/Caches/hatcheck` on macOS,
+  `$XDG_CACHE_HOME/hatcheck` elsewhere, `%LOCALAPPDATA%\hatcheck\Cache` on Windows), one line per
+  limit with the account, the limit, the percentage used, the reset ahead and the time; a reading
+  already there isn't written twice, and lines older than 30 days go when the file is next
+  rewritten. The pace is the first reading in the limit's current window against the last, so it
+  takes two readings at least ten minutes apart, and nothing is said until then; a cleared cache
+  starts it over. Nothing is sent anywhere. In `--json`, each limit has it as `trend`
+  (`pace_percent_per_hour`, `over_seconds`, `readings`, `runs_out_at`, `before_reset`), `null`
+  until there is one.
 - `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share. `--json` prints the accounts as data
   ([below](#--json-for-scripts-status-bars-and-apps)).
@@ -1195,7 +1208,10 @@ No room yet; waiting for ~/.claude-a until Tue 12:00pm (in 2d14h)…
 - A line's Fable part ends with the account's pace: what's left, divided by the hours until it
   resets, so what the account can spend per hour without running out before the reset. `0.5%/h`
   with 31% left means about 62 hours to go. An account without a Fable limit shows the pace of its
-  tightest limit instead.
+  tightest limit instead. When hatcheck has readings of that limit over time, the line goes on
+  with how fast it's actually being used up and whether it runs out before the reset, `using
+  3.2%/h over 2h, runs out Thu 2pm`, as [`hatcheck usage`](#hatcheck-usage-plan-usage-for-every-profile)
+  shows under each limit.
 - `--wait` sleeps until an account has room, then answers as above: any account of the session's
   agent (Claude Code's, without a session); `--wait NAME` (or `default`, `codex`, `codex:NAME`,
   `kimi`, `kimi:NAME`, `dsh`, `dsh:NAME`, `mcode`, `mcode:NAME`, `qwen`, `qwen:NAME`, `copilot`,
@@ -1518,7 +1534,8 @@ $ hatcheck --json
       "limits": [
         {"name": "session (5h)", "short": "5h", "kind": "session", "used_percent": 20, "left_percent": 80,
          "resets_at": "2026-10-16T01:30:00Z", "window_seconds": 18000, "severity": "normal", "per_model": false,
-         "pace": 28.42}
+         "pace": 28.42,
+         "trend": {"pace_percent_per_hour": 3.2, "over_seconds": 7200, "readings": 3, "runs_out_at": null, "before_reset": false}}
       ],
       "extra": null,
       "fable": {"left": true, "resets_at": "2026-10-20T16:00:00Z", "band": "fresh"}

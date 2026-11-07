@@ -22,6 +22,7 @@ pub mod doctor;
 pub mod dsh;
 pub mod facts;
 pub mod find;
+pub mod history;
 pub mod kimi;
 pub mod launch;
 pub mod mcode;

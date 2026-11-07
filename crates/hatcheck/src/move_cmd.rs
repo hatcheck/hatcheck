@@ -1556,7 +1556,12 @@ fn fill_in(a: &mut Ask, prog: &str) -> Result<(), Stop> {
                         out::println(&format!(
                             "Session {id8}{title} is in {}: {}.",
                             show(&held_by(k)),
-                            crate::best::summary(&accounts[k].3, now, accounts[k].1)
+                            crate::best::summary_with_trend(
+                                &accounts[k].2,
+                                &accounts[k].3,
+                                now,
+                                accounts[k].1
+                            )
                         ));
                     }
                     crate::best::print_account(

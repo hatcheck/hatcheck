@@ -65,7 +65,7 @@ class StatusLine(unittest.TestCase):
     def test_the_preview_from_the_snapshot(self):
         code, out = self.run_line(None, self.work)  # nothing on stdin: the preview
         self.assertEqual(code, 0, out)
-        preview = r"^work · 5h 60% ↻(2h0m|1h59m) · Fable 48% ↻(4d0h|3d23h) · cached [23]m ago\n"
+        preview = r"^work · 5h 60% ↻(2h00m|1h59m) · Fable 48% ↻(4d0h|3d23h) · cached [23]m ago\n"
         self.assertRegex(out, preview + "$")
         code, out = self.h.run("statusline", "--show", "work")
         self.assertEqual(code, 0, out)
@@ -86,7 +86,7 @@ class StatusLine(unittest.TestCase):
         code, out = self.h.run("statusline", "--install", "work", "home")
         self.assertEqual(code, 0, out)
         self.assertIn("✓ Added to ~/.claude-work/settings.json: statusLine runs ", out)
-        self.assertRegex(out, r" statusline\n  Now, in a session there: work · 5h 60% ↻(2h0m|1h59m)")
+        self.assertRegex(out, r" statusline\n  Now, in a session there: work · 5h 60% ↻(2h00m|1h59m)")
         self.assertIn("✓ Added to ~/.claude-home/settings.json: statusLine runs ", out)
         with open(os.path.join(self.work, "settings.json"), encoding="utf-8") as fh:
             settings = json.load(fh)
