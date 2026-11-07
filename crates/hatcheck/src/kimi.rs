@@ -814,15 +814,11 @@ mod tests {
 
     #[test]
     fn working_directories_are_keyed_as_kimi_keys_them() {
-        // Checked against kimi 2.2.0: /Volumes/ep4t/repos/murky-swamp -> wd_murky-swamp_eccd5d64c70f.
-        assert_eq!(
-            wd_key("/Volumes/ep4t/repos/murky-swamp"),
-            "wd_murky-swamp_eccd5d64c70f"
-        );
-        assert_eq!(
-            wd_key("/Users/yi/repos/murky-swamp"),
-            "wd_murky-swamp_896d0e03446c"
-        );
+        // The scheme was checked against kimi 2.2.0 on a real folder: the
+        // base name, then the first 12 hex digits of the SHA-256 of the
+        // absolute path (`shasum -a 256` gives the same digits).
+        assert_eq!(wd_key("/Users/me/code/api"), "wd_api_e42225e9bbd4");
+        assert_eq!(wd_key("/home/me/code/api"), "wd_api_3336d22ae195");
         assert!(wd_key("/x/my code").starts_with("wd_my-code_"));
     }
 

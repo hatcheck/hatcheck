@@ -25,8 +25,8 @@ in and a file for zcode to read on the way out.
   in once with `kimi login` there, exactly as `~/.codex-NAME` is for Codex. Note that running
   `kimi` at all writes to its home, so hatcheck never runs it against a folder it shouldn't fill.
 - Sessions: `sessions/wd_<name>_<hash>/session_<uuid>/`, where `<name>` is the folder's base name
-  and `<hash>` the first 12 hex digits of the SHA-256 of its absolute path (checked:
-  `/Volumes/ep4t/repos/murky-swamp` gives `eccd5d64c70f`). Inside: `state.json` (id, `cwd`,
+  and `<hash>` the first 12 hex digits of the SHA-256 of its absolute path (checked against a
+  real session folder). Inside: `state.json` (id, `cwd`,
   title, `lastPrompt`, `createdAt`, `updatedAt` in ms, `archived`, `forkedFrom`, and
   `agents.main.homedir`, an absolute path into the home), `agents/main/wire.jsonl` (the main
   agent's event stream, `protocol_version` 1.5, used to resume), `agents/<sub>/wire.jsonl` for
@@ -72,7 +72,7 @@ in and a file for zcode to read on the way out.
   Mac's `PATH`; the source repo builds the same bundle or a single-file binary. `zcode --help` and
   `zcode doctor --json` in an empty `HOME` created nothing there, so both are safe probes.
 - Sessions: SQLite, `cli/db/db.sqlite`, WAL, OpenCode's schema with ZCode's additions: `session`
-  (`id` like `sess_<uuid>`, `project_id` like `proj_users-yi-repos-murky-swamp`, `parent_id` for
+  (`id` like `sess_<uuid>`, `project_id` like `proj_users-me-code-api`, `parent_id` for
   subagents, `slug`, `directory`, `title`, `version` of the zcode that wrote it, `task_type`
   `interactive` or `subagent_child`, `time_created`/`updated`/`archived` in ms), `message` (JSON
   `data`: role, time, `parentID`, `modelID`, `providerID`, `path.cwd`, tokens, `semantics`,
