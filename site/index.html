@@ -154,8 +154,8 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
 <span class="b c">Best Claude Code account now: </span><span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
-  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 9:58pm (in 2h39m)</span>
-  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Sun 12:06am (in 4d4h)</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 10:55pm (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Wed 1:03am (in 4d4h)</span>
 Carry it there with:
 <span class="c">  hatcheck move b</span><span class="d">    (hatcheck fork b keeps the original)</span>
 <span class="d">Then:</span>
@@ -223,11 +223,15 @@ hat r               # carry on the newest session here, after asking</code></pre
           <tr><td><code>hat un</code></td><td><code>unbind</code></td><td>untie it again</td></tr>
           <tr><td><code>hat d</code></td><td><code>desktop</code></td><td>Claude Desktop instances, on macOS and Windows</td></tr>
           <tr><td><code>hat p</code></td><td><code>provider</code></td><td>the keys and models behind <code>claude-z</code> and <code>claude-k</code></td></tr>
-          <tr><td><code>hat do</code></td><td><code>doctor</code></td><td>which copies of hatcheck and the agents are installed, and which run</td></tr>
+          <tr><td><code>hat do</code></td><td><code>doctor</code></td><td>which copies of hatcheck and the agents are installed, and which run, and how long each profile keeps its transcripts</td></tr>
+          <tr><td><code>hat se</code></td><td><code>search</code></td><td>the sessions whose title or conversation has every word, in every profile and home</td></tr>
+          <tr><td><code>hat prof</code></td><td><code>profiles</code></td><td>what each profile and home is set up with, and what differs between two</td></tr>
+          <tr><td><code>hat st</code></td><td><code>statusline</code></td><td>a status line for Claude Code: the profile a session runs in, and what's left of its plan</td></tr>
+          <tr><td><code>hat c</code></td><td><code>completions</code></td><td>the completions for zsh, bash, fish or PowerShell</td></tr>
         </tbody>
       </table>
     </div>
-    <p>A longer start works too, such as <code>hat mo</code>, and options follow as after the whole name: <code>hat u --cached</code>. Where two commands start with the same letter, the one used more gets it, so bind, unbind and doctor take two letters and relocate three; what hatcheck prints uses the whole name. The launchers are short too: <code>cl a</code>, <code>cx a</code> and <code>ck a</code> run Claude Code, Codex and Kimi Code CLI with profile <code>a</code> (<a href="#start">a profile per account</a>).</p>
+    <p>A longer start works too, such as <code>hat mo</code>, and options follow as after the whole name: <code>hat u --cached</code>. Where two commands start with the same letter, the one used more gets it, so bind, unbind and doctor take two letters, relocate three and profiles four; what hatcheck prints uses the whole name. The launchers are short too: <code>cl a</code>, <code>cx a</code> and <code>ck a</code> run Claude Code, Codex and Kimi Code CLI with profile <code>a</code> (<a href="#start">a profile per account</a>).</p>
   </section>
 
   <section class="wrap" id="more">
@@ -239,7 +243,7 @@ hat r               # carry on the newest session here, after asking</code></pre
       </div>
       <div class="card">
         <h3><a href="commands.html">Every command</a></h3>
-        <p>What <code>hatcheck --help</code> prints, then each of the fifteen commands' own <code>--help</code>, as this version prints them.</p>
+        <p>What <code>hatcheck --help</code> prints, then each of the nineteen commands' own <code>--help</code>, as this version prints them.</p>
       </div>
       <div class="card">
         <h3><a href="rules.html">Rules it keeps</a></h3>

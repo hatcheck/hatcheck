@@ -7,13 +7,13 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <title>Every command · Hatcheck</title>
-  <meta name="description" content="What hatcheck --help prints, and each of its fifteen commands' own --help: sessions, usage, best, where, show, move, fork, relocate, open, resume, bind, unbind, desktop, provider and doctor.">
+  <meta name="description" content="What hatcheck --help prints, and each of its nineteen commands' own --help: sessions, usage, best, where, show, search, move, fork, relocate, open, resume, bind, unbind, desktop, provider, profiles, statusline, doctor and completions.">
   <link rel="canonical" href="https://hatcheck.dev/commands">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hatcheck.dev/commands">
   <meta property="og:image" content="https://hatcheck.dev/og.png">
   <meta property="og:title" content="Every command · Hatcheck">
-  <meta property="og:description" content="What hatcheck --help prints, and each of its fifteen commands' own --help: sessions, usage, best, where, show, move, fork, relocate, open, resume, bind, unbind, desktop, provider and doctor.">
+  <meta property="og:description" content="What hatcheck --help prints, and each of its nineteen commands' own --help: sessions, usage, best, where, show, search, move, fork, relocate, open, resume, bind, unbind, desktop, provider, profiles, statusline, doctor and completions.">
 </head>
 <body>
   <nav class="top wrap" aria-label="Site">
@@ -52,6 +52,8 @@ Usage:
     hatcheck resume [SESSION]          carry on the newest session started here, in this
                                        terminal, after asking; hat r for short
     hatcheck show SESSION              a session's conversation, read-only
+    hatcheck search WORDS...           the sessions whose title or conversation has every
+                                       word, in every profile and home, newest first
     hatcheck best [--for SESSION]      the best account now, in full, and the move command
                                        that carries the newest session started here to it;
                                        --wait sleeps until one has room
@@ -59,13 +61,19 @@ Usage:
     hatcheck unbind [FOLDER]           untie it again
     hatcheck desktop ...               Claude Desktop instances on macOS and Windows: list,
                                        open, make one
-    hatcheck provider ...              the Z.ai and Kimi keys and models behind claude-z,
-                                       claude-k, cl -z and cl -k
+    hatcheck provider ...              the Z.ai, Kimi, MiniMax and DeepSeek keys and models
+                                       behind claude-z, -k, -m and -d, and cl -z, -k, -m, -D
+    hatcheck profiles [A B]            what each profile and home is set up with: skills,
+                                       agents, commands, plugins, hooks, MCP servers,
+                                       settings; with two named, what differs between them
+    hatcheck statusline ...            a status line for Claude Code, with the profile and
+                                       what's left of its plan; --install PROFILE adds it
     hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
                                        which runs, and how to remove the rest
+    hatcheck completions SHELL         the completions for zsh, bash, fish or PowerShell
 
-hatcheck, usage, where, show, desktop, move, fork, relocate and doctor take --json,
-for scripts, status bars and the desktop app.
+hatcheck, usage, where, show, search, profiles, desktop, move, fork, relocate and
+doctor take --json, for scripts, status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
@@ -73,8 +81,9 @@ and so on. cl, cx and ck run Claude Code, Codex and Kimi Code CLI with a profile
 
 A subcommand can be cut to its first letters: hat m is hat move, hat f is hat
 fork. Where two share a letter, it goes to the one used more: b is best, s is
-show, u is usage, d is desktop and r is resume, so bind, unbind and doctor take
-two letters, bi, un and do, and relocate three, rel.<!-- /help:hatcheck --></code></pre>
+show, se is search, u is usage, d is desktop, p is provider and r is resume, so
+bind, unbind and doctor take two letters, bi, un and do, relocate three, rel,
+and profiles four, prof.<!-- /help:hatcheck --></code></pre>
     <div class="helps">
       <details><summary><code>hatcheck sessions</code><span>or plain <code>hat</code>, the default: recent sessions in every profile and home, with resume commands, costs and plan usage</span></summary>
 <pre><code><!-- help:sessions -->usage: hatcheck sessions [-h] [-n N] [-a] [-A | --this-folder] [-f |
@@ -179,7 +188,8 @@ options:
   -j, --json  print the matches as JSON<!-- /help:where --></code></pre>
       </details>
       <details><summary><code>hatcheck show</code><span>or <code>hat s</code>: a session's conversation, read-only</span></summary>
-<pre><code><!-- help:show -->usage: hatcheck show [-h] [--from PROFILE] [--last N] [--brief] [-j] session
+<pre><code><!-- help:show -->usage: hatcheck show [-h] [--from PROFILE] [--last N] [--brief] [-m | -j]
+                     session
 
 Show a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
 Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session's
@@ -196,10 +206,41 @@ options:
   --brief         show the handover brief hatcheck move --brief hands over
                   instead: the first prompt, the files and commands its tool
                   calls named, and its last turns
+  -m, --markdown  print it as a Markdown document: a heading with the
+                  session's facts, then each turn under who said it and when,
+                  tool calls in code blocks
   -j, --json      print it as JSON<!-- /help:show --></code></pre>
       </details>
+      <details><summary><code>hatcheck search</code><span>or <code>hat se</code>: the sessions whose title or conversation has every word, in every profile and home</span></summary>
+<pre><code><!-- help:search -->usage: hatcheck search [-h] [--since HOURS] [--here] [--from PROFILE] [-a]
+                       [-m N] [-f] [-j]
+                       [words ...]
+
+Find the sessions whose title or conversation has every word, in every profile
+and home of every agent: newest first, each with the command that resumes it
+and the turns the words are in. Case doesn't matter, and a word can be part of
+a longer one.
+
+positional arguments:
+  words           the words to look for
+
+options:
+  -h, --help      show this help message and exit
+  --since HOURS   only sessions active in the last HOURS: 36, 1.5, 12h or 3d
+  --here          only sessions started from this folder
+  --from PROFILE  only this profile or home: NAME, codex:NAME, kimi:NAME and
+                  so on, or a path
+  -a, --all       also look in sessions from Claude Desktop, the SDK, the
+                  Codex app and the other hosts the session list hides without
+                  --all
+  -m, --max N     show at most N sessions (default 20; 0 for every one)
+  -f, --full      print CLAUDE_CONFIG_DIR=... claude instead of the cl
+                  shortcut, and the same for the other launchers
+  -j, --json      print the sessions found as JSON<!-- /help:search --></code></pre>
+      </details>
       <details><summary><code>hatcheck move</code><span>or <code>hat m</code>: move a session to another profile or home, or convert it for another agent</span></summary>
-<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--brief] [--dry-run] [-j]
+<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--brief] [-y] [--dry-run]
+                     [-j]
                      [session] [profile]
 
 Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
@@ -207,7 +248,7 @@ Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session to
 another profile, to carry on with it there, or convert it for another agent.
 With a profile alone, the newest session started from this folder goes to it;
 with nothing, or a session alone, to the best account of its agent now, as
-hatcheck best picks it; either after asking.
+hatcheck best picks it; either after asking, unless --yes.
 
 positional arguments:
   session         the session ID, or the start of it (default: the newest
@@ -234,13 +275,15 @@ options:
   --brief         for a conversion into another agent, hand over a brief in
                   place of the whole conversation: the first prompt, the files
                   and commands its tool calls named, and its last turns
+  -y, --yes       don't ask: go ahead with the session and account it picks,
+                  and in a terminal resume it right after
   --dry-run       show what would be moved, copied, converted and deleted, and
                   change nothing
   -j, --json      say what was or would be done as JSON, and never ask to
                   resume it<!-- /help:move --></code></pre>
       </details>
       <details><summary><code>hatcheck fork</code><span>or <code>hat f</code>: fork a session into another profile or home, as a new session with its own ID</span></summary>
-<pre><code><!-- help:fork -->usage: hatcheck fork [-h] [--from PROFILE] [--brief] [--dry-run] [-j]
+<pre><code><!-- help:fork -->usage: hatcheck fork [-h] [--from PROFILE] [--brief] [-y] [--dry-run] [-j]
                      [session] [profile]
 
 Fork a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
@@ -249,7 +292,7 @@ another profile: bring it in as a new session with its own ID, beside any copy
 already there, and keep the original. For another agent, it's converted. With
 a profile alone, the newest session started from this folder goes into it;
 with nothing, or a session alone, into the best account of its agent now, as
-hatcheck best picks it; either after asking.
+hatcheck best picks it; either after asking, unless --yes.
 
 positional arguments:
   session         the session ID, or the start of it (default: the newest
@@ -274,6 +317,8 @@ options:
   --brief         for a conversion into another agent, hand over a brief in
                   place of the whole conversation: the first prompt, the files
                   and commands its tool calls named, and its last turns
+  -y, --yes       don't ask: go ahead with the session and account it picks,
+                  and in a terminal resume the new session right after
   --dry-run       show what would be copied or converted, and change nothing
   -j, --json      say what was or would be done as JSON, and never ask to
                   resume it<!-- /help:fork --></code></pre>
@@ -429,7 +474,8 @@ options:
       <details><summary><code>hatcheck provider</code><span>or <code>hat p</code>: the Z.ai and Kimi keys and models behind claude-z and claude-k</span></summary>
 <pre><code><!-- help:provider -->usage: hatcheck provider [-h] {setup,env} ...
 
-Settings for running Claude Code on Z.ai (z) or Kimi (k) instead of Anthropic.
+Settings for running Claude Code on Z.ai (z), Kimi (k), MiniMax (m) or
+DeepSeek (d) instead of Anthropic.
 
 positional arguments:
   {setup,env}
@@ -438,6 +484,49 @@ positional arguments:
 
 options:
   -h, --help   show this help message and exit<!-- /help:provider --></code></pre>
+      </details>
+      <details><summary><code>hatcheck profiles</code><span>or <code>hat prof</code>: what each profile and home is set up with, and what differs between two</span></summary>
+<pre><code><!-- help:profiles -->usage: hatcheck profiles [-h] [-j] [profiles ...]
+
+What each Claude Code profile, Codex home and Kimi home is set up with, read
+as the agent keeps it: its instructions file, skills, agents, commands,
+prompts, plugins, hooks, MCP servers, permissions and settings. With two
+named, what differs between them: what one has that the other doesn't, and
+what both have that isn't the same. Nothing is changed, and nothing that could
+be a secret is shown.
+
+positional arguments:
+  profiles    two profiles or homes to compare: NAME for ~/.claude-NAME,
+              default for ~/.claude, codex or codex:NAME, kimi or kimi:NAME,
+              or a path
+
+options:
+  -h, --help  show this help message and exit
+  -j, --json  print the setups, or the comparison, as JSON<!-- /help:profiles --></code></pre>
+      </details>
+      <details><summary><code>hatcheck statusline</code><span>or <code>hat st</code>: a status line for Claude Code: the profile a session runs in, and what's left of its plan</span></summary>
+<pre><code><!-- help:statusline -->usage: hatcheck statusline [-h] [--install | --uninstall | --show] [--all]
+                           [profiles ...]
+
+A status line for Claude Code: the profile the session runs in, its model,
+what's left of the plan's 5-hour and weekly limits and when each resets, the
+context used and the session's cost. Run by Claude Code, from the statusLine
+setting --install adds to a profile's settings.json, it reads what Claude Code
+hands it and asks nothing. Run in a terminal, it previews the line from the
+profile's last usage snapshot.
+
+positional arguments:
+  profiles     profiles for --install, --uninstall or --show: NAME for
+               ~/.claude-NAME, default, or a path
+
+options:
+  -h, --help   show this help message and exit
+  --install    add the statusLine setting to each profile's settings.json, or
+               point the one hatcheck added at this hatcheck
+  --uninstall  take out the statusLine setting hatcheck added
+  --all        with --install or --uninstall: every profile
+  --show       preview the line for a profile (default: the one
+               CLAUDE_CONFIG_DIR names, or ~/.claude)<!-- /help:statusline --></code></pre>
       </details>
       <details><summary><code>hatcheck doctor</code><span>or <code>hat do</code>: every copy of hatcheck and the agents on your PATH</span></summary>
 <pre><code><!-- help:doctor -->usage: hatcheck doctor [-h] [-j]
@@ -448,6 +537,22 @@ one runs, and how to remove the rest. Changes nothing.
 options:
   -h, --help  show this help message and exit
   -j, --json  print what it found as JSON<!-- /help:doctor --></code></pre>
+      </details>
+      <details><summary><code>hatcheck completions</code><span>or <code>hat c</code>: the completions for zsh, bash, fish or PowerShell</span></summary>
+<pre><code><!-- help:completions -->usage: hatcheck completions [-h] SHELL
+
+Print the completions for a shell: the subcommands, each one's options, and,
+where a word is a profile, a session or a folder, those, asked of hatcheck as
+you type. Load them as the script's first lines say: eval "$(hatcheck
+completions zsh)" after compinit, eval "$(hatcheck completions bash)",
+hatcheck completions fish &gt; ~/.config/fish/completions/hatcheck.fish, or
+hatcheck completions powershell | Out-String | Invoke-Expression.
+
+positional arguments:
+  SHELL       zsh, bash, fish or powershell
+
+options:
+  -h, --help  show this help message and exit<!-- /help:completions --></code></pre>
       </details>
     </div>
   </main>
