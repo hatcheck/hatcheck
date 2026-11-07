@@ -1,13 +1,16 @@
-//! hatcheck show SESSION [--from PROFILE] [--last N] [--json]: a session's conversation,
-//! read-only: your messages and the replies, with each tool call as a block of text.
+//! hatcheck show SESSION [--from PROFILE] [--last N] [--json] [--markdown]: a session's
+//! conversation, read-only: your messages and the replies, with each tool call as a block of
+//! text; --markdown writes it as a Markdown document, to keep or share.
 
 use crate::args::{Count, Parser};
 use crate::conv;
+use crate::facts;
 use crate::open_cmd::{pick, Pick};
 use crate::ospath;
 use crate::out;
 use crate::paths;
 use crate::py;
+use crate::times;
 use crate::widths::truncate;
 use serde_json::{json, Value};
 
@@ -25,7 +28,9 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     )
     .option(&["--last"], "last", "N", "only the last N turns")
     .flag(&["--brief"], "brief", "show the handover brief hatcheck move --brief hands over instead: the first prompt, the files and commands its tool calls named, and its last turns")
-    .flag(&["-j", "--json"], "json", "print it as JSON");
+    .flag(&["-m", "--markdown"], "markdown", "print it as a Markdown document: a heading with the session's facts, then each turn under who said it and when, tool calls in code blocks")
+    .flag(&["-j", "--json"], "json", "print it as JSON")
+    .exclusive(&["markdown", "json"]);
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
@@ -85,6 +90,10 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         return 0;
     }
     let assistant = s.agent.speaker();
+    if args.flag("markdown") {
+        out::print(&markdown(&s, &conv, turns, total, brief));
+        return 0;
+    }
     let title = truncate(if s.title.is_empty() { "?" } else { &s.title }, 60);
     let some = if turns.len() < total {
         format!(", the last {}", turns.len())
@@ -120,4 +129,116 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         paint.muted(&format!("Left out: {}.", conv.left_out))
     ));
     0
+}
+
+/// Whether a part of a turn is a tool call or its result, as conv writes them: shown in a
+/// code block, so its lines aren't read as Markdown.
+fn is_tool_block(text: &str) -> bool {
+    let lead = py::lstrip(text);
+    lead.starts_with("[external_agent_tool_call")
+        || lead.starts_with("[external_agent_tool_result]")
+}
+
+/// A code fence longer than any run of backticks in the text, so the block closes where meant.
+fn fence_for(text: &str) -> String {
+    let longest = text.split(|c| c != '`').map(str::len).max().unwrap_or(0);
+    "`".repeat(longest.max(2) + 1)
+}
+
+/// The conversation as a Markdown document: a heading with the session's facts, then each turn
+/// under who said it and when, its tool calls and their results in code blocks.
+pub fn markdown(
+    s: &facts::Summary,
+    conv: &conv::Conversation,
+    turns: &[conv::Turn],
+    total: usize,
+    brief: bool,
+) -> String {
+    let title = if s.title.is_empty() {
+        "Untitled session"
+    } else {
+        &s.title
+    };
+    let mut facts: Vec<String> = vec![format!(
+        "{} session `{}` in `{}`",
+        s.agent.name(),
+        s.id,
+        paths::shell_path(&s.profile)
+    )];
+    if let Some(cwd) = conv
+        .cwd
+        .as_deref()
+        .or(s.cwd.as_deref())
+        .filter(|c| !c.is_empty())
+    {
+        facts.push(format!("started from `{}`", paths::shell_path(cwd)));
+    }
+    if let Some(branch) = py::s(&s.branch).filter(|b| !b.is_empty()) {
+        facts.push(format!("on branch `{branch}`"));
+    }
+    if let Some(model) = py::s(&conv.model).filter(|m| !m.is_empty()) {
+        facts.push(format!("model `{model}`"));
+    }
+    let shown = if turns.len() < total {
+        format!("the last {} of {total} turns", turns.len())
+    } else {
+        format!("{total} turn{}", if total == 1 { "" } else { "s" })
+    };
+    facts.push(format!(
+        "{shown}, {} tool call{}",
+        conv.calls,
+        if conv.calls == 1 { "" } else { "s" }
+    ));
+    let mut text = format!("# {}\n\n{}.", py::collapse(title), facts.join(", "));
+    if brief {
+        text += " A handover brief, as hatcheck move --brief hands one over: the first prompt, the files and commands the tool calls named, and the last turns.";
+    }
+    text += &format!(
+        " Exported by hatcheck {} on {}. Left out: {}.\n",
+        crate::cli::version(),
+        times::short_local(times::now()),
+        conv.left_out
+    );
+    for (role, texts, when) in turns {
+        let who = if role == "user" {
+            "You"
+        } else {
+            s.agent.speaker()
+        };
+        let at = match when {
+            Value::String(w) if !w.is_empty() => {
+                format!(" · {}", py::head(w, 16).replace('T', " "))
+            }
+            _ => String::new(),
+        };
+        text += &format!("\n## {who}{at}\n");
+        for part in texts {
+            if is_tool_block(part) {
+                let fence = fence_for(part);
+                text += &format!("\n{fence}text\n{}\n{fence}\n", part.trim_matches('\n'));
+            } else {
+                text += &format!("\n{}\n", part.trim_matches('\n'));
+            }
+        }
+    }
+    text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tool_blocks_get_a_fence_longer_than_their_backticks() {
+        assert!(is_tool_block(
+            "[external_agent_tool_call: Bash]\ncommand: ls\n[/external_agent_tool_call]"
+        ));
+        assert!(is_tool_block(
+            "  [external_agent_tool_result]\nok\n[/external_agent_tool_result]"
+        ));
+        assert!(!is_tool_block("Run `ls` first"));
+        assert_eq!(fence_for("no backticks"), "```");
+        assert_eq!(fence_for("has ``` inside"), "````");
+        assert_eq!(fence_for("has `````` six"), "```````");
+    }
 }

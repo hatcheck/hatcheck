@@ -1081,6 +1081,14 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
   describes: your messages, the replies' text and tool calls with their results, shell commands and
   compaction summaries. Reasoning, files' contents and opencode's own records are left out; images
   and files are marked.
+- `--markdown` (`-m`) prints the conversation as a Markdown document, to keep or share:
+  `hatcheck show 3f1c2a9e --markdown > login-fix.md`. A heading with the title, then a line of
+  the session's facts (the agent, ID and profile, the folder it started from, its branch and
+  model, how many turns and tool calls, when it was exported and what's left out), then each
+  turn under `## You · 2026-11-06 19:12` or `## Claude · …`, with each tool call and its result in
+  a `text` code block, fenced longer than any run of backticks inside it, so the document reads
+  as its parts. `--last N` and `--brief` apply, and the facts say so; it's raw output, with no
+  colours, and can't be combined with `--json`.
 - `--brief` shows the handover brief `hatcheck move --brief` would hand over in its place: the
   first prompt, the files and commands the tool calls named, and the last six turns; `--json`
   then says `"brief": true`, and `turns_total` counts the brief's turns.
