@@ -42,6 +42,8 @@ hatcheck where SESSION             where a session is stored
 hatcheck bind PROFILE              tie a folder to a profile, for cl, cx, ck and the list
 hatcheck profiles [A B]            what each profile and home is set up with, and what
                                    differs between two
+hatcheck statusline --install A    a status line for Claude Code: the profile a session runs
+                                   in, and what's left of its plan
 hatcheck doctor                    every copy of hatcheck and the agents on your PATH
 hatcheck desktop                   Claude Desktop instances on macOS and Windows
 hatcheck provider                  the Z.ai, Kimi, MiniMax and DeepSeek keys and models behind

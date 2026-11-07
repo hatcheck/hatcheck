@@ -180,6 +180,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's, mcode's, qwen's, copilot's and opencode's stay as they are |
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
 | [`hatcheck profiles [A B]`](docs/commands.md#hatcheck-profiles-what-each-profile-is-set-up-with) | what each profile and home is set up with: skills, agents, commands, plugins, hooks, MCP servers, permissions and settings; with two named, what differs between them |
+| [`hatcheck statusline --install PROFILE`](docs/commands.md#hatcheck-statusline-which-account-a-session-is-on-in-claude-codes-status-line) | a status line for Claude Code with the profile the session runs in and what's left of its plan: `work · Opus 5.5 · 5h 62% ↻2h41m · wk 30% ↻3d2h · ctx 23% · $1.23` |
 | [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest |
 | [`hatcheck desktop`](#claude-desktop-instances-macos-and-windows) | Claude Desktop instances on macOS and Windows |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |
@@ -199,7 +200,10 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   session-start hook to each profile's `settings.json`, each Codex home's `hooks.json` and
   Antigravity CLI's `~/.gemini/config/hooks.json`, or points the one it added at the `hatcheck` it
   finds now, and `unbind --hook` removes only what it added ([`bind.rs`](crates/hatcheck/src/bind.rs),
-  `add_hooks` and `remove_hooks`).
+  `add_hooks` and `remove_hooks`); `hatcheck statusline --install` sets the `statusLine` of the
+  profiles you name, leaves one somebody else set alone, and `--uninstall` takes out only the one
+  it added ([`statusline.rs`](crates/hatcheck/src/statusline.rs), `install` and `uninstall`).
+  `hatcheck profiles` and `search` only read.
 - **No credentials.** It never asks for, stores, refreshes or moves a login. For Claude it never
   reads one: Claude Code's own `/usage` is run in the profile and the snapshot it saves is read
   ([`usage.rs`](crates/hatcheck/src/usage.rs), `run_claude_usage` and `claude_live`). For Codex, the

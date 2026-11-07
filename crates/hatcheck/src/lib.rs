@@ -41,6 +41,7 @@ pub mod search;
 pub mod serve;
 pub mod sessions;
 pub mod show;
+pub mod statusline;
 pub mod times;
 pub mod usage;
 pub mod where_cmd;

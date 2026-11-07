@@ -18,7 +18,7 @@ const AGY_HOOK: &str = "hatcheck";
 
 /// Write JSON whole, under a temporary name until it's complete, as Python's json.dump with
 /// indent=2 writes it, and a newline.
-fn write_json(path: &str, data: &Value) -> std::io::Result<()> {
+pub(crate) fn write_json(path: &str, data: &Value) -> std::io::Result<()> {
     std::fs::create_dir_all(ospath::dirname(path))?;
     let tmp = format!("{path}.hatcheck-tmp");
     std::fs::write(&tmp, py::dumps(data) + "\n")?;
@@ -436,7 +436,9 @@ fn hook_files() -> Vec<(Agent, String, String)> {
 }
 
 /// How Claude Code and Codex run the hook: hatcheck from your PATH, or this program.
-fn hook_command() -> String {
+/// The hatcheck a setting's command runs, quoted for the shell: the one on the PATH, else this
+/// one, by its full path.
+pub(crate) fn hatcheck_exe_quoted() -> String {
     let quote = |s: &str| {
         if ospath::WINDOWS {
             format!("\"{s}\"")
@@ -449,10 +451,16 @@ fn hook_command() -> String {
             .ok()
             .map(|p| p.to_string_lossy().into_owned())
     });
-    format!(
-        "{} {HOOK}",
-        quote(&exe.unwrap_or_else(|| "hatcheck".into()))
-    )
+    quote(&exe.unwrap_or_else(|| "hatcheck".into()))
+}
+
+/// The JSON object in a settings file ({} when there's no file), or why it can't be used.
+pub(crate) fn read_settings_object(path: &str) -> Result<Dict, String> {
+    read_settings(path)
+}
+
+fn hook_command() -> String {
+    format!("{} {HOOK}", hatcheck_exe_quoted())
 }
 
 #[allow(clippy::too_many_arguments)]

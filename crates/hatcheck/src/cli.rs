@@ -2,12 +2,28 @@
 
 use crate::{
     best, bind, desktop, doctor, move_cmd, open_cmd, out, profiles, provider, relocate, resume,
-    search, sessions, show, usage, where_cmd,
+    search, sessions, show, statusline, usage, where_cmd,
 };
 
 pub const SUBCOMMANDS: &[&str] = &[
-    "sessions", "usage", "where", "move", "fork", "open", "resume", "show", "search", "best",
-    "bind", "unbind", "desktop", "provider", "profiles", "relocate", "doctor",
+    "sessions",
+    "usage",
+    "where",
+    "move",
+    "fork",
+    "open",
+    "resume",
+    "show",
+    "search",
+    "best",
+    "bind",
+    "unbind",
+    "desktop",
+    "provider",
+    "profiles",
+    "statusline",
+    "relocate",
+    "doctor",
 ];
 
 /// The letters two subcommands start with, each given to the one used more. The other takes two
@@ -80,6 +96,8 @@ Usage:
     hatcheck profiles [A B]            what each profile and home is set up with: skills,
                                        agents, commands, plugins, hooks, MCP servers,
                                        settings; with two named, what differs between them
+    hatcheck statusline ...            a status line for Claude Code, with the profile and
+                                       what's left of its plan; --install PROFILE adds it
     hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
                                        which runs, and how to remove the rest
 
@@ -211,6 +229,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "show" => show::main(&argv, &prog),
         "search" => search::main(&argv, &prog),
         "profiles" => profiles::main(&argv, &prog),
+        "statusline" => statusline::main(&argv, &prog),
         "desktop" => desktop::main(&argv, &prog),
         "best" => best::main(&argv, &prog),
         "bind" => bind::main(&argv, &prog),

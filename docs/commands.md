@@ -1294,6 +1294,53 @@ Nothing was changed: hatcheck reads a setup and never writes one. A skill, agent
 
 `hat prof` is the short form: `p` goes to `provider`.
 
+## `hatcheck statusline`: which account a session is on, in Claude Code's status line
+
+A status line for Claude Code that says which profile the session runs in and what's left of its
+plan, so that working in the wrong account shows at a glance:
+
+```
+work · Opus 5.5 · 5h 62% ↻2h41m · wk 30% ↻3d2h · Fable 48% ↻4d4h · ctx 23% · $1.23
+```
+
+```
+$ hatcheck statusline --install work home
+✓ Added to ~/.claude-work/settings.json: statusLine runs /Users/me/.local/bin/hatcheck statusline
+  Now, in a session there: work · 5h 62% ↻2h41m · Fable 48% ↻4d4h · cached 12m ago
+✓ Added to ~/.claude-home/settings.json: statusLine runs /Users/me/.local/bin/hatcheck statusline
+  Now, in a session there: home · usage ?
+```
+
+- The line, in order: the profile (`default` for `~/.claude`, `NAME` for `~/.claude-NAME`, else
+  the folder's name), the model, each limit as `5h 62% ↻2h41m` (what's left, and how long until
+  it resets), the context window used, and what the session has cost. A limit with a quarter or
+  less left is yellow and with a tenth or less red, the context from three quarters and nine
+  tenths likewise, and the profile is in bold cyan; `NO_COLOR` turns the colours off. Claude
+  Code renders the colours itself, so the line has them though it goes down a pipe.
+- Where the numbers come from: Claude Code hands the command a JSON object on stdin each time
+  it redraws, with the model, the session's cost and context, and its own rate limits, the
+  5-hour and the 7-day, as it tracks them from its requests (`rate_limits.five_hour` and
+  `seven_day`, each with `used_percentage` and `resets_at`; Claude Code 2.1.319). That's the
+  `5h` and `wk`. The per-model weekly limits, such as Fable's, which Claude Code doesn't hand
+  over, come from the profile's last usage snapshot (what `hatcheck usage --cached` reads) while
+  it's under an hour old. Nothing is asked over the network, and no login is read; the profile
+  is the one `CLAUDE_CONFIG_DIR` names in the session's environment, as `cl` sets it.
+- `--install PROFILE…` (or `--all`) sets `statusLine` in each profile's `settings.json` to
+  `{"type": "command", "command": "<hatcheck> statusline"}`, with hatcheck's full path so it's
+  found from any PATH, and prints the line as it would read there now. A `statusLine` somebody
+  else set is left as it is, and said so, with exit 1; one hatcheck added is pointed at the
+  hatcheck found now. `--uninstall PROFILE…` (or `--all`) takes out the one hatcheck added and
+  leaves any other. Nothing else in `settings.json` is touched: it's read as JSON and written
+  back with its keys in their order, as `bind --hook` writes it.
+- `--show [PROFILE]`, or the command run in a terminal with nothing on stdin, previews the line
+  from the profile's snapshot alone, with the snapshot's age (`cached 12m ago`) or `usage ?`
+  without one: what Claude Code's own numbers add can't be seen outside a session.
+- The exit status: 0 for a line; for `--install` and `--uninstall`, 0 when every profile named
+  ended up as asked, 1 when one was left as it was; a profile that isn't there, or another
+  agent's, is an error.
+
+`hat st` is the short form.
+
 ## `hatcheck bind`: tie a folder to a profile
 
 With several accounts, it's easy to start `claude` in a repo out of habit, under the wrong one.
