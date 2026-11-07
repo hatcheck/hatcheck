@@ -59,8 +59,9 @@ in two words, so it's `hat` again: `hat check` lists sessions and `hat check usa
 
 A subcommand can be cut to its first letters, after `hat` or `hatcheck`: `hat m …` is `hat move …`
 and `hat f …` is `hat fork …`. Where two share a letter, it goes to the one used more: `b` is
-`best`, `s` is `show`, `se` is `search`, `u` is `usage`, `d` is `desktop` and `r` is `resume`, so
-`bind`, `unbind` and `doctor` take two letters, `bi`, `un` and `do`, and `relocate` three, `rel`. What it prints,
+`best`, `s` is `show`, `se` is `search`, `u` is `usage`, `d` is `desktop`, `p` is `provider` and
+`r` is `resume`, so `bind`, `unbind` and `doctor` take two letters, `bi`, `un` and `do`, `relocate`
+three, `rel`, and `profiles` four, `prof`. What it prints,
 and the commands it suggests, use the whole name.
 
 On a terminal, human-facing reports use one style: `✓` for a completed change, `◇` for a dry run
@@ -1210,6 +1211,88 @@ No room yet; waiting for ~/.claude-a until Tue 12:00pm (in 2d14h)…
 - **Advice only.** It runs when you ask, prints commands, and never starts, moves or switches
   anything. Using several accounts to get around one plan's limits may break Anthropic's or OpenAI's
   terms; this is for choosing between accounts you may use for the work at hand.
+
+## `hatcheck profiles`: what each profile is set up with
+
+Shows what every Claude Code profile, Codex home and Kimi home is set up with, and, with two
+named, what differs between them: for the profile that has a skill, an MCP server or a hook the
+other doesn't, or a different model. It reads and never writes.
+
+```
+$ hatcheck profiles
+What each profile and home is set up with
+Claude Code
+  ~/.claude  (default)
+    model opus · effortLevel high · theme dark · 2 more settings
+    CLAUDE.md 1.2 KB · 12 skills · 1 command · 2 plugins · 4 hooks · 1 MCP server · 6 permissions
+  ~/.claude-work
+    model opus · theme dark
+    13 synced skills · 2 plugins
+Codex
+  ~/.codex  (default)
+    model gpt-5.5 · model_reasoning_effort high · 3 more settings
+    AGENTS.md 415 B · 20 skills · 1 prompt · 1 hook · 4 MCP servers · 17 trusted folders
+Kimi Code CLI
+  ~/.kimi-code  (default)
+    default_model kimi-code/k3 · effort high
+    1 hooks file
+hatcheck profiles A B shows what differs between two; nothing is changed.
+
+$ hatcheck profiles default work
+~/.claude and ~/.claude-work, Claude Code profiles
+Only in ~/.claude:
+  instructions CLAUDE.md                ~/.claude/CLAUDE.md
+  skill k2                              ~/.claude/skills/k2
+  command commit                        ~/.claude/commands/commit.md
+  plugin cloudflare@cloudflare          1.0.0, enabled
+  hook PreToolUse: [Bash] ~/.config/iterm2/cc-status
+  MCP server github
+  permission allow Bash(npm run:*)
+  setting effortLevel                   high
+Only in ~/.claude-work:
+  setting fastMode                      true
+In both, not the same:
+  setting model  opus in ~/.claude, claude-fable-5-1 in ~/.claude-work
+  env FOO        set differently
+The same in both: 13 synced skills, 1 plugin and 1 setting.
+Nothing was changed: hatcheck reads a setup and never writes one. A skill, agent, command, prompt or hooks file is a folder or file to copy into the other; a setting, permission, hook, plugin or MCP server is set in the agent itself or its config file.
+```
+
+- What's read, as each agent keeps it. A Claude Code profile (checked against Claude Code
+  2.1.319): its `CLAUDE.md`; `skills/*/` (and `skills/synced/*/*/`, the skills synced from
+  claude.ai, which are the account's own); `agents/*.md`; `commands/**/*.md`, a nested one named
+  with `:` as Claude Code names it; `hooks/*`; `keybindings.json`; the plugins in
+  `plugins/installed_plugins.json` with their versions, and whether `settings.json` enables each;
+  and `settings.json` itself: each hook command under `hooks` (as `Event: [matcher] command`),
+  each rule under `permissions` (`allow …`, `deny …`, `ask …`), each variable under `env` by its
+  name, and every other key as a setting, a table of them (`modelSettings`) as one setting per
+  entry; and the MCP servers in the profile's `.claude.json` (`~/.claude.json` for `~/.claude`),
+  by name. A Codex home (Codex 0.155): `AGENTS.md`, `skills/*/`, `prompts/*.md`, `rules/*`, the
+  hook commands in `hooks.json`, and `config.toml`'s top-level settings, `[mcp_servers.*]` by
+  name, `[profiles.*]` with each one's model, `[projects."…"]` as trusted folders with their
+  trust level, and other tables as settings (`tui.notifications`). A Kimi home (Kimi Code CLI
+  2.2): `config.toml`'s top-level settings and `[thinking]`, `hooks/*`, and `skills/*/`; the
+  tables kimi writes for its providers, models and services aren't read, since they hold keys.
+- Nothing that could be a secret is shown: an env variable goes by its name (two profiles with
+  the same name set to different values show `set differently`), an MCP server by its name
+  (`defined differently` when the definitions differ), and a file by its size; `--json`'s
+  fingerprints are hashes.
+- The comparison: what only one has, each with its path when it's a file or folder, so it can be
+  copied over by hand; what both have that isn't the same, with the two values of a setting or
+  the two sizes of a file; and how many things are the same. Two of one agent's only: a Claude
+  Code profile isn't compared with a Codex home. The profiles are named as `move` names one:
+  `work` or `default`, `codex` or `codex:work`, `kimi` or `kimi:work`, or a path.
+- The exit status of a comparison is 0 when the two are set up the same and 1 when they differ,
+  as `diff`'s; a profile that isn't there, two of different agents, or one and the same folder
+  twice is an error on stderr, exit 1.
+- A file that's there but can't be read, such as a `settings.json` that isn't valid JSON, is said
+  with a `⚠` line rather than shown as absent, and in `--json` under `unread`.
+- `--json`: alone, `{"version": 1, "profiles": [{"agent", "path", "items": [{"kind", "name",
+  "shown", "path", "fingerprint"}], "unread"}]}`; with two, `{"version": 1, "a", "b", "only_in_a",
+  "only_in_b", "different": [{"kind", "name", "a", "b", "a_path", "b_path"}], "same", "identical"}`,
+  the setups and items as above.
+
+`hat prof` is the short form: `p` goes to `provider`.
 
 ## `hatcheck bind`: tie a folder to a profile
 

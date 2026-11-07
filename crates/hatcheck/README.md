@@ -40,6 +40,8 @@ hatcheck search WORDS...           the sessions whose title or conversation has 
                                    in every profile and home, with the turns they're in
 hatcheck where SESSION             where a session is stored
 hatcheck bind PROFILE              tie a folder to a profile, for cl, cx, ck and the list
+hatcheck profiles [A B]            what each profile and home is set up with, and what
+                                   differs between two
 hatcheck doctor                    every copy of hatcheck and the agents on your PATH
 hatcheck desktop                   Claude Desktop instances on macOS and Windows
 hatcheck provider                  the Z.ai, Kimi, MiniMax and DeepSeek keys and models behind

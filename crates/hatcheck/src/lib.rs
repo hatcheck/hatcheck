@@ -31,6 +31,7 @@ pub mod opencode;
 pub mod ospath;
 pub mod out;
 pub mod paths;
+pub mod profiles;
 pub mod provider;
 pub mod py;
 pub mod qwen;

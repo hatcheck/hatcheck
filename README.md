@@ -179,6 +179,7 @@ Each is documented as it is, with its options and what it prints, in
 | [`hatcheck fork SESSION PROFILE`](docs/commands.md#hatcheck-fork-a-session-as-a-new-one-in-another-profile) | bring it in there as a new session, keeping the original |
 | [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's, mcode's, qwen's, copilot's and opencode's stay as they are |
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
+| [`hatcheck profiles [A B]`](docs/commands.md#hatcheck-profiles-what-each-profile-is-set-up-with) | what each profile and home is set up with: skills, agents, commands, plugins, hooks, MCP servers, permissions and settings; with two named, what differs between them |
 | [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest |
 | [`hatcheck desktop`](#claude-desktop-instances-macos-and-windows) | Claude Desktop instances on macOS and Windows |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |

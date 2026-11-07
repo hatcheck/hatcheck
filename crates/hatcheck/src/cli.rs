@@ -1,13 +1,13 @@
 //! The hatcheck command: picks the subcommand and runs it, or the launcher it's called as.
 
 use crate::{
-    best, bind, desktop, doctor, move_cmd, open_cmd, out, provider, relocate, resume, search,
-    sessions, show, usage, where_cmd,
+    best, bind, desktop, doctor, move_cmd, open_cmd, out, profiles, provider, relocate, resume,
+    search, sessions, show, usage, where_cmd,
 };
 
 pub const SUBCOMMANDS: &[&str] = &[
     "sessions", "usage", "where", "move", "fork", "open", "resume", "show", "search", "best",
-    "bind", "unbind", "desktop", "provider", "relocate", "doctor",
+    "bind", "unbind", "desktop", "provider", "profiles", "relocate", "doctor",
 ];
 
 /// The letters two subcommands start with, each given to the one used more. The other takes two
@@ -16,6 +16,7 @@ const SHARED_LETTERS: &[(&str, &str)] = &[
     ("b", "best"),
     ("s", "show"),
     ("se", "search"),
+    ("p", "provider"),
     ("u", "usage"),
     ("d", "desktop"),
     ("r", "resume"),
@@ -76,11 +77,14 @@ Usage:
                                        open, make one
     hatcheck provider ...              the Z.ai, Kimi, MiniMax and DeepSeek keys and models
                                        behind claude-z, -k, -m and -d, and cl -z, -k, -m, -D
+    hatcheck profiles [A B]            what each profile and home is set up with: skills,
+                                       agents, commands, plugins, hooks, MCP servers,
+                                       settings; with two named, what differs between them
     hatcheck doctor                    every copy of hatcheck and the agents on your PATH,
                                        which runs, and how to remove the rest
 
-hatcheck, usage, where, show, search, desktop, move, fork, relocate and doctor
-take --json, for scripts, status bars and the desktop app.
+hatcheck, usage, where, show, search, profiles, desktop, move, fork, relocate and
+doctor take --json, for scripts, status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
@@ -88,8 +92,9 @@ and so on. cl, cx and ck run Claude Code, Codex and Kimi Code CLI with a profile
 
 A subcommand can be cut to its first letters: hat m is hat move, hat f is hat
 fork. Where two share a letter, it goes to the one used more: b is best, s is
-show, se is search, u is usage, d is desktop and r is resume, so bind, unbind
-and doctor take two letters, bi, un and do, and relocate three, rel.";
+show, se is search, u is usage, d is desktop, p is provider and r is resume, so
+bind, unbind and doctor take two letters, bi, un and do, relocate three, rel,
+and profiles four, prof.";
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -205,6 +210,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "resume" => resume::main(&argv, &prog),
         "show" => show::main(&argv, &prog),
         "search" => search::main(&argv, &prog),
+        "profiles" => profiles::main(&argv, &prog),
         "desktop" => desktop::main(&argv, &prog),
         "best" => best::main(&argv, &prog),
         "bind" => bind::main(&argv, &prog),
@@ -274,6 +280,8 @@ mod tests {
             ("o", "open"),
             ("d", "desktop"),
             ("p", "provider"),
+            ("prov", "provider"),
+            ("prof", "profiles"),
             ("r", "resume"),
             ("res", "resume"),
             ("rel", "relocate"),
