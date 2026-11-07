@@ -73,18 +73,6 @@
     <p class="unofficial">Unofficial: not made by, affiliated with or endorsed by any of the agents' makers. The agents' names and marks are theirs.</p>
   </header>
 
-  <section class="wrap" id="video">
-    <h2>Half a minute of it</h2>
-    <p>A session carried from a profile that's running low to the account with the most left, in 28 seconds.</p>
-    <div class="video">
-      <a href="https://www.youtube.com/watch?v=9Ymg5ud8KZ0" data-embed="https://www.youtube-nocookie.com/embed/9Ymg5ud8KZ0?autoplay=1&amp;rel=0" aria-label="Play the video: Hatcheck, 28 seconds">
-        <img src="video-poster.jpg" width="1280" height="720" decoding="async" alt="A frame from the video, headed “Carry the session”: a terminal prompt above two profiles, one with 8% left and one with 91%, marked best now.">
-        <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
-      </a>
-    </div>
-    <p class="video-note">Press play and it streams from YouTube (youtube-nocookie.com); until then the page loads nothing from outside. <a href="https://www.youtube.com/watch?v=9Ymg5ud8KZ0">Open it on YouTube</a>.</p>
-  </section>
-
   <section class="wrap" id="start">
     <h2>Start with a profile per account</h2>
     <p>Claude Code keeps its login, settings and sessions in one folder, <code>~/.claude</code>. Pointed at another folder with <code>CLAUDE_CONFIG_DIR</code>, it keeps a second set there, with a login of its own: a profile. Hatcheck is built on that: a folder per account, and <code>cl</code> to run Claude Code with one. Codex and Kimi Code CLI work the same way, with <code>CODEX_HOME</code> and <code>KIMI_CODE_HOME</code>, and <code>cx</code> and <code>ck</code> run them.</p>
@@ -103,11 +91,11 @@ hatcheck             # the sessions here from every profile, and what's left of 
     <div class="cards three">
       <div class="card">
         <h3>What to resume, and what's left</h3>
-        <p><code>hatcheck</code> lists recent sessions from every profile and home, and Antigravity CLI's and ZCode's beside them, with the command that resumes each or opens DSH's session history, what it cost, and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> shows the best account now and the <code>move</code> command that carries a session to it.</p>
+        <p><code>hatcheck</code> lists recent sessions from every profile and home, and Antigravity CLI's and ZCode's beside them, with the command that resumes each or opens DSH's session history, what it cost, and what's left of that plan. <code>hatcheck usage</code> shows every plan, sorted by what's left of Fable; <code>hatcheck best</code> ranks them, for choosing between the accounts you may use for the work at hand.</p>
       </div>
       <div class="card">
         <h3>Sessions that travel</h3>
-        <p><code>hatcheck move</code> carries a session to another profile when one account runs low, back again later, <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/formats.md#how-a-conversion-works">converts it</a> for any of the ten agents, as a file the agent is started on for those without an importer; <code>--brief</code> hands over a brief in place of the whole conversation. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
+        <p><code>hatcheck move</code> carries a session to another profile, such as the account the work belongs to, and back again, or <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/formats.md#how-a-conversion-works">converts it</a> for any of the ten agents, as a file the agent is started on for those without an importer; <code>--brief</code> hands over a brief in place of the whole conversation. <code>hatcheck fork</code> brings one in as a new session and keeps the original; <code>hatcheck open</code> resumes one in a new terminal or opens DSH's web UI, in its folder, and <code>hat r</code> carries on the newest session from the folder in this terminal, after asking.</p>
       </div>
       <div class="card">
         <h3>Claude Desktop, one per account</h3>
@@ -161,8 +149,8 @@ hatcheck             # the sessions here from every profile, and what's left of 
       <div class="limit"><span class="name violet">week (Fable)</span><span class="pct">19%</span><span class="bar violet-bar"><i style="width:19%"></i></span><span class="bar time"><i style="width:57%"></i></span><span class="reset">resets Tue 12:00pm</span></div>
     </div>
 
-    <h3>Where to carry it</h3>
-    <p><code>hat best</code> shows the best account now as <code>hatcheck usage</code> shows it, and the command that carries the newest session started here to it:</p>
+    <h3>Which account to use</h3>
+    <p><code>hat best</code> ranks the accounts as <code>hatcheck usage</code> shows them, for choosing between those you may use for the work at hand, with the command that carries the newest session started here to the first; it is advice only:</p>
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
 <span class="b c">Best Claude Code account now: </span><span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
@@ -192,6 +180,18 @@ $ hatcheck relocate ~/code/web ~/code/site
 The folder binding of ~/code/web moved to ~/code/site.
 Resume them from ~/code/site. To undo: <span class="c">hatcheck relocate ~/code/site ~/code/web</span><!-- /sample:relocate --></code></pre>
     <p>Only the folder each session records is rewritten; what the conversation says about the old path stays as it was. Antigravity CLI and ZCode keep the folder in their own databases, which hatcheck never writes, Kimi Code CLI files sessions under a hash of it, DSH keeps it in an immutable header and workspace state, mcode keeps shared SQLite state and absolute manifest paths with related assets, and qwen files the transcript under the folder's name and writes the folder on every line, so theirs stay as they are, and it says so. <code>--dry-run</code> shows what would move, a session that's open or still being written stops it before anything changes, and running it the other way round undoes it, byte for byte.</p>
+  </section>
+
+  <section class="wrap" id="video">
+    <h2>Half a minute of it</h2>
+    <p>The terminal side, in 28 seconds: a session carried from one Claude Code profile to another, with what's left of each plan beside it.</p>
+    <div class="video">
+      <a href="https://www.youtube.com/watch?v=9Ymg5ud8KZ0" data-embed="https://www.youtube-nocookie.com/embed/9Ymg5ud8KZ0?autoplay=1&amp;rel=0" aria-label="Play the video: Hatcheck, 28 seconds">
+        <img src="video-poster.jpg" width="1280" height="720" decoding="async" alt="A frame from the video, headed “Carry the session”: a terminal prompt above two profiles, one with 8% left and one with 91%, marked best now.">
+        <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
+      </a>
+    </div>
+    <p class="video-note">Press play and it streams from YouTube (youtube-nocookie.com); until then the page loads nothing from outside. <a href="https://www.youtube.com/watch?v=9Ymg5ud8KZ0">Open it on YouTube</a>.</p>
   </section>
 
   <section class="wrap" id="short">

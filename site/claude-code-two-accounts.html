@@ -51,7 +51,7 @@ hatcheck                    # the sessions here from every profile, with the com
 
     <h2>What's left of each plan, and which to use</h2>
 <pre><code>hat u      # every account's limits: the 5-hour session, the week, and per-model limits such as Fable
-hat b      # the account with the most room now, and the command that carries the newest session here to it</code></pre>
+hat b      # the best account now, of those you may use for this work, and the command that carries the newest session here to it</code></pre>
     <p>The numbers come from Claude Code's own <code>/usage</code>, run in each profile with that profile's login; hatcheck reads the snapshot Claude Code saves and never a login. <a href="claude-usage-limits.html">Claude usage limits</a> explains the limits and the bars. <code>hat b</code> is <code>hatcheck best</code>:</p>
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
@@ -66,7 +66,7 @@ Carry it there with:
 <span class="d">Advice only: nothing is started, moved or switched. hatcheck usage shows every account's limits.</span><!-- /sample:best --></code></pre>
 
     <h2>Carry a session to the other account</h2>
-    <p>When one account runs low, <code>hatcheck move home</code> carries the newest session started from this folder to <code>~/.claude-home</code>, after showing what it would do and asking; <code>hatcheck fork home</code> copies it there as a new session and keeps the original. The copy resumes with <code>cl home --resume</code> and the session's id. Nothing switches on its own: hatcheck prints the command, and you run it.</p>
+    <p>When a session started in one account belongs in the other, <code>hatcheck move home</code> carries the newest session started from this folder to <code>~/.claude-home</code>, after showing what it would do and asking; <code>hatcheck fork home</code> copies it there as a new session and keeps the original. The copy resumes with <code>cl home --resume</code> and the session's id. Nothing switches on its own: hatcheck prints the command, and you run it.</p>
 
     <h2>Claude Desktop, too</h2>
     <p>Claude Desktop keeps one login as well, and the same idea applies: a data folder per account. <a href="two-claude-accounts-on-one-mac.html">Two Claude accounts on one Mac</a> has it.</p>
