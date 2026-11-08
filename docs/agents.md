@@ -601,8 +601,7 @@ cl a --resume <session-id>          # …and later back on its account's Claude 
   on, on Windows); claude-z's and claude-k's are the files the
   [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup made with those works as
   is. Enter keeps what's saved, and the first model, each provider's flagship, when nothing is.
-  MiniMax has one model to offer, so its setup doesn't ask. `hatcheck provider` shows what's set up,
-  and what `/model` offers in a session.
+  `hatcheck provider` shows what's set up, and what `/model` offers in a session.
 - A launcher sets itself up: run on a terminal with no key saved, it asks the setup's questions
   first and then starts Claude Code, and when the models saved aren't among those its menu offers
   now, such as `glm-4.7` or `k3`, it asks them again, Enter keeping the key and taking the flagship.
@@ -638,15 +637,22 @@ cl a --resume <session-id>          # …and later back on its account's Claude 
   Code caps it at 1000000 with a warning at every start, and compacts within the model's window
   without it. Checked with 2.1.319 in a pseudo-terminal against a dead address: `/model` showed the
   rows, and `/context` 1M for `k3.1-pro[1m]` and 256k for `k3-256k`.
-- On MiniMax, `MiniMax-M3.1-Flash[1m]` (M3.1 Flash, the M Plan's one text model, on every tier;
-  MiniMax-M3, the generation before, isn't on the M Plan); on DeepSeek, `deepseek-v4-pro[1m]` (V4
-  Pro, the flagship) or `deepseek-flash[1m]` (V4.1 Flash, at a quarter to a third of Pro's price),
-  each with plain `deepseek-flash` for Claude Code's haiku tier and its subagents. That's as
-  MiniMax's and DeepSeek's Claude Code guides and model pages had them on 2026-11-05, but for V4
-  Pro, which DeepSeek's guide names only as what Claude's opus models map to, and its models page
-  gives 1M of context too. Claude Code compacts their 1M at 512K on MiniMax, which it recommends
-  for everyday coding, and at 768K on DeepSeek, as its guide sets. Neither provider's models have
-  been run through Claude Code with these launchers yet: the settings are their guides'.
+- On MiniMax, `MiniMax-M3.1-Flash[1m]` (M3.1 Flash, the M Plan's text model on every tier, and
+  the default) or `MiniMax-M3[1m]` (M3, the generation before, of June 2026, with 1M too), the two
+  models MiniMax's Anthropic-compatible API serves; the M2.7, M2.5, M2.1 and M2 names and their
+  highspeed forms, which its model list still shows, are retired and refused there. M3.1 Flash
+  thinks always, at the effort given, and M3 only when adaptive thinking is asked for, as its API
+  page says. On DeepSeek, `deepseek-v4-pro[1m]` (V4 Pro, the
+  flagship) or `deepseek-flash[1m]` (V4.1 Flash, at a quarter to a third of Pro's price), the two
+  its Anthropic-compatible API serves, each with plain `deepseek-flash` for Claude Code's haiku
+  tier and its subagents. That's as MiniMax's and DeepSeek's Claude Code guides, API pages and
+  model pages had them on 2026-11-08, but for V4 Pro, which DeepSeek's guide names only as what
+  Claude's opus models map to, and its models page gives 1M of context too. Claude Code compacts
+  their 1M at 512K on MiniMax, which it recommends for everyday coding, and at 768K on DeepSeek,
+  as its guide sets. All four answered through Claude Code 2.1.319 on 2026-11-08, run as the
+  launchers run it (`scripts/provider_probe.py`): MiniMax's two on an M Plan key, whose plan page
+  names M3.1 Flash alone, neither reply carrying a thinking block, and DeepSeek's two with
+  thinking.
 - Kimi is reached at `https://api.kimi.ai/coding/`, the address of Kimi's English guide; a key that
   works at `https://api.kimi.com/coding/`, the Chinese guide's, worked at both on 2026-10-24.
   MiniMax is reached at `https://api.minimax.io/anthropic` and DeepSeek at

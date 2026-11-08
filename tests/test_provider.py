@@ -247,12 +247,21 @@ class Provider(unittest.TestCase):
             self.assertEqual(env[name], "MiniMax-M3.1-Flash[1m]")
         self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "524288")
         self.assertNotIn("CLAUDE_CODE_MAX_CONTEXT_TOKENS", env)
-        # One model to offer: setup says which, and asks only for the key and the output limit.
-        code, out = self.setup_with("m", "\n\n\n")
+        # M3, the generation before, is the other model MiniMax's Anthropic-compatible API serves
+        # (2026-11-08); the retired M2 series isn't offered.
+        code, out = self.setup_with("m", "\n2\n\n\n")
         self.assertEqual(code, 0, out)
-        self.assertIn("Model: MiniMax-M3.1-Flash[1m]", out)
-        self.assertNotIn("Choose", out)
+        self.assertIn("  1) MiniMax-M3.1-Flash[1m]     M3.1 Flash: 1M context, compacting at 512K (every M Plan tier)\n"
+                      "  2) MiniMax-M3[1m]             M3: the generation before, 1M context\n", out)
+        self.assertIn("Choose 1-2, or Enter for 1, MiniMax-M3.1-Flash[1m]: ", out)
+        self.assertNotIn("M2", out)
         self.assertIn("Saved. Start Claude Code on MiniMax with claude-m, or with a profile: cl -m <profile>", out)
+        env = self.env("m")
+        for name in ("ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL"):
+            self.assertEqual(env[name], "MiniMax-M3[1m]")
+        self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "524288")
+        code, out = self.h.run(SCRIPT)
+        self.assertIn("key …-key · MiniMax-M3[1m] · effort max\n  /model offers M3.1 Flash and M3\n", out)
 
     def test_deepseek(self):
         # As DeepSeek's Claude Code guide sets it, 2026-11-05, but with V4 Pro, the flagship, as

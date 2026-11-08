@@ -138,6 +138,15 @@ class Commands(unittest.TestCase):
         with open(picker(self.h, "z"), encoding="utf-8") as fh:
             self.assertEqual([(row["model"], row["label"]) for row in json.load(fh)["modelPicker"]["options"]],
                              [("glm-5.3[1m]", "GLM-5.3"), ("glm-5.3-flash[1m]", "GLM-5.3-Flash")])
+        # MiniMax's two, and DeepSeek's two.
+        self.h.provider_config("m", 'CM_API_KEY="minimax-test-key"\n')
+        self.h.provider_config("d", 'CD_API_KEY="deepseek-test-key"\n')
+        for provider, rows in (("m", [("MiniMax-M3.1-Flash[1m]", "M3.1 Flash"), ("MiniMax-M3[1m]", "M3")]),
+                               ("d", [("deepseek-v4-pro[1m]", "DeepSeek V4 Pro"), ("deepseek-flash[1m]", "DeepSeek V4.1 Flash")])):
+            code, out = self.claude_on("claude-" + provider, "-p", "hi")
+            self.assertEqual(code, 0, out)
+            with open(picker(self.h, provider), encoding="utf-8") as fh:
+                self.assertEqual([(row["model"], row["label"]) for row in json.load(fh)["modelPicker"]["options"]], rows)
         # Your own --settings is Claude Code's one, so the picker's isn't added.
         for args in (["--settings", "mine.json", "-p", "hi"], ["--settings=mine.json", "-p", "hi"]):
             code, out = self.claude_on("claude-k", *args)

@@ -183,16 +183,26 @@ pub const PROVIDERS: [Provider; 4] = [
         key_from:
             "the MiniMax console, https://platform.minimax.io/console/plan (the M Plan API key)",
         models: &["MODEL"],
-        // As MiniMax's Claude Code guide sets it (checked 2026-11-05): M3.1 Flash, the M Plan's
-        // one text model on every tier, with 1M of context, compacting at 512K, which MiniMax
-        // recommends for everyday coding. Its models page also lists MiniMax-M3, the generation
-        // before, which isn't on the M Plan.
-        choices: &[(
-            "MiniMax-M3.1-Flash[1m]",
-            "M3.1 Flash",
-            "1M context, compacting at 512K (every M Plan tier)",
-            &["MiniMax-M3.1-Flash[1m]"],
-        )],
+        // As MiniMax's Claude Code guide sets it (checked 2026-11-08): M3.1 Flash, the M Plan's
+        // text model on every tier, with 1M of context, compacting at 512K, which MiniMax
+        // recommends for everyday coding; and M3, the generation before, the other model its
+        // Anthropic-compatible API serves, with 1M too. Both answered on an M Plan key through
+        // Claude Code 2.1.319 on 2026-11-08; the retired M2 series, which the model list still
+        // shows, is refused there.
+        choices: &[
+            (
+                "MiniMax-M3.1-Flash[1m]",
+                "M3.1 Flash",
+                "1M context, compacting at 512K (every M Plan tier)",
+                &["MiniMax-M3.1-Flash[1m]"],
+            ),
+            (
+                "MiniMax-M3[1m]",
+                "M3",
+                "the generation before, 1M context",
+                &["MiniMax-M3[1m]"],
+            ),
+        ],
         compact_at: "524288",
         plans: &[],
     },
