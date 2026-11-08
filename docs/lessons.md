@@ -229,6 +229,19 @@ table, a row at a time.
   `provider.rs`, and `test_kimi_models_with_1m_of_context_arent_capped` in `tests/test_provider.py`.
 - Seen 1× (2026-11-04).
 
+**A value copied from a provider's guide is run through the agent that reads it.** Kimi's Claude
+Code guide sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW` and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` to 1048576
+for its 1M models; Claude Code 2.1.319 caps the first at 1000000 and warns at every start, and
+needs neither for a model named with `[1m]`, which has 1M by its name. The guide's values sat in
+`claude-k` for a week, every session on Kimi opening with the warning, until the maintainer asked
+why. What a variable does, and whether it's needed, is read from the agent: in a pseudo-terminal
+against a dead address, `/context` says the window the agent assumes, and sends nothing.
+- Evidence: 2026-11-07, Claude Code 2.1.319 with `ANTHROPIC_BASE_URL` at 127.0.0.1:9: `/context`
+  reported 1M for `k3.1-pro[1m]` with no variable set, 200k for `k3-256k` ("default for an
+  unrecognized model"), and 262.1k for it with `CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144`, which left
+  the 1M model at 1M; `environment` in `provider.rs` sets that one alone now.
+- Seen 1× (2026-11-07).
+
 ## What hatcheck changes
 
 **A folder is deleted only once it's checked, where it's deleted, to be one of hatcheck's own.**

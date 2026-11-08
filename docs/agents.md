@@ -586,7 +586,7 @@ profile, so a session can switch between Claude and those models and stay in its
 
 ```bash
 claude-k                            # Claude Code on Kimi, with ~/.claude; the first time, it asks for the key
-claude-k reconfig                   # your Kimi API key, model and effort again (claude-z, -m or -d for the others)
+claude-k reconfig                   # your Kimi API key, plan, model and effort again (claude-z, -m or -d for the others)
 cl -k a --resume <session-id>       # carry on a session in ~/.claude-a on Kimi…
 cl a --resume <session-id>          # …and later back on its account's Claude plan
 ```
@@ -594,31 +594,50 @@ cl a --resume <session-id>          # …and later back on its account's Claude 
 - Setup asks for the API key (from [z.ai](https://z.ai/manage-apikey/apikey-list), the
   [Kimi Code Console](https://www.kimi.com/code), the
   [MiniMax console](https://platform.minimax.io/console/plan), whose M Plan API key it is, or the
-  [DeepSeek Platform](https://platform.deepseek.com/api_keys)), the model, the reasoning effort and
-  an optional cap on output tokens. It saves them in `~/.config/claude-z/config`,
-  `~/.config/claude-k/config`, `~/.config/claude-m/config` or `~/.config/claude-d/config`
-  (`%APPDATA%\claude-z\config` and so on, on Windows); claude-z's and claude-k's are the files the
+  [DeepSeek Platform](https://platform.deepseek.com/api_keys)), on Kimi the plan, since Kimi's
+  plans have models of their own, the model, the reasoning effort and an optional cap on output
+  tokens. It saves them in `~/.config/claude-z/config`, `~/.config/claude-k/config`,
+  `~/.config/claude-m/config` or `~/.config/claude-d/config` (`%APPDATA%\claude-z\config` and so
+  on, on Windows); claude-z's and claude-k's are the files the
   [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup made with those works as
   is. Enter keeps what's saved, and the first model, each provider's flagship, when nothing is.
-  MiniMax has one model to offer, so its setup doesn't ask. `hatcheck provider` shows what's set up.
+  MiniMax has one model to offer, so its setup doesn't ask. `hatcheck provider` shows what's set up,
+  and what `/model` offers in a session.
 - A launcher sets itself up: run on a terminal with no key saved, it asks the setup's questions
   first and then starts Claude Code, and when the models saved aren't among those its menu offers
   now, such as `glm-4.7` or `k3`, it asks them again, Enter keeping the key and taking the flagship.
   Off a terminal, with no one to ask, one with no key stops and says to run `claude-k reconfig`, and
   one with a model no longer offered runs it as saved and says so on stderr. `hatcheck provider`
   marks such a model `(not offered now)`.
-- Models, as each provider's Claude Code guide and model list had them on 2026-11-05, the first
+- Models, as each provider's Claude Code guide and model list had them on 2026-11-07, the first
   being the default: on Z.ai `glm-5.3[1m]` (GLM-5.3, with `glm-5.3-flash[1m]` for quick tasks) or
-  `glm-5.3-flash[1m]`, the two every GLM Coding Plan has; on Kimi its six model IDs,
-  `k3.1-pro[1m]` (K3.1 Pro), `k3.1-pro` (at 256k), `k3.1-pro-highspeed[1m]` (K3.1 Pro Highspeed,
-  2-3x faster at twice the quota), `k3[1m]`, `k3-256k` (K3 at 256k, for half `k3`'s quota),
-  `kimi-for-coding[1m]` (K2.8 Preview) or `kimi-for-coding-highspeed` (K2.7 Code Highspeed). `[1m]`
-  turns on the 1M-token context window, which Kimi gives K3.1 Pro and K3 on Pro and Allegretto
-  plans and up, Highspeed on every plan that has it (the same ones), and K2.8 Preview on every
-  plan; the others run with 256k. `hatcheck provider env` uses a model saved earlier, such as
-  `k3.1-pro-highspeed`, as it is, so one saved without `[1m]` keeps 256k. The Kimi models but
-  `k3-256k` were run through Claude Code 2.1.310, which sends K3.1 Pro the thinking it requires;
-  Highspeed and K2.8 Preview were run then without `[1m]`.
+  `glm-5.3-flash[1m]`, the two every GLM Coding Plan has; on Kimi, the plan's: Pro or Allegretto
+  and up has `k3.1-pro[1m]` (K3.1 Pro), `k3.1-pro-highspeed[1m]` (K3.1 Pro Highspeed, 2-3x faster
+  at twice the quota), `k3[1m]`, `k3-256k` (K3 at 256k, for half `k3`'s quota),
+  `kimi-for-coding[1m]` (K2.8 Preview) and `kimi-for-coding-highspeed` (K2.7 Code Highspeed); Plus
+  or Moderato has `k3.1-pro`, `k3` and `k3-256k`, with 256k there, and `kimi-for-coding[1m]`; and
+  the legacy Andante plan `kimi-for-coding[1m]` alone. `[1m]` turns on the 1M-token context
+  window, which Kimi gives K3.1 Pro and K3 on Pro and Allegretto plans and up, Highspeed on every
+  plan that has it (the same ones), and K2.8 Preview on every plan. The plan is saved as
+  `CK_PLAN`; a config from before there was one is read as Pro's when its model has `[1m]` and as
+  Plus's otherwise, and `hatcheck provider env` uses a model saved earlier, such as
+  `k3.1-pro-highspeed`, as it is. The Kimi models but `k3-256k` were run through Claude Code
+  2.1.310, which sends K3.1 Pro the thinking it requires; Highspeed and K2.8 Preview were run then
+  without `[1m]`.
+- In a session, `/model` lists the plan's models, each once, by the provider's name for it, so it
+  switches between K3.1 Pro and K3.1 Pro Highspeed, or GLM-5.3 and GLM-5.3-Flash, without
+  `reconfig`: the launcher writes them to `~/.config/claude-k/model-picker.json`, beside its config
+  (`claude-z`, `-m` and `-d` likewise), as Claude Code's `modelPicker` setting, with Claude Code's
+  own lineup hidden, and passes the file with `--settings`, which Claude Code 2.1.319 honours; the
+  Default row stays, naming the model saved. A `--settings` of your own on the command line is
+  passed as it is and the picker's isn't, since Claude Code takes one; nothing in the profile's
+  `settings.json` is written. On Kimi, `CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144` gives the 256k models
+  their window in place of the 200k Claude Code assumes for a model it doesn't know, and leaves a
+  `[1m]` model's 1M alone, so a model picked in a session runs with its own window;
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, which Kimi's guide sets to 1048576, isn't set, since Claude
+  Code caps it at 1000000 with a warning at every start, and compacts within the model's window
+  without it. Checked with 2.1.319 in a pseudo-terminal against a dead address: `/model` showed the
+  rows, and `/context` 1M for `k3.1-pro[1m]` and 256k for `k3-256k`.
 - On MiniMax, `MiniMax-M3.1-Flash[1m]` (M3.1 Flash, the M Plan's one text model, on every tier;
   MiniMax-M3, the generation before, isn't on the M Plan); on DeepSeek, `deepseek-v4-pro[1m]` (V4
   Pro, the flagship) or `deepseek-flash[1m]` (V4.1 Flash, at a quarter to a third of Pro's price),
@@ -644,8 +663,8 @@ cl a --resume <session-id>          # …and later back on its account's Claude 
   set `/effort` does nothing in a session (Claude Code answers "Not applied"); after `--effort`,
   `/effort` changes the session's. `hatcheck provider env` has no effort for that reason.
 - `--model` on the command line is Claude Code's own too, ahead of the launcher's `ANTHROPIC_MODEL`
-  for that session, but the rest stays the saved model's: the haiku tier, subagents and, on Kimi,
-  the context window, so a 256k model named that way over a saved `[1m]` one runs with 1M.
+  for that session, but the haiku tier and subagents stay the saved model's. The context window
+  follows the model named, as for one picked with `/model`: 1M with `[1m]`, 256k without on Kimi.
 - DeepSeek's flag for `cl` is a capital `-D`: `-d` stays Claude Code's own, short for `--debug`, so
   `cl -d` in a folder bound to a profile debugs that profile's session on its Claude plan, and a
   slip of either letter never sends a conversation to another provider. Claude Code has no

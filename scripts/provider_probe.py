@@ -33,9 +33,6 @@ def probe(provider, model):
     env.update({k: v for k, v in given.items() if v is not None})
     for name in SLOTS + (["CLAUDE_CODE_SUBAGENT_MODEL"] if provider != "z" else []):
         env[name] = model
-    if provider == "k":
-        window = "1048576" if model.endswith("[1m]") else "262144"
-        env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = window
     root = tempfile.mkdtemp(prefix="provider-probe-")
     env["CLAUDE_CONFIG_DIR"] = os.path.join(root, "config")
     try:

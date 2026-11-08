@@ -2,6 +2,7 @@
 the binaries built beside hatcheck, as every install has them; AsNames runs them through
 hatcheck itself, as a link named cl does. A fake claude stands in for Claude Code, a fake
 codex for Codex, and a fake kimi for Kimi Code CLI."""
+import json
 import os
 import subprocess
 import unittest
@@ -20,6 +21,12 @@ EXE = ".exe" if WINDOWS else ""
 def launcher(name):
     """A launcher's own binary, built beside hatcheck."""
     return os.path.join(os.path.dirname(ENGINE), name + EXE)
+
+
+def picker(h, provider):
+    """The /model picker settings a provider's launcher writes beside its config, and passes with --settings."""
+    base = os.path.join(h.home, "AppData", "Roaming") if WINDOWS else os.path.join(h.home, ".config")
+    return os.path.join(base, "claude-" + provider, "model-picker.json")
 
 
 class Commands(unittest.TestCase):
@@ -93,30 +100,71 @@ class Commands(unittest.TestCase):
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
         code, out = self.cl("-k", "work", "--resume", ID, extra_env={"ANTHROPIC_API_KEY": "sk-ant-from-the-shell"})
         self.assertEqual(code, 0, out)
-        for line in ("args=--effort max --resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
+        for line in ("args=--effort max --settings %s --resume %s" % (picker(self.h, "k"), ID),
+                     "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
                      "ANTHROPIC_BASE_URL=https://api.kimi.ai/coding/", "ANTHROPIC_AUTH_TOKEN=kimi-test-key",
                      "ANTHROPIC_API_KEY=unset", "ANTHROPIC_MODEL=k3.1-pro[1m]"):
             self.assertIn(line, out)
+
+    def test_the_model_picker(self):
+        # Claude Code's /model lists the plan's models, each once by Kimi's name, in place of its own
+        # lineup: a settings file the launcher writes beside the config and passes with --settings
+        # (modelPicker, Claude Code 2.1.319), unless a --settings of your own is given.
+        self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
+        code, out = self.cl("-k", "work", "-p", "hi")
+        self.assertEqual(code, 0, out)
+        with open(picker(self.h, "k"), encoding="utf-8") as fh:
+            settings = json.load(fh)
+        self.assertEqual(settings, {"modelPicker": {"replaceBuiltInOptions": True, "options": [
+            {"model": "k3.1-pro[1m]", "label": "K3.1 Pro", "description": "the flagship, 1M context · k3.1-pro[1m]"},
+            {"model": "k3.1-pro-highspeed[1m]", "label": "K3.1 Pro Highspeed",
+             "description": "2-3x faster at twice the quota, 1M context · k3.1-pro-highspeed[1m]"},
+            {"model": "k3[1m]", "label": "K3", "description": "the generation before, 1M context · k3[1m]"},
+            {"model": "k3-256k", "label": "K3 256K", "description": "K3 at 256k, for half k3's quota · k3-256k"},
+            {"model": "kimi-for-coding[1m]", "label": "K2.8 Preview",
+             "description": "1M context on every plan · kimi-for-coding[1m]"},
+            {"model": "kimi-for-coding-highspeed", "label": "K2.7 Code Highspeed",
+             "description": "5-6x faster at 3x the quota, 256k, no effort setting · kimi-for-coding-highspeed"}]}})
+        # A Plus plan's four, and Z.ai's two.
+        self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_PLAN="plus"\nCK_MODEL="k3-256k"\n')
+        code, out = self.claude_on("claude-k", "-p", "hi")
+        self.assertEqual(code, 0, out)
+        with open(picker(self.h, "k"), encoding="utf-8") as fh:
+            self.assertEqual([row["model"] for row in json.load(fh)["modelPicker"]["options"]],
+                             ["k3.1-pro", "k3", "k3-256k", "kimi-for-coding[1m]"])
+        code, out = self.claude_on("claude-z", "-p", "hi")
+        self.assertEqual(code, 0, out)
+        self.assertIn("args=--effort max --settings %s -p hi" % picker(self.h, "z"), out)
+        with open(picker(self.h, "z"), encoding="utf-8") as fh:
+            self.assertEqual([(row["model"], row["label"]) for row in json.load(fh)["modelPicker"]["options"]],
+                             [("glm-5.3[1m]", "GLM-5.3"), ("glm-5.3-flash[1m]", "GLM-5.3-Flash")])
+        # Your own --settings is Claude Code's one, so the picker's isn't added.
+        for args in (["--settings", "mine.json", "-p", "hi"], ["--settings=mine.json", "-p", "hi"]):
+            code, out = self.claude_on("claude-k", *args)
+            self.assertEqual(code, 0, out)
+            self.assertIn("args=--effort max " + " ".join(args) + "\n", out)
+            self.assertNotIn("model-picker.json", out)
 
     def test_minimax_and_deepseek(self):
         self.h.provider_config("m", 'CM_API_KEY="minimax-test-key"\n')
         self.h.provider_config("d", 'CD_API_KEY="deepseek-test-key"\n')
         code, out = self.cl("-m", "work", "--resume", ID)
         self.assertEqual(code, 0, out)
-        for line in ("args=--effort max --resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
+        for line in ("args=--effort max --settings %s --resume %s" % (picker(self.h, "m"), ID),
+                     "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
                      "ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic", "ANTHROPIC_AUTH_TOKEN=minimax-test-key",
                      "ANTHROPIC_API_KEY=unset", "ANTHROPIC_MODEL=MiniMax-M3.1-Flash[1m]"):
             self.assertIn(line, out)
         code, out = self.claude_on("claude-d", "-p", "hi")
         self.assertEqual(code, 0, out)
-        for line in ("args=--effort max -p hi", "CLAUDE_CONFIG_DIR=unset",
+        for line in ("args=--effort max --settings %s -p hi" % picker(self.h, "d"), "CLAUDE_CONFIG_DIR=unset",
                      "ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic", "ANTHROPIC_AUTH_TOKEN=deepseek-test-key",
                      "ANTHROPIC_MODEL=deepseek-v4-pro[1m]", "ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash"):
             self.assertIn(line, out)
         code, out = self.cl("-D", "work", "-d")
         self.assertEqual(code, 0, out)
         self.assertIn("ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic", out)
-        self.assertIn("args=--effort max -d", out)
+        self.assertIn("args=--effort max --settings %s -d" % picker(self.h, "d"), out)
         # -d stays Claude Code's --debug, so a debug run in a bound folder is the profile's own,
         # on its Claude plan, and goes to no other provider.
         api = self.h.folder("code", "api")
@@ -218,8 +266,9 @@ class Commands(unittest.TestCase):
     def test_claude_z_and_k_keep_the_config_dir(self):
         code, out = self.claude_on("claude-z", "--resume", ID)
         self.assertEqual(code, 0, out)
-        for line in ("args=--effort max --resume " + ID, "CLAUDE_CONFIG_DIR=unset", "ANTHROPIC_MODEL=glm-5.3[1m]",
-                     "ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic", "ANTHROPIC_AUTH_TOKEN=zai-test-key"):
+        for line in ("args=--effort max --settings %s --resume %s" % (picker(self.h, "z"), ID), "CLAUDE_CONFIG_DIR=unset",
+                     "ANTHROPIC_MODEL=glm-5.3[1m]", "ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic",
+                     "ANTHROPIC_AUTH_TOKEN=zai-test-key"):
             self.assertIn(line, out)
         mine = os.path.join(self.h.home, ".claude-work")
         code, out = self.claude_on("claude-z", "-p", "hi", extra_env={"CLAUDE_CONFIG_DIR": mine})
@@ -235,17 +284,18 @@ class Commands(unittest.TestCase):
     def test_effort(self):
         # max unless the config names another, auto leaves it to Claude Code, and one typed wins.
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
-        for args, shown in ((["-p", "hi"], "args=--effort max -p hi"),
-                            (["--effort", "low", "-p", "hi"], "args=--effort low -p hi"),
-                            (["--effort=high", "-p", "hi"], "args=--effort=high -p hi"),
-                            (["mcp", "list"], "args=--effort max mcp list")):  # before Claude Code's commands
+        settings = "--settings " + picker(self.h, "k")
+        for args, shown in ((["-p", "hi"], "args=--effort max %s -p hi"),
+                            (["--effort", "low", "-p", "hi"], "args=%s --effort low -p hi"),
+                            (["--effort=high", "-p", "hi"], "args=%s --effort=high -p hi"),
+                            (["mcp", "list"], "args=--effort max %s mcp list")):  # before Claude Code's commands
             code, out = self.claude_on("claude-k", *args)
             self.assertEqual(code, 0, out)
-            self.assertIn(shown + "\n", out)
-        for saved, shown in (("high", "args=--effort high -p hi"), ("auto", "args=-p hi")):
+            self.assertIn(shown % settings + "\n", out)
+        for saved, shown in (("high", "args=--effort high %s -p hi"), ("auto", "args=%s -p hi")):
             self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_EFFORT="%s"\n' % saved)
             code, out = self.cl("-k", "work", "-p", "hi")
-            self.assertIn(shown + "\n", out)
+            self.assertIn(shown % settings + "\n", out)
 
     def test_models_no_longer_offered_run_as_saved_off_a_terminal(self):
         self.h.provider_config("z", 'CZ_API_KEY="zai-test-key"\nCZ_MODEL_OPUS="glm-5.3[1m]"\nCZ_MODEL_HAIKU="glm-4.7"\n')
@@ -267,7 +317,7 @@ class Commands(unittest.TestCase):
         self.assertIn("Claude Code on DeepSeek isn't set up yet: the key and model first.", out)
         self.assertNotIn("deepseek-typed-key", out.split("args=")[0])  # not echoed
         self.assertIn("Saved. Starting Claude Code on DeepSeek; claude-d reconfig changes these.", out)
-        for line in ("args=--effort max -p hi", "ANTHROPIC_AUTH_TOKEN=deepseek-typed-key",
+        for line in ("args=--effort max --settings %s -p hi" % picker(self.h, "d"), "ANTHROPIC_AUTH_TOKEN=deepseek-typed-key",
                      "ANTHROPIC_MODEL=deepseek-v4-pro[1m]", "ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash"):
             self.assertIn(line, out)
         # Models no longer offered: the setup again, Enter keeping the key and taking the flagship.
@@ -280,7 +330,8 @@ class Commands(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("Claude Code on Z.ai: glm-5.3[1m] (sonnet glm-5.3-flash[1m], haiku glm-4.7), saved in "
                       "~/.config/claude-z/config, isn't among the models offered now. Choose again", out)
-        for line in ("args=--effort max --resume " + ID, "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
+        for line in ("args=--effort max --settings %s --resume %s" % (picker(self.h, "z"), ID),
+                     "CLAUDE_CONFIG_DIR=" + os.path.join(self.h.home, ".claude-work"),
                      "ANTHROPIC_AUTH_TOKEN=zai-test-key", "ANTHROPIC_MODEL=glm-5.3[1m]",
                      "ANTHROPIC_DEFAULT_HAIKU_MODEL=glm-5.3-flash[1m]"):
             self.assertIn(line, out)
@@ -289,7 +340,7 @@ class Commands(unittest.TestCase):
         # Set up and current: no questions.
         code, out = in_terminal([launcher("claude-z"), "-p", "hi"], [], env, self.h.root)
         self.assertEqual(code, 0, out)
-        self.assertTrue(out.startswith("args=--effort max -p hi"), out)
+        self.assertTrue(out.startswith("args=--effort max --settings %s -p hi" % picker(self.h, "z")), out)
 
     def test_reconfig(self):
         code, out = self.claude_on("claude-k", "reconfig")  # nothing typed

@@ -13,8 +13,9 @@ use std::io::{BufRead, Write};
 
 /// A provider: the flag cl takes for it, its name, the prefix of its config fields, its endpoint,
 /// where to get a key, its model slots, the model choices, each filling all the slots, the first
-/// being its flagship and the default, and where Claude Code compacts a session on one of its
-/// [1m] models, as the provider's Claude Code guide sets it.
+/// being its flagship and the default, where Claude Code compacts a session on one of its [1m]
+/// models, as the provider's Claude Code guide sets it, and its plans where they have models of
+/// their own. The choices offered now go into Claude Code's /model picker, each once, by name.
 pub struct Provider {
     pub key: &'static str,
     /// -z, -k and -m, but -D for DeepSeek: cl leaves -d to Claude Code, whose -d is --debug, so
@@ -25,8 +26,27 @@ pub struct Provider {
     pub url: &'static str,
     pub key_from: &'static str,
     pub models: &'static [&'static str],
-    pub choices: &'static [(&'static str, &'static str, &'static [&'static str])],
+    pub choices: &'static [Choice],
     pub compact_at: &'static str,
+    /// Plans with models of their own, Kimi's; empty where every plan has the same models.
+    pub plans: &'static [Plan],
+}
+
+/// A model a launcher offers: its ID as the provider's API takes it, the name the provider gives
+/// it, a line about it, and what it puts in each of the provider's model slots.
+pub type Choice = (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+);
+
+/// A plan of a provider whose plans have models of their own: its ID, saved as CK_PLAN, a line
+/// about it, and its models among the choices, the first being its flagship and the default.
+pub struct Plan {
+    pub id: &'static str,
+    pub about: &'static str,
+    pub models: &'static [&'static str],
 }
 
 pub const PROVIDERS: [Provider; 4] = [
@@ -39,48 +59,88 @@ pub const PROVIDERS: [Provider; 4] = [
         key_from: "the Kimi Code Console, https://www.kimi.com/code (Create API Key)",
         models: &["MODEL"],
         // Kimi's six model IDs, as its model list and its Claude Code guide's table by plan had
-        // them on 2026-11-05, with [1m] wherever the guide gives a model 1M of context: K3.1 Pro
-        // and K3 on Pro or Allegretto and up (256k below), K3.1 Pro Highspeed on every plan that
-        // has it, and K2.8 Preview on every plan. k3-256k, K3 at 256k, takes half k3's quota, so
-        // it replaced plain k3; K2.7 Code Highspeed has 256k and no effort setting.
+        // them on 2026-11-07, with [1m] wherever the guide gives a model 1M of context, and the
+        // plans below saying which each has: on Pro or Allegretto and up every model, K3.1 Pro
+        // and K3 with 1M; on Plus or Moderato K3.1 Pro, K3 and K3 256K with 256k and K2.8
+        // Preview with 1M; and on the legacy Andante plan K2.8 Preview alone. k3-256k, K3 at
+        // 256k, takes half k3's quota; K2.7 Code Highspeed has 256k and no effort setting.
         choices: &[
             (
                 "k3.1-pro[1m]",
-                "K3.1 Pro, the flagship, 1M context (Pro or Allegretto plan and up)",
+                "K3.1 Pro",
+                "the flagship, 1M context",
                 &["k3.1-pro[1m]"],
             ),
             (
-                "k3.1-pro",
-                "K3.1 Pro, 256k context (Plus or Moderato and up)",
-                &["k3.1-pro"],
-            ),
-            (
                 "k3.1-pro-highspeed[1m]",
-                "K3.1 Pro, 2-3x faster at twice the quota, 1M context (Pro or Allegretto and up)",
+                "K3.1 Pro Highspeed",
+                "2-3x faster at twice the quota, 1M context",
                 &["k3.1-pro-highspeed[1m]"],
             ),
             (
                 "k3[1m]",
-                "K3, 1M context (Pro or Allegretto plan and up)",
+                "K3",
+                "the generation before, 1M context",
                 &["k3[1m]"],
             ),
             (
                 "k3-256k",
-                "K3, 256k context, half k3's quota (Plus or Moderato and up)",
+                "K3 256K",
+                "K3 at 256k, for half k3's quota",
                 &["k3-256k"],
             ),
             (
                 "kimi-for-coding[1m]",
-                "K2.8 Preview, 1M context (every coding plan)",
+                "K2.8 Preview",
+                "1M context on every plan",
                 &["kimi-for-coding[1m]"],
             ),
             (
                 "kimi-for-coding-highspeed",
-                "K2.7 Code Highspeed, about 6x faster at 3x the quota, 256k (Pro or Allegretto and up)",
+                "K2.7 Code Highspeed",
+                "5-6x faster at 3x the quota, 256k, no effort setting",
                 &["kimi-for-coding-highspeed"],
             ),
+            (
+                "k3.1-pro",
+                "K3.1 Pro",
+                "the flagship, 256k on this plan",
+                &["k3.1-pro"],
+            ),
+            (
+                "k3",
+                "K3",
+                "the generation before, 256k on this plan, at twice K3 256K's quota",
+                &["k3"],
+            ),
         ],
-        compact_at: "1048576",
+        // No compaction window: a [1m] model has 1M by its name, and Claude Code compacts within
+        // the window it knows (2.1.319), which CLAUDE_CODE_MAX_CONTEXT_TOKENS sets for the others.
+        compact_at: "",
+        plans: &[
+            Plan {
+                id: "pro",
+                about: "Pro or Allegretto and up: 1M context, and the Highspeed models",
+                models: &[
+                    "k3.1-pro[1m]",
+                    "k3.1-pro-highspeed[1m]",
+                    "k3[1m]",
+                    "k3-256k",
+                    "kimi-for-coding[1m]",
+                    "kimi-for-coding-highspeed",
+                ],
+            },
+            Plan {
+                id: "plus",
+                about: "Plus or Moderato: 256k context, 1M for K2.8 Preview",
+                models: &["k3.1-pro", "k3", "k3-256k", "kimi-for-coding[1m]"],
+            },
+            Plan {
+                id: "andante",
+                about: "Andante (legacy): K2.8 Preview alone",
+                models: &["kimi-for-coding[1m]"],
+            },
+        ],
     },
     Provider {
         key: "z",
@@ -96,11 +156,13 @@ pub const PROVIDERS: [Provider; 4] = [
         choices: &[
             (
                 "glm-5.3[1m]",
-                "flagship, 1M context, with glm-5.3-flash[1m] for quick tasks",
+                "GLM-5.3",
+                "the flagship, 1M context, with GLM-5.3-Flash for quick tasks",
                 &["glm-5.3[1m]", "glm-5.3[1m]", "glm-5.3-flash[1m]"],
             ),
             (
                 "glm-5.3-flash[1m]",
+                "GLM-5.3-Flash",
                 "fast, multimodal, cheapest, 1M context",
                 &[
                     "glm-5.3-flash[1m]",
@@ -110,6 +172,7 @@ pub const PROVIDERS: [Provider; 4] = [
             ),
         ],
         compact_at: "1000000",
+        plans: &[],
     },
     Provider {
         key: "m",
@@ -126,10 +189,12 @@ pub const PROVIDERS: [Provider; 4] = [
         // before, which isn't on the M Plan.
         choices: &[(
             "MiniMax-M3.1-Flash[1m]",
-            "M3.1 Flash, 1M context, compacting at 512K (every M Plan tier)",
+            "M3.1 Flash",
+            "1M context, compacting at 512K (every M Plan tier)",
             &["MiniMax-M3.1-Flash[1m]"],
         )],
         compact_at: "524288",
+        plans: &[],
     },
     Provider {
         key: "d",
@@ -146,16 +211,19 @@ pub const PROVIDERS: [Provider; 4] = [
         choices: &[
             (
                 "deepseek-v4-pro[1m]",
-                "DeepSeek V4 Pro, the flagship, 1M context, with Flash for quick tasks",
+                "DeepSeek V4 Pro",
+                "the flagship, 1M context, with Flash for quick tasks",
                 &["deepseek-v4-pro[1m]", "deepseek-flash"],
             ),
             (
                 "deepseek-flash[1m]",
-                "DeepSeek V4.1 Flash, 1M context, a quarter to a third of Pro's price",
+                "DeepSeek V4.1 Flash",
+                "1M context, a quarter to a third of Pro's price",
                 &["deepseek-flash[1m]", "deepseek-flash"],
             ),
         ],
         compact_at: "786432",
+        plans: &[],
     },
 ];
 
@@ -243,10 +311,45 @@ fn field(p: &Provider, values: &Map<String, Value>, name: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The plan the config names, for a provider whose plans have models of their own: CK_PLAN, or
+/// else the plan the model saved belongs to, a [1m] model or none saved meaning the first, Pro,
+/// and another the second, Plus.
+pub fn plan(p: &Provider, values: &Map<String, Value>) -> Option<&'static Plan> {
+    let first = p.plans.first()?;
+    let named = field(p, values, "PLAN").to_lowercase();
+    if let Some(found) = p.plans.iter().find(|plan| plan.id == named) {
+        return Some(found);
+    }
+    let model = field(p, values, p.models[0]);
+    Some(
+        p.plans
+            .iter()
+            .find(|plan| plan.models.contains(&model.as_str()))
+            .unwrap_or(if model.is_empty() || model.ends_with("[1m]") {
+                first
+            } else {
+                p.plans.get(1).unwrap_or(first)
+            }),
+    )
+}
+
+/// The models offered now, the first being the default: every choice, or the plan's.
+pub fn choices_for(p: &Provider, values: &Map<String, Value>) -> Vec<&'static Choice> {
+    match plan(p, values) {
+        None => p.choices.iter().collect(),
+        Some(plan) => plan
+            .models
+            .iter()
+            .filter_map(|id| p.choices.iter().find(|c| c.0 == *id))
+            .collect(),
+    }
+}
+
 pub fn models(p: &Provider, values: &Map<String, Value>) -> Vec<String> {
+    let flagship = choices_for(p, values)[0].3;
     p.models
         .iter()
-        .zip(p.choices[0].2)
+        .zip(flagship)
         .map(|(slot, default)| {
             Some(field(p, values, slot))
                 .filter(|v| !v.is_empty())
@@ -274,7 +377,7 @@ pub fn effort(p: &Provider, values: &Map<String, Value>) -> Option<String> {
 /// the default.
 pub fn outdated(p: &Provider, values: &Map<String, Value>) -> bool {
     let chosen = models(p, values);
-    !p.choices.iter().any(|(_, _, slots)| chosen == *slots)
+    !choices_for(p, values).iter().any(|c| chosen == c.3)
 }
 
 /// Claude Code's arguments with --effort first, before any command of Claude Code's, unless they
@@ -341,10 +444,12 @@ pub fn environment(
         env.push(("CLAUDE_CODE_SUBAGENT_MODEL", Some(quick)));
         let long = model.ends_with("[1m]");
         if p.key == "k" {
-            // Kimi's guide sets both to the context the plan gives: 1M, or 256k.
-            let window = if long { p.compact_at } else { "262144" };
-            env.push(("CLAUDE_CODE_AUTO_COMPACT_WINDOW", Some(window.into())));
-            env.push(("CLAUDE_CODE_MAX_CONTEXT_TOKENS", Some(window.into())));
+            // Kimi's 256k models aren't in Claude Code's catalog, which assumes 200k for a model
+            // it doesn't know unless this names the window; a [1m] model has 1M by its name,
+            // which this doesn't cap (Claude Code 2.1.319). CLAUDE_CODE_AUTO_COMPACT_WINDOW,
+            // which Kimi's guide sets to 1048576, isn't set: Claude Code caps it at 1000000 with
+            // a warning, and without it compacts within the model's window.
+            env.push(("CLAUDE_CODE_MAX_CONTEXT_TOKENS", Some("262144".into())));
         } else if long {
             // MiniMax's and DeepSeek's set where to compact, short of the 1M that [1m] gives.
             env.push(("CLAUDE_CODE_AUTO_COMPACT_WINDOW", Some(p.compact_at.into())));
@@ -354,6 +459,62 @@ pub fn environment(
         env.push(("CLAUDE_CODE_MAX_OUTPUT_TOKENS", Some(get("MAX_TOKENS"))));
     }
     env
+}
+
+/// The settings that curate Claude Code's /model picker: the models offered now, each once, with
+/// the provider's name for it, in place of Claude Code's own lineup (modelPicker, honoured from
+/// --settings by Claude Code 2.1.319). The default row stays, naming ANTHROPIC_MODEL.
+pub fn picker(p: &Provider, values: &Map<String, Value>) -> Value {
+    let options: Vec<Value> = choices_for(p, values)
+        .iter()
+        .map(|c| {
+            let (id, name, about, _) = **c;
+            serde_json::json!({"model": id, "label": name, "description": format!("{about} · {id}")})
+        })
+        .collect();
+    serde_json::json!({"modelPicker": {"options": options, "replaceBuiltInOptions": true}})
+}
+
+/// Where a launcher keeps those settings: model-picker.json beside the config.
+pub fn picker_path(p: &Provider) -> String {
+    ospath::join(&ospath::dirname(&config_path(p)), "model-picker.json")
+}
+
+/// Claude Code's arguments with --settings naming the picker file, written now when it differs,
+/// in front, unless they name a --settings of their own, which Claude Code takes once. A file
+/// that can't be written is said so on stderr, and Claude Code's own picker stays.
+pub fn with_settings(
+    p: &Provider,
+    values: &Map<String, Value>,
+    me: &str,
+    args: Vec<String>,
+) -> Vec<String> {
+    if args
+        .iter()
+        .any(|a| a == "--settings" || a.starts_with("--settings="))
+    {
+        return args;
+    }
+    let path = picker_path(p);
+    let text = serde_json::to_string_pretty(&picker(p, values)).unwrap_or_default() + "\n";
+    if std::fs::read_to_string(&path).ok().as_deref() != Some(text.as_str()) {
+        let written = std::fs::create_dir_all(ospath::dirname(&path))
+            .and_then(|_| std::fs::write(&path, &text));
+        if let Err(e) = written {
+            out::eprint(&format!(
+                "{}\n",
+                out::Paint::stderr().warning(&format!(
+                    "{me}: couldn't write {}, so /model offers Claude Code's own models: {e}",
+                    shown(&path)
+                ))
+            ));
+            return args;
+        }
+    }
+    ["--settings".to_string(), path]
+        .into_iter()
+        .chain(args)
+        .collect()
 }
 
 fn sh_quote(value: &str) -> String {
@@ -463,6 +624,12 @@ fn status() -> i32 {
                     format!(" · max output {tokens}")
                 },
                 base.map_or(String::new(), |b| format!(" · {b}"))
+            ));
+            let names: Vec<&str> = choices_for(p, &values).iter().map(|c| c.1).collect();
+            out::println(&format!(
+                "  /model offers {}{}",
+                crate::config::and_list(&names),
+                plan(p, &values).map_or(String::new(), |plan| format!(" ({} plan)", plan.id))
             ));
         }
     }
@@ -694,46 +861,83 @@ fn setup_for(p: &Provider, why: Why) -> i32 {
         }
         out::println("That has spaces, quotes or backslashes in it; paste just the key.");
     };
-    // The models saved, kept on Enter while they're among the choices; otherwise, or with none
-    // saved, Enter takes the first, the flagship.
+    // The plan, where the provider's plans have models of their own: the one saved, kept on
+    // Enter; otherwise Enter takes the first.
+    let mut plan_id: Option<String> = None;
+    if !p.plans.is_empty() {
+        let saved_plan = field(p, &values, "PLAN").to_lowercase();
+        let keeps_plan = p.plans.iter().any(|plan| plan.id == saved_plan);
+        out::heading("Plan:");
+        for (n, plan) in p.plans.iter().enumerate() {
+            out::println(&format!("  {}) {:<10} {}", n + 1, plan.id, plan.about));
+        }
+        let mut id = if keeps_plan {
+            saved_plan.clone()
+        } else {
+            p.plans[0].id.to_string()
+        };
+        loop {
+            let enter = if keeps_plan {
+                format!("Enter to keep {saved_plan}")
+            } else {
+                format!("Enter for 1, {}", p.plans[0].id)
+            };
+            let answer = ask(&format!("Choose 1-{}, or {enter}: ", p.plans.len()), false);
+            if answer.is_empty() {
+                break;
+            }
+            if let Some(n) = answer.parse::<usize>().ok().filter(|n| {
+                answer.bytes().all(|b| b.is_ascii_digit()) && (1..=p.plans.len()).contains(n)
+            }) {
+                id = p.plans[n - 1].id.to_string();
+                break;
+            }
+            out::println("Type a number from the list, or press Enter.");
+        }
+        plan_id = Some(id);
+    }
+    let mut now = values.clone();
+    if let Some(id) = &plan_id {
+        now.insert(format!("{pre}PLAN"), Value::String(id.clone()));
+    }
+    // The models saved, kept on Enter while they're among the choices offered now; otherwise,
+    // or with none saved, Enter takes the first, the flagship.
+    let offered = choices_for(p, &now);
     let saved = p
         .models
         .iter()
         .any(|slot| !field(p, &values, slot).is_empty());
-    let flagship: Vec<String> = p.choices[0].2.iter().map(|m| m.to_string()).collect();
-    let mut chosen: Vec<String> = if outdated(p, &values) {
+    let flagship: Vec<String> = offered[0].3.iter().map(|m| m.to_string()).collect();
+    let mut chosen: Vec<String> = if outdated(p, &now) {
         flagship.clone()
     } else {
-        models(p, &values)
+        models(p, &now)
     };
-    let keeps = saved && !outdated(p, &values);
-    if p.choices.len() == 1 {
+    let keeps = saved && !outdated(p, &now);
+    if offered.len() == 1 {
         // One model to offer: nothing to ask.
-        let (label, about, _) = p.choices[0];
-        out::println(&format!("Model: {label}  {about}"));
+        let &(id, name, about, _) = offered[0];
+        out::println(&format!("Model: {id}  {name}: {about}"));
     } else {
         out::heading("Model:");
-        for (n, (label, about, _)) in p.choices.iter().enumerate() {
-            out::println(&format!("  {}) {label:<26} {about}", n + 1));
+        for (n, &(id, name, about, _)) in offered.iter().enumerate() {
+            out::println(&format!("  {}) {id:<26} {name}: {about}", n + 1));
         }
     }
-    while p.choices.len() > 1 {
+    while offered.len() > 1 {
         let enter = if keeps {
             format!("Enter to keep {}", describe(p, &chosen))
         } else {
-            format!("Enter for 1, {}", p.choices[0].0)
+            format!("Enter for 1, {}", offered[0].0)
         };
-        let answer = ask(
-            &format!("Choose 1-{}, or {enter}: ", p.choices.len()),
-            false,
-        );
+        let answer = ask(&format!("Choose 1-{}, or {enter}: ", offered.len()), false);
         if answer.is_empty() {
             break;
         }
         if let Some(n) = answer.parse::<usize>().ok().filter(|n| {
-            answer.bytes().all(|b| b.is_ascii_digit()) && (1..=p.choices.len()).contains(n)
+            answer.bytes().all(|b| b.is_ascii_digit()) && (1..=offered.len()).contains(n)
         }) {
-            chosen = p.choices[n - 1].2.iter().map(|m| m.to_string()).collect();
+            chosen = offered[n - 1].3.iter().map(|m| m.to_string()).collect();
             break;
         }
         out::println("Type a number from the list, or press Enter.");
@@ -772,6 +976,9 @@ fn setup_for(p: &Provider, why: Why) -> i32 {
         break;
     }
     let mut updates: Vec<(String, String)> = vec![(format!("{pre}API_KEY"), key)];
+    if let Some(id) = plan_id {
+        updates.push((format!("{pre}PLAN"), id));
+    }
     updates.extend(
         p.models
             .iter()

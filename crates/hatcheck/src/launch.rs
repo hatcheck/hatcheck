@@ -202,6 +202,7 @@ fn cl(mut args: Vec<String>, me: &str, mut provider: Option<&'static str>) -> i3
         for (name, value) in provider::environment(p, &values) {
             changes.push((name.to_string(), value));
         }
+        args = provider::with_settings(p, &values, me, args);
         args = provider::with_effort(p, &values, args);
     }
     run(me, "claude", &args, &changes)

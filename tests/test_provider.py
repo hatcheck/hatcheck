@@ -58,11 +58,16 @@ class Provider(unittest.TestCase):
         for name in ("ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
                      "CLAUDE_CODE_SUBAGENT_MODEL"):
             self.assertEqual(env[name], "k3.1-pro[1m]")
-        self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "1048576")
+        # Claude Code 2.1.319 assumes 200k for a model it doesn't know unless this names the window,
+        # which doesn't cap a [1m] model's 1M; and it caps CLAUDE_CODE_AUTO_COMPACT_WINDOW at 1000000
+        # with a warning, where Kimi's guide says 1048576, so that one isn't set.
+        self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "262144")
+        self.assertNotIn("CLAUDE_CODE_AUTO_COMPACT_WINDOW", env)
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_MODEL="k3-256k"\nCK_MAX_TOKENS="32000"\n'
                                     'CK_BASE_URL="https://api.moonshot.ai/anthropic"\n')
         env = self.env("k")
-        self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "262144")
+        self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "262144")
+        self.assertNotIn("CLAUDE_CODE_AUTO_COMPACT_WINDOW", env)
         self.assertEqual(env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"], "32000")
         self.assertEqual(env["ANTHROPIC_BASE_URL"], "https://api.moonshot.ai/anthropic")
 
@@ -126,50 +131,91 @@ class Provider(unittest.TestCase):
 
     def test_setup_asks_again_after_a_bad_answer(self):
         path = self.h.provider_config("k", 'CK_API_KEY="old"\nCK_MAX_TOKENS="1000"\n')
-        code, out = self.setup_with("k", "has space\nkimi-new\n9\n6\nmaximal\nAuto\nlots\n-\n")
+        code, out = self.setup_with("k", "has space\nkimi-new\n4\n\n9\n5\nmaximal\nAuto\nlots\n-\n")
         self.assertEqual(code, 0, out)
         self.assertIn("paste just the key", out)
-        self.assertIn("Type a number from the list", out)
+        self.assertEqual(out.count("Type a number from the list"), 2)  # the plan, then the model
         self.assertIn("Type one of low, medium, high, xhigh, max or auto", out)
         with open(path, encoding="utf-8") as fh:
-            self.assertEqual(fh.read(), 'CK_API_KEY="kimi-new"\nCK_MAX_TOKENS=""\nCK_MODEL="kimi-for-coding[1m]"\n'
-                                        'CK_EFFORT="auto"\n')
+            self.assertEqual(fh.read(), 'CK_API_KEY="kimi-new"\nCK_MAX_TOKENS=""\nCK_PLAN="pro"\n'
+                                        'CK_MODEL="kimi-for-coding[1m]"\nCK_EFFORT="auto"\n')
 
-    def test_kimi_models_with_1m_of_context_arent_capped(self):
-        # Kimi's Claude Code guide, 2026-11-04: K3.1 Pro Highspeed has 1M on every plan that has
-        # it, and K2.8 Preview on every plan.
-        for choice, model in (("3", "k3.1-pro-highspeed[1m]"), ("6", "kimi-for-coding[1m]")):
+    def test_kimi_1m_models_keep_their_window_and_256k_ones_get_theirs(self):
+        # Kimi's Claude Code guide, 2026-11-07: K3.1 Pro Highspeed has 1M on every plan that has
+        # it, and K2.8 Preview on every plan; the [1m] in the name gives Claude Code the window.
+        for choice, model in (("2", "k3.1-pro-highspeed[1m]"), ("5", "kimi-for-coding[1m]")):
             path = self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
-            code, out = self.setup_with("k", "\n%s\n\n\n" % choice)
+            code, out = self.setup_with("k", "\n\n%s\n\n\n" % choice)
             self.assertEqual(code, 0, out)
             with open(path, encoding="utf-8") as fh:
                 self.assertIn('CK_MODEL="%s"' % model, fh.read())
             env = self.env("k")
             self.assertEqual(env["ANTHROPIC_MODEL"], model)
-            self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "1048576")
-            self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "1048576")
-        # One saved without [1m] from an earlier menu is used as it is, with 256k, and said to be
-        # off the menu, so a launcher on a terminal asks again.
+            self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "262144")
+            self.assertNotIn("CLAUDE_CODE_AUTO_COMPACT_WINDOW", env)
+        # One saved without [1m] from an earlier menu is used as it is, read as a Plus plan's,
+        # and said to be off the menu, so a launcher on a terminal asks again.
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_MODEL="k3.1-pro-highspeed"\n')
         env = self.env("k")
         self.assertEqual(env["ANTHROPIC_MODEL"], "k3.1-pro-highspeed")
         self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "262144")
         code, out = self.h.run(SCRIPT)
-        self.assertIn("key …-key · k3.1-pro-highspeed (not offered now) · effort max", out)
+        self.assertIn("key …-key · k3.1-pro-highspeed (not offered now) · effort max\n"
+                      "  /model offers K3.1 Pro, K3, K3 256K and K2.8 Preview (plus plan)", out)
 
-    def test_kimi_offers_its_six_models(self):
-        # Kimi's model list and guide, 2026-11-05: k3-256k, K3 at 256k for half k3's quota,
-        # replaced plain k3, which is off the menu now.
-        self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
-        code, out = self.setup_with("k", "\n5\n\n\n")
+    def test_kimi_offers_each_plans_models(self):
+        # Kimi's model list and its guide's table by plan, 2026-11-07: every model on Pro or
+        # Allegretto and up, four with 256k on Plus or Moderato, and K2.8 Preview alone on the
+        # legacy Andante plan; each once, so no model is listed with and without [1m].
+        path = self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\n')
+        code, out = self.setup_with("k", "\n\n4\n\n\n")
         self.assertEqual(code, 0, out)
-        for label in ("k3.1-pro[1m]", "k3.1-pro ", "k3.1-pro-highspeed[1m]", "k3[1m]", "k3-256k",
-                      "kimi-for-coding[1m]", "kimi-for-coding-highspeed"):
-            self.assertIn(label, out)
-        self.assertIn("Choose 1-7, or Enter for 1, k3.1-pro[1m]: ", out)
+        self.assertIn("Plan:\n  1) pro        Pro or Allegretto and up: 1M context, and the Highspeed models\n"
+                      "  2) plus       Plus or Moderato: 256k context, 1M for K2.8 Preview\n"
+                      "  3) andante    Andante (legacy): K2.8 Preview alone\n", out)
+        self.assertIn("Choose 1-3, or Enter for 1, pro: ", out)
+        self.assertIn("  1) k3.1-pro[1m]               K3.1 Pro: the flagship, 1M context\n"
+                      "  2) k3.1-pro-highspeed[1m]     K3.1 Pro Highspeed: 2-3x faster at twice the quota, 1M context\n"
+                      "  3) k3[1m]                     K3: the generation before, 1M context\n"
+                      "  4) k3-256k                    K3 256K: K3 at 256k, for half k3's quota\n"
+                      "  5) kimi-for-coding[1m]        K2.8 Preview: 1M context on every plan\n"
+                      "  6) kimi-for-coding-highspeed  K2.7 Code Highspeed: 5-6x faster at 3x the quota, 256k, no effort setting\n",
+                      out)
+        self.assertIn("Choose 1-6, or Enter for 1, k3.1-pro[1m]: ", out)
+        self.assertNotIn("k3.1-pro ", out)
+        with open(path, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), 'CK_API_KEY="kimi-test-key"\nCK_PLAN="pro"\nCK_MODEL="k3-256k"\n'
+                                        'CK_EFFORT="max"\nCK_MAX_TOKENS=""\n')
         env = self.env("k")
         self.assertEqual(env["ANTHROPIC_MODEL"], "k3-256k")
         self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "262144")
+        code, out = self.h.run(SCRIPT)
+        self.assertIn("key …-key · k3-256k · effort max\n"
+                      "  /model offers K3.1 Pro, K3.1 Pro Highspeed, K3, K3 256K, K2.8 Preview and K2.7 Code Highspeed"
+                      " (pro plan)", out)
+        # Plus: the model saved stays offered, so Enter keeps it; 1 takes K3.1 Pro at 256k.
+        code, out = self.setup_with("k", "\n2\n1\n\n\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Choose 1-3, or Enter to keep pro: ", out)
+        self.assertIn("  1) k3.1-pro                   K3.1 Pro: the flagship, 256k on this plan\n"
+                      "  2) k3                         K3: the generation before, 256k on this plan, at twice K3 256K's quota\n"
+                      "  3) k3-256k                    K3 256K: K3 at 256k, for half k3's quota\n"
+                      "  4) kimi-for-coding[1m]        K2.8 Preview: 1M context on every plan\n", out)
+        self.assertIn("Choose 1-4, or Enter to keep k3-256k: ", out)
+        self.assertNotIn("highspeed", out)
+        env = self.env("k")
+        self.assertEqual(env["ANTHROPIC_MODEL"], "k3.1-pro")
+        code, out = self.h.run(SCRIPT)
+        self.assertIn("  /model offers K3.1 Pro, K3, K3 256K and K2.8 Preview (plus plan)", out)
+        # Andante: one model, so nothing to choose; the model saved isn't it, so it's taken.
+        code, out = self.setup_with("k", "\n3\n\n\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Model: kimi-for-coding[1m]  K2.8 Preview: 1M context on every plan\n", out)
+        self.assertEqual(out.count("Choose"), 1)
+        with open(path, encoding="utf-8") as fh:
+            self.assertIn('CK_PLAN="andante"\nCK_MODEL="kimi-for-coding[1m]"\n', fh.read())
+        code, out = self.h.run(SCRIPT)
+        self.assertIn("  /model offers K2.8 Preview (andante plan)", out)
 
     def test_setup_needs_a_key(self):
         code, out = self.setup_with("k", "")
@@ -182,7 +228,7 @@ class Provider(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("Z.ai (claude-z, or cl -z <profile>):", out)
         self.assertIn("key …1234 · glm-5.3[1m] (sonnet glm-5.3-flash[1m], haiku glm-4.7) (not offered now)"
-                      " · effort max", out)
+                      " · effort max\n  /model offers GLM-5.3 and GLM-5.3-Flash\n", out)
         self.assertNotIn("zai-test-key", out)
         self.assertIn("Kimi (claude-k, or cl -k <profile>): not set up; run claude-k reconfig", out)
         self.assertIn("MiniMax (claude-m, or cl -m <profile>): not set up; run claude-m reconfig", out)
