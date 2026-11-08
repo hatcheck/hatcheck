@@ -595,8 +595,8 @@ cl a --resume <session-id>          # …and later back on its account's Claude 
   [Kimi Code Console](https://www.kimi.com/code), the
   [MiniMax console](https://platform.minimax.io/console/plan), whose M Plan API key it is, or the
   [DeepSeek Platform](https://platform.deepseek.com/api_keys)), on Kimi the plan, since Kimi's
-  plans have models of their own, the model, the reasoning effort and an optional cap on output
-  tokens. It saves them in `~/.config/claude-z/config`, `~/.config/claude-k/config`,
+  plans have models of their own, the model, the reasoning effort and a cap on output tokens,
+  Enter keeping the launcher's own (below). It saves them in `~/.config/claude-z/config`, `~/.config/claude-k/config`,
   `~/.config/claude-m/config` or `~/.config/claude-d/config` (`%APPDATA%\claude-z\config` and so
   on, on Windows); claude-z's and claude-k's are the files the
   [claude-z](https://github.com/yiwang/claude-z) launchers use, so a setup made with those works as
@@ -668,6 +668,20 @@ cl a --resume <session-id>          # …and later back on its account's Claude 
   `CLAUDE_CODE_EFFORT_LEVEL=max` MiniMax's and DeepSeek's guides set, since while that variable is
   set `/effort` does nothing in a session (Claude Code answers "Not applied"); after `--effort`,
   `/effort` changes the session's. `hatcheck provider env` has no effort for that reason.
+- The launchers cap a reply at the model's own output ceiling, as `CLAUDE_CODE_MAX_OUTPUT_TOKENS`,
+  which Claude Code sends as `max_tokens` on every request: 128,000 on Z.ai (GLM-5.3 and
+  GLM-5.3-Flash, as docs.z.ai gives both) and on MiniMax (M3 and M3.1 Flash, as MiniMax Code's own
+  model table has them), and 262,144 on DeepSeek, which documents none — hosts of V4 Pro list
+  384K — being what fits beside the 768K compaction window within 1M. Claude Code's own default is
+  32,000, and these providers count a model's thinking against `max_tokens`, so at `max` effort
+  the default cut work short: on 2026-11-08 a turn took 64K tokens on GLM-5.3-Flash, 57K on M3 and
+  79K on V4 Pro, and GLM-5.3 at the default ended four replies running at exactly 32,000 with
+  nothing done. A figure above a model's ceiling is clamped, not refused — every endpoint took
+  200,000 to 500,000 that day — but input and `max_tokens` share the window, so the cap stays
+  within what the compaction window leaves. Kimi gives no figure and runs at Claude Code's
+  default: a turn there took 15,850 at most, and its 256k models would leave no room beside a cap.
+  Setup takes another figure (saved as `CZ_MAX_TOKENS` and so on), or `-` for the launcher's own;
+  `hatcheck provider` shows the figure in force.
 - `--model` on the command line is Claude Code's own too, ahead of the launcher's `ANTHROPIC_MODEL`
   for that session, but the haiku tier and subagents stay the saved model's. The context window
   follows the model named, as for one picked with `/model`: 1M with `[1m]`, 256k without on Kimi.

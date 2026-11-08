@@ -28,6 +28,16 @@ pub struct Provider {
     pub models: &'static [&'static str],
     pub choices: &'static [Choice],
     pub compact_at: &'static str,
+    /// The max_tokens the launchers ask of the provider when the config saves none, as
+    /// CLAUDE_CODE_MAX_OUTPUT_TOKENS: the provider's documented output ceiling, or, where it
+    /// documents none, the largest reply that fits beside the compaction window within 1M; ""
+    /// for Claude Code's own default (32,000 in 2.1.319). These providers count a model's
+    /// thinking against max_tokens, so at max effort the default cut work short: a turn took
+    /// 64K tokens on GLM-5.3-Flash, 57K on MiniMax-M3 and 79K on DeepSeek V4 Pro on 2026-11-08,
+    /// and GLM-5.3 at the default ended four replies running at exactly 32,000 with nothing
+    /// done. A figure above a model's ceiling is clamped, not refused — every endpoint here
+    /// took 200,000 to 500,000 that day — but input and max_tokens share the window.
+    pub max_output: &'static str,
     /// Plans with models of their own, Kimi's; empty where every plan has the same models.
     pub plans: &'static [Plan],
 }
@@ -117,6 +127,9 @@ pub const PROVIDERS: [Provider; 4] = [
         // No compaction window: a [1m] model has 1M by its name, and Claude Code compacts within
         // the window it knows (2.1.319), which CLAUDE_CODE_MAX_CONTEXT_TOKENS sets for the others.
         compact_at: "",
+        // Kimi's docs give no output ceiling; a turn in a draft round took 15,850 tokens at most
+        // (2026-11-08), and the 256k models would leave no room beside a cap.
+        max_output: "",
         plans: &[
             Plan {
                 id: "pro",
@@ -172,6 +185,8 @@ pub const PROVIDERS: [Provider; 4] = [
             ),
         ],
         compact_at: "1000000",
+        // 128K for GLM-5.3 and GLM-5.3-Flash, as docs.z.ai gives both (2026-11-08).
+        max_output: "128000",
         plans: &[],
     },
     Provider {
@@ -204,6 +219,9 @@ pub const PROVIDERS: [Provider; 4] = [
             ),
         ],
         compact_at: "524288",
+        // 128,000 for M3 and M3.1 Flash, as MiniMax Code's own model table has them
+        // (2026-11-08); the API page says thinking counts toward max_tokens and gives no figure.
+        max_output: "128000",
         plans: &[],
     },
     Provider {
@@ -233,6 +251,9 @@ pub const PROVIDERS: [Provider; 4] = [
             ),
         ],
         compact_at: "786432",
+        // DeepSeek's pages give no figure (hosts of V4 Pro list 384K, and the endpoint took
+        // 500,000 on 2026-11-08): what fits beside the 768K compaction window within 1M.
+        max_output: "262144",
         plans: &[],
     },
 ];
@@ -382,6 +403,15 @@ pub fn effort(p: &Provider, values: &Map<String, Value>) -> Option<String> {
     }
 }
 
+/// The cap on a reply the launchers pass as CLAUDE_CODE_MAX_OUTPUT_TOKENS: the config's
+/// MAX_TOKENS, else the provider's own, and None where both are empty, which leaves Claude
+/// Code's default.
+pub fn max_output(p: &Provider, values: &Map<String, Value>) -> Option<String> {
+    Some(field(p, values, "MAX_TOKENS"))
+        .filter(|t| !t.is_empty())
+        .or_else(|| Some(p.max_output.to_string()).filter(|t| !t.is_empty()))
+}
+
 /// Whether the models saved are none of the choices offered now, such as a model the provider
 /// has since replaced. A slot not saved takes the default's model, so a config with no models is
 /// the default.
@@ -465,8 +495,8 @@ pub fn environment(
             env.push(("CLAUDE_CODE_AUTO_COMPACT_WINDOW", Some(p.compact_at.into())));
         }
     }
-    if !get("MAX_TOKENS").is_empty() {
-        env.push(("CLAUDE_CODE_MAX_OUTPUT_TOKENS", Some(get("MAX_TOKENS"))));
+    if let Some(cap) = max_output(p, values) {
+        env.push(("CLAUDE_CODE_MAX_OUTPUT_TOKENS", Some(cap)));
     }
     env
 }
@@ -601,7 +631,6 @@ fn status() -> i32 {
         ));
         if let Some(values) = values {
             let key = field(p, &values, "API_KEY");
-            let tokens = field(p, &values, "MAX_TOKENS");
             let tail: String = key
                 .chars()
                 .rev()
@@ -628,10 +657,9 @@ fn status() -> i32 {
                     ""
                 },
                 effort(p, &values).unwrap_or_else(|| "auto".into()),
-                if tokens.is_empty() {
-                    String::new()
-                } else {
-                    format!(" · max output {tokens}")
+                match max_output(p, &values) {
+                    Some(cap) => format!(" · max output {cap}"),
+                    None => String::new(),
                 },
                 base.map_or(String::new(), |b| format!(" · {b}"))
             ));
@@ -967,14 +995,22 @@ fn setup_for(p: &Provider, why: Why) -> i32 {
         }
         break;
     }
+    let own = if p.max_output.is_empty() {
+        "Claude Code's default".to_string()
+    } else {
+        format!("the launcher's {}", p.max_output)
+    };
     let mut tokens = field(p, &values, "MAX_TOKENS");
     loop {
         let keep = if tokens.is_empty() {
-            "Claude Code's default".to_string()
+            own.clone()
         } else {
             tokens.clone()
         };
-        let answer = ask(&format!("Max output tokens per reply, e.g. 64000 (Enter keeps {keep}; - for Claude Code's default): "), false);
+        let answer = ask(
+            &format!("Max output tokens per reply, e.g. 64000 (Enter keeps {keep}; - for {own}): "),
+            false,
+        );
         if answer == "-" {
             tokens = String::new();
         } else if !answer.is_empty() && answer.bytes().all(|b| b.is_ascii_digit()) {

@@ -135,7 +135,7 @@ Every probe leaves something in a real home. Look for what changed since the mar
 - hatcheck: the probe's `imports/<id>.md`, `.jsonl` or `.json` in its cache folder.
 
 ## 4. Update
-
+ Each provider's output ceiling (`max_output` in `provider.rs`) goes with its models: check the provider's model page for the figure when a model changes.
 - **Code:** what changed in a format, a fix with a test whose fixture has the new shape (the
   helpers in `tests/helpers.py` take what each version writes).
 - **Docs:** each "checked against" names the version and date it was checked again, and only what

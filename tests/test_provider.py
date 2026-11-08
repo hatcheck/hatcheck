@@ -47,7 +47,9 @@ class Provider(unittest.TestCase):
         self.assertEqual(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"], "glm-4.7")
         self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "1000000")
         self.assertEqual(env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"], "1")
-        self.assertNotIn("CLAUDE_CODE_MAX_OUTPUT_TOKENS", env)
+        # The launcher's own cap on a reply, GLM's 128K ceiling, where the config saves none:
+        # Claude Code's default of 32,000, which GLM's thinking counts against, cut work short.
+        self.assertEqual(env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"], "128000")
 
     def test_kimi(self):
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_MODEL=""\n')
@@ -63,6 +65,8 @@ class Provider(unittest.TestCase):
         # with a warning, where Kimi's guide says 1048576, so that one isn't set.
         self.assertEqual(env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "262144")
         self.assertNotIn("CLAUDE_CODE_AUTO_COMPACT_WINDOW", env)
+        # No cap of the launcher's own on Kimi, which gives no figure: Claude Code's default.
+        self.assertNotIn("CLAUDE_CODE_MAX_OUTPUT_TOKENS", env)
         self.h.provider_config("k", 'CK_API_KEY="kimi-test-key"\nCK_MODEL="k3-256k"\nCK_MAX_TOKENS="32000"\n'
                                     'CK_BASE_URL="https://api.moonshot.ai/anthropic"\n')
         env = self.env("k")
@@ -228,7 +232,7 @@ class Provider(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("Z.ai (claude-z, or cl -z <profile>):", out)
         self.assertIn("key …1234 · glm-5.3[1m] (sonnet glm-5.3-flash[1m], haiku glm-4.7) (not offered now)"
-                      " · effort max\n  /model offers GLM-5.3 and GLM-5.3-Flash\n", out)
+                      " · effort max · max output 128000\n  /model offers GLM-5.3 and GLM-5.3-Flash\n", out)
         self.assertNotIn("zai-test-key", out)
         self.assertIn("Kimi (claude-k, or cl -k <profile>): not set up; run claude-k reconfig", out)
         self.assertIn("MiniMax (claude-m, or cl -m <profile>): not set up; run claude-m reconfig", out)
@@ -247,6 +251,7 @@ class Provider(unittest.TestCase):
             self.assertEqual(env[name], "MiniMax-M3.1-Flash[1m]")
         self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "524288")
         self.assertNotIn("CLAUDE_CODE_MAX_CONTEXT_TOKENS", env)
+        self.assertEqual(env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"], "128000")  # M3's and M3.1 Flash's ceiling
         # M3, the generation before, is the other model MiniMax's Anthropic-compatible API serves
         # (2026-11-08); the retired M2 series isn't offered.
         code, out = self.setup_with("m", "\n2\n\n\n")
@@ -261,7 +266,8 @@ class Provider(unittest.TestCase):
             self.assertEqual(env[name], "MiniMax-M3[1m]")
         self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "524288")
         code, out = self.h.run(SCRIPT)
-        self.assertIn("key …-key · MiniMax-M3[1m] · effort max\n  /model offers M3.1 Flash and M3\n", out)
+        self.assertIn("key …-key · MiniMax-M3[1m] · effort max · max output 128000\n"
+                      "  /model offers M3.1 Flash and M3\n", out)
 
     def test_deepseek(self):
         # As DeepSeek's Claude Code guide sets it, 2026-11-05, but with V4 Pro, the flagship, as
@@ -276,6 +282,8 @@ class Provider(unittest.TestCase):
         self.assertEqual(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"], "deepseek-flash")
         self.assertEqual(env["CLAUDE_CODE_SUBAGENT_MODEL"], "deepseek-flash")
         self.assertEqual(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "786432")
+        # What fits beside the 768K compaction window within 1M; DeepSeek documents no ceiling.
+        self.assertEqual(env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"], "262144")
         code, out = self.setup_with("d", "\n2\n\n\n")
         self.assertEqual(code, 0, out)
         self.assertIn("Choose 1-2, or Enter for 1, deepseek-v4-pro[1m]: ", out)
