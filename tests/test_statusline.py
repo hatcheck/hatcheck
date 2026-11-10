@@ -75,19 +75,19 @@ class StatusLine(unittest.TestCase):
         self.assertTrue(out.startswith("home · usage ?\n"), out)
         code, out = self.h.run("statusline", "--show", "nope")
         self.assertEqual(code, 1, out)
-        self.assertIn("There's no ~/.claude-nope", out)
+        self.assertIn("There's no ~/.claude-nope".replace("/", os.sep), out)
         self.h.codex_home("default")
         code, out = self.h.run("statusline", "--show", "codex")
         self.assertEqual(code, 1, out)
-        self.assertIn("~/.codex is Codex's; the status line is Claude Code's", out)
+        self.assertIn("~/.codex is Codex's; the status line is Claude Code's".replace("/", os.sep), out)
 
     def test_install_and_uninstall_touch_only_hatchecks_setting(self):
         write(os.path.join(self.work, "settings.json"), json.dumps({"model": "opus"}))
         code, out = self.h.run("statusline", "--install", "work", "home")
         self.assertEqual(code, 0, out)
-        self.assertIn("✓ Added to ~/.claude-work/settings.json: statusLine runs ", out)
+        self.assertIn("✓ Added to ~/.claude-work/settings.json: statusLine runs ".replace("/", os.sep), out)
         self.assertRegex(out, r" statusline\n  Now, in a session there: work · 5h 60% ↻(2h00m|1h59m)")
-        self.assertIn("✓ Added to ~/.claude-home/settings.json: statusLine runs ", out)
+        self.assertIn("✓ Added to ~/.claude-home/settings.json: statusLine runs ".replace("/", os.sep), out)
         with open(os.path.join(self.work, "settings.json"), encoding="utf-8") as fh:
             settings = json.load(fh)
         self.assertEqual(settings["model"], "opus")  # the rest as it was
@@ -98,37 +98,37 @@ class StatusLine(unittest.TestCase):
         before = os.stat(os.path.join(self.work, "settings.json")).st_mtime_ns
         code, out = self.h.run("statusline", "--install", "work")
         self.assertEqual(code, 0, out)
-        self.assertIn("✓ Already in ~/.claude-work/settings.json", out)
+        self.assertIn("✓ Already in ~/.claude-work/settings.json".replace("/", os.sep), out)
         self.assertEqual(os.stat(os.path.join(self.work, "settings.json")).st_mtime_ns, before)
         # One somebody else set is left as it is, and said so.
         write(os.path.join(self.home, "settings.json"), json.dumps({"statusLine": {"type": "command", "command": "my-line.sh"}}))
         code, out = self.h.run("statusline", "--install", "home")
         self.assertEqual(code, 1, out)
-        self.assertIn("⚠ ~/.claude-home/settings.json has a status line of its own (my-line.sh): left as it is.", out)
+        self.assertIn("⚠ ~/.claude-home/settings.json has a status line of its own (my-line.sh): left as it is.".replace("/", os.sep), out)
         code, out = self.h.run("statusline", "--uninstall", "home")
         self.assertEqual(code, 1, out)
-        self.assertIn("⚠ ~/.claude-home/settings.json has a status line that isn't hatcheck's (my-line.sh): left as it is.", out)
+        self.assertIn("⚠ ~/.claude-home/settings.json has a status line that isn't hatcheck's (my-line.sh): left as it is.".replace("/", os.sep), out)
         with open(os.path.join(self.home, "settings.json"), encoding="utf-8") as fh:
             self.assertEqual(json.load(fh)["statusLine"]["command"], "my-line.sh")
         code, out = self.h.run("statusline", "--uninstall", "--all")
         self.assertEqual(code, 1, out)  # home's wasn't hatcheck's
-        self.assertIn("✓ Took hatcheck's status line out of ~/.claude-work/settings.json", out)
+        self.assertIn("✓ Took hatcheck's status line out of ~/.claude-work/settings.json".replace("/", os.sep), out)
         with open(os.path.join(self.work, "settings.json"), encoding="utf-8") as fh:
             self.assertEqual(json.load(fh), {"model": "opus"})
         code, out = self.h.run("statusline", "--uninstall", "work")
         self.assertEqual(code, 0, out)
-        self.assertIn("~/.claude-work/settings.json has no status line.", out)
+        self.assertIn("~/.claude-work/settings.json has no status line.".replace("/", os.sep), out)
         # Named wrongly, or not at all.
         code, out = self.h.run("statusline", "--install")
         self.assertEqual(code, 2, out)
         self.assertIn("name a profile (work, default, a path), or --all for every one", out)
         code, out = self.h.run("statusline", "--install", "codex")
         self.assertEqual(code, 1, out)
-        self.assertIn("~/.codex is Codex's; the status line is Claude Code's", out)
+        self.assertIn("~/.codex is Codex's; the status line is Claude Code's".replace("/", os.sep), out)
         write(os.path.join(self.work, "settings.json"), "{broken")
         code, out = self.h.run("statusline", "--install", "work")
         self.assertEqual(code, 1, out)
-        self.assertIn("~/.claude-work/settings.json: can't read its settings.json (not valid JSON)", out)
+        self.assertIn("~/.claude-work/settings.json: can't read its settings.json (not valid JSON)".replace("/", os.sep), out)
 
 
 if __name__ == "__main__":

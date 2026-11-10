@@ -339,6 +339,15 @@ fake `claude` stands in for Claude Code, and Codex tokens are expired so nothing
 - Evidence: the first fake `claude` wrapper, 2026-10-18; `${0%/*}` now.
 - Seen 1× (2026-10-18).
 
+**An argument a test expects back from a fake `.cmd` is spelled as Rust hands it over.** Rust
+quotes an argument holding an ASCII symbol outside `#$*+-./:?@\_` when it runs a batch file, `=`
+among them, and the fake `claude.cmd`'s `%*` keeps the quotes, so `--effort=high` comes back as
+`"--effort=high"` on Windows alone. `as_passed` in `tests/test_commands.py` spells them so.
+- Evidence: 2026-11-10, `test_effort` and `test_the_model_picker`, failing on windows-latest from
+  2026-11-05 and 2026-11-08, in a tests run left red for four pushes until a release's checks read
+  it; `append_bat_arg` in Rust's `library/std/src/sys/pal/windows/args.rs`.
+- Seen 1× (2026-11-10).
+
 **Two processes appending to one file can write over each other on Windows.** Its C runtime
 appends by moving to the end and then writing, so runs at once can land on the same spot. A fake
 that several runs use at once writes a file per run.

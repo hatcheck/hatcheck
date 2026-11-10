@@ -29,6 +29,15 @@ def picker(h, provider):
     return os.path.join(base, "claude-" + provider, "model-picker.json")
 
 
+def as_passed(*args):
+    """Arguments as the fake claude echoes them. On Windows the fake is a .cmd file: Rust quotes an
+    argument with an ASCII symbol outside #$*+-./:?@\\_ in it, such as =, for a batch file, and %*
+    keeps the quotes."""
+    def plain(arg):
+        return arg and all(c.isalnum() or c in "#$*+-./:?@\\_" for c in arg if c.isascii())
+    return " ".join(arg if not WINDOWS or plain(arg) else '"%s"' % arg for arg in args)
+
+
 class Commands(unittest.TestCase):
     def setUp(self):
         self.h = FakeHome()
@@ -151,7 +160,7 @@ class Commands(unittest.TestCase):
         for args in (["--settings", "mine.json", "-p", "hi"], ["--settings=mine.json", "-p", "hi"]):
             code, out = self.claude_on("claude-k", *args)
             self.assertEqual(code, 0, out)
-            self.assertIn("args=--effort max " + " ".join(args) + "\n", out)
+            self.assertIn("args=--effort max " + as_passed(*args) + "\n", out)
             self.assertNotIn("model-picker.json", out)
 
     def test_minimax_and_deepseek(self):
@@ -296,7 +305,7 @@ class Commands(unittest.TestCase):
         settings = "--settings " + picker(self.h, "k")
         for args, shown in ((["-p", "hi"], "args=--effort max %s -p hi"),
                             (["--effort", "low", "-p", "hi"], "args=%s --effort low -p hi"),
-                            (["--effort=high", "-p", "hi"], "args=%s --effort=high -p hi"),
+                            (["--effort=high", "-p", "hi"], "args=%s " + as_passed("--effort=high", "-p", "hi")),
                             (["mcp", "list"], "args=--effort max %s mcp list")):  # before Claude Code's commands
             code, out = self.claude_on("claude-k", *args)
             self.assertEqual(code, 0, out)
@@ -459,7 +468,7 @@ class Commands(unittest.TestCase):
             self.assertIn("hat is the short name for hatcheck.", out)
             code, out = self.run_command(["cmd", "/c", os.path.join(target, "claude-k.cmd"), "--version"])
             self.assertIn("ANTHROPIC_BASE_URL=https://api.kimi.ai/coding/", out)
-            self.assertIn("args=--version", out)
+            self.assertIn("args=--effort max --settings %s --version" % picker(self.h, "k"), out)
             write(os.path.join(target, "claude-where.cmd"), old)  # removed on uninstall too
             code, out = self.run_command(POWERSHELL + [os.path.join(REPO, "install.ps1"), "-Bin", target, "-Uninstall"])
             self.assertEqual(os.listdir(target), [], out)

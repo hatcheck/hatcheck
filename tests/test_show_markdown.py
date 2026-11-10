@@ -1,5 +1,6 @@
 """hatcheck show --markdown: a session's conversation as a Markdown document. Against a
 throwaway home: no real profiles, Keychain or network."""
+import os
 import re
 import unittest
 
@@ -30,8 +31,10 @@ class ShowMarkdown(unittest.TestCase):
         head, rest = out.split("\n", 1)
         self.assertEqual(head, "# Fix the login test")
         facts = rest.lstrip("\n").split("\n", 1)[0]
-        self.assertRegex(facts, r"^Claude Code session `" + A + r"` in `~/\.claude-work`, started from `~/code`, on branch `main`, "
-                         r"2 turns, 1 tool call\. Exported by hatcheck \d+\.\d+\.\d+ on .+\. Left out: .+\.$")
+        sep = re.escape(os.sep)
+        self.assertRegex(facts, r"^Claude Code session `" + A + r"` in `~" + sep + r"\.claude-work`, started from `~" + sep
+                         + r"code`, on branch `main`, 2 turns, 1 tool call\. Exported by hatcheck \d+\.\d+\.\d+ on .+\. "
+                         r"Left out: .+\.$")
         self.assertRegex(out, r"\n## You · \d{4}-\d\d-\d\d \d\d:\d\d\n\nFix the login test\n")
         self.assertRegex(out, r"\n## Claude · \d{4}-\d\d-\d\d \d\d:\d\d\n\nok\n")
         # The tool call and its result, in code blocks fenced longer than any backticks inside.
@@ -49,7 +52,7 @@ class ShowMarkdown(unittest.TestCase):
         # Codex's, with its speaker and its tool calls as conv writes them.
         code, out = self.h.run("show", X[:13], "-m")
         self.assertEqual(code, 0, out)
-        self.assertTrue(out.startswith("# Speed up the build\n\nCodex session `" + X + "` in `~/.codex`"), out[:120])
+        self.assertTrue(out.startswith("# Speed up the build\n\nCodex session `" + X + "` in `" + "~/.codex".replace("/", os.sep) + "`"), out[:120])
         self.assertIn("\n## Codex · ", out)
         self.assertIn("[external_agent_tool_call: exec_command]", out)
         self.assertNotIn("SECRET-REASONING", out)

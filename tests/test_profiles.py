@@ -63,16 +63,16 @@ class Profiles(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertNoSecret(out)
         self.assertEqual(out.splitlines()[0], "What each profile and home is set up with")
-        self.assertIn("Claude Code\n  ~/.claude-home\n    model sonnet · theme dark\n"
-                      "    CLAUDE.md 18 B · 2 skills · 1 MCP server · 1 permission · 1 env variable\n", out)
-        self.assertIn("  ~/.claude-work\n    model opus · theme dark · 1 more setting\n"
-                      "    CLAUDE.md 9 B · 1 skill · 1 agent · 1 command · 1 plugin · 1 hook · 1 hooks file · 1 MCP server"
-                      " · 2 permissions · 1 env variable\n", out)
-        self.assertIn("Codex\n  ~/.codex  (default)\n    model gpt-5.5 · model_reasoning_effort high\n"
-                      "    AGENTS.md 6 B · 1 prompt · 1 hook · 1 MCP server · 1 trusted folder\n"
-                      "  ~/.codex-other\n    model gpt-5.5\n    nothing set up yet\n", out)
-        self.assertIn("Kimi Code CLI\n  ~/.kimi-code  (default)\n    default_model kimi-code/k3 · effort high · 1 more setting\n"
-                      "    1 hooks file\n", out)
+        self.assertIn(("Claude Code\n  ~/.claude-home\n    model sonnet · theme dark\n"
+                       "    CLAUDE.md 18 B · 2 skills · 1 MCP server · 1 permission · 1 env variable\n").replace("/", os.sep), out)
+        self.assertIn(("  ~/.claude-work\n    model opus · theme dark · 1 more setting\n"
+                       "    CLAUDE.md 9 B · 1 skill · 1 agent · 1 command · 1 plugin · 1 hook · 1 hooks file · 1 MCP server"
+                       " · 2 permissions · 1 env variable\n").replace("/", os.sep), out)
+        self.assertIn(("Codex\n  ~/.codex  (default)\n    model gpt-5.5 · model_reasoning_effort high\n"
+                       "    AGENTS.md 6 B · 1 prompt · 1 hook · 1 MCP server · 1 trusted folder\n"
+                       "  ~/.codex-other\n    model gpt-5.5\n    nothing set up yet\n").replace("/", os.sep), out)
+        self.assertIn("Kimi Code CLI\n  %s  (default)\n    default_model kimi-code/k3 · effort high · 1 more setting\n"
+                      "    1 hooks file\n" % self.h.shown(self.kimi), out)
         self.assertTrue(out.endswith("hatcheck profiles A B shows what differs between two; nothing is changed.\n"), out)
         code, out = self.h.run("profiles", "--json")
         self.assertEqual(code, 0, out)
@@ -97,21 +97,21 @@ class Profiles(unittest.TestCase):
         code, out = self.h.run("profiles", "work", "home")
         self.assertEqual(code, 1, out)  # they differ, as diff says it
         self.assertNoSecret(out)
-        self.assertEqual(out.splitlines()[0], "~/.claude-work and ~/.claude-home, Claude Code profiles")
-        self.assertIn("Only in ~/.claude-work:\n", out)
+        self.assertEqual(out.splitlines()[0], "~/.claude-work and ~/.claude-home, Claude Code profiles".replace("/", os.sep))
+        self.assertIn("Only in ~/.claude-work:\n".replace("/", os.sep), out)
         for line in ("  agent reviewer", "  command git:commit", "  hooks file notify.sh", "  plugin x@m",
                      "  hook PreToolUse: [Bash] echo one", "  permission allow Bash(npm run:*)",
                      "  setting modelSettings.opus"):
             self.assertIn(line, out)
         self.assertIn("1.0.0, enabled", out)
         self.assertIn("effortLevel high", out)
-        self.assertIn("~/.claude-work/agents/reviewer.md", out)
-        self.assertIn("Only in ~/.claude-home:\n  skill pdf", out)
+        self.assertIn("~/.claude-work/agents/reviewer.md".replace("/", os.sep), out)
+        self.assertIn("Only in ~/.claude-home:\n  skill pdf".replace("/", os.sep), out)
         self.assertIn("In both, not the same:\n", out)
-        self.assertIn("  instructions CLAUDE.md  9 B in ~/.claude-work, 18 B in ~/.claude-home\n", out)
+        self.assertIn("  instructions CLAUDE.md  9 B in ~/.claude-work, 18 B in ~/.claude-home\n".replace("/", os.sep), out)
         self.assertIn("  MCP server github       defined differently\n", out)
         self.assertIn("  env FOO                 set differently\n", out)
-        self.assertIn("  setting model           opus in ~/.claude-work, sonnet in ~/.claude-home\n", out)
+        self.assertIn("  setting model           opus in ~/.claude-work, sonnet in ~/.claude-home\n".replace("/", os.sep), out)
         self.assertIn("The same in both: 1 skill, 1 permission and 1 setting.\n", out)
         self.assertIn("Nothing was changed: hatcheck reads a setup and never writes one.", out)
         code, out = self.h.run("profiles", "work", "home", "--json")
@@ -127,7 +127,7 @@ class Profiles(unittest.TestCase):
         code, out = self.h.run("profiles", "codex", "codex:other")
         self.assertEqual(code, 1, out)
         self.assertNoSecret(out)
-        self.assertIn("~/.codex and ~/.codex-other, Codex homes\nOnly in ~/.codex:\n", out)
+        self.assertIn("~/.codex and ~/.codex-other, Codex homes\nOnly in ~/.codex:\n".replace("/", os.sep), out)
         for line in ("  instructions AGENTS.md", "  prompt commit", "  hook SessionStart: echo hi", "  MCP server github",
                      "  trusted folder /Users/me/app.v2", "  setting model_reasoning_effort"):
             self.assertIn(line, out)
@@ -153,7 +153,7 @@ class Profiles(unittest.TestCase):
     def test_what_it_refuses(self):
         code, out = self.h.run("profiles", "work", "codex")
         self.assertEqual(code, 1, out)
-        self.assertIn("~/.claude-work is Claude Code's and ~/.codex is Codex's: hatcheck compares two of one agent's", out)
+        self.assertIn("~/.claude-work is Claude Code's and ~/.codex is Codex's: hatcheck compares two of one agent's".replace("/", os.sep), out)
         code, out = self.h.run("profiles", "work")
         self.assertEqual(code, 2, out)
         self.assertIn("give two profiles to compare, or none to see every one", out)
@@ -162,7 +162,7 @@ class Profiles(unittest.TestCase):
         self.assertIn("are the same folder", out)
         code, out = self.h.run("profiles", "nope", "work")
         self.assertEqual(code, 1, out)
-        self.assertIn("There's no ~/.claude-nope", out)
+        self.assertIn("There's no ~/.claude-nope".replace("/", os.sep), out)
         self.h.config("[ignore]\nagents = [\"codex\"]\n")
         code, out = self.h.run("profiles")
         self.assertEqual(code, 0, out)
@@ -175,9 +175,9 @@ class Profiles(unittest.TestCase):
         write(os.path.join(self.home, "settings.json"), "{not json")
         code, out = self.h.run("profiles")
         self.assertEqual(code, 0, out)
-        self.assertIn("⚠ ~/.claude-home/settings.json: not valid JSON", out)
+        self.assertIn("⚠ ~/.claude-home/settings.json: not valid JSON".replace("/", os.sep), out)
         code, out = self.h.run("profiles", "work", "home")
-        self.assertIn("⚠ ~/.claude-home/settings.json: not valid JSON", out)
+        self.assertIn("⚠ ~/.claude-home/settings.json: not valid JSON".replace("/", os.sep), out)
         data = json.loads(self.h.run("profiles", "--json")[1])
         home = next(p for p in data["profiles"] if p["path"] == self.home)
         self.assertEqual(home["unread"], [os.path.join(self.home, "settings.json").replace(self.h.home, "~") + ": not valid JSON"])

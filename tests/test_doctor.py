@@ -140,10 +140,11 @@ class Doctor(unittest.TestCase):
         code, out = h.run("doctor")
         self.assertEqual(code, 1, out)  # the broken file is something to fix
         self.assertIn("Transcripts: Claude Code deletes a profile's 30 days after they were last written, unless cleanupPeriodDays in its settings.json says otherwise:\n", out)
-        self.assertIn("  ~/.claude-work           90 days (cleanupPeriodDays), Claude Desktop's after 14 (desktopSessionCleanupPeriodDays)\n", out)
-        self.assertIn("  ~/.claude-home           30 days (the default)\n", out)
-        self.assertIn("  ~/.claude-bad            ? (can't read its settings.json (not valid JSON))\n", out)
-        self.assertIn("~/.claude-bad: can't read its settings.json (not valid JSON), so Claude Code can't tell how long to keep its transcripts there", out)
+        for line in ("  ~/.claude-work           90 days (cleanupPeriodDays), Claude Desktop's after 14 (desktopSessionCleanupPeriodDays)\n",
+                     "  ~/.claude-home           30 days (the default)\n",
+                     "  ~/.claude-bad            ? (can't read its settings.json (not valid JSON))\n",
+                     "~/.claude-bad: can't read its settings.json (not valid JSON), so Claude Code can't tell how long to keep its transcripts there"):
+            self.assertIn(line.replace("/", os.sep), out)
         data = json.loads(h.run("doctor", "--json")[1])
         by_profile = {x["profile"]: x for x in data["transcripts"]}
         self.assertEqual((by_profile[work]["days"], by_profile[work]["set"], by_profile[work]["desktop_days"]), (90, True, 14))

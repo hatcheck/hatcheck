@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-from helpers import FakeHome
+from helpers import WINDOWS, FakeHome
 
 A = "aaaaaaaa-0000-4000-8000-000000000001"
 B = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -37,7 +37,10 @@ class Completions(unittest.TestCase):
                 self.assertIn("-n '__fish_seen_subcommand_from search' -l since", out)
             if shell == "powershell":
                 self.assertIn("Register-ArgumentCompleter -Native -CommandName hatcheck, hat", out)
-            # The shells that are here read the script without complaint.
+            # The shells that are here read the script without complaint. On Windows only
+            # PowerShell's is tried: the bash found there is WSL's, which takes Linux paths.
+            if WINDOWS and shell != "powershell":
+                continue
             program = {"zsh": ["zsh", "-n"], "bash": ["bash", "-n"], "fish": ["fish", "-n"],
                        "powershell": ["pwsh", "-NoProfile", "-Command"]}[shell]
             env = self.h.env()
@@ -68,7 +71,7 @@ class Completions(unittest.TestCase):
         h.codex_session(codex, h.folder("code"), X, "Speed up the build", 20)
         code, out = h.run("complete", "profiles")
         self.assertEqual(code, 0, out)
-        self.assertEqual(out, "home\t~/.claude-home\nwork\t~/.claude-work\ncodex\t~/.codex\n")
+        self.assertEqual(out, "home\t~/.claude-home\nwork\t~/.claude-work\ncodex\t~/.codex\n".replace("/", os.sep))
         code, out = h.run("complete", "sessions")
         self.assertEqual(code, 0, out)
         self.assertEqual(out, A + "\tFix the login test\n" + X + "\tSpeed up the build\n")  # the last week's, newest first
