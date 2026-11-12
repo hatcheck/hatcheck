@@ -46,7 +46,7 @@ fn env(name: &str) -> Option<String> {
 
 /// Every Claude Code config dir with sessions: ~/.claude* dirs (and $CLAUDE_CONFIG_DIR) that
 /// hold a projects/ folder, ~/.claude first, the rest by name. None of them, as of every agent's
-/// folders below, when config.toml leaves the agent out.
+/// folders below, when config.toml or the command's agent filter leaves the agent out.
 pub fn find_profiles() -> Vec<String> {
     if crate::config::ignores(Agent::Claude) {
         return Vec::new();
@@ -144,7 +144,7 @@ pub fn find_opencode_homes() -> Vec<String> {
     unless_ignored(Agent::Opencode, crate::opencode::find_homes)
 }
 
-/// An agent's folders, or none when config.toml leaves the agent out.
+/// An agent's folders, or none when config.toml or the command's agent filter leaves the agent out.
 fn unless_ignored(agent: Agent, find: fn() -> Vec<String>) -> Vec<String> {
     if crate::config::ignores(agent) {
         Vec::new()

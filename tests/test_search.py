@@ -109,6 +109,20 @@ class Search(unittest.TestCase):
         self.assertEqual(code, 2, out)
         self.assertIn("the following arguments are required: words", out)
 
+    def test_only_and_ignore_agents(self):
+        code, out = self.h.run("search", "limiter", "--json", "-o", "claude")
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        self.assertEqual([(s["agent"], s["id"]) for s in data["sessions"]], [("claude", A)])
+        code, out = self.h.run("search", "limiter", "--json", "-i", "claude")
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        self.assertEqual([(s["agent"], s["id"]) for s in data["sessions"]], [("codex", X)])
+        self.assertEqual(data["hidden"], {})
+        code, out = self.h.run("search", "rate", "--from", "codex", "-i", "codex")
+        self.assertEqual(code, 1, out)
+        self.assertIn("-o/--only or -i/--ignore leaves Codex out", out)
+
     def test_what_config_toml_leaves_out_isnt_looked_in(self):
         self.h.config("[ignore]\nfolders = [\"~/code/blog\"]\nagents = [\"codex\"]\n")
         code, out = self.h.run("search", "rate")

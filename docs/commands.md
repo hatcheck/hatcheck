@@ -50,7 +50,8 @@ after `ses_`, which can be pasted along with it; resume it with `opencode --sess
 its folder.
 
 A session in a folder [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out, or of an
-agent it leaves out, isn't found: `where` exits 1, as for an ID that matches nothing.
+agent it leaves out, isn't found: `where` exits 1, as for an ID that matches nothing. The shared
+[`-o` / `-i` agent filter](#selecting-agents) limits which agents `where` searches.
 
 ## `hatcheck`: what to resume
 
@@ -69,6 +70,16 @@ and `⚠` for a warning, with bold headings, cyan commands, dim explanations and
 appears only in the main help and the session list's heading. `NO_COLOR` turns the colours off,
 and a pipe never gets them. `--json` and raw output (`--print`, `where`, `bind --which` and
 `provider env`) have no colours or added symbols.
+
+### Selecting agents
+
+`hatcheck` (and `hatcheck sessions`), `usage`, `where`, `search` and `profiles` share `-o` /
+`--only AGENT`, to show just the agents named, and `-i` / `--ignore AGENT`, to leave agents out.
+Repeat either option, or separate names with commas: `hat -o claude,codex`, `hat -i agy,kimi`. The
+names are `claude`, `codex`, `agy`, `kimi`, `zcode`, `dsh`, `mcode`, `qwen`, `copilot` and
+`opencode`. With both options, `--ignore` wins. An excluded agent isn't discovered or asked for
+usage, in text or `--json`, and can't be named with an option such as `search --from`. The filter
+doesn't bring back an agent [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out) leaves out.
 
 Lists the Claude Code sessions from every `~/.claude*` profile, the Codex sessions from every
 `~/.codex*` home, the Kimi Code CLI sessions from every `~/.kimi-code*` home and the DeepSeek
@@ -275,6 +286,8 @@ No sessions active in ~/code/new in the last 24h or open now; 7 in other folders
 |--------------|-------------------------------------------------------------------------------|
 | `HOURS`      | how far back to look (default 24); takes `36`, `1.5`, `12h` or `3d`           |
 | `-n N`       | show only the newest N sessions per folder and count the rest; `0` for all, undoing [`config.toml`](#configtoml-the-lists-defaults-and-what-to-leave-out)'s |
+| `-o`, `--only AGENT` | show sessions only from the agents named ([Selecting agents](#selecting-agents)) |
+| `-i`, `--ignore AGENT` | leave sessions from the agents named out                    |
 | `-a`, `--all` | also list sessions from Claude Desktop's Code tab, the SDK, the Codex app, its IDE extension, `codex exec`, the Antigravity app, MiniMax Code's internal, non-subagent sessions, Qwen Code's from channels, scheduled tasks and other hosts, and Copilot sessions another client than its CLI made |
 | `-A`, `--all-folders` | list every folder, from one that has sessions or one that has none  |
 | `-f`, `--full` | print `CLAUDE_CONFIG_DIR=~/.claude-<name> claude …` instead of `cl`, `CODEX_HOME=… codex …` instead of `cx`, and `KIMI_CODE_HOME=… kimi …` instead of `ck` |
@@ -401,11 +414,8 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   starts it over. Nothing is sent anywhere. In `--json`, each limit has it as `trend`
   (`pace_percent_per_hour`, `over_seconds`, `readings`, `runs_out_at`, `before_reset`), `null`
   until there is one.
-- `-o` / `--only AGENT` shows just one agent's accounts, and `-i` / `--ignore AGENT` leaves an
-  agent out. Repeat either option, or separate agents with commas: `hat u -o claude,codex`, `hat u
-  -i agy,kimi`. The names are `claude`, `codex`, `agy`, `kimi`, `zcode`, `dsh`, `mcode`, `qwen`,
-  `copilot` and `opencode`. With both options, `--ignore` wins. An agent left out isn't discovered
-  or asked for usage, in text or `--json`; these options don't bring back one `config.toml` leaves out.
+- The shared [`-o` / `-i` agent filter](#selecting-agents) selects which agents' accounts are
+  listed. An agent left out isn't run or asked for usage.
 - `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share. `--json` prints the accounts as data
   ([below](#--json-for-scripts-status-bars-and-apps)).
@@ -1153,7 +1163,9 @@ cd ~/code/api
   0 for every one), and the line at the end says how many weren't shown. `--since HOURS` looks
   only at sessions active since then, as the list's HOURS (`36`, `1.5`, `12h`, `3d`); `--here` only
   at sessions started from this folder; `--from PROFILE` only in that profile or home, named as
-  `move` names one (`work`, `codex:work`, `kimi`, a path). `-a`/`--all` searches the sessions from
+  `move` names one (`work`, `codex:work`, `kimi`, a path). The shared
+  [`-o` / `-i` agent filter](#selecting-agents) narrows the agents searched, and an agent it
+  leaves out can't be named with `--from`. `-a`/`--all` searches the sessions from
   Claude Desktop, the SDK, the Codex app and the other hosts the list hides without `--all` too;
   without it they aren't searched, and the line at the end says how many of them may have the
   words (their file holds them) and that `--all` searches them.
@@ -1326,6 +1338,8 @@ Nothing was changed: hatcheck reads a setup and never writes one. A skill, agent
   the same name set to different values show `set differently`), an MCP server by its name
   (`defined differently` when the definitions differ), and a file by its size; `--json`'s
   fingerprints are hashes.
+- The shared [`-o` / `-i` agent filter](#selecting-agents) selects which agents' profiles and
+  homes are summed up. A profile named for a comparison can be filtered out the same way.
 - The comparison: what only one has, each with its path when it's a file or folder, so it can be
   copied over by hand; what both have that isn't the same, with the two values of a setting or
   the two sizes of a file; and how many things are the same. Two of one agent's only: a Claude

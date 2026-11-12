@@ -1,4 +1,5 @@
-//! hatcheck [sessions] [HOURS] ...: recent sessions from every agent's profiles and homes,
+//! hatcheck [sessions] [HOURS] [--only AGENT] [--ignore AGENT] ...: recent sessions from the
+//! selected agents' profiles and homes,
 //! grouped by folder, each with the command that resumes it or opens DSH's session history,
 //! and what's left of its account's plan.
 //! docs/commands.md's `hatcheck` section describes the list.
@@ -800,7 +801,7 @@ fn render(block: &Block, c: &Columns, paint: &Paint) -> Vec<String> {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes, ZCode sessions from ~/.zcode, DeepSeek Harness sessions across all ~/.dsh* homes, MiniMax Code sessions across all ~/.minimax* homes and the homes MINIMAX_DATA_DIR and MAVIS_DATA_DIR select, Qwen Code sessions across all ~/.qwen* homes and the home QWEN_HOME names, GitHub Copilot CLI sessions across all ~/.copilot* homes and the home COPILOT_HOME names, and OpenCode sessions from ~/.local/share/opencode, with the command that resumes each one or opens DSH's session history.")
+    let parser = crate::agent::AgentSelection::options(Parser::new(prog, "List recent Claude Code CLI sessions across all ~/.claude* profiles, Codex CLI sessions across all ~/.codex* homes, Antigravity CLI sessions from ~/.gemini/antigravity-cli, Kimi Code CLI sessions across all ~/.kimi-code* homes, ZCode sessions from ~/.zcode, DeepSeek Harness sessions across all ~/.dsh* homes, MiniMax Code sessions across all ~/.minimax* homes and the homes MINIMAX_DATA_DIR and MAVIS_DATA_DIR select, Qwen Code sessions across all ~/.qwen* homes and the home QWEN_HOME names, GitHub Copilot CLI sessions across all ~/.copilot* homes and the home COPILOT_HOME names, and OpenCode sessions from ~/.local/share/opencode, with the command that resumes each one or opens DSH's session history."))
         .positional("hours", Count::Optional, &format!("how far back to look (default {DEFAULT_HOURS}); accepts 36, 1.5, 12h or 3d"))
         .option(&["-n", "--per-folder"], "per_folder", "N", "show only the newest N sessions per folder (default: all)")
         .flag(&["-a", "--all"], "all", "also list sessions last used from Claude Desktop or the SDK, Codex sessions from the Codex app, its IDE extension or codex exec, the Antigravity app's conversations, Qwen Code sessions from its channels, scheduled tasks and other hosts, and Copilot sessions from clients other than its CLI")
@@ -827,6 +828,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
+    let selection = match crate::agent::AgentSelection::parse(&args) {
+        Ok(s) => s,
+        Err(e) => return parser.error(&e).exit_code(),
+    };
+    crate::config::select_agents(selection);
     // What config.toml sets stands unless the command line says otherwise.
     let cfg = crate::config::current();
     let hours_text = args

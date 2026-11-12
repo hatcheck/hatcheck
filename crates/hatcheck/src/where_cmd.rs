@@ -1,4 +1,5 @@
-//! hatcheck where SESSION [--json]: find a session by its ID, or the start of it. Reports
+//! hatcheck where SESSION [--only AGENT] [--ignore AGENT] [--json]: find a session by its ID,
+//! or the start of it, in the selected agents. Reports
 //! each agent's transcript or readable store and any session-owned data folder; for DSH, the
 //! selected v4 log and its session directory, for mcode the active messages.jsonl and session
 //! directory, for qwen the transcript, for copilot the session's events file and for opencode
@@ -47,7 +48,7 @@ pub fn find(prefix: &str) -> Vec<String> {
         }
     }
     if crate::config::ignores(crate::agent::Agent::Codex) {
-        homes.clear(); // config.toml leaves Codex out: looked for nowhere
+        homes.clear(); // config.toml or the command's agent filter leaves Codex out
     }
     let mut seen: Vec<String> = Vec::new();
     let lower = prefix.to_lowercase();
@@ -255,16 +256,21 @@ pub fn as_json(found: &[String], prefix: &str) -> Value {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(
+    let parser = crate::agent::AgentSelection::options(Parser::new(
         prog,
         "Find a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session by its ID, or the start of it.",
-    )
+    ))
     .positional("session", Count::One, "the session ID, or the start of it")
     .flag(&["-j", "--json"], "json", "print the matches as JSON");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
+    let selection = match crate::agent::AgentSelection::parse(&args) {
+        Ok(s) => s,
+        Err(e) => return parser.error(&e).exit_code(),
+    };
+    crate::config::select_agents(selection);
     let prefix = args.value("session").unwrap_or("");
     let found = find(prefix);
     if args.flag("json") {

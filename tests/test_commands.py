@@ -419,6 +419,27 @@ class Commands(unittest.TestCase):
             code, out = self.run_command(["hat", "where", "--help"])
             self.assertIn("usage: hat where", out)
 
+    def test_agent_filters_for_sessions_and_where(self):
+        cwd = os.path.join(self.h.home, "code")
+        code, out = self.run_command(HATCHECK + ["--no-usage", "--json", "-o", "claude"], cwd=cwd)
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        self.assertEqual({s["agent"] for s in data["sessions"]}, {"claude"})
+        self.assertEqual([s["id"] for s in data["sessions"]], [ID])
+        code, out = self.run_command(HATCHECK + ["--no-usage", "--json", "-i", "claude"], cwd=cwd)
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        self.assertEqual({s["agent"] for s in data["sessions"]}, {"codex"})
+        self.assertEqual([s["id"] for s in data["sessions"]], [CODEX_ID])
+        code, out = self.where("-o", "codex", ID[:8])
+        self.assertEqual((code, out), (1, ""))
+        code, out = self.where("--json", "-i", "claude", CODEX_ID[:13])
+        self.assertEqual(code, 0, out)
+        found = json.loads(out)["sessions"]
+        self.assertEqual([(s["agent"], s["file"]) for s in found], [("codex", self.rollout)])
+        code, out = self.where("-i", "codex", CODEX_ID[:13])
+        self.assertEqual((code, out), (1, ""))
+
     def test_where_finds_a_session_by_prefix(self):
         code, out = self.where(ID[:8])
         self.assertEqual(code, 0, out)

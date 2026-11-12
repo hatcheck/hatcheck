@@ -1,6 +1,7 @@
-//! hatcheck search WORDS... [--since HOURS] [--here] [--from PROFILE] [-a] [-m N] [-f] [-j]:
-//! the sessions whose title or conversation has every word, in every profile and home of every
-//! agent, newest first, each with the command that resumes it and the turns the words are in.
+//! hatcheck search WORDS... [--since HOURS] [--here] [--from PROFILE] [--only AGENT]
+//! [--ignore AGENT] [-a] [-m N] [-f] [-j]: the sessions whose title or conversation has every
+//! word, in the selected agents' profiles and homes, newest first, each with the command that
+//! resumes it and the turns the words are in.
 //! docs/commands.md's `hatcheck search` section has the rest.
 //!
 //! A conversation is what hatcheck show reads, so a word only in a message an agent adds itself,
@@ -579,10 +580,10 @@ fn count(n: usize, what: &str) -> String {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(
+    let parser = crate::agent::AgentSelection::options(Parser::new(
         prog,
         "Find the sessions whose title or conversation has every word, in every profile and home of every agent: newest first, each with the command that resumes it and the turns the words are in. Case doesn't matter, and a word can be part of a longer one.",
-    )
+    ))
     .positional("words", Count::Any, "the words to look for")
     .option(&["--since"], "since", "HOURS", "only sessions active in the last HOURS: 36, 1.5, 12h or 3d")
     .flag(&["--here"], "here", "only sessions started from this folder")
@@ -595,6 +596,11 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
+    let selection = match crate::agent::AgentSelection::parse(&args) {
+        Ok(s) => s,
+        Err(e) => return parser.error(&e).exit_code(),
+    };
+    crate::config::select_agents(selection);
     let words: Vec<String> = args
         .values("words")
         .iter()

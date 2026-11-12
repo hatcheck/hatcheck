@@ -9,7 +9,7 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 ### Added
 
 - **An npm package, `hatcheck`, installs the nine commands with `npm install -g hatcheck`** on macOS, Linux and Windows (`packaging/npm/`, published by `.github/workflows/npm.yml` through npm's trusted publisher). On macOS and Linux its `postinstall` script points `bin/` straight at the platform's Rust binary so running a command starts no Node process; on Windows and under `--ignore-scripts`, `bin/` runs the same binary through `run.js`. `hatcheck doctor` recognises an npm install and prints `npm uninstall -g hatcheck` to remove one that's shadowed.
-- **`hatcheck usage -o` / `--only AGENT` shows just the agents named, and `-i` / `--ignore AGENT` leaves agents out.** Repeat either option or separate names with commas, as in `hat u -o claude,codex` and `hat u -i agy,kimi`; with both, `--ignore` wins. Excluded agents aren't discovered, run or asked for usage, in text or `--json`, and the shell completions offer the agent names.
+- **`-o` / `--only AGENT` and `-i` / `--ignore AGENT` select the agents in `hatcheck` / `sessions`, `usage`, `where`, `search` and `profiles`.** Repeat either option or separate names with commas, as in `hat -o claude,codex` and `hat u -i agy,kimi`; with both, `--ignore` wins. Excluded agents aren't discovered or asked for usage, in text or `--json`, and the shell completions offer the agent names.
 
 ### Fixed
 

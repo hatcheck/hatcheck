@@ -1,5 +1,6 @@
-//! hatcheck profiles [A B] [--json]: what each Claude Code profile, Codex home and Kimi home is
-//! set up with, read as the agent keeps it: its instructions file, skills, agents, commands,
+//! hatcheck profiles [A B] [--only AGENT] [--ignore AGENT] [--json]: what each selected Claude
+//! Code profile, Codex home and Kimi home is set up with, read as the agent keeps it: its
+//! instructions file, skills, agents, commands,
 //! prompts, plugins, hooks, MCP servers, permissions and settings; and, with two named, what
 //! differs between them. Nothing is written, and no value that could be a secret is shown: an
 //! env variable goes by its name, an MCP server by its name, and a file by its size.
@@ -851,16 +852,21 @@ fn counted(items: &[&Item]) -> String {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(
+    let parser = crate::agent::AgentSelection::options(Parser::new(
         prog,
         "What each Claude Code profile, Codex home and Kimi home is set up with, read as the agent keeps it: its instructions file, skills, agents, commands, prompts, plugins, hooks, MCP servers, permissions and settings. With two named, what differs between them: what one has that the other doesn't, and what both have that isn't the same. Nothing is changed, and nothing that could be a secret is shown.",
-    )
+    ))
     .positional("profiles", Count::Any, "two profiles or homes to compare: NAME for ~/.claude-NAME, default for ~/.claude, codex or codex:NAME, kimi or kimi:NAME, or a path")
     .flag(&["-j", "--json"], "json", "print the setups, or the comparison, as JSON");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
+    let selection = match crate::agent::AgentSelection::parse(&args) {
+        Ok(s) => s,
+        Err(e) => return parser.error(&e).exit_code(),
+    };
+    crate::config::select_agents(selection);
     let names = args.values("profiles");
     if names.len() == 1 || names.len() > 2 {
         return parser

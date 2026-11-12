@@ -217,6 +217,47 @@ impl Agent {
     }
 }
 
+/// The agents -o/--only and -i/--ignore select for one command.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AgentSelection {
+    pub(crate) only: Vec<Agent>,
+    pub(crate) ignore: Vec<Agent>,
+}
+
+impl AgentSelection {
+    /// The shared options, with every agent's key in --only's help.
+    pub fn options(parser: crate::args::Parser) -> crate::args::Parser {
+        parser
+            .option(&["-o", "--only"], "only", "AGENT", "show only an agent: claude, codex, agy, kimi, zcode, dsh, mcode, qwen, copilot or opencode; repeat or comma-separate")
+            .option(&["-i", "--ignore"], "ignore", "AGENT", "leave an agent out (same names; repeat or comma-separate)")
+    }
+
+    pub fn parse(args: &crate::args::Args) -> Result<AgentSelection, String> {
+        let mut selection = AgentSelection::default();
+        for (option, ignored) in [("only", false), ("ignore", true)] {
+            for value in args.values(option) {
+                for key in value.split(',').map(str::trim) {
+                    let Some(agent) = Agent::from_key(key) else {
+                        return Err(format!(
+                            "--{option}: '{key}' isn't an agent; they're {}",
+                            crate::config::and_list(&Agent::KEYS)
+                        ));
+                    };
+                    let agents = if ignored {
+                        &mut selection.ignore
+                    } else {
+                        &mut selection.only
+                    };
+                    if !agents.contains(&agent) {
+                        agents.push(agent);
+                    }
+                }
+            }
+        }
+        Ok(selection)
+    }
+}
+
 /// Sorted by key, as the names sorted as text: agy, claude, codex, copilot, dsh, kimi, mcode,
 /// opencode, qwen, zcode.
 impl Ord for Agent {

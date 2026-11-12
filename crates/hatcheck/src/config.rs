@@ -4,9 +4,11 @@
 //! the file HATCHECK_CONFIG names. cli.rs reads it before every subcommand, and a file that
 //! can't be read stops the command, since one silently ignored would seem to apply. It's a plain
 //! subset of TOML, read here: comments, [tables], and key = value with strings, numbers, booleans
-//! and arrays of them. docs/commands.md's `config.toml` section documents it.
+//! and arrays of them. The multi-agent commands' -o/--only and -i/--ignore selection is kept
+//! beside it for one run, without changing what the file reports. docs/commands.md's `config.toml`
+//! section documents the file.
 
-use crate::agent::Agent;
+use crate::agent::{Agent, AgentSelection};
 use crate::ospath;
 use crate::paths;
 use crate::py::{self, s};
@@ -37,6 +39,9 @@ pub struct Config {
     pub list_resolved: Vec<String>,
     pub ignore_resolved: Vec<String>,
     pub ignore_agents: Vec<Agent>,
+    /// The command line's agent filter, kept apart from what the file sets and reports.
+    pub command_only_agents: Vec<Agent>,
+    pub command_ignore_agents: Vec<Agent>,
 }
 
 /// The config of the command that's running, installed by cli.rs; the defaults until then.
@@ -91,9 +96,22 @@ pub fn current() -> Config {
     with(Clone::clone)
 }
 
-/// Whether the file leaves an agent out: hatcheck then looks for none of its profiles or homes.
+/// Apply one command's -o/--only and -i/--ignore, without changing what the file says.
+pub fn select_agents(selection: AgentSelection) {
+    let mut config = current();
+    config.command_only_agents = selection.only;
+    config.command_ignore_agents = selection.ignore;
+    install(config);
+}
+
+/// Whether the file or the command's agent filter leaves an agent out: hatcheck then looks for
+/// none of its profiles or homes. A command never brings back one the file leaves out.
 pub fn ignores(agent: Agent) -> bool {
-    with(|c| c.ignore_agents.contains(&agent))
+    with(|c| {
+        c.ignore_agents.contains(&agent)
+            || c.command_ignore_agents.contains(&agent)
+            || (!c.command_only_agents.is_empty() && !c.command_only_agents.contains(&agent))
+    })
 }
 
 /// Whether the file leaves a folder out: not among the folders it lists, when it lists any, or
@@ -125,10 +143,14 @@ pub fn shown_path() -> String {
     paths::shell_path(&if named.is_empty() { path() } else { named })
 }
 
-/// What a command says when it's asked for an agent the file leaves out: hatcheck looks in
-/// none of its folders, even one named on the command line.
+/// What a command says when it's asked for an agent left out: hatcheck looks in none of its
+/// folders, even one named on the command line.
 pub fn agent_left_out(agent: Agent) -> String {
-    format!("{} leaves {} out", shown_path(), agent.name())
+    if with(|c| c.ignore_agents.contains(&agent)) {
+        format!("{} leaves {} out", shown_path(), agent.name())
+    } else {
+        format!("-o/--only or -i/--ignore leaves {} out", agent.name())
+    }
 }
 
 /// Whether a pattern names a folder, or one above it: the pattern's parts, with * for any run

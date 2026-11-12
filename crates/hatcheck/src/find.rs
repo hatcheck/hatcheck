@@ -75,8 +75,8 @@ pub fn place(spec: &str) -> (Agent, String) {
     (Agent::Claude, paths::profile_folder(Agent::Claude, spec))
 }
 
-/// place, refused for an agent config.toml leaves out: hatcheck looks in none of its folders,
-/// even one named on the command line.
+/// place, refused for an agent config.toml or the command's agent filter leaves out: hatcheck
+/// looks in none of its folders, even one named on the command line.
 pub fn place_seen(spec: &str) -> Result<(Agent, String), String> {
     let (agent, folder) = place(spec);
     if crate::config::ignores(agent) {

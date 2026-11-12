@@ -93,6 +93,18 @@ class Profiles(unittest.TestCase):
         self.assertEqual(by_path[self.kimi]["agent"], "kimi")
         self.assertEqual(work["unread"], [])
 
+    def test_only_and_ignore_agents(self):
+        code, out = self.h.run("profiles", "--json", "-o", "codex")
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        self.assertEqual({p["agent"] for p in data["profiles"]}, {"codex"})
+        self.assertEqual({p["path"] for p in data["profiles"]}, {self.codex, self.codex_other})
+        code, out = self.h.run("profiles", "--json", "-i", "claude")
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        self.assertEqual({p["agent"] for p in data["profiles"]}, {"codex", "kimi"})
+        self.assertNoSecret(out)
+
     def test_two_profiles_compared(self):
         code, out = self.h.run("profiles", "work", "home")
         self.assertEqual(code, 1, out)  # they differ, as diff says it

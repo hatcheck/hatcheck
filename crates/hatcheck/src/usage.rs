@@ -85,7 +85,7 @@ fn default_codex_home() -> String {
 }
 
 /// ~/.claude plus every ~/.claude-* (and $CLAUDE_CONFIG_DIR) Claude Code config dir; none when
-/// config.toml leaves Claude Code out, as paths::find_profiles gives none then.
+/// config.toml or the command's agent filter leaves Claude Code out, as paths::find_profiles gives none then.
 pub fn find_profiles() -> Vec<String> {
     if crate::config::ignores(Agent::Claude) {
         return Vec::new();
@@ -116,7 +116,7 @@ pub fn find_profiles() -> Vec<String> {
 }
 
 /// ~/.codex plus every ~/.codex-* (and $CODEX_HOME) Codex home: a folder with Codex's login,
-/// config or sessions in it; none when config.toml leaves Codex out.
+/// config or sessions in it; none when config.toml or the command's agent filter leaves Codex out.
 pub fn find_codex_homes() -> Vec<String> {
     if crate::config::ignores(Agent::Codex) {
         return Vec::new();
@@ -2053,47 +2053,8 @@ pub fn account_lines(
     (lines, unlabeled)
 }
 
-#[derive(Default)]
-struct AgentSelection {
-    only: Vec<Agent>,
-    ignore: Vec<Agent>,
-}
-
-impl AgentSelection {
-    fn includes(&self, agent: Agent) -> bool {
-        (self.only.is_empty() || self.only.contains(&agent)) && !self.ignore.contains(&agent)
-    }
-}
-
-fn agent_selection(args: &crate::args::Args) -> Result<AgentSelection, String> {
-    let mut selection = AgentSelection::default();
-    for (option, ignored) in [("only", false), ("ignore", true)] {
-        for value in args.values(option) {
-            for key in value.split(',').map(str::trim) {
-                let Some(agent) = Agent::from_key(key) else {
-                    return Err(format!(
-                        "--{option}: '{key}' isn't an agent; they're {}",
-                        crate::config::and_list(&Agent::KEYS)
-                    ));
-                };
-                let agents = if ignored {
-                    &mut selection.ignore
-                } else {
-                    &mut selection.only
-                };
-                if !agents.contains(&agent) {
-                    agents.push(agent);
-                }
-            }
-        }
-    }
-    Ok(selection)
-}
-
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode, DeepSeek Harness (~/.dsh*), MiniMax Code (~/.minimax*), Qwen Code (~/.qwen*), GitHub Copilot CLI (~/.copilot*) and OpenCode (~/.local/share/opencode) are listed with why they give none, with mcode's plan quota not wired yet.")
-        .option(&["-o", "--only"], "only", "AGENT", "show only an agent: claude, codex, agy, kimi, zcode, dsh, mcode, qwen, copilot or opencode; repeat or comma-separate")
-        .option(&["-i", "--ignore"], "ignore", "AGENT", "leave an agent out (same names; repeat or comma-separate)")
+    let parser = crate::agent::AgentSelection::options(Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode, DeepSeek Harness (~/.dsh*), MiniMax Code (~/.minimax*), Qwen Code (~/.qwen*), GitHub Copilot CLI (~/.copilot*) and OpenCode (~/.local/share/opencode) are listed with why they give none, with mcode's plan quota not wired yet."))
         .flag(&["-C", "--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
         .flag(&["-e", "--email"], "email", "show each account's email address (hidden by default)")
         .flag(&["-j", "--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
@@ -2101,33 +2062,27 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
-    let selection = match agent_selection(&args) {
+    let selection = match crate::agent::AgentSelection::parse(&args) {
         Ok(s) => s,
         Err(e) => return parser.error(&e).exit_code(),
     };
-    let roots = |agent, find: fn() -> Vec<String>| {
-        if selection.includes(agent) {
-            find()
-        } else {
-            Vec::new()
-        }
-    };
+    crate::config::select_agents(selection);
     let paint = Paint::new();
     let p = |code: &str, text: &str| paint.p(code, text);
     let now = times::now();
     let (accounts, any_fable) = sorted_by_fable(
         load_usage(
-            &roots(Agent::Claude, find_profiles),
+            &find_profiles(),
             args.flag("cached"),
-            &roots(Agent::Codex, find_codex_homes),
-            &roots(Agent::Agy, paths::find_agy_roots),
-            &roots(Agent::Kimi, paths::find_kimi_homes),
-            &roots(Agent::Zcode, paths::find_zcode_roots),
-            &roots(Agent::Dsh, paths::find_dsh_homes),
-            &roots(Agent::Mcode, paths::find_mcode_homes),
-            &roots(Agent::Qwen, paths::find_qwen_homes),
-            &roots(Agent::Copilot, paths::find_copilot_homes),
-            &roots(Agent::Opencode, paths::find_opencode_homes),
+            &find_codex_homes(),
+            &paths::find_agy_roots(),
+            &paths::find_kimi_homes(),
+            &paths::find_zcode_roots(),
+            &paths::find_dsh_homes(),
+            &paths::find_mcode_homes(),
+            &paths::find_qwen_homes(),
+            &paths::find_copilot_homes(),
+            &paths::find_opencode_homes(),
         ),
         now,
     );
