@@ -246,20 +246,23 @@ class AgyUsage(unittest.TestCase):
         self.assertEqual([(l["name"], l["left_percent"], l["resets_at"] is None) for l in account["limits"]],
                          [("Gemini 4 Argon", 100, True), ("Gemini 3.8 Flash", 100, True),
                           ("Claude Opus 5.5 (Max)", 25, False), ("Claude Opus 5.5 (High, Medium)", 62, False)])
-        # The list's one-line comment folds the models that read the same into one meter, in a
-        # terminal wide enough for every bar.
+        # The list's comment, with more limits than a line holds, shows them as hatcheck usage
+        # does: a line each.
         code, out = self.h.run("sessions", "--all-folders", "--cached", PATH=self.bin + os.pathsep + self.h.env()["PATH"],
                                HATCHECK_CACHE_DIR=self.cache, COLUMNS="200")
         self.assertEqual(code, 0, out)
         lines = out.splitlines()
         command = next(k for k, line in enumerate(lines) if "agy --conversation " + G in line)
-        self.assertRegex(lines[command + 1], r"^ {8}# Gemini 4 Argon \+1 +100% █+  Claude Opus 5.5 \(Max\) +25% .*Claude Opus 5.5 \(High, Medium\) +62% ")
+        self.assertRegex(lines[command + 1], r"^ {8}# Gemini 4 Argon {17}100% █{10}$")
+        self.assertRegex(lines[command + 2], r"^ {8}# Gemini 3.8 Flash {15}100% █{10}$")
+        self.assertRegex(lines[command + 3], r"^ {8}# Claude Opus 5.5 \(Max\) {11}25% ")
+        self.assertRegex(lines[command + 4], r"^ {8}# Claude Opus 5.5 \(High, Medium\)  62% .*resets [^()]+ \(in 2h59m\)$")
 
     def test_the_buckets_agy_1_5_6_answers_with(self):
         # agy 1.5.6 answered on 2026-11-11 with 1.4.3's buckets by window, and a group for a model
-        # too. hatcheck usage keeps agy's names; the list's comment shows the short ones, folds the
-        # groups that read the same, and leaves out bars, then the meters at 100%, to fit the
-        # terminal; Claude Code's meters don't line up with agy's.
+        # too: five limits, which the list's comment shows as hatcheck usage does, a line each,
+        # leaving out the time bars, then agy's long names, to fit the terminal. agy has one
+        # folder, so one account: its block is shown once, under its first conversation.
         bucket = lambda window, left, hours: {"window": window, "remaining_fraction": left,  # noqa: E731
                                               "reset_time": iso(NOW + hours * 3600)}
         write(os.path.join(self.root, "fake-usage.json"), json.dumps({"groups": [
@@ -277,22 +280,28 @@ class AgyUsage(unittest.TestCase):
             {"kind": "session", "group": "session", "percent": 40, "severity": "normal", "resets_at": iso(NOW + 2 * 3600)},
             {"kind": "weekly_all", "group": "weekly", "percent": 10, "severity": "normal", "resets_at": iso(NOW + 3 * 86400)}]})
         self.h.session(work, self.h.folder("code", "api"), A, "A Claude Code session", 2)
-        bar, week = r"█+[▏▎▍▌▋▊▉]?░*", r"(6d23h|7d0h)"
-        for columns, agy in [
-                ("200", r"Gemini \+1 100%% █{7} ↻%s %s  Gemini 5h \+1 100%% █{5} ↻%s 4h5\dm  "
-                        r"Gemini 4 Argon 81%% █████▋░ ↻%s 4d1h" % (bar, week, bar, bar)),
-                ("120", r"Gemini \+1 100%% █{7} ↻%s  Gemini 5h \+1 100%% █{5} ↻4h5\dm  Gemini 4 Argon 81%% █████▋░ ↻4d1h"
-                        % week),
-                ("100", r"Gemini \+1 100%% ↻%s  Gemini 5h \+1 100%% ↻4h5\dm  Gemini 4 Argon 81%% ↻4d1h" % week),
-                ("60", r"Gemini 4 Argon 81% ↻4d1h  \+2 at 100%")]:
+        later = "c134893c-20f5-48ea-bc9b-7f7c9271bc4f"
+        self.h.agy_session(self.root, self.h.folder("code", "web"), later, "Another agy conversation", 3)
+        names = ["Gemini Models weekly", "Gemini Models 5h", "Claude and GPT models weekly",
+                 "Claude and GPT models 5h", "Gemini 4 Argon weekly"]
+        shorts = ["Gemini", "Gemini 5h", "Claude/GPT", "Claude/GPT 5h", "Gemini 4 Argon"]
+        bar = r"[█▏▎▍▌▋▊▉░]{10}"
+        for columns, labels, time_bars in [("200", names, True), ("100", names, True), ("90", names, False),
+                                           ("70", shorts, False)]:
             code, out = self.h.run("sessions", "--all-folders", "--cached", PATH=self.bin + os.pathsep + self.h.env()["PATH"],
                                    HATCHECK_CACHE_DIR=self.cache, COLUMNS=columns)
             self.assertEqual(code, 0, out)
             lines = out.splitlines()
-            comment = lambda command: lines[next(k for k, line in enumerate(lines) if command in line) + 1]  # noqa: E731
-            self.assertRegex(comment("agy --conversation " + G), r"^ {8}# %s$" % agy)
-            self.assertRegex(comment("--resume " + A), r"^ {8}# 5h 60% [█↻]")  # not pushed along by agy's
-            self.assertLessEqual(len(comment("agy --conversation " + G)), int(columns))
+            at = lambda command: next(k for k, line in enumerate(lines) if command in line)  # noqa: E731
+            first = at("agy --conversation " + G)
+            width = max(len(label) for label in labels)
+            for line, label, left in zip(lines[first + 1:first + 6], labels, ["100", "100", "100", "100", "81"]):
+                self.assertRegex(line, r"^ {8}# %s %3s%% %s%sresets [^()]+ \(in \w+\)$"
+                                 % (re.escape(label.ljust(width)), left, bar, "  %s " % bar if time_bars else "  "))
+                self.assertLessEqual(len(line), int(columns), line)
+            self.assertNotRegex(lines[first + 6], r"^ {8}#")
+            self.assertNotRegex(lines[at("agy --conversation " + later) + 1], r"^ {8}#")  # shown once
+            self.assertRegex(lines[at("--resume " + A) + 1], r"^ {8}# 5h 60% [█↻]")
 
     def test_two_hatchecks_ask_agy_once(self):
         """The app's engine and the CLI can ask at once; a second /usage at the same time gets

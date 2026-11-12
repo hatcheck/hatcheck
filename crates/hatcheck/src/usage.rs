@@ -866,7 +866,8 @@ pub fn percent_left(
     ))
 }
 
-/// An account's limits folded for the session list's one-line comment: with more than three,
+/// An account's limits folded for one line, as `hatcheck statusline` shows them (the session
+/// list's comment shows more than three a line each instead): with more than three,
 /// as Antigravity's bucket per model, every row with the same reading (used, reset and window)
 /// becomes one meter, named by the models that share it (`Flash, Pro`, or `Gemini 4 Argon +1`
 /// when that's over 16 characters) or `all models` when every row reads the same. A row nothing
@@ -1961,13 +1962,15 @@ pub fn account_header(
 }
 
 /// An account's rows, as hatcheck usage prints them under its heading, each label padded to
-/// width: the lines, and whether any is a quota field shown by its raw name.
+/// width, and without the bar of the time left when `time_bars` is false: the lines, and
+/// whether any is a quota field shown by its raw name.
 pub fn account_lines(
     paint: &Paint,
     rows: &[Row],
     saved_at: Option<f64>,
     now: f64,
     width: usize,
+    time_bars: bool,
 ) -> (Vec<String>, bool) {
     let p = |code: &str, text: &str| paint.p(code, text);
     let mut lines = Vec::new();
@@ -2024,8 +2027,13 @@ pub fn account_lines(
             .collect::<Vec<_>>()
             .join(" · ");
         let label = format!("{:<width$}", row.label);
+        let time_bar = if time_bars {
+            format!(" {time_bar}")
+        } else {
+            String::new()
+        };
         let line = format!(
-            "  {} {} {}  {} {}",
+            "  {} {} {} {} {}",
             p(
                 &label_color(&row.kind, if row.labeled { "" } else { "2" }, paint.wide),
                 &label
@@ -2163,7 +2171,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     }
     for (header, rows, extra, saved_at) in &blocks {
         out::println(header);
-        let (lines, dim) = account_lines(&paint, rows, *saved_at, now, width);
+        let (lines, dim) = account_lines(&paint, rows, *saved_at, now, width, true);
         for line in &lines {
             out::println(line);
         }

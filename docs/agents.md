@@ -173,19 +173,18 @@ against 1.4.2):
   `Claude Opus 5.5 (Max)`, …), each with a `remaining_fraction` and a `reset_time` that is the
   epoch while nothing has been spent from it, meaning no reset ahead; its description says the
   buckets are views of three quota pools (Gemini Pro, Gemini Flash, Claude/GPT), each showing its
-  pool's tighter cap. hatcheck shows a row per model, the tiers folded while they read the same
-  and a row per reading named by its tiers when they don't, and in the session list's one-line
-  comment folds the models that read the same into one meter (`Gemini 4 Argon +1`, or `all
-  models`). agy 1.4.3 answered with each group's limits as `buckets`, each with a `window` (`5h`
-  or `weekly`), shown as one row per bucket with the window's length, and the `windows` and
-  `models` of 1.4.2's answer are still read. agy 1.5.6 answers in 1.4.3's shape again, with a group
-  for a model beside the two for groups of models (`Gemini Models`, `Claude and GPT models`, `Gemini
-  4 Argon`); the list's comment names a bucket by its group without the `models` at its end and with
-  `/` for its ` and `, alone for a weekly one, as a model's own weekly limit is, and with its window
-  for another (`Gemini`, `Gemini 5h`, `Claude/GPT`). An untouched bucket's `reset_time` is a window
-  from when agy answered, so two can read an hour apart. Checked against the answers agy 1.4.3 gave on
-  2026-10-20, 1.4.7 on 2026-10-24 and 1.4.10 on 2026-10-29, and 1.5.6's groups as hatcheck read them
-  on 2026-11-11.
+  pool's tighter cap. hatcheck shows a row per model, the tiers folded while they read the same and
+  a row per reading named by its tiers when they don't, and the session list's comment shows them a
+  line each, as `hatcheck usage` does. agy 1.4.3 answered with each group's limits as `buckets`,
+  each with a `window` (`5h` or `weekly`), shown as one row per bucket with the window's length, and
+  the `windows` and `models` of 1.4.2's answer are still read. agy 1.5.6 answers in 1.4.3's shape
+  again, with a group for a model beside the two for groups of models (`Gemini Models`, `Claude and
+  GPT models`, `Gemini 4 Argon`); in a terminal too narrow for those names, the list's comment names
+  a bucket by its group without the `models` at its end and with `/` for its ` and `, alone for a
+  weekly one, as a model's own weekly limit is, and with its window for another (`Gemini`, `Gemini
+  5h`, `Claude/GPT`). An untouched bucket's `reset_time` is a window from when agy answered, so two
+  can read an hour apart. Checked against the answers agy 1.4.3 gave on 2026-10-20, 1.4.7 on
+  2026-10-24 and 1.4.10 on 2026-10-29, and 1.5.6's groups as hatcheck read them on 2026-11-11.
 - A session converted for agy can't be written into its store, so `hatcheck move <id> agy` writes
   the conversation as a file in `imports` in hatcheck's cache folder and prints the command that
   starts agy on it: see [With Antigravity CLI](commands.md#with-antigravity-cli).

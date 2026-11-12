@@ -272,24 +272,82 @@ impl Meter {
     }
 }
 
-/// profile -> text: each plan limit's short name (per-model ones in violet), % left and a bar
-/// of it, then ↻, a bar of the time left until it resets and that time, coloured by urgency.
-/// A meter lines up with the one of the same name in the same place on the other lines, not
-/// with another agent's. A line wider than `room` leaves out its time bars, then its plan bars
-/// too, and lines up with the lines that left out the same.
+/// More limits than this and an account's comment is a block, a limit a line.
+const LIMITS_ON_A_LINE: usize = 3;
+
+/// An account with more limits than a line holds, as hatcheck usage lays them out under its
+/// heading: a limit a line, the names lined up, the % left and its bar, a bar of the time left
+/// and when it resets. Lines wider than `room` leave out the time bars, then use the short
+/// names; the trend is hatcheck usage's alone.
+fn usage_block(
+    usage: &Value,
+    saved_at: Option<f64>,
+    now: f64,
+    paint: &Paint,
+    room: usize,
+) -> Vec<String> {
+    let limits: Vec<&Value> = match get(usage, "limits") {
+        Value::Array(rows) => rows.iter().filter(|r| r.is_object()).collect(),
+        _ => Vec::new(),
+    };
+    let lines = |short: bool, time_bars: bool, paint: &Paint| {
+        // usage_rows gives the limits first, in their order, then the quota fields.
+        let mut rows: Vec<usage::Row> = usage::usage_rows(usage)
+            .into_iter()
+            .filter(|r| r.labeled)
+            .collect();
+        if short {
+            for (row, limit) in rows.iter_mut().zip(&limits) {
+                row.label = usage::row_label(limit, true);
+            }
+        }
+        let width = rows.iter().map(|r| r.label.chars().count()).max();
+        usage::account_lines(paint, &rows, saved_at, now, width.unwrap_or(0), time_bars)
+            .0
+            .into_iter()
+            .map(|line| line.strip_prefix("  ").unwrap_or(&line).to_string())
+            .collect::<Vec<_>>()
+    };
+    let plain = Paint {
+        on: false,
+        wide: false,
+    };
+    let ways = [(false, true), (false, false), (true, false)];
+    let (short, time_bars) = ways
+        .into_iter()
+        .find(|&(short, time_bars)| {
+            lines(short, time_bars, &plain)
+                .iter()
+                .all(|line| line.chars().count() <= room)
+        })
+        .unwrap_or((true, false)); // too wide even then: as narrow as it goes
+    lines(short, time_bars, paint)
+}
+
+/// profile -> lines. An account with up to three limits has one: each limit's short name
+/// (per-model ones in violet), % left and a bar of it, then ↻, a bar of the time left until it
+/// resets and that time, coloured by urgency. A meter lines up with the one of the same name in
+/// the same place on the other lines, not with another agent's. A line wider than `room` leaves
+/// out its time bars, then its plan bars, then the meters at 100%, then the times, and lines up
+/// with the lines that left out the same. One with more has a line a limit, `usage_block`.
 pub fn usage_cells(
     results: &[(String, Usage)],
     now: f64,
     paint: &Paint,
     room: usize,
-) -> HashMap<String, String> {
+) -> HashMap<String, Vec<String>> {
+    let mut cells = HashMap::new();
     let mut meters: Vec<(String, Vec<Meter>)> = Vec::new();
     for (profile, (usage, saved_at, _)) in results {
         let mut rows: Vec<Meter> = Vec::new();
         let limits = usage.as_ref().map(|u| get(u, "limits"));
-        if let Some(Value::Array(limits)) = limits {
-            // One line: an account with many limits that read the same shows them as one.
-            for row in &usage::fold_limits(limits) {
+        if let (Some(usage), Some(Value::Array(limits))) = (usage, limits) {
+            if limits.len() > LIMITS_ON_A_LINE {
+                let block = usage_block(usage, *saved_at, now, paint, room);
+                cells.insert(profile.clone(), block);
+                continue;
+            }
+            for row in limits {
                 let left =
                     usage::percent_left(get(row, "percent"), get(row, "resets_at"), *saved_at, now);
                 let reset = s(get(row, "resets_at")).and_then(times::parse_time);
@@ -422,11 +480,10 @@ pub fn usage_cells(
         }
     }
     let widths = widths_of(&detail);
-    meters
-        .iter()
-        .zip(&detail)
-        .map(|((profile, rows), &d)| (profile.clone(), line(rows, d, &widths, paint)))
-        .collect()
+    for ((profile, rows), &d) in meters.iter().zip(&detail) {
+        cells.insert(profile.clone(), vec![line(rows, d, &widths, paint)]);
+    }
+    cells
 }
 
 /// The sessions found, keyed as the Python version keyed them, in the order first found.
@@ -1519,7 +1576,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     };
     let columns = Columns::of(&blocks);
     let mut block_at = 0;
-    let mut previous: Option<(Option<usize>, Option<String>)> = None; // (account, usage text) of the row above
+    let mut previous: Option<(Option<usize>, Option<Vec<String>>)> = None; // (account, usage lines) of the row above
+    let mut blocks_shown = Vec::new(); // (account, usage lines) of each block printed
     for f in &folders {
         let (folder, listed, older) = (&f.path, &f.listed, f.more);
         let missing = if ospath::isdir(folder) {
@@ -1624,10 +1682,22 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             let this = (account.get(&s.profile).copied(), usage.clone());
             // The plan's usage on a line of its own under the command, as a shell comment, so
             // a pasted block still runs just the command. Left out when the session above uses
-            // the same account, even through another profile, so it would only repeat.
-            if let Some(text) = usage.as_ref().filter(|u| !u.is_empty()) {
-                if previous.as_ref() != Some(&this) {
-                    out::println(&format!("{}{} {text}", " ".repeat(8), p("2", "#")));
+            // the same account, even through another profile, so it would only repeat; an
+            // account's block of a line a limit, such as agy's one folder, is shown once.
+            if let Some(lines) = usage.as_ref().filter(|u| !u.is_empty()) {
+                let show = if lines.len() > 1 {
+                    let first = !blocks_shown.contains(&this);
+                    if first {
+                        blocks_shown.push(this.clone());
+                    }
+                    first
+                } else {
+                    previous.as_ref() != Some(&this)
+                };
+                if show {
+                    for text in lines {
+                        out::println(&format!("{}{} {text}", " ".repeat(8), p("2", "#")));
+                    }
                 }
             }
             previous = Some(this);
@@ -1785,17 +1855,16 @@ mod tests {
             },
             usize::MAX,
         );
-        let cell = &cells["p"];
+        let cell = &cells["p"][0];
         for painted in ["\x1b[2m5h", "\x1b[2mweek", "\x1b[38;5;134mFable"] {
             assert!(cell.contains(painted), "{painted:?} in {cell:?}");
         }
     }
 
-    /// Claude Code's three limits for `claude`, and agy 1.5.6's five, folded to four, for `agy`,
-    /// as the list's comment lays them out in `room` columns: agy's as they read on 2026-11-11,
-    /// with a little spent from Gemini's 5 hours and the weekly limits untouched, their resets
-    /// an hour apart.
-    fn claude_and_agy(room: usize) -> HashMap<String, String> {
+    /// Claude Code's three limits for `claude`, and agy 1.5.6's five for `agy`, as the list's
+    /// comment lays them out in `room` columns: agy's as they read on 2026-11-11, with a little
+    /// spent from Gemini's 5 hours and the weekly limits untouched, their resets an hour apart.
+    fn claude_and_agy(room: usize) -> HashMap<String, Vec<String>> {
         let now = 1792274316.0;
         let at = |hours: f64| json!(times::iso_utc(now + hours * 3600.0).unwrap());
         let claude = json!({"limits": [
@@ -1803,15 +1872,17 @@ mod tests {
             {"kind": "weekly_all", "group": "weekly", "percent": 70, "severity": "normal", "resets_at": at(74.0)},
             {"kind": "weekly_scoped", "group": "weekly", "percent": 55, "severity": "warning", "resets_at": at(95.0),
              "scope": {"model": {"display_name": "Fable"}}}]});
-        let agy = |short: &str, used: i64, hours: f64, window: i64| {
-            json!({"kind": "quota_scoped", "group": "quota", "label": short, "short": short, "percent": used,
+        let agy = |label: &str, short: &str, used: i64, hours: f64, window: i64| {
+            json!({"kind": "quota_scoped", "group": "quota", "label": label, "short": short, "percent": used,
                    "resets_at": at(hours), "window_seconds": window, "severity": "normal"})
         };
         let (week, five) = (7 * 86400, 5 * 3600);
         let agy = json!({"limits": [
-            agy("Gemini", 0, 167.0, week), agy("Gemini 5h", 1, 4.77, five),
-            agy("Claude/GPT", 0, 168.0, week), agy("Claude/GPT 5h", 0, 5.0, five),
-            agy("Gemini 4 Argon", 46, 96.5, week)]});
+            agy("Gemini Models weekly", "Gemini", 0, 167.0, week),
+            agy("Gemini Models 5h", "Gemini 5h", 1, 4.77, five),
+            agy("Claude and GPT models weekly", "Claude/GPT", 0, 168.0, week),
+            agy("Claude and GPT models 5h", "Claude/GPT 5h", 0, 5.0, five),
+            agy("Gemini 4 Argon weekly", "Gemini 4 Argon", 46, 96.5, week)]});
         let results: Vec<(String, Usage)> = vec![
             ("claude".into(), (Some(claude), None, None)),
             ("agy".into(), (Some(agy), None, None)),
@@ -1828,12 +1899,7 @@ mod tests {
         let cells = claude_and_agy(usize::MAX);
         assert_eq!(
             cells["claude"],
-            "5h 62% ███▏░ ↻██▊░░ 2h42m  week 30% ██▏░░░░ ↻███▏░░░ 3d2h  Fable 45% ███▏░░░ ↻████░░░ 3d23h"
-        );
-        assert_eq!(
-            cells["agy"],
-            "Gemini +1 100% ███████ ↻██████▉ 6d23h  Gemini 5h 99% ████▉ ↻████▊ 4h46m  \
-             Claude/GPT 5h 100% █████ ↻█████ 5h00m  Gemini 4 Argon 54% ███▊░░░ ↻████░░░ 4d0h"
+            ["5h 62% ███▏░ ↻██▊░░ 2h42m  week 30% ██▏░░░░ ↻███▏░░░ 3d2h  Fable 45% ███▏░░░ ↻████░░░ 3d23h"]
         );
     }
 
@@ -1842,27 +1908,60 @@ mod tests {
         let cells = claude_and_agy(100);
         assert_eq!(
             cells["claude"],
-            "5h 62% ███▏░ ↻██▊░░ 2h42m  week 30% ██▏░░░░ ↻███▏░░░ 3d2h  Fable 45% ███▏░░░ ↻████░░░ 3d23h"
-        );
-        assert_eq!(
-            cells["agy"],
-            "Gemini +1 100% ↻6d23h  Gemini 5h 99% ↻4h46m  Claude/GPT 5h 100% ↻5h00m  Gemini 4 Argon 54% ↻4d0h"
+            ["5h 62% ███▏░ ↻██▊░░ 2h42m  week 30% ██▏░░░░ ↻███▏░░░ 3d2h  Fable 45% ███▏░░░ ↻████░░░ 3d23h"]
         );
         let cells = claude_and_agy(70);
         assert_eq!(
             cells["claude"],
-            "5h 62% ███▏░ ↻2h42m  week 30% ██▏░░░░ ↻3d2h  Fable 45% ███▏░░░ ↻3d23h"
-        );
-        assert_eq!(
-            cells["agy"],
-            "Gemini 5h 99% ↻4h46m  Gemini 4 Argon 54% ↻4d0h  +2 at 100%"
+            ["5h 62% ███▏░ ↻2h42m  week 30% ██▏░░░░ ↻3d2h  Fable 45% ███▏░░░ ↻3d23h"]
         );
         let cells = claude_and_agy(40);
-        assert_eq!(cells["claude"], "5h 62%  week 30%  Fable 45%");
-        // Too wide even then: the least detail, and the line as long as it is.
+        assert_eq!(cells["claude"], ["5h 62%  week 30%  Fable 45%"]);
+    }
+
+    /// Each of agy's lines up to its reset, whose clock depends on the time zone.
+    fn agy_lines(room: usize) -> Vec<String> {
+        claude_and_agy(room)["agy"]
+            .iter()
+            .map(|line| {
+                let (start, reset) = line.split_once(" resets ").unwrap();
+                assert!(reset.ends_with(')'), "{line:?}");
+                assert!(
+                    line.chars().count() <= room,
+                    "{line:?} is wider than {room}"
+                );
+                start.trim_end().to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn more_limits_than_a_line_holds_are_a_line_each_as_hatcheck_usage_shows_them() {
+        let full = [
+            "Gemini Models weekly         100% ██████████  █████████▉",
+            "Gemini Models 5h              99% █████████▉  █████████▌",
+            "Claude and GPT models weekly 100% ██████████  ██████████",
+            "Claude and GPT models 5h     100% ██████████  ██████████",
+            "Gemini 4 Argon weekly         54% █████▍░░░░  █████▊░░░░",
+        ];
+        assert_eq!(agy_lines(usize::MAX), full);
+        assert_eq!(agy_lines(100), full);
+        // Narrower, the time bars go, then the long names.
+        let names = |rows: &[&str]| {
+            rows.iter()
+                .map(|r| r.rsplit_once("  ").unwrap().0.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(agy_lines(80), names(&full));
         assert_eq!(
-            cells["agy"],
-            "Gemini 5h 99%  Gemini 4 Argon 54%  +2 at 100%"
+            agy_lines(60),
+            [
+                "Gemini         100% ██████████",
+                "Gemini 5h       99% █████████▉",
+                "Claude/GPT     100% ██████████",
+                "Claude/GPT 5h  100% ██████████",
+                "Gemini 4 Argon  54% █████▍░░░░",
+            ]
         );
     }
 

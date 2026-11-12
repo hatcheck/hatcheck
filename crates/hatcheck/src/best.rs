@@ -363,7 +363,7 @@ pub fn print_account(paint: &Paint, lead: &str, account: &Ranked, now: f64) {
         .map(|r| r.label.chars().count())
         .max()
         .unwrap_or(0);
-    let (lines, _) = usage::account_lines(paint, &rows, *saved_at, now, width);
+    let (lines, _) = usage::account_lines(paint, &rows, *saved_at, now, width, true);
     for line in &lines {
         out::println(line);
     }
