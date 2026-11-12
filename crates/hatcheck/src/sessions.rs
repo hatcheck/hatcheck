@@ -217,24 +217,72 @@ fn agents_text(present: &[Agent]) -> String {
     }
 }
 
+/// A plan limit as the list's comment shows it, each part with its colour: the limit's short
+/// name, the % left and a bar of it, and ↻ with a bar of the time left until it resets (none
+/// without a window to measure that against) and that time (none without a reset ahead).
+struct Meter {
+    label: String,
+    label_code: String,
+    pct: String,
+    pct_code: String,
+    plan: String,
+    plan_code: String,
+    time_bar: String,
+    until: String,
+    until_code: String,
+}
+
+/// How much a comment shows, for a line that would be too wide with more: 0 is everything, 1
+/// all but the time bars, 2 neither bar, 3 that without the meters at 100%, which it counts at
+/// the end instead, and this that without the times too.
+const LEAST_DETAIL: usize = 4;
+
+impl Meter {
+    /// Nothing spent from it.
+    fn full(&self) -> bool {
+        self.pct == "100%"
+    }
+
+    /// The meters a line shows at a level of detail.
+    fn shown(rows: &[Meter], detail: usize) -> Vec<&Meter> {
+        rows.iter().filter(|m| detail < 3 || !m.full()).collect()
+    }
+
+    /// The meter's columns at a level of detail, as (colour, text): its name, the % left, the
+    /// plan bar, and ↻ with the time bar and the time.
+    fn columns(&self, detail: usize) -> Vec<(&str, String)> {
+        let until = if self.until.is_empty() {
+            String::new()
+        } else if detail == 0 && !self.time_bar.is_empty() {
+            format!("↻{} {}", self.time_bar, self.until)
+        } else {
+            format!("↻{}", self.until)
+        };
+        let mut columns = vec![
+            (self.label_code.as_str(), self.label.clone()),
+            (self.pct_code.as_str(), self.pct.clone()),
+        ];
+        if detail < 2 {
+            columns.push((self.plan_code.as_str(), self.plan.clone()));
+        }
+        if detail < LEAST_DETAIL {
+            columns.push((self.until_code.as_str(), until));
+        }
+        columns
+    }
+}
+
 /// profile -> text: each plan limit's short name (per-model ones in violet), % left and a bar
-/// of it, then ↻, a bar of the time left until it resets and that time, coloured by urgency,
-/// in columns aligned across profiles.
+/// of it, then ↻, a bar of the time left until it resets and that time, coloured by urgency.
+/// A meter lines up with the one of the same name in the same place on the other lines, not
+/// with another agent's. A line wider than `room` leaves out its time bars, then its plan bars
+/// too, and lines up with the lines that left out the same.
 pub fn usage_cells(
     results: &[(String, Usage)],
     now: f64,
     paint: &Paint,
+    room: usize,
 ) -> HashMap<String, String> {
-    type Meter = (
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-    );
     let mut meters: Vec<(String, Vec<Meter>)> = Vec::new();
     for (profile, (usage, saved_at, _)) in results {
         let mut rows: Vec<Meter> = Vec::new();
@@ -250,15 +298,15 @@ pub fn usage_cells(
                     .filter(|_| truthy(&window))
                     .map(py::Num::f);
                 let blocks = usage::bar_cells(&window);
-                let (pct, code, plan, mut until, mut until_code);
+                let (pct, code, plan);
+                let (mut time_bar, mut until, mut until_code) =
+                    (String::new(), String::new(), String::new());
                 match left {
                     None => {
                         // reset since the snapshot
                         pct = "?".to_string();
                         code = "2".to_string();
                         plan = "·".repeat(blocks);
-                        until = String::new();
-                        until_code = String::new();
                     }
                     Some(left) => {
                         pct = format!("{}%", left.d());
@@ -266,13 +314,10 @@ pub fn usage_cells(
                             .unwrap_or("")
                             .to_string();
                         plan = usage::bar(left.f() / 100.0, blocks);
-                        until = String::new();
-                        until_code = String::new();
                         if let Some(reset) = reset {
                             let to_go = window_n.map(|w| (reset - now) / w);
-                            let time_bar =
-                                to_go.map_or(String::new(), |f| usage::bar(f, blocks) + " ");
-                            until = format!("↻{time_bar}{}", times::duration(reset - now));
+                            time_bar = to_go.map_or(String::new(), |f| usage::bar(f, blocks));
+                            until = times::duration(reset - now);
                             until_code = match to_go {
                                 Some(f) => usage::urgency_color(f, paint.wide),
                                 None => "2".into(),
@@ -282,72 +327,106 @@ pub fn usage_cells(
                 }
                 // A per-model limit's bar is violet like its name; its % keeps the severity's colour.
                 let kind = get(row, "kind");
-                rows.push((
-                    usage::row_label(row, true),
-                    usage::label_color(kind, "2", paint.wide),
+                rows.push(Meter {
+                    label: usage::row_label(row, true),
+                    label_code: usage::label_color(kind, "2", paint.wide),
+                    plan_code: usage::label_color(kind, &code, paint.wide),
                     pct,
-                    code.clone(),
+                    pct_code: code,
                     plan,
-                    usage::label_color(kind, &code, paint.wide),
+                    time_bar,
                     until,
                     until_code,
-                ));
+                });
             }
         }
         meters.push((profile.clone(), rows));
     }
-    let mut widths: Vec<[usize; 4]> = Vec::new(); // meter slot -> widest [label, % left, plan bar, time bar]
-    for (_, rows) in &meters {
-        for (i, m) in rows.iter().enumerate() {
-            if widths.len() <= i {
-                widths.push([0; 4]);
-            }
-            let w = &mut widths[i];
-            for (k, text) in [&m.0, &m.2, &m.4, &m.6].into_iter().enumerate() {
-                w[k] = w[k].max(text.chars().count());
+    // (place, name, detail) -> the widest of each column of the meters there.
+    type Widths = HashMap<(usize, String, usize), Vec<usize>>;
+    let widths_of = |detail: &[usize]| {
+        let mut widths = Widths::new();
+        for ((_, rows), &d) in meters.iter().zip(detail) {
+            for (i, m) in Meter::shown(rows, d).into_iter().enumerate() {
+                let w = widths.entry((i, m.label.clone(), d)).or_default();
+                for (k, (_, text)) in m.columns(d).iter().enumerate() {
+                    if w.len() <= k {
+                        w.push(0);
+                    }
+                    w[k] = w[k].max(text.chars().count());
+                }
             }
         }
-    }
-    let padded = |code: &str, text: &str, width: usize, right: bool| {
-        let gap = " ".repeat(width.saturating_sub(text.chars().count()));
-        let text = if text.is_empty() {
-            String::new()
-        } else {
-            paint.p(code, text)
-        };
-        if right {
-            gap + &text
-        } else {
-            text + &gap
-        }
+        widths
     };
-    let mut cells = HashMap::new();
-    for (profile, rows) in meters {
-        let parts: Vec<String> = rows
-            .iter()
+    let line = |rows: &[Meter], d: usize, widths: &Widths, paint: &Paint| {
+        if rows.is_empty() {
+            return paint.p("2", "usage ?");
+        }
+        let shown = Meter::shown(rows, d);
+        let full = rows.len() - shown.len();
+        let parts: Vec<String> = shown
+            .into_iter()
             .enumerate()
-            .map(
-                |(i, (label, label_code, pct, code, plan, plan_code, until, until_code))| {
-                    let [lw, pw, bw, uw] = widths[i];
-                    // Padded so the next meter lines up; the trailing gap is cut below.
-                    [
-                        padded(label_code, label, lw, false),
-                        padded(code, pct, pw, true),
-                        padded(plan_code, plan, bw, false),
-                        padded(until_code, until, uw, false),
-                    ]
+            .map(|(i, m)| {
+                let w = &widths[&(i, m.label.clone(), d)];
+                m.columns(d)
+                    .iter()
+                    .enumerate()
+                    .filter(|(k, _)| w[*k] > 0) // empty on every line here: no room for it
+                    .map(|(k, (code, text))| {
+                        // The % right-aligned, the rest padded so the next meter lines up; the
+                        // trailing gap is cut below.
+                        let gap = " ".repeat(w[k].saturating_sub(text.chars().count()));
+                        let text = if text.is_empty() {
+                            String::new()
+                        } else {
+                            paint.p(code, text)
+                        };
+                        if k == 1 {
+                            gap + &text
+                        } else {
+                            text + &gap
+                        }
+                    })
+                    .collect::<Vec<_>>()
                     .join(" ")
-                },
-            )
+            })
             .collect();
-        let text = if parts.is_empty() {
-            paint.p("2", "usage ?")
-        } else {
-            parts.join("  ").trim_end_matches(py::is_space).to_string()
-        };
-        cells.insert(profile, text);
+        let mut text = parts.join("  ").trim_end_matches(py::is_space).to_string();
+        if full > 0 {
+            // The meters left out at 100%, counted.
+            let note = if text.is_empty() {
+                format!("all {full} at 100%")
+            } else {
+                text += "  ";
+                format!("+{full} at 100%")
+            };
+            text += &paint.p("2", &note);
+        }
+        text
+    };
+    // Each line at the most detail that fits: a line that moves on to less only narrows the
+    // columns of those that stay, which still fit.
+    let plain = Paint {
+        on: false,
+        wide: false,
+    };
+    let mut detail = vec![0; meters.len()];
+    for pass in 0..LEAST_DETAIL {
+        let widths = widths_of(&detail);
+        for (i, (_, rows)) in meters.iter().enumerate() {
+            if detail[i] == pass && line(rows, pass, &widths, &plain).chars().count() > room {
+                detail[i] = pass + 1;
+            }
+        }
     }
-    cells
+    let widths = widths_of(&detail);
+    meters
+        .iter()
+        .zip(&detail)
+        .map(|((profile, rows), &d)| (profile.clone(), line(rows, d, &widths, paint)))
+        .collect()
 }
 
 /// The sessions found, keyed as the Python version keyed them, in the order first found.
@@ -1382,7 +1461,8 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let cells = if results.is_empty() {
         HashMap::new()
     } else {
-        usage_cells(&results, now, &paint)
+        // The comment's line is indented 8 and starts `# `: it fits the width left after that.
+        usage_cells(&results, now, &paint, width.saturating_sub(10))
     };
     let window = format!("{}h", py::g(hours));
     let mut present = Vec::new();
@@ -1703,11 +1783,87 @@ mod tests {
                 on: true,
                 wide: true,
             },
+            usize::MAX,
         );
         let cell = &cells["p"];
         for painted in ["\x1b[2m5h", "\x1b[2mweek", "\x1b[38;5;134mFable"] {
             assert!(cell.contains(painted), "{painted:?} in {cell:?}");
         }
+    }
+
+    /// Claude Code's three limits for `claude`, and agy 1.5.6's five, folded to four, for `agy`,
+    /// as the list's comment lays them out in `room` columns: agy's as they read on 2026-11-11,
+    /// with a little spent from Gemini's 5 hours and the weekly limits untouched, their resets
+    /// an hour apart.
+    fn claude_and_agy(room: usize) -> HashMap<String, String> {
+        let now = 1792274316.0;
+        let at = |hours: f64| json!(times::iso_utc(now + hours * 3600.0).unwrap());
+        let claude = json!({"limits": [
+            {"kind": "session", "group": "session", "percent": 38, "severity": "normal", "resets_at": at(2.7)},
+            {"kind": "weekly_all", "group": "weekly", "percent": 70, "severity": "normal", "resets_at": at(74.0)},
+            {"kind": "weekly_scoped", "group": "weekly", "percent": 55, "severity": "warning", "resets_at": at(95.0),
+             "scope": {"model": {"display_name": "Fable"}}}]});
+        let agy = |short: &str, used: i64, hours: f64, window: i64| {
+            json!({"kind": "quota_scoped", "group": "quota", "label": short, "short": short, "percent": used,
+                   "resets_at": at(hours), "window_seconds": window, "severity": "normal"})
+        };
+        let (week, five) = (7 * 86400, 5 * 3600);
+        let agy = json!({"limits": [
+            agy("Gemini", 0, 167.0, week), agy("Gemini 5h", 1, 4.77, five),
+            agy("Claude/GPT", 0, 168.0, week), agy("Claude/GPT 5h", 0, 5.0, five),
+            agy("Gemini 4 Argon", 46, 96.5, week)]});
+        let results: Vec<(String, Usage)> = vec![
+            ("claude".into(), (Some(claude), None, None)),
+            ("agy".into(), (Some(agy), None, None)),
+        ];
+        let plain = Paint {
+            on: false,
+            wide: false,
+        };
+        usage_cells(&results, now, &plain, room)
+    }
+
+    #[test]
+    fn a_meter_lines_up_only_with_one_of_its_name() {
+        let cells = claude_and_agy(usize::MAX);
+        assert_eq!(
+            cells["claude"],
+            "5h 62% ███▏░ ↻██▊░░ 2h42m  week 30% ██▏░░░░ ↻███▏░░░ 3d2h  Fable 45% ███▏░░░ ↻████░░░ 3d23h"
+        );
+        assert_eq!(
+            cells["agy"],
+            "Gemini +1 100% ███████ ↻██████▉ 6d23h  Gemini 5h 99% ████▉ ↻████▊ 4h46m  \
+             Claude/GPT 5h 100% █████ ↻█████ 5h00m  Gemini 4 Argon 54% ███▊░░░ ↻████░░░ 4d0h"
+        );
+    }
+
+    #[test]
+    fn a_line_too_wide_leaves_out_bars_then_full_meters_then_times() {
+        let cells = claude_and_agy(100);
+        assert_eq!(
+            cells["claude"],
+            "5h 62% ███▏░ ↻██▊░░ 2h42m  week 30% ██▏░░░░ ↻███▏░░░ 3d2h  Fable 45% ███▏░░░ ↻████░░░ 3d23h"
+        );
+        assert_eq!(
+            cells["agy"],
+            "Gemini +1 100% ↻6d23h  Gemini 5h 99% ↻4h46m  Claude/GPT 5h 100% ↻5h00m  Gemini 4 Argon 54% ↻4d0h"
+        );
+        let cells = claude_and_agy(70);
+        assert_eq!(
+            cells["claude"],
+            "5h 62% ███▏░ ↻2h42m  week 30% ██▏░░░░ ↻3d2h  Fable 45% ███▏░░░ ↻3d23h"
+        );
+        assert_eq!(
+            cells["agy"],
+            "Gemini 5h 99% ↻4h46m  Gemini 4 Argon 54% ↻4d0h  +2 at 100%"
+        );
+        let cells = claude_and_agy(40);
+        assert_eq!(cells["claude"], "5h 62%  week 30%  Fable 45%");
+        // Too wide even then: the least detail, and the line as long as it is.
+        assert_eq!(
+            cells["agy"],
+            "Gemini 5h 99%  Gemini 4 Argon 54%  +2 at 100%"
+        );
     }
 
     #[test]

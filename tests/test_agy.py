@@ -246,13 +246,53 @@ class AgyUsage(unittest.TestCase):
         self.assertEqual([(l["name"], l["left_percent"], l["resets_at"] is None) for l in account["limits"]],
                          [("Gemini 4 Argon", 100, True), ("Gemini 3.8 Flash", 100, True),
                           ("Claude Opus 5.5 (Max)", 25, False), ("Claude Opus 5.5 (High, Medium)", 62, False)])
-        # The list's one-line comment folds the models that read the same into one meter.
+        # The list's one-line comment folds the models that read the same into one meter, in a
+        # terminal wide enough for every bar.
         code, out = self.h.run("sessions", "--all-folders", "--cached", PATH=self.bin + os.pathsep + self.h.env()["PATH"],
-                               HATCHECK_CACHE_DIR=self.cache)
+                               HATCHECK_CACHE_DIR=self.cache, COLUMNS="200")
         self.assertEqual(code, 0, out)
         lines = out.splitlines()
         command = next(k for k, line in enumerate(lines) if "agy --conversation " + G in line)
-        self.assertRegex(lines[command + 1], r"^ {8}# Gemini 4 Argon \+1 +100% █+ +Claude Opus 5.5 \(Max\) +25% .*Claude Opus 5.5 \(High, Medium\) +62% ")
+        self.assertRegex(lines[command + 1], r"^ {8}# Gemini 4 Argon \+1 +100% █+  Claude Opus 5.5 \(Max\) +25% .*Claude Opus 5.5 \(High, Medium\) +62% ")
+
+    def test_the_buckets_agy_1_5_6_answers_with(self):
+        # agy 1.5.6 answered on 2026-11-11 with 1.4.3's buckets by window, and a group for a model
+        # too. hatcheck usage keeps agy's names; the list's comment shows the short ones, folds the
+        # groups that read the same, and leaves out bars, then the meters at 100%, to fit the
+        # terminal; Claude Code's meters don't line up with agy's.
+        bucket = lambda window, left, hours: {"window": window, "remaining_fraction": left,  # noqa: E731
+                                              "reset_time": iso(NOW + hours * 3600)}
+        write(os.path.join(self.root, "fake-usage.json"), json.dumps({"groups": [
+            {"name": "Gemini Models", "buckets": [bucket("weekly", 1, 168), bucket("5h", 1, 5)]},
+            {"name": "Claude and GPT models", "buckets": [bucket("weekly", 1, 168), bucket("5h", 1, 5)]},
+            {"name": "Gemini 4 Argon", "buckets": [bucket("weekly", 0.81, 97.5)]}]}))
+        code, out = self.run_usage("--json")
+        self.assertEqual(code, 0, out)
+        self.assertEqual([(l["name"], l["short"]) for l in json.loads(out)["accounts"][0]["limits"]],
+                         [("Gemini Models weekly", "Gemini"), ("Gemini Models 5h", "Gemini 5h"),
+                          ("Claude and GPT models weekly", "Claude/GPT"),
+                          ("Claude and GPT models 5h", "Claude/GPT 5h"),
+                          ("Gemini 4 Argon weekly", "Gemini 4 Argon")])
+        work = self.h.profile("work", "acct-w", usage={"limits": [
+            {"kind": "session", "group": "session", "percent": 40, "severity": "normal", "resets_at": iso(NOW + 2 * 3600)},
+            {"kind": "weekly_all", "group": "weekly", "percent": 10, "severity": "normal", "resets_at": iso(NOW + 3 * 86400)}]})
+        self.h.session(work, self.h.folder("code", "api"), A, "A Claude Code session", 2)
+        bar, week = r"█+[▏▎▍▌▋▊▉]?░*", r"(6d23h|7d0h)"
+        for columns, agy in [
+                ("200", r"Gemini \+1 100%% █{7} ↻%s %s  Gemini 5h \+1 100%% █{5} ↻%s 4h5\dm  "
+                        r"Gemini 4 Argon 81%% █████▋░ ↻%s 4d1h" % (bar, week, bar, bar)),
+                ("120", r"Gemini \+1 100%% █{7} ↻%s  Gemini 5h \+1 100%% █{5} ↻4h5\dm  Gemini 4 Argon 81%% █████▋░ ↻4d1h"
+                        % week),
+                ("100", r"Gemini \+1 100%% ↻%s  Gemini 5h \+1 100%% ↻4h5\dm  Gemini 4 Argon 81%% ↻4d1h" % week),
+                ("60", r"Gemini 4 Argon 81% ↻4d1h  \+2 at 100%")]:
+            code, out = self.h.run("sessions", "--all-folders", "--cached", PATH=self.bin + os.pathsep + self.h.env()["PATH"],
+                                   HATCHECK_CACHE_DIR=self.cache, COLUMNS=columns)
+            self.assertEqual(code, 0, out)
+            lines = out.splitlines()
+            comment = lambda command: lines[next(k for k, line in enumerate(lines) if command in line) + 1]  # noqa: E731
+            self.assertRegex(comment("agy --conversation " + G), r"^ {8}# %s$" % agy)
+            self.assertRegex(comment("--resume " + A), r"^ {8}# 5h 60% [█↻]")  # not pushed along by agy's
+            self.assertLessEqual(len(comment("agy --conversation " + G)), int(columns))
 
     def test_two_hatchecks_ask_agy_once(self):
         """The app's engine and the CLI can ask at once; a second /usage at the same time gets

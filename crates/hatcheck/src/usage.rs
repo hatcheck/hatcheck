@@ -868,18 +868,25 @@ pub fn percent_left(
 
 /// An account's limits folded for the session list's one-line comment: with more than three,
 /// as Antigravity's bucket per model, every row with the same reading (used, reset and window)
-/// becomes one meter, named by the models that share it (`Gemini 4 Argon, Gemini 3.1 Pro`, or
-/// `Gemini 4 Argon +1` when that's long) or `all models` when every row reads the same. Three or
-/// fewer are shown as they are, and hatcheck usage keeps every row.
+/// becomes one meter, named by the models that share it (`Flash, Pro`, or `Gemini 4 Argon +1`
+/// when that's over 16 characters) or `all models` when every row reads the same. A row nothing
+/// has been spent from reads the same as another of its window whatever their resets say: agy
+/// 1.5.6 gives such a bucket a reset a window from when it answered, an hour apart between two.
+/// Three or fewer are shown as they are, and hatcheck usage keeps every row.
 pub fn fold_limits(limits: &[Value]) -> Vec<Value> {
     let rows: Vec<&Value> = limits.iter().filter(|r| r.is_object()).collect();
     if rows.len() <= 3 {
         return rows.into_iter().cloned().collect();
     }
     let reading = |row: &Value| {
+        let unspent = Num::of(get(row, "percent")).is_some_and(|n| n.f() == 0.0);
         (
             get(row, "percent").clone(),
-            get(row, "resets_at").clone(),
+            if unspent {
+                Value::Null
+            } else {
+                get(row, "resets_at").clone()
+            },
             get(row, "window_seconds").clone(),
         )
     };
@@ -901,7 +908,7 @@ pub fn fold_limits(limits: &[Value]) -> Vec<Value> {
             let joined = labels.join(", ");
             let name = if all {
                 "all models".to_string()
-            } else if labels.len() == 1 || joined.chars().count() <= 28 {
+            } else if labels.len() == 1 || joined.chars().count() <= 16 {
                 joined
             } else {
                 format!("{} +{}", labels[0], labels.len() - 1)
@@ -2272,6 +2279,28 @@ mod tests {
             .map(|r| row_label(r, true))
             .collect();
         assert_eq!(labels, ["Flash, Pro", "Claude, GPT"]);
+        // agy 1.5.6's groups by their short names: `Gemini, Claude/GPT` is over 16, and two
+        // nothing has been spent from are one meter though agy's resets for them differ.
+        let (week, five) = (Some("2026-11-08T00:00:00Z"), Some("2026-11-01T05:00:00Z"));
+        let windowed = |label: &str, used: i64, reset: Option<&str>, hours: i64| {
+            let mut r = row(label, used, reset);
+            r["window_seconds"] = json!(hours * 3600);
+            r
+        };
+        let groups = vec![
+            windowed("Gemini", 0, week, 168),
+            windowed("Gemini 5h", 1, five, 5),
+            windowed("Claude/GPT", 0, Some("2026-11-08T01:00:00Z"), 168),
+            windowed("Claude/GPT 5h", 0, five, 5),
+            windowed("Gemini 4 Argon", 19, week, 168),
+        ];
+        let folded = fold_limits(&groups);
+        let labels: Vec<String> = folded.iter().map(|r| row_label(r, true)).collect();
+        assert_eq!(
+            labels,
+            ["Gemini +1", "Gemini 5h", "Claude/GPT 5h", "Gemini 4 Argon"]
+        );
+        assert_eq!(folded[0]["resets_at"], week.unwrap());
         let same: Vec<Value> = (0..4)
             .map(|i| row(&format!("Model {i}"), 0, None))
             .collect();

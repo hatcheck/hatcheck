@@ -188,6 +188,12 @@ No sessions active in ~/code/new in the last 24h or open now; 7 in other folders
 - A plan bar shorter than its time bar means that limit is being used up faster than its window runs
   out, like `Fable` above: 48% left with more than half the week to go. `?` means the limit has
   reset since the saved snapshot it came from.
+- A meter lines up under the one of the same name in the comments above it, and another agent's
+  meters, named otherwise, don't push it along. A comment too wide for the terminal (its width,
+  `$COLUMNS` when set, or 100 columns in a pipe) leaves out, a step at a time until it fits: its
+  time bars, keeping `↻` and the time; its plan bars; the meters at 100%, counted at the end
+  (`# Gemini 5h 99% ↻4h46m  Gemini 4 Argon 54% ↻4d0h  +2 at 100%`); and the times, keeping the
+  %. A comment too wide even then is shown as it is.
 - A command without the comment, like the second one in `~/notes`, uses the same account as the
   command above it, even through another profile, so its usage is the same.
 - A session whose newest reply came from Z.ai, Kimi, MiniMax or DeepSeek shows that model, like `on k3`
@@ -198,11 +204,15 @@ No sessions active in ~/code/new in the last 24h or open now; 7 in other folders
   from the Codex app (now part of the ChatGPT desktop app), its IDE extension and `codex exec` are
   hidden like Desktop ones, and Codex's own approval reviews aren't listed.
 - Antigravity CLI sessions resume with `agy --conversation <id>`, and have no branch after the
-  title, since agy writes none down. Their comment shows what agy's `/usage` reports, a limit per
-  model (agy 1.4.10 names a bucket per model and effort tier, which hatcheck folds to one per
-  model while the tiers read the same), and since that's many, those that read the same are one
-  meter here, named by the models sharing it (`Gemini 4 Argon +1`), or `all models` when every
-  one does; `hatcheck usage` keeps a row per model. The
+  title, since agy writes none down. Their comment shows what agy's `/usage` reports: agy 1.5.6
+  gives a limit per group of models and window (`Gemini Models weekly`, `Gemini Models 5h`,
+  `Gemini 4 Argon weekly`), named here as the other agents' limits are (`Gemini`, `Gemini 5h`,
+  `Claude/GPT`, `Gemini 4 Argon`), and agy 1.4.10 one per model and effort tier, which hatcheck
+  folds to one per model while the tiers read the same. Since that's many, those that read the
+  same are one meter here, named by what shares it (`Flash, Pro`, or `Gemini +1` past 16
+  characters), or `all models` when every one does; those of a window nothing has been spent
+  from read the same whatever their resets, which agy puts a window from when it answered.
+  `hatcheck usage` keeps a row for each, with agy's names. The
   Antigravity app's conversations, read from the app's own folder, are hidden like Desktop ones,
   and conversations agy ran itself aren't listed.
 - Kimi Code CLI sessions, from every `~/.kimi-code*` home, resume with `kimi --session session_<id>`,

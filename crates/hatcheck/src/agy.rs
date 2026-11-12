@@ -574,16 +574,40 @@ fn window_seconds(window: &str) -> Value {
     }
 }
 
+/// The short name of a bucket named by its window, which the session list's comment shows, as
+/// the other agents' limits are named there: its group without the `models` agy's group names
+/// end with and `/` for its ` and `, alone for a weekly bucket, as a model's own weekly limit is
+/// named by the model alone, and with the window after it for another. `Gemini Models` gives
+/// `Gemini` and `Gemini 5h`, `Claude and GPT models` `Claude/GPT`; `All Models` keeps its name.
+fn short_name(group: &str, window: &str) -> String {
+    let group = group.trim();
+    let cut = group
+        .len()
+        .checked_sub(" models".len())
+        .filter(|&at| group.is_char_boundary(at) && group[at..].eq_ignore_ascii_case(" models"));
+    let group = match cut.map(|at| group[..at].trim_end()) {
+        Some(rest) if !rest.is_empty() && !rest.eq_ignore_ascii_case("all") => rest,
+        _ => group,
+    };
+    let group = group.replace(" and ", "/");
+    if window_seconds(window) == json!(7 * 86400) {
+        group
+    } else {
+        format!("{group} {}", window.trim())
+    }
+}
+
 /// agy's /usage answer as a usage body with limits[] rows like Claude's: one row per limit it
 /// reports, each the share of a quota used and when it resets. agy 1.4.10 names one group, `All
 /// Models`, with a bucket per model and effort tier (`Gemini 4 Argon (High)`), each with a
 /// remaining_fraction and a reset_time that is the epoch while nothing has been spent, meaning
 /// no reset ahead; a bucket stands by its own name, and a model's tiers become one row while
 /// they read the same, else a row per reading, named by its tiers. agy 1.4.3 named groups with
-/// `buckets` by `window` (5h or weekly), each labelled with the group's name and the window;
-/// agy 1.4.2 named the same with quota_info on the group, on each of its windows or on each of
-/// its models. All are still read. A remaining_fraction left out beside a reset_time means none
-/// left.
+/// `buckets` by `window` (5h or weekly), each labelled with the group's name and the window and
+/// given a short name (`short_name`), as 1.5.6 does again with a group for a model too (`Gemini
+/// 4 Argon`); agy 1.4.2 named the same with quota_info on the group, on each of its windows or
+/// on each of its models. All are still read. A remaining_fraction left out beside a reset_time
+/// means none left.
 pub fn usage_body(data: &Value) -> Value {
     let mut rows = Vec::new();
     let groups = match get(data, "groups") {
@@ -592,7 +616,7 @@ pub fn usage_body(data: &Value) -> Value {
     };
     for group in groups {
         let name = label_of(group, "quota");
-        let mut meters: Vec<(String, &Value, Value)> = Vec::new(); // label, the meter, its window's length
+        let mut meters: Vec<(String, String, &Value, Value)> = Vec::new(); // label, short name, the meter, its window's length
         for (key, prefix) in [("buckets", true), ("windows", true), ("models", false)] {
             if let Value::Array(items) = get(group, key) {
                 for item in items.iter().filter(|i| i.is_object()) {
@@ -612,14 +636,19 @@ pub fn usage_body(data: &Value) -> Value {
                     } else {
                         part
                     };
-                    meters.push((label, item, window_seconds(&window)));
+                    let short = if by_window {
+                        short_name(&name, &window)
+                    } else {
+                        label.clone()
+                    };
+                    meters.push((label, short, item, window_seconds(&window)));
                 }
             }
         }
         if meters.is_empty() {
-            meters.push((name.clone(), group, Value::Null));
+            meters.push((name.clone(), name.clone(), group, Value::Null));
         }
-        for (label, meter, window) in meters {
+        for (label, short, meter, window) in meters {
             let quota = if get(meter, "quota_info").is_object() {
                 get(meter, "quota_info")
             } else {
@@ -649,7 +678,7 @@ pub fn usage_body(data: &Value) -> Value {
                 "normal"
             };
             let (model, tier) = model_and_tier(&label);
-            rows.push(json!({"kind": "quota_scoped", "group": "quota", "label": label.clone(), "short": label,
+            rows.push(json!({"kind": "quota_scoped", "group": "quota", "label": label.clone(), "short": short,
                              "window_seconds": window, "percent": used,
                              "resets_at": reset.and_then(times::isoformat_utc).map_or(Value::Null, Value::String),
                              "severity": severity, "model": model, "tier": tier}));
@@ -896,6 +925,37 @@ mod tests {
         assert_eq!(rows[0]["window_seconds"], 7 * 86400);
         assert_eq!(rows[1]["window_seconds"], 5 * 3600);
         assert_eq!(plan_text(Some(&body)), "Antigravity"); // 1.4.3 names no tier
+    }
+
+    #[test]
+    fn buckets_by_window_have_short_names() {
+        // The groups of agy 1.5.6's answer on 2026-11-11, as hatcheck read them: 1.4.3's buckets
+        // by window, and a group for a model. The list's comment shows the short names.
+        let later = times::isoformat_utc(1_800_000_000.0).unwrap();
+        let bucket = |window: &str, left: f64| json!({"window": window, "remaining_fraction": left, "reset_time": later});
+        let data = json!({"groups": [
+            {"name": "Gemini Models", "buckets": [bucket("weekly", 1.0), bucket("5h", 1.0)]},
+            {"name": "Claude and GPT models", "buckets": [bucket("weekly", 1.0), bucket("5h", 1.0)]},
+            {"name": "Gemini 4 Argon", "buckets": [bucket("weekly", 0.81)]},
+            {"name": "All Models", "buckets": [bucket("daily", 0.5)]}]});
+        let body = usage_body(&data);
+        let names: Vec<(&str, &str)> = body["limits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| (r["label"].as_str().unwrap(), r["short"].as_str().unwrap()))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("Gemini Models weekly", "Gemini"),
+                ("Gemini Models 5h", "Gemini 5h"),
+                ("Claude and GPT models weekly", "Claude/GPT"),
+                ("Claude and GPT models 5h", "Claude/GPT 5h"),
+                ("Gemini 4 Argon weekly", "Gemini 4 Argon"),
+                ("All Models daily", "All Models daily"),
+            ]
+        );
     }
 
     #[test]

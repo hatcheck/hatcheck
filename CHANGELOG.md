@@ -9,6 +9,11 @@ What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`,
 ### Added
 
 - **An npm package, `hatcheck`, installs the nine commands with `npm install -g hatcheck`** on macOS, Linux and Windows (`packaging/npm/`, published by `.github/workflows/npm.yml` through npm's trusted publisher). On macOS and Linux its `postinstall` script points `bin/` straight at the platform's Rust binary so running a command starts no Node process; on Windows and under `--ignore-scripts`, `bin/` runs the same binary through `run.js`. `hatcheck doctor` recognises an npm install and prints `npm uninstall -g hatcheck` to remove one that's shadowed.
+- **`hatcheck usage --only AGENT` shows just the agents named, and `--ignore AGENT` leaves agents out.** Repeat either option or separate names with commas, as in `hat u --only claude,codex` and `hat u --ignore agy,kimi`; with both, `--ignore` wins. Excluded agents aren't discovered, run or asked for usage, in text or `--json`, and the shell completions offer the agent names.
+
+### Fixed
+
+- **The session list's usage comment fits the terminal.** A meter lines up only under one of the same name, so agy's long names no longer pad Claude Code's comment out to theirs. A comment still too wide leaves out its time bars, then its plan bars, then the meters at 100%, which it counts at the end (`+2 at 100%`), and then the times, keeping the % to the last. agy's limits have short names there, as every other agent's do: agy 1.5.6's `Gemini Models weekly`, `Gemini Models 5h`, `Claude and GPT models 5h` and `Gemini 4 Argon weekly` are `Gemini`, `Gemini 5h`, `Claude/GPT 5h` and `Gemini 4 Argon`; limits that read the same fold to `Gemini +1` once their names together pass 16 characters, and limits nothing has been spent from fold though agy's resets for them differ. `hatcheck usage` keeps agy's names.
 
 ## 0.7.2 - 2026-11-10
 
