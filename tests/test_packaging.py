@@ -1,6 +1,7 @@
 """The packages: one version everywhere, one licence, and the same nine commands from every
-way of installing them (the Rust binaries, which PyPI's wheels, the release archives and the
-installers carry)."""
+way of installing them (the Rust binaries, which PyPI's wheels, the npm package, the release
+archives and the installers carry)."""
+import json
 import os
 import re
 import tomllib
@@ -22,6 +23,7 @@ class Packaging(unittest.TestCase):
         version = re.search(r'^version = "([^"]+)"', text("Cargo.toml"), re.M).group(1)  # --version prints it
         self.assertIn("version.workspace = true", text("crates", "hatcheck", "Cargo.toml"))
         self.assertIn('dynamic = ["version"]', text("pyproject.toml"))  # maturin takes Cargo's
+        self.assertEqual(json.loads(text("packaging", "npm", "package.json"))["version"], version)
         for name in CLI_WINGET:
             self.assertIn("PackageVersion: %s\n" % version, text("packaging", "winget", "cli", name))
         self.assertIn("/releases/download/v%s/hatcheck-x86_64-pc-windows-msvc.zip" % version,
@@ -35,6 +37,7 @@ class Packaging(unittest.TestCase):
         self.assertIn('license-files = ["LICENSE"]', text("pyproject.toml"))
         self.assertIn("License: MIT\n", text("packaging", "winget", "hatcheck.Hatcheck.locale.en-US.yaml"))
         self.assertIn("License: MIT\n", text("packaging", "winget", "cli", "hatcheck.Hatcheck.CLI.locale.en-US.yaml"))
+        self.assertEqual(json.loads(text("packaging", "npm", "package.json"))["license"], "MIT")
         self.assertIn('license = "MIT"', text("desktop", "src-tauri", "Cargo.toml"))
         self.assertIn('"license": "MIT"', text("desktop", "package.json"))
         self.assertIn("## License", text("README.md"))
@@ -48,6 +51,11 @@ class Packaging(unittest.TestCase):
         winget = text("packaging", "winget", "cli", "hatcheck.Hatcheck.CLI.installer.yaml")
         self.assertEqual(re.findall(r"RelativeFilePath: (\S+)", winget), [c + ".exe" for c in COMMANDS])
         self.assertEqual(re.findall(r"PortableCommandAlias: (\S+)", winget), COMMANDS)
+        npm_bin = json.loads(text("packaging", "npm", "package.json"))["bin"]
+        self.assertEqual(sorted(npm_bin), sorted(COMMANDS))
+        for name, rel in npm_bin.items():
+            self.assertEqual(rel, "bin/" + name)
+            self.assertTrue(os.path.isfile(os.path.join(REPO, "packaging", "npm", "bin", name)))
 
     def test_the_crate(self):
         crate = tomllib.loads(text("crates", "hatcheck", "Cargo.toml"))
@@ -85,6 +93,12 @@ class Packaging(unittest.TestCase):
         self.assertIn("id-token: write", crates)
         self.assertIn("rust-lang/crates-io-auth-action@v1", crates)
         self.assertIn("cargo publish -p hatcheck --locked", crates)
+        # npm's trusted publisher names npm.yml and the npm environment.
+        npm = text(".github", "workflows", "npm.yml")
+        self.assertIn("environment: npm", npm)
+        self.assertIn("id-token: write", npm)
+        self.assertIn("npm publish --provenance --access public", npm)
+        self.assertNotIn("workflow_call", npm)
 
 
 if __name__ == "__main__":
@@ -139,3 +153,30 @@ class InstallScript(unittest.TestCase):
         self.assertIn("Didn't add hat: %s has that name" % os.path.join(foreign, "hat"), out)
         self.assertFalse(os.path.lexists(os.path.join(other_bin, "hat")))
         self.assertTrue(all(os.path.islink(os.path.join(other_bin, n)) for n in COMMANDS if n != "hat"))
+
+    def test_npm_package_runs_both_ways(self):
+        import shutil
+        import subprocess
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node isn't on PATH")
+        pkg = os.path.join(self.h.root, "npm-pkg")
+        shutil.copytree(os.path.join(REPO, "packaging", "npm"), pkg)
+        target = subprocess.check_output([node, "-p", "process.platform + '-' + process.arch"], text=True).strip()
+        vendor = os.path.join(pkg, "vendor", target)
+        os.makedirs(vendor, exist_ok=True)
+        os.symlink(self.engine, os.path.join(vendor, "hatcheck"))
+        # 1. Through run.js, as under --ignore-scripts or on Windows.
+        p = subprocess.run([node, "-e", 'process.argv = ["node", "bin/cl"]; require("./run.js")("bin/cl")'],
+                           cwd=pkg, env=self.h.env(), capture_output=True, text=True)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("usage: cl", p.stderr)
+        # 2. After postinstall (install.js), which points bin/<name> straight at the binary.
+        subprocess.run([node, os.path.join(pkg, "install.js")], cwd=pkg, check=True)
+        for name in COMMANDS:
+            self.assertEqual(os.readlink(os.path.join(pkg, "bin", name)),
+                             os.path.join("..", "vendor", target, "hatcheck"))
+        p = subprocess.run([os.path.join(pkg, "bin", "hat"), "--version"],
+                           env=self.h.env(), capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertTrue(p.stdout.startswith("hat "), p.stdout)

@@ -165,7 +165,8 @@ tags ([desktop/README.md](../desktop/README.md#releases)).
    packages and builds) and `cargo check` in `desktop/src-tauri`.
 2. **The release commit**, `chore: release X.Y.Z, with its notes in CHANGELOG.md`, whose body says
    what was run: the version in `Cargo.toml` (`[workspace.package]`, which the crate and the PyPI
-   package take) and `Cargo.lock`; in `packaging/winget/cli/`, `PackageVersion` in all three
+   package take), `Cargo.lock` and `packaging/npm/package.json`; in `packaging/winget/cli/`,
+   `PackageVersion` in all three
    manifests and the `InstallerUrl` and `ReleaseNotesUrl` for `vX.Y.Z`, with `InstallerSha256`
    left as the last release's until the new zip exists; in `CHANGELOG.md`, `## Unreleased` renamed
    `## X.Y.Z - YYYY-MM-DD`, with a paragraph under it saying what the release is, one line per
@@ -179,19 +180,23 @@ tags ([desktop/README.md](../desktop/README.md#releases)).
    git push origin main vX.Y.Z
    ```
 
-   Three workflows run on it, each on its own. **Release** (`v-release.yml`, written by cargo-dist
+   Four workflows run on it, each on its own. **Release** (`v-release.yml`, written by cargo-dist
    from `dist-workspace.toml`) builds the nine commands for the six targets, the shell and
    PowerShell installers and the Homebrew formula, pushes the formula to `hatcheck/homebrew-tap`
    and makes the GitHub release, with the changelog section as its notes. **PyPI** (`release.yml`)
    builds a wheel for each of five platforms and the sdist, and publishes them through PyPI's
    trusted publisher. **crates.io** (`crates.yml`) runs `cargo publish -p hatcheck --locked`
-   through crates.io's. `gh run list --limit 5` watches them and `gh run view <id> --log-failed`
+   through crates.io's. **npm** (`npm.yml`) builds `hatcheck` for each of the five platforms,
+   packs them into `packaging/npm/` and publishes through npm's trusted publisher.
+   `gh run list --limit 5` watches them and `gh run view <id> --log-failed`
    reads a failure; a failed one runs again without a new tag, `gh run rerun <id>` for Release and
-   `gh workflow run release.yml -f tag=vX.Y.Z` for PyPI, the same with `crates.yml` for crates.io.
+   `gh workflow run release.yml -f tag=vX.Y.Z` for PyPI, the same with `crates.yml` for crates.io
+   and `npm.yml` for npm.
    The release is out when the GitHub release has an archive and its `.sha256` for each target,
    the two installers, `hatcheck.rb`, `sha256.sum` and `dist-manifest.json`, the version is on
-   [pypi.org/project/hatcheck](https://pypi.org/project/hatcheck/) and
-   [crates.io/crates/hatcheck](https://crates.io/crates/hatcheck), and the tap's formula names it.
+   [pypi.org/project/hatcheck](https://pypi.org/project/hatcheck/),
+   [crates.io/crates/hatcheck](https://crates.io/crates/hatcheck) and `npmjs.com/package/hatcheck`,
+   and the tap's formula names it.
 4. **After it**, each commit's body saying what was run:
    - `chore: give the CLI's winget manifest X.Y.Z's zip SHA-256`: download
      `hatcheck-x86_64-pc-windows-msvc.zip` and its `.sha256` from the release, check that

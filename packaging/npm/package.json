@@ -1,0 +1,48 @@
+{
+  "name": "hatcheck",
+  "version": "0.7.2",
+  "description": "Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek Harness, MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode accounts on one computer, each kept apart: recent sessions, plan usage, resume or open commands and moves across them.",
+  "license": "MIT",
+  "author": "Yi Wang",
+  "homepage": "https://hatcheck.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hatcheck/hatcheck.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hatcheck/hatcheck/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "codex",
+    "cli",
+    "profiles",
+    "sessions"
+  ],
+  "bin": {
+    "hatcheck": "bin/hatcheck",
+    "hat": "bin/hat",
+    "cl": "bin/cl",
+    "cx": "bin/cx",
+    "ck": "bin/ck",
+    "claude-z": "bin/claude-z",
+    "claude-k": "bin/claude-k",
+    "claude-m": "bin/claude-m",
+    "claude-d": "bin/claude-d"
+  },
+  "files": [
+    "bin/",
+    "vendor/",
+    "run.js",
+    "install.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

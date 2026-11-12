@@ -1,0 +1,121 @@
+name: npm
+
+# A tag such as v0.2.0 publishes the hatcheck npm package, from which npm install -g hatcheck
+# installs the nine commands. This workflow builds the Rust hatcheck binary on each of the five
+# platforms, tests installing and running the package on each, packs all five into the package's
+# vendor/ folder, and publishes it through npm's trusted publishing. Like release.yml (PyPI) and
+# crates.yml (crates.io), it can be re-run on its own.
+#
+# npm's trusted publisher for the package names this repo, this file (npm.yml) and the npm
+# environment, set up in the package's settings on npmjs.com once its first version is there.
+# The tag must match the version in Cargo.toml and packaging/npm/package.json. Run by hand with
+# a tag, it builds and publishes that release's package:
+#   gh workflow run npm.yml -f tag=v0.2.0
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag, such as v0.2.0"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: The tag matches the version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
+          npm_version=$(node -p 'require("./packaging/npm/package.json").version')
+          test "v$version" = "$TAG" || { echo "The tag is $TAG but Cargo.toml is $version"; exit 1; }
+          test "$npm_version" = "$version" || { echo "packaging/npm/package.json is $npm_version but Cargo.toml is $version"; exit 1; }
+
+  binaries:
+    name: binary, ${{ matrix.platform.target }}
+    needs: version
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { runner: ubuntu-22.04, target: x86_64-unknown-linux-gnu, dir: linux-x64, exe: hatcheck }
+          - { runner: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, dir: linux-arm64, exe: hatcheck }
+          - { runner: macos-15-intel, target: x86_64-apple-darwin, dir: darwin-x64, exe: hatcheck }
+          - { runner: macos-latest, target: aarch64-apple-darwin, dir: darwin-arm64, exe: hatcheck }
+          - { runner: windows-latest, target: x86_64-pc-windows-msvc, dir: win32-x64, exe: hatcheck.exe }
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Build the binary
+        run: cargo build --release --locked -p hatcheck --bin hatcheck --target ${{ matrix.platform.target }}
+      - name: Pack, install and run its commands
+        shell: bash
+        run: |
+          mkdir -p "packaging/npm/vendor/${{ matrix.platform.dir }}"
+          cp "target/${{ matrix.platform.target }}/release/${{ matrix.platform.exe }}" \
+             "packaging/npm/vendor/${{ matrix.platform.dir }}/${{ matrix.platform.exe }}"
+          cp README.md LICENSE packaging/npm/
+          tgz=$(cd packaging/npm && npm pack --quiet)
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install -g --prefix "$prefix" "packaging/npm/$tgz"
+          bin="$prefix/bin"; [ -d "$prefix/bin" ] || bin="$prefix"
+          "$bin/hatcheck" --version
+          "$bin/hat" --help > /dev/null
+          set +e
+          "$bin/cl" > out.txt 2>&1; code=$?
+          set -e
+          test "$code" = 2 && grep -q "usage: cl" out.txt
+      - uses: actions/upload-artifact@v6
+        with:
+          name: npm-${{ matrix.platform.dir }}
+          path: packaging/npm/vendor/${{ matrix.platform.dir }}/${{ matrix.platform.exe }}
+
+  npm:
+    needs: binaries
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: npm-*
+          path: dist-npm
+      - name: Assemble the package
+        run: |
+          for dir in darwin-arm64 darwin-x64 linux-arm64 linux-x64 win32-x64; do
+            mkdir -p "packaging/npm/vendor/$dir"
+            cp "dist-npm/npm-$dir/"* "packaging/npm/vendor/$dir/"
+          done
+          chmod +x packaging/npm/vendor/darwin-*/hatcheck packaging/npm/vendor/linux-*/hatcheck packaging/npm/bin/*
+          test -f packaging/npm/vendor/win32-x64/hatcheck.exe
+          cp README.md LICENSE packaging/npm/
+      - name: Publish
+        working-directory: packaging/npm
+        run: |
+          npm install -g npm@latest
+          npm publish --provenance --access public

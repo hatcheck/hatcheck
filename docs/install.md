@@ -16,6 +16,7 @@ MiniMax Code, Qwen Code, GitHub Copilot CLI and OpenCode support likewise use yo
 ```bash
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
+npm install -g hatcheck             # npm, on macOS, Linux and Windows
 uv tool install hatcheck            # or: pipx install hatcheck
 cargo binstall hatcheck             # the release binaries, with cargo-binstall
 cargo install hatcheck              # or build them from crates.io
@@ -29,8 +30,9 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/hatcheck/hatcheck/
 
 The installer scripts put the commands in `~/.local/bin` and add that folder to your `PATH`; set
 `HATCHECK_NO_MODIFY_PATH=1` first to keep your shell's startup files as they are. Each release, made
-from a tag such as `v0.2.0`, has them and the binaries for each platform, and PyPI gets the same
-binaries as wheels. The release builds start after 0.1.0, which is the Python version.
+from a tag such as `v0.2.0`, has them and the binaries for each platform, PyPI gets the same
+binaries as wheels, and npm gets them in the `hatcheck` package. The release builds start after
+0.1.0, which is the Python version.
 
 From a clone, on macOS and Linux, with Rust 1.90 or newer ([rustup.rs](https://rustup.rs)):
 
@@ -111,6 +113,7 @@ Homebrew warns about it. So remove the old install when you switch:
 | `install.sh` or `install.ps1`, from a clone | `./install.sh --uninstall` or `.\install.ps1 -Uninstall`, which remove only the links and launchers they made |
 | the installer scripts from a release | deleting the nine commands from `~/.local/bin`: `rm ~/.local/bin/{hatcheck,hat,cl,cx,ck,claude-z,claude-k,claude-m,claude-d}` (on Windows, the `.exe` files in `~\.local\bin`) |
 | Homebrew | `brew uninstall hatcheck` |
+| npm | `npm uninstall -g hatcheck` |
 | uv or pipx | `uv tool uninstall hatcheck` or `pipx uninstall hatcheck` |
 | cargo | `cargo uninstall hatcheck` |
 
@@ -159,7 +162,7 @@ Hooks from hatcheck bind --hook:
 Each way of installing puts hatcheck's nine commands in a folder of its own, and the first copy of
 each name on your `PATH` is the one that runs, so a second install sits there unused, or runs for
 some of the names and not others. `hatcheck doctor` finds every copy, says how it got there (uv,
-pipx, Homebrew, cargo, winget, the release installer or a build from a clone, told by what each
+pipx, Homebrew, npm, cargo, winget, the release installer or a build from a clone, told by what each
 links to and by the version each prints) and which runs, and prints the line that removes each of
 the others, as in the table above. It changes nothing. It also lists every `claude`, `codex`, `agy`,
 `kimi`, `zcode`, `dsh`, `mcode`, `qwen`, `copilot` and `opencode` on your `PATH`, but for the agents

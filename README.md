@@ -136,6 +136,7 @@ One binary per platform, with no Python needed. Each of these installs `hatcheck
 ```bash
 curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
+npm install -g hatcheck             # npm, on macOS, Linux and Windows
 uv tool install hatcheck            # or: pipx install hatcheck
 cargo binstall hatcheck             # the release binaries, with cargo-binstall
 cargo install hatcheck              # or build them from crates.io
@@ -152,8 +153,9 @@ The installer scripts put the commands in `~/.local/bin` and add that folder to 
 for zsh, bash, fish and PowerShell come from
 [`hatcheck completions`](docs/commands.md#hatcheck-completions-for-zsh-bash-fish-and-powershell):
 `eval "$(hatcheck completions zsh)"` after `compinit`, and the others as that section says. Each release, made
-from a tag such as `v0.2.0`, has them and the binaries for each platform, and PyPI gets the same
-binaries as wheels. The release builds start after 0.1.0, which is the Python version.
+from a tag such as `v0.2.0`, has them and the binaries for each platform, PyPI gets the same
+binaries as wheels, and npm gets them in the `hatcheck` package. The release builds start after
+0.1.0, which is the Python version.
 
 From a clone, on Windows, switching between installs or removing one, and `hatcheck doctor`,
 which lists every copy on your `PATH`: [docs/install.md](docs/install.md). hatcheck installs no
@@ -306,7 +308,7 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   and what earlier work got wrong, with the rule that would have caught it.
 - **`CHANGELOG.md`**, each release's notes; **`install.sh`** and **`install.ps1`**, to build from a
   clone; **`pyproject.toml`** and **`dist-workspace.toml`**, the PyPI wheels and the release
-  builds; **`packaging/`**, the app's cask and the winget manifests; **`scripts/`**, `upstream.py`
+  builds; **`packaging/`**, the app's cask, the winget manifests and the npm package; **`scripts/`**, `upstream.py`
   (the Monday check) and `provider_probe.py`; and **`site/`**, [hatcheck.dev](https://hatcheck.dev)
   and the logo.
 

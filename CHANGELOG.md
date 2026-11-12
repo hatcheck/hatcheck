@@ -4,6 +4,12 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z`, `claude-k`, `claude-m` and `claude-d`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
+## Unreleased
+
+### Added
+
+- **An npm package, `hatcheck`, installs the nine commands with `npm install -g hatcheck`** on macOS, Linux and Windows (`packaging/npm/`, published by `.github/workflows/npm.yml` through npm's trusted publisher). On macOS and Linux its `postinstall` script points `bin/` straight at the platform's Rust binary so running a command starts no Node process; on Windows and under `--ignore-scripts`, `bin/` runs the same binary through `run.js`. `hatcheck doctor` recognises an npm install and prints `npm uninstall -g hatcheck` to remove one that's shadowed.
+
 ## 0.7.2 - 2026-11-10
 
 `hatcheck search` finds the sessions that mention something, in every profile and home of every agent; `hatcheck profiles` shows what each profile and home is set up with, and what differs between two; `hatcheck statusline` puts the profile and what's left of its plan in Claude Code's status line; and `hatcheck completions` gives zsh, bash, fish and PowerShell their completions. `usage` and `best` say whether a limit runs out before it resets, `show --markdown` writes a conversation out as a document, and `doctor` says how long each Claude Code profile keeps its transcripts. `claude-m` and `claude-d` run Claude Code on MiniMax's and DeepSeek's models, and every provider's launcher starts at `max` effort, sets itself up, and lists the provider's own models in `/model`; `claude-k` gives K3.1 Pro Highspeed and K2.8 Preview their 1M of context, and no longer starts with a warning from Claude Code.

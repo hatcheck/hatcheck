@@ -37,12 +37,23 @@ class Doctor(unittest.TestCase):
             self.link(os.path.join(brew, "bin", name), os.path.join("..", "Cellar", "hatcheck", "0.3.0", "bin", name))
         return os.path.join(brew, "bin")
 
+    def npm_install(self):
+        """<npm>/bin/<name> -> ../lib/node_modules/hatcheck/bin/<name> -> ../vendor/<target>/hatcheck."""
+        npm = os.path.join(self.h.root, "npm")
+        vendor = os.path.join(npm, "lib", "node_modules", "hatcheck", "vendor", "darwin-arm64", "hatcheck")
+        self.link(vendor, ENGINE)
+        for name in COMMANDS:
+            self.link(os.path.join(npm, "lib", "node_modules", "hatcheck", "bin", name),
+                      os.path.join("..", "vendor", "darwin-arm64", "hatcheck"))
+            self.link(os.path.join(npm, "bin", name), os.path.join("..", "lib", "node_modules", "hatcheck", "bin", name))
+        return os.path.join(npm, "bin")
+
     def doctor(self, path_dirs, *args):
         return self.h.run("doctor", *args, PATH=os.pathsep.join(list(path_dirs) + [self.h.env()["PATH"]]))
 
     @unittest.skipIf(WINDOWS, "lays the installs out with symlinks")
     def test_two_installs(self):
-        uv, brew = self.uv_install(), self.brew_install()
+        uv, brew, npm = self.uv_install(), self.brew_install(), self.npm_install()
         code, out = self.doctor([uv, brew])
         self.assertEqual(code, 1, out)  # something to fix
         self.assertRegex(out, r"^This is hatcheck \d+\.\d+\.\d+, built in ")
@@ -54,6 +65,9 @@ class Doctor(unittest.TestCase):
         code, out = self.doctor([brew, uv])  # the other way round
         self.assertRegex(out, r"1\. Homebrew: .*; runs")
         self.assertIn("To remove uv's: uv tool uninstall hatcheck", out)
+        code, out = self.doctor([uv, npm])
+        self.assertRegex(out, r"2\. npm: \S+/npm/bin -> \S+/lib/node_modules/hatcheck/bin +\d+\.\d+\.\d+ +all nine commands; shadowed")
+        self.assertIn("To remove npm's: npm uninstall -g hatcheck", out)
 
     @unittest.skipIf(WINDOWS, "lays the install out with symlinks")
     def test_one_install_and_the_agents(self):

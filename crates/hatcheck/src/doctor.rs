@@ -29,6 +29,7 @@ enum Install {
     Uv,
     Pipx,
     Homebrew,
+    Npm,
     Cargo,
     /// The shell or PowerShell installer of a release, or winget.
     Installer,
@@ -47,6 +48,7 @@ impl Install {
             Install::Uv => "uv",
             Install::Pipx => "pipx",
             Install::Homebrew => "Homebrew",
+            Install::Npm => "npm",
             Install::Cargo => "cargo",
             Install::Installer => "the release installer",
             Install::Winget => "winget",
@@ -61,6 +63,7 @@ impl Install {
             Install::Uv => "uv",
             Install::Pipx => "pipx",
             Install::Homebrew => "homebrew",
+            Install::Npm => "npm",
             Install::Cargo => "cargo",
             Install::Installer => "installer",
             Install::Winget => "winget",
@@ -183,12 +186,27 @@ fn receipt() -> Option<Value> {
         .and_then(|t| serde_json::from_str(&t).ok())
 }
 
-/// A launcher install.ps1 made: the .exe it runs, from the .cmd file.
+/// A launcher install.ps1 or npm made on Windows: the path it runs, from the .cmd file.
 fn cmd_launcher_target(path: &str) -> Option<String> {
     if !path.to_lowercase().ends_with(".cmd") {
         return None;
     }
     let text = std::fs::read_to_string(path).ok()?;
+    if text
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+        .contains("/node_modules/hatcheck/")
+    {
+        let stem = ospath::basename(path);
+        let stem = stem
+            .strip_suffix(".cmd")
+            .or_else(|| stem.strip_suffix(".CMD"))
+            .unwrap_or(&stem);
+        return Some(ospath::join_all(
+            &ospath::dirname(path),
+            &["node_modules", "hatcheck", "bin", stem],
+        ));
+    }
     if !text.contains("made by hatcheck install.ps1")
         && !text.contains("made by claude-multi-account")
     {
@@ -202,7 +220,8 @@ fn cmd_launcher_target(path: &str) -> Option<String> {
 
 /// Where a copy of one of hatcheck's commands came from, and the folder its install lives in
 /// (the build or package folder, which groups the commands of one install): the first link in
-/// the chain that says, since uv, pipx and Homebrew each link from a bin folder into their own.
+/// the chain that says, since uv, pipx, Homebrew and npm each link from a bin folder into their
+/// own.
 fn classify(f: &Found, receipt: Option<&Value>) -> (Install, String) {
     let home = paths::home();
     let cargo_bin = std::env::var("CARGO_HOME")
@@ -214,7 +233,7 @@ fn classify(f: &Found, receipt: Option<&Value>) -> (Install, String) {
         chain.push(exe);
     }
     for target in &chain {
-        let lower = target.replace('\\', "/").to_lowercase();
+        let lower = target.replace('\\', "/").to_ascii_lowercase();
         let folder = ospath::dirname(target);
         if lower.contains("/uv/tools/hatcheck/") {
             return (Install::Uv, folder);
@@ -224,6 +243,10 @@ fn classify(f: &Found, receipt: Option<&Value>) -> (Install, String) {
         }
         if lower.contains("/cellar/hatcheck/") || lower.contains("/linuxbrew/") {
             return (Install::Homebrew, folder);
+        }
+        if let Some(k) = lower.find("/node_modules/hatcheck/") {
+            let pkg = &target[..k + "/node_modules/hatcheck".len()];
+            return (Install::Npm, ospath::join(pkg, "bin"));
         }
         if lower.contains("/winget/packages/hatcheck") || lower.contains("/winget/links/") {
             return (Install::Winget, folder);
@@ -277,6 +300,7 @@ impl Group {
             Install::Uv => "uv tool uninstall hatcheck".into(),
             Install::Pipx => "pipx uninstall hatcheck".into(),
             Install::Homebrew => "brew uninstall hatcheck".into(),
+            Install::Npm => "npm uninstall -g hatcheck".into(),
             Install::Cargo => "cargo uninstall hatcheck".into(),
             Install::Winget => "winget uninstall hatcheck.Hatcheck.CLI".into(),
             Install::Clone => {
@@ -520,12 +544,14 @@ fn examine() -> Report {
         }
     }
     for g in groups.iter_mut().filter(|g| g.version.is_none()) {
-        let exe = if ospath::WINDOWS {
-            "hatcheck.exe"
+        let exe = if ospath::WINDOWS && g.install == Install::Npm {
+            ospath::join(&g.bin, "hatcheck.cmd")
+        } else if ospath::WINDOWS {
+            ospath::join(&g.folder, "hatcheck.exe")
         } else {
-            "hatcheck"
+            ospath::join(&g.folder, "hatcheck")
         };
-        g.version = hatcheck_version(&ospath::join(&g.folder, exe));
+        g.version = hatcheck_version(&exe);
     }
     let exe = std::env::current_exe()
         .map(|p| p.to_string_lossy().into_owned())
@@ -982,6 +1008,19 @@ mod tests {
         assert_eq!(
             kind("hat", "/opt/homebrew/Cellar/hatcheck/0.3.0/bin/hat"),
             Install::Homebrew
+        );
+        assert_eq!(
+            classify(
+                &found(
+                    "hatcheck",
+                    "/opt/homebrew/lib/node_modules/hatcheck/vendor/darwin-arm64/hatcheck"
+                ),
+                None
+            ),
+            (
+                Install::Npm,
+                ospath::join("/opt/homebrew/lib/node_modules/hatcheck", "bin")
+            )
         );
         assert_eq!(
             kind("cx", "/home/me/code/hatcheck/target/release/cx"),

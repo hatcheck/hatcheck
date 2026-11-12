@@ -258,9 +258,10 @@ hat r               # carry on the newest session here, after asking</code></pre
 
   <section class="wrap" id="install">
     <h2>Install the CLI</h2>
-    <p>macOS, Linux and Windows: one binary per platform, nothing else needed. It installs <code>hatcheck</code> and <code>hat</code>, <a href="#short">its short name</a>, with <code>cl</code>, <code>cx</code>, <code>ck</code>, <code>claude-z</code> and <code>claude-k</code>, but no agent: <a href="agents.html#get">get those from their makers</a>. Installed more than one way, <code>hatcheck doctor</code> says which copy runs and how to remove the rest.</p>
+    <p>macOS, Linux and Windows: one binary per platform, nothing else needed. It installs <code>hatcheck</code> and <code>hat</code>, <a href="#short">its short name</a>, with <code>cl</code>, <code>cx</code>, <code>ck</code>, <code>claude-z</code>, <code>claude-k</code>, <code>claude-m</code> and <code>claude-d</code>, but no agent: <a href="agents.html#get">get those from their makers</a>. Installed more than one way, <code>hatcheck doctor</code> says which copy runs and how to remove the rest.</p>
 <pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
 brew install hatcheck/tap/hatcheck  # Homebrew, on macOS and Linux
+npm install -g hatcheck             # npm, on macOS, Linux and Windows
 uv tool install hatcheck            # or: pipx install hatcheck
 cargo binstall hatcheck             # the release binaries, with cargo-binstall
 cargo install hatcheck              # or build them from crates.io</code></pre>
