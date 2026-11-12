@@ -29,13 +29,20 @@ enum Kind {
 }
 
 /// What a metavar or positional's name stands for: PROFILE is a profile or home, SESSION an
-/// ID, OLD, NEW and FOLDER folders, SHELL one of the shells.
+/// ID, OLD, NEW and FOLDER folders, SHELL one of the shells, AGENT an agent's key.
 fn kind_of(metavar: &str, choices: &[String]) -> Kind {
     if !choices.is_empty() {
         return Kind::Choices(choices.to_vec());
     }
     let m = metavar.to_uppercase();
-    if m.contains("PROFILE") {
+    if m == "AGENT" {
+        Kind::Choices(
+            crate::agent::Agent::KEYS
+                .iter()
+                .map(|k| k.to_string())
+                .collect(),
+        )
+    } else if m.contains("PROFILE") {
         Kind::Profiles
     } else if m.contains("SESSION") {
         Kind::Sessions

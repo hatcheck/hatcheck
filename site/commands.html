@@ -135,7 +135,7 @@ options:
   -e, --email         with --json, include each account's email address<!-- /help:sessions --></code></pre>
       </details>
       <details><summary><code>hatcheck usage</code><span>or <code>hat u</code>: plan usage left for every profile and home</span></summary>
-<pre><code><!-- help:usage -->usage: hatcheck usage [-h] [-C] [-e] [-j]
+<pre><code><!-- help:usage -->usage: hatcheck usage [-h] [-o AGENT] [-i AGENT] [-C] [-e] [-j]
 
 Show how much of each plan limit is left, for every Claude Code profile
 (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder
@@ -145,13 +145,18 @@ Copilot CLI (~/.copilot*) and OpenCode (~/.local/share/opencode) are listed
 with why they give none, with mcode's plan quota not wired yet.
 
 options:
-  -h, --help    show this help message and exit
-  -C, --cached  don't call the APIs; show the snapshots Claude Code and Codex
-                last saved, and hatcheck's last readings of agy's /usage and
-                Kimi's usage
-  -e, --email   show each account's email address (hidden by default)
-  -j, --json    print the accounts and their limits as JSON, for scripts and
-                status bars<!-- /help:usage --></code></pre>
+  -h, --help          show this help message and exit
+  -o, --only AGENT    show only an agent: claude, codex, agy, kimi, zcode,
+                      dsh, mcode, qwen, copilot or opencode; repeat or comma-
+                      separate
+  -i, --ignore AGENT  leave an agent out (same names; repeat or comma-
+                      separate)
+  -C, --cached        don't call the APIs; show the snapshots Claude Code and
+                      Codex last saved, and hatcheck's last readings of agy's
+                      /usage and Kimi's usage
+  -e, --email         show each account's email address (hidden by default)
+  -j, --json          print the accounts and their limits as JSON, for scripts
+                      and status bars<!-- /help:usage --></code></pre>
       </details>
       <details><summary><code>hatcheck best</code><span>or <code>hat b</code>: the best account now, and the move command that carries a session to it</span></summary>
 <pre><code><!-- help:best -->usage: hatcheck best [-h] [--for SESSION] [-C] [--wait [PROFILE]]

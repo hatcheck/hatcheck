@@ -1,5 +1,5 @@
-//! hatcheck usage [--cached] [--email] [--json]: how much of each plan limit is left, for
-//! every Claude Code profile (~/.claude*) and every Codex home (~/.codex*); the session list
+//! hatcheck usage [--only AGENT] [--ignore AGENT] [--cached] [--email] [--json]: how much of
+//! each plan limit is left, for every selected agent's profiles and homes; the session list
 //! uses it too. docs/commands.md's `hatcheck usage` section says what it shows.
 //!
 //! A Claude Code profile's numbers come from Claude Code itself: `claude -p /usage` is run in
@@ -2045,8 +2045,47 @@ pub fn account_lines(
     (lines, unlabeled)
 }
 
+#[derive(Default)]
+struct AgentSelection {
+    only: Vec<Agent>,
+    ignore: Vec<Agent>,
+}
+
+impl AgentSelection {
+    fn includes(&self, agent: Agent) -> bool {
+        (self.only.is_empty() || self.only.contains(&agent)) && !self.ignore.contains(&agent)
+    }
+}
+
+fn agent_selection(args: &crate::args::Args) -> Result<AgentSelection, String> {
+    let mut selection = AgentSelection::default();
+    for (option, ignored) in [("only", false), ("ignore", true)] {
+        for value in args.values(option) {
+            for key in value.split(',').map(str::trim) {
+                let Some(agent) = Agent::from_key(key) else {
+                    return Err(format!(
+                        "--{option}: '{key}' isn't an agent; they're {}",
+                        crate::config::and_list(&Agent::KEYS)
+                    ));
+                };
+                let agents = if ignored {
+                    &mut selection.ignore
+                } else {
+                    &mut selection.only
+                };
+                if !agents.contains(&agent) {
+                    agents.push(agent);
+                }
+            }
+        }
+    }
+    Ok(selection)
+}
+
 pub fn main(argv: &[String], prog: &str) -> i32 {
     let parser = Parser::new(prog, "Show how much of each plan limit is left, for every Claude Code profile (~/.claude*), Codex home (~/.codex*), Antigravity CLI folder (~/.gemini/antigravity-cli) and Kimi home (~/.kimi-code*); ZCode, DeepSeek Harness (~/.dsh*), MiniMax Code (~/.minimax*), Qwen Code (~/.qwen*), GitHub Copilot CLI (~/.copilot*) and OpenCode (~/.local/share/opencode) are listed with why they give none, with mcode's plan quota not wired yet.")
+        .option(&["-o", "--only"], "only", "AGENT", "show only an agent: claude, codex, agy, kimi, zcode, dsh, mcode, qwen, copilot or opencode; repeat or comma-separate")
+        .option(&["-i", "--ignore"], "ignore", "AGENT", "leave an agent out (same names; repeat or comma-separate)")
         .flag(&["-C", "--cached"], "cached", "don't call the APIs; show the snapshots Claude Code and Codex last saved, and hatcheck's last readings of agy's /usage and Kimi's usage")
         .flag(&["-e", "--email"], "email", "show each account's email address (hidden by default)")
         .flag(&["-j", "--json"], "json", "print the accounts and their limits as JSON, for scripts and status bars");
@@ -2054,22 +2093,33 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
+    let selection = match agent_selection(&args) {
+        Ok(s) => s,
+        Err(e) => return parser.error(&e).exit_code(),
+    };
+    let roots = |agent, find: fn() -> Vec<String>| {
+        if selection.includes(agent) {
+            find()
+        } else {
+            Vec::new()
+        }
+    };
     let paint = Paint::new();
     let p = |code: &str, text: &str| paint.p(code, text);
     let now = times::now();
     let (accounts, any_fable) = sorted_by_fable(
         load_usage(
-            &find_profiles(),
+            &roots(Agent::Claude, find_profiles),
             args.flag("cached"),
-            &find_codex_homes(),
-            &paths::find_agy_roots(),
-            &paths::find_kimi_homes(),
-            &paths::find_zcode_roots(),
-            &paths::find_dsh_homes(),
-            &paths::find_mcode_homes(),
-            &paths::find_qwen_homes(),
-            &paths::find_copilot_homes(),
-            &paths::find_opencode_homes(),
+            &roots(Agent::Codex, find_codex_homes),
+            &roots(Agent::Agy, paths::find_agy_roots),
+            &roots(Agent::Kimi, paths::find_kimi_homes),
+            &roots(Agent::Zcode, paths::find_zcode_roots),
+            &roots(Agent::Dsh, paths::find_dsh_homes),
+            &roots(Agent::Mcode, paths::find_mcode_homes),
+            &roots(Agent::Qwen, paths::find_qwen_homes),
+            &roots(Agent::Copilot, paths::find_copilot_homes),
+            &roots(Agent::Opencode, paths::find_opencode_homes),
         ),
         now,
     );

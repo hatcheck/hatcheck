@@ -55,6 +55,28 @@ class CachedUsage(unittest.TestCase):
         code, out = self.h.run(SCRIPT, "--cached")
         self.assertIn("~/.claude-a, ~/.claude-b".replace("/", __import__("os").sep), out)
 
+    def test_only_and_ignore_agents(self):
+        self.h.profile("work", "acct-w", usage=limits())
+        self.h.codex_home("default", "acct-c")
+
+        def agents(*args):
+            code, out = self.h.run("u", "--cached", "--json", *args)
+            self.assertEqual(code, 0, out)
+            return {a["agent"] for a in json.loads(out)["accounts"]}
+
+        both = {"claude", "codex"}
+        self.assertEqual(agents("-o", "claude,codex"), both)
+        self.assertEqual(agents("--only", "claude", "-o", "codex", "--ignore", "codex"),
+                         {"claude"})
+        self.assertEqual(agents("-i", "claude"), {"codex"})
+
+    def test_an_unknown_agent_is_refused(self):
+        for option in ("--only", "--ignore"):
+            code, out = self.h.run(SCRIPT, option, "claude, gemini")
+            self.assertEqual(code, 2, out)
+            self.assertIn("%s: 'gemini' isn't an agent; they're claude, codex, agy, kimi, zcode, "
+                          "dsh, mcode, qwen, copilot and opencode" % option, out)
+
     def test_not_signed_in(self):
         self.h.profile("solo")
         code, out = self.h.run(SCRIPT, "--cached")
@@ -104,6 +126,14 @@ class LiveUsage(unittest.TestCase):
         fresh = limits()
         fresh["limits"][0]["percent"] = 75
         write(os.path.join(self.work, "fake-usage.json"), json.dumps(fresh))
+
+    def test_an_agent_left_out_isnt_run(self):
+        self.h.codex_home("default", "acct-c")  # its expired test token asks nothing
+        for args in (("--only", "codex"), ("--ignore", "claude")):
+            code, out = self.h.run(SCRIPT, "--json", *args, PATH=self.path)
+            self.assertEqual(code, 0, out)
+            self.assertEqual([a["agent"] for a in json.loads(out)["accounts"]], ["codex"])
+        self.assertEqual(self.h.claude_runs(), [])
 
     def test_numbers_come_from_claude_code(self):
         code, out = self.h.run(SCRIPT, PATH=self.path, ANTHROPIC_AUTH_TOKEN="zai-key", CLAUDECODE="1",

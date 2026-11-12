@@ -26,6 +26,7 @@ class Completions(unittest.TestCase):
                          "hatcheck complete sessions", "relocate", "desktop"):
                 self.assertIn(word, out, (shell, word))
             self.assertNotIn("--no-details", out)  # hidden options stay hidden
+            self.assertIn("claude codex agy kimi zcode dsh mcode qwen copilot opencode", out)
             if shell == "zsh":
                 self.assertTrue(out.startswith("#compdef hatcheck hat\n"), out[:80])
                 self.assertIn("compdef _hatcheck hatcheck hat\n", out)

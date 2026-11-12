@@ -391,6 +391,11 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   starts it over. Nothing is sent anywhere. In `--json`, each limit has it as `trend`
   (`pace_percent_per_hour`, `over_seconds`, `readings`, `runs_out_at`, `before_reset`), `null`
   until there is one.
+- `-o` / `--only AGENT` shows just one agent's accounts, and `-i` / `--ignore AGENT` leaves an
+  agent out. Repeat either option, or separate agents with commas: `hat u -o claude,codex`, `hat u
+  -i agy,kimi`. The names are `claude`, `codex`, `agy`, `kimi`, `zcode`, `dsh`, `mcode`, `qwen`,
+  `copilot` and `opencode`. With both options, `--ignore` wins. An agent left out isn't discovered
+  or asked for usage, in text or `--json`; these options don't bring back one `config.toml` leaves out.
 - `--cached` skips the APIs. `-e` / `--email` adds each account's email address, which is hidden by
   default so the output is safe to share. `--json` prints the accounts as data
   ([below](#--json-for-scripts-status-bars-and-apps)).
