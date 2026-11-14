@@ -243,7 +243,7 @@ Each rule names the code that keeps it, so it can be checked rather than taken o
   [DeepSeek](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html),
   [MiniMax](https://chat.minimax.io/doc/privacy-policy.html),
   [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/support/tos-privacy/) and
-  [GitHub Copilot](https://docs.github.com/en/site-policy/privacy-policies/github-copilot-privacy-statement),
+  [GitHub Copilot](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement),
   and OpenCode's to whichever provider you signed it in to, under that provider's terms. Hatcheck
   summarises none of them; [the weekly check](docs/maintenance.md) only keeps the links alive.
 - **No automatic switching** between accounts. `hatcheck best` ranks and prints commands, and

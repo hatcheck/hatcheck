@@ -2698,12 +2698,19 @@ fn convert(
                 show(source)
             )
         })?,
-        Agent::Zcode => zcode::read_conversation(source, sid).map_err(|e| {
-            format!(
-                "zcode's session {id8} in {} can't be read: {e}",
-                show(source)
-            )
-        })?,
+        Agent::Zcode => {
+            if zcode::session_open(source, sid) {
+                return Err(format!(
+                    "ZCode session {id8} is open in zcode; quit it first, so it stops changing"
+                ));
+            }
+            zcode::read_conversation(source, sid).map_err(|e| {
+                format!(
+                    "zcode's session {id8} in {} can't be read: {e}",
+                    show(source)
+                )
+            })?
+        }
         Agent::Dsh => {
             if dsh::session_open(&path) {
                 return Err(format!(

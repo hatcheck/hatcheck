@@ -44,7 +44,9 @@ VERSION = r"\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?"
 
 def fetch(url, headers=None, method="GET", timeout=20):
     """(status, final url, body bytes) of a request; status 0 and the error when it fails."""
-    req = urllib.request.Request(url, method=method, headers=dict({"User-Agent": AGENT_UA}, **(headers or {})))
+    # Asking for HTML, as a browser does: crates.io answers 404 to a page fetched with urllib's `*/*`.
+    base = {"User-Agent": AGENT_UA, "Accept": "text/html,*/*"}
+    req = urllib.request.Request(url, method=method, headers=dict(base, **(headers or {})))
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.geturl(), r.read() if method == "GET" else b""
@@ -55,7 +57,7 @@ def fetch(url, headers=None, method="GET", timeout=20):
 
 
 def fetch_json(url, headers=None):
-    status, _, body = fetch(url, headers)
+    status, _, body = fetch(url, dict({"Accept": "application/json"}, **(headers or {})))
     try:
         return json.loads(body) if status == 200 else None
     except ValueError:
@@ -81,14 +83,18 @@ def cask(name):
     return str(d.get("version", "")).split(",")[0], d.get("deprecation_reason") if d.get("deprecated") else None
 
 
-def github_release(repo):
+def github_release(repo, tag=None):
+    """The newest release's version; with `tag`, a pattern a tag must match whole, the newest release
+    so tagged, for a repository that releases other packages beside the agent."""
     # GitHub limits requests without a token, and a workflow's runners share their addresses.
     token = os.environ.get("GITHUB_TOKEN")
     headers = {"Authorization": "Bearer " + token} if token else None
     for r in fetch_json("https://api.github.com/repos/%s/releases?per_page=20" % repo, headers) or []:
-        if not r.get("prerelease") and not r.get("draft"):
-            m = re.search(VERSION, r.get("tag_name", ""))
-            return m.group(0) if m else r.get("tag_name")
+        name = r.get("tag_name", "")
+        if r.get("prerelease") or r.get("draft") or (tag and not re.fullmatch(tag, name)):
+            continue
+        m = re.search(VERSION, name)
+        return m.group(0) if m else name
     return None
 
 
@@ -161,9 +167,11 @@ AGENTS = [
     ("GitHub Copilot CLI", lambda: run_version(["copilot", "--version"]),
      lambda: (npm("@github/copilot"), "prerelease %s" % npm("@github/copilot", "prerelease")),
      ["copilot", "GitHub Copilot CLI"], r"\b1\.0\.\d{2,3}\b"),
-    # Version 2 is on GitHub releases and the anomalyco tap; npm's opencode-ai is version 1.
-    ("OpenCode", lambda: run_version(["opencode", "--version"]), lambda: (github_release("anomalyco/opencode"), None),
-     ["opencode", "OpenCode"], r"\b2\.\d+\.\d+\b"),
+    # Version 2 is on GitHub releases and the anomalyco tap; npm's opencode-ai is version 1. The same
+    # releases carry version 1's (v1.x.y) and its packages' (process-daemon-v0.5.2), so only a v2 tag
+    # counts; and no pattern of its own, since Claude Code's and Kimi's versions start with 2 too.
+    ("OpenCode", lambda: run_version(["opencode", "--version"]),
+     lambda: (github_release("anomalyco/opencode", r"v2\.\d+\.\d+"), None), ["opencode", "OpenCode"]),
 ]
 
 APPS = [("Claude Desktop", "claude"), ("ChatGPT, with Codex", "chatgpt"), ("Codex app (old cask)", "codex-app"),
@@ -182,10 +190,11 @@ def links():
     for path in doc_files():
         for url in re.findall(r"https?://[^\s)\"'<>`]+", open(path, encoding="utf-8").read()):
             url = url.rstrip(".,;:")
-            # help.openai.com answers 403 to some fetches that aren't a browser's (curl's, here), so its
-            # pages aren't checked, to keep the weekly check quiet rather than crying wolf.
+            # help.openai.com answers 403 to some fetches that aren't a browser's (curl's, here), and
+            # platform.deepseek.com a 202 bot challenge or a 403, so their pages aren't checked, to keep
+            # the weekly check quiet rather than crying wolf.
             if not re.search(r"github\.com/hatcheck/hatcheck|hatcheck\.dev|localhost|127\.0\.0\.1|example\.|api\.|backend-api|youtube"
-                             r"|help\.openai\.com", url):
+                             r"|help\.openai\.com|platform\.deepseek\.com", url):
                 urls.add(url.replace("&amp;", "&"))
     return sorted(urls)
 

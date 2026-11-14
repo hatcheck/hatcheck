@@ -56,6 +56,62 @@ class ZcodeSessions(unittest.TestCase):
         code, out = self.h.run("where", Z[:8])
         self.assertEqual(code, 1, out)
 
+    def test_a_session_zcode_purged_is_gone(self):
+        # ZCode 3.18.2 marks permanently deleted sessions in session_purge while or after purging.
+        db = sqlite3.connect(self.db)
+        db.execute(
+            "create table session_purge (session_id text primary key, root_id text not null, "
+            "operation_id text not null, retained_artifacts text not null, "
+            "workspace_path text not null, workspace_identity text, state text not null)"
+        )
+        db.execute(
+            "insert into session_purge values (?, ?, 'op_1', '[]', ?, null, 'deleting')",
+            ("sess_" + Z, "sess_" + Z, self.api),
+        )
+        db.commit()
+        db.close()
+        code, out = self.h.run("sessions", "--all-folders", "--no-usage")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(Z, out)
+        code, out = self.h.run("where", Z[:8])
+        self.assertEqual(code, 1, out)
+
+    def test_runtime_presence_marks_session_open(self):
+        # ZCode 3.18.2 records open sessions in session_runtime_presence with the owner's PID.
+        db = sqlite3.connect(self.db)
+        db.execute(
+            "create table session_runtime_presence ("
+            "session_id text not null, owner_id text not null, process_id integer not null, "
+            "primary key(session_id, owner_id))"
+        )
+        db.execute(
+            "insert into session_runtime_presence values (?, 'dead', 999999999)",
+            ("sess_" + Z,),
+        )
+        db.commit()
+        code, out = self.h.run("sessions", "--json", "--no-usage")
+        self.assertEqual(code, 0, out)
+        z = next(s for s in json.loads(out)["sessions"] if s["id"] == Z)
+        self.assertIsNone(z["open"])  # a gone process doesn't count as open
+        db.execute(
+            "insert into session_runtime_presence values (?, 'cli', ?)",
+            ("sess_" + Z, os.getpid()),
+        )
+        db.commit()
+        db.close()
+        code, out = self.h.run("sessions", "--json", "--no-usage")
+        self.assertEqual(code, 0, out)
+        z = next(s for s in json.loads(out)["sessions"] if s["id"] == Z)
+        self.assertEqual(z["open"], {"pid": None, "status": None, "in": "zcode"})
+        code, out = self.h.run("open", Z[:8], HATCHECK_TERMINAL="false")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ZCode session 1fb068a4 is open in zcode; switch to it, or quit it first", out)
+        code, out = self.h.run("open", Z[:8], "--print")  # prints the commands without starting them
+        self.assertEqual(code, 0, out)
+        code, out = self.h.run("move", Z[:8], "claude")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ZCode session 1fb068a4 is open in zcode; quit it first, so it stops changing", out)
+
     def test_json(self):
         code, out = self.h.run("sessions", "--json", "--no-usage")
         self.assertEqual(code, 0, out)

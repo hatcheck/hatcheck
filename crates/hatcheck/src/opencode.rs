@@ -2,14 +2,15 @@
 //! ~/.local/share/opencode (XDG_DATA_HOME's opencode when that is set): opencode.db, a SQLite
 //! database with every project's sessions (session_v2), their messages (session_message, a JSON
 //! record each: a user or assistant message, a shell command, a compaction or a record of
-//! opencode's own) and its provider logins (credential, account), which hatcheck never reads,
+//! opencode's own, with assistant content sometimes stored per row in session_part since 2.2.7)
+//! and its provider logins (credential, account), which hatcheck never reads,
 //! with its logs, shell history and repository cache beside it. Its settings are in
 //! ~/.config/opencode, and the background service it runs through registers under
 //! ~/.local/state/opencode. The V1 store, storage/ beside the database, is what opencode 2
 //! imports on its first run, and isn't read. hatcheck opens the database read-only and writes
 //! nothing: a session converted for opencode is a file for its own `opencode session import`.
 //! docs/agents.md's `OpenCode` section says what is read, and that it was checked against
-//! opencode 2.1.4.
+//! opencode 2.1.4 and compared with opencode 2.2.7.
 
 use crate::agent::Agent;
 use crate::conv::{self, Conversation, Turn};
@@ -234,6 +235,24 @@ pub fn sessions(home: &str) -> Vec<Session> {
                 }
             }
         }
+        // OpenCode 2.2.7+ (migration 20261029002625_session_part) may move assistant parts out of
+        // `session_message.data.content` into `session_part`; older databases lack the table.
+        if let Ok(mut query) = db.prepare(
+            "SELECT session_id, COALESCE(SUM(LENGTH(data)), 0) FROM session_part GROUP BY session_id",
+        ) {
+            if let Ok(found) = query.query_map([], |r| {
+                Ok((
+                    text(r.get::<_, rusqlite::types::Value>(0)?),
+                    r.get::<_, i64>(1)?,
+                ))
+            }) {
+                for (sid, extra) in found.flatten() {
+                    if let Some(entry) = counts.get_mut(&sid) {
+                        entry.1 = entry.1.saturating_add(extra);
+                    }
+                }
+            }
+        }
     }
     rows.into_iter()
         .map(|row| {
@@ -367,26 +386,57 @@ fn content_text(content: &Value) -> String {
     }
 }
 
+/// Assistant content parts stored in `session_part` (added in opencode 2.2.7), grouped by
+/// message ID in ordinal order; empty when the database is older and lacks the table.
+fn session_parts(
+    db: &rusqlite::Connection,
+    session_id: &str,
+) -> std::collections::HashMap<String, Vec<Value>> {
+    let mut by_message: std::collections::HashMap<String, Vec<Value>> =
+        std::collections::HashMap::new();
+    let Ok(mut query) = db.prepare(
+        "SELECT message_id, data FROM session_part WHERE session_id = ?1 ORDER BY message_id, ordinal",
+    ) else {
+        return by_message;
+    };
+    let Ok(found) = query.query_map([session_id], |r| {
+        Ok((
+            text(r.get::<_, rusqlite::types::Value>(0)?),
+            text(r.get::<_, rusqlite::types::Value>(1)?),
+        ))
+    }) else {
+        return by_message;
+    };
+    for (mid, raw) in found.flatten() {
+        if let Ok(part) = serde_json::from_str::<Value>(&raw) {
+            by_message.entry(mid).or_default().push(part);
+        }
+    }
+    by_message
+}
+
 /// The conversation, from the session's message records in order: your messages, the replies'
 /// text and tool calls with their results, and the shell commands and compaction summaries;
 /// reasoning, files' contents and opencode's own records left out.
 fn conversation(home: &str, x: &Session) -> std::io::Result<Conversation> {
     let db = open(home).map_err(|e| std::io::Error::other(e.to_string()))?;
     let full = Agent::Opencode.full_id(&x.row.id);
+    let mut parts_by_message = session_parts(&db, &full);
     let mut query = db
-        .prepare("SELECT type, time_created, data FROM session_message WHERE session_id = ?1 ORDER BY seq")
+        .prepare("SELECT id, type, time_created, data FROM session_message WHERE session_id = ?1 ORDER BY seq")
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let found = query
         .query_map([&full], |r| {
             Ok((
                 text(r.get::<_, rusqlite::types::Value>(0)?),
-                seconds(r.get::<_, rusqlite::types::Value>(1)?) * 1000.0,
-                text(r.get::<_, rusqlite::types::Value>(2)?),
+                text(r.get::<_, rusqlite::types::Value>(1)?),
+                seconds(r.get::<_, rusqlite::types::Value>(2)?) * 1000.0,
+                text(r.get::<_, rusqlite::types::Value>(3)?),
             ))
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let (mut turns, mut calls, mut model) = (Vec::new(), 0, Value::Null);
-    for (kind, created, data) in found.flatten() {
+    for (mid, kind, created, data) in found.flatten() {
         let data: Value = serde_json::from_str(&data).unwrap_or(Value::Null);
         let when = stamp(created);
         match kind.as_str() {
@@ -417,7 +467,10 @@ fn conversation(home: &str, x: &Session) -> std::io::Result<Conversation> {
                         model = m;
                     }
                 }
-                for part in get(&data, "content").as_array().into_iter().flatten() {
+                // OpenCode's own reader prepends `session_part` rows before inline `data.content`.
+                let external = parts_by_message.remove(&mid).unwrap_or_default();
+                let inline = get(&data, "content").as_array().into_iter().flatten();
+                for part in external.iter().chain(inline) {
                     match s(get(part, "type")) {
                         Some("text") => {
                             if let Some(t) =
@@ -825,6 +878,88 @@ mod tests {
         assert_eq!(messages[1]["content"][0]["text"], "Hi.");
         assert!(messages[1]["time"]["completed"].is_u64());
         assert!(messages[0]["id"].as_str().unwrap().starts_with("msg_"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn reads_assistant_parts_from_session_part_rows() {
+        let dir =
+            std::env::temp_dir().join(format!("hatcheck-opencode-parts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let home = store(&dir);
+        let base_size = sessions(&home)[0].size;
+        let db = Connection::open(db_path(&home)).unwrap();
+        db.execute_batch(
+            "CREATE TABLE session_part (message_id text NOT NULL, session_id text NOT NULL, ordinal integer NOT NULL, type text NOT NULL, call_id text, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL, PRIMARY KEY(message_id, ordinal));",
+        )
+        .unwrap();
+        let full = format!("ses_{ID}");
+        // Rewrite msg_3 with empty inline content and put its parts in session_part.
+        let empty = json!({"agent": "build", "model": {"id": "claude-opus-5-5", "providerID": "anthropic"}, "content": [], "time": {"created": 1792958050000u64, "completed": 1792958060000u64}});
+        db.execute(
+            "UPDATE session_message SET data = ?1 WHERE id = 'msg_3'",
+            [empty.to_string()],
+        )
+        .unwrap();
+        let msg3_parts = [
+            (
+                0,
+                "reasoning",
+                None,
+                json!({"type": "reasoning", "text": "PART REASONING"}),
+            ),
+            (
+                1,
+                "text",
+                None,
+                json!({"type": "text", "text": "From session_part."}),
+            ),
+            (
+                2,
+                "tool",
+                Some("c2"),
+                json!({"type": "tool", "id": "c2", "name": "grep", "state": {"status": "completed", "input": {"pattern": "TODO"}, "content": [{"type": "text", "text": "src/lib.rs:1"}]}}),
+            ),
+        ];
+        for (ord, kind, call_id, data) in msg3_parts {
+            db.execute(
+                "INSERT INTO session_part (message_id, session_id, ordinal, type, call_id, time_created, time_updated, data) VALUES ('msg_3', ?1, ?2, ?3, ?4, 1792958050000, 1792958050000, ?5)",
+                rusqlite::params![full, ord, kind, call_id, data.to_string()],
+            )
+            .unwrap();
+        }
+        // Check [...session_part, ...inline] order on msg_5 as well.
+        db.execute(
+            "INSERT INTO session_part (message_id, session_id, ordinal, type, call_id, time_created, time_updated, data) VALUES ('msg_5', ?1, 0, 'text', NULL, 1792958100000, 1792958100000, ?2)",
+            rusqlite::params![full, json!({"type": "text", "text": "Before inline."}).to_string()],
+        )
+        .unwrap();
+        drop(db);
+
+        assert!(sessions(&home)[0].size > 0 && base_size > 0);
+        let conv = read_conversation(&home, &full).unwrap();
+        assert_eq!(conv.calls, 2);
+        let text = conv
+            .turns
+            .iter()
+            .map(|t| t.1.join("\n"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for expected in [
+            "Fix the uploader",
+            "From session_part.",
+            "grep",
+            "src/lib.rs:1",
+            "shell",
+            "Before inline.",
+            "Done.",
+        ] {
+            assert!(text.contains(expected), "{expected}");
+        }
+        let before = text.find("Before inline.").unwrap();
+        let after = text.find("Done.").unwrap();
+        assert!(before < after);
+        assert!(!text.contains("PART REASONING"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

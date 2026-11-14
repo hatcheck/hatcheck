@@ -1006,7 +1006,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
             found.put(key, (session.when, true, session.size), session, false);
         }
     }
-    // Nothing marks a Kimi or ZCode session open, so the window alone decides.
+    // Nothing marks a Kimi session open, so the window alone decides.
     let kimi_homes = paths::find_kimi_homes();
     for home in &kimi_homes {
         for x in crate::kimi::sessions(home) {
@@ -1033,17 +1033,19 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
     let zcode_roots = paths::find_zcode_roots();
     for root in &zcode_roots {
         for row in crate::zcode::rows(root) {
-            let session = crate::zcode::summary(root, &row);
+            let mut session = crate::zcode::summary(root, &row);
             if session.entrypoint_text() == "subagent" {
                 continue; // one zcode ran itself
             }
-            if !session.has_messages {
+            let is_open = crate::zcode::session_open(root, &row.id);
+            if !session.has_messages && !is_open {
                 empty += 1;
                 continue;
             }
-            if session.when < cutoff {
+            if session.when < cutoff && !is_open {
                 continue;
             }
+            session.open = is_open.then(|| open_in(Agent::Zcode.program()));
             let key = format!(
                 "{}\u{0}{}\u{0}{}",
                 Agent::Zcode.key(),

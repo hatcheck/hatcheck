@@ -164,7 +164,16 @@ pub(crate) fn refuse_if_open(s: &Summary) -> Result<(), String> {
                 Ok(())
             };
         }
-        Agent::Kimi | Agent::Zcode | Agent::Opencode => return Ok(()), // nothing marks one of theirs open
+        Agent::Zcode => {
+            return if crate::zcode::session_open(&s.profile, &s.id) {
+                Err(format!(
+                    "ZCode session {id8} is open in zcode; switch to it, or quit it first"
+                ))
+            } else {
+                Ok(())
+            };
+        }
+        Agent::Kimi | Agent::Opencode => return Ok(()), // nothing marks one of theirs open
         Agent::Claude => {}
     }
     let live = sessions::open_sessions(std::slice::from_ref(&s.profile));

@@ -177,6 +177,54 @@ class OpencodeSessions(unittest.TestCase):
         self.assertEqual((shown["cwd"], shown["title"]), (cwd, 'Windows \\ paths and "quotes"'))
         self.assertIn(json.dumps(cwd)[1:-1], out)
 
+    def test_session_part_rows_are_read_with_message_rows(self):
+        db = sqlite3.connect(self.db)
+        db.execute(
+            "CREATE TABLE session_part (message_id text NOT NULL, session_id text NOT NULL, ordinal integer NOT NULL, "
+            "type text NOT NULL, call_id text, time_created integer NOT NULL, time_updated integer NOT NULL, "
+            "data text NOT NULL, PRIMARY KEY(message_id, ordinal))"
+        )
+        full = "ses_" + O
+        msg3 = "msg_%s03" % O[:12]
+        msg5 = "msg_%s05" % O[:12]
+        db.execute(
+            "UPDATE session_message SET data = ? WHERE id = ?",
+            (json.dumps({"agent": "build", "model": {"id": MODEL.split("/", 1)[1], "providerID": "anthropic"},
+                         "content": [], "time": {"created": 1792958050000, "completed": 1792958060000}}), msg3),
+        )
+        parts = [
+            (msg3, 0, "reasoning", None, {"type": "reasoning", "text": "PART REASONING"}),
+            (msg3, 1, "text", None, {"type": "text", "text": "From session_part."}),
+            (msg3, 2, "tool", "call-2", {
+                "type": "tool", "id": "call-2", "name": "grep",
+                "state": {"status": "completed", "input": {"pattern": "TODO"},
+                          "content": [{"type": "text", "text": "src/lib.rs:1"}]},
+            }),
+            (msg5, 0, "text", None, {"type": "text", "text": "Before inline."}),
+        ]
+        for msg_id, ordinal, kind, call_id, data in parts:
+            db.execute(
+                "INSERT INTO session_part (message_id, session_id, ordinal, type, call_id, time_created, "
+                "time_updated, data) VALUES (?, ?, ?, ?, ?, 1792958050000, 1792958050000, ?)",
+                (msg_id, full, ordinal, kind, call_id, json.dumps(data)),
+            )
+        db.commit()
+        db.close()
+
+        listed = self.sessions("--details")
+        self.assertEqual([s["id"] for s in listed], [O])
+        self.assertEqual(listed[0]["turns"], {"total": 2, "prompts": 1, "tool_calls": 2})
+        code, out = self.h.run("show", O[:8], "--json")
+        self.assertEqual(code, 0, out)
+        shown = json.loads(out)
+        self.assertEqual((shown["turns_total"], shown["tool_calls"]), (2, 2))
+        text = "\n".join(turn["text"] for turn in shown["turns"])
+        for expected in ("From session_part.", "[external_agent_tool_call: grep]", "src/lib.rs:1",
+                         "[external_agent_tool_call: shell]", "Before inline.", "Done: " + TITLE):
+            self.assertIn(expected, text)
+        self.assertLess(text.index("Before inline."), text.index("Done: " + TITLE))
+        self.assertNotIn("PART REASONING", text)
+
 
 class OpencodeDiscovery(unittest.TestCase):
     def setUp(self):

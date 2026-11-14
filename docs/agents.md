@@ -67,7 +67,7 @@ The desktop apps:
 | ZCode | macOS, Windows, Linux (beta) | [zcode.z.ai](https://zcode.z.ai/en) |
 | DeepSeek Harness | macOS (Apple silicon), Windows | [deepseek.com/harness](https://deepseek.com/harness) |
 | Qwen Code Desktop | macOS, Windows, Linux | [GitHub releases, `desktop-latest`](https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) |
-| MiniMax Code | macOS, Windows | [MiniMax Code's download guide](https://agent.minimax.io/docs/code/get-started/download) |
+| MiniMax Code | macOS, Windows | [MiniMax Code's download guide](https://code.minimax.io/docs/code/get-started/download) |
 | OpenCode | macOS, Windows, Linux | [opencode.ai](https://opencode.ai/) |
 
 Homebrew on macOS has five of them:
@@ -265,13 +265,16 @@ resume, beside `--session`, which hatcheck prints:
 shared with the ZCode desktop app, and nothing but `HOME` moves it (`ZCODE_STORAGE_DIR` and
 `ZCODE_DATA_BASE_DIR` move other parts of `~/.zcode`), so hatcheck reads that one folder, and there
 are no ZCode profiles or a launcher for them (see [What isn't done yet](#what-isnt-done-yet)). What it
-reads, checked against ZCode 0.16.9, the CLI in the ZCode 3.15.3 app. The CLI in ZCode 3.16.3,
-0.17.0, was compared with it on 2026-10-24 without being run, so as not to move the shared
-database on: it adds the soft delete below and a table of its own, and takes the same flags.
+reads, checked against ZCode 0.16.9, the CLI in the ZCode 3.15.3 app. ZCode 0.17.0 (app 3.16.3, on
+2026-10-24) and ZCode 0.17.1 (ZCode 3.17.2, on 2026-11-12, and 3.18.2, on 2026-11-14) were compared
+with it without being run, so as not to move the shared database on: 0.17.0 adds the soft delete
+below and a table of its own, 0.17.1 adds `zcode_database_identity` and, in 3.18.2, `session_purge`
+and `session_runtime_presence`, and both take the same flags.
 
 - The database's `session` rows: the ID (`sess_<uuid>`), the folder the session ran in, its title
   and times, and whether ZCode ran it itself (a subagent), which aren't listed. ZCode 0.17.0 keeps
-  the row of a session you delete, with `time_deleted` set, and hatcheck leaves it out as ZCode's
+  the row of a session you delete, with `time_deleted` set, and ZCode 3.18.2 records permanently
+  deleted sessions in `session_purge`; hatcheck leaves both out as ZCode's
   own lists do. Its `message` and
   `part` rows hold the conversation: text, each tool call with its input and output, and ZCode's
   reasoning, which is left out. hatcheck opens the database read-only and never writes it:
@@ -280,7 +283,9 @@ database on: it adds the soft delete below and a table of its own, and takes the
   when there is one. `v2/` is the desktop app's, with the login, which hatcheck never reads.
 - hatcheck names a session by the UUID after `sess_`, and puts the prefix back in
   `zcode --resume sess_…`; a pasted `sess_…` is understood.
-- Nothing marks a session open.
+- From ZCode 3.18.2, a session counts as open while a row in `session_runtime_presence` for it
+  names a running process, which stops duplicate opens and conversions; a row for a process that has
+  gone doesn't count. Older databases lack the table and mark none open.
 - `hatcheck move <id> zcode` writes the conversation as a file and prints the command that starts
   zcode on it: see [With ZCode](commands.md#with-zcode).
 - The `zcode` command: the ZCode desktop app ships the CLI as a Node bundle, `Resources/glm/zcode.cjs`
@@ -308,7 +313,8 @@ and the home `DSH_HOME` names; `dsh` and `dsh:NAME` name these in profile argume
 hatcheck DSH launcher or installer alias. DSH's own profiles are plugin stacks under
 `DSH_HOME/profiles`, not hatcheck account homes: the shipped app profiles are `web`, `headless`,
 `acp`, `sdk` and `sdk-minimal`, while `tui` is only an example custom profile name in DSH's docs.
-What hatcheck reads, checked against dsh 0.2.1-rc.2:
+What hatcheck reads, checked against dsh 0.2.1-rc.2 (compared with dsh 0.2.2-rc.1 on 2026-11-12,
+without a live turn: session format v4, `session.lock` and `--help`/`web` flags unchanged):
 
 - `sessions/<project>/<id>/session.v4.jsonl[.zstd]`: the current v4 log, raw or as concatenated
   Zstandard frames. hatcheck selects the highest canonical generation; an unsupported or corrupt
@@ -359,7 +365,9 @@ What hatcheck reads is checked against the 0.6.5 source preview. The installed C
 resume and `mcode login`. That 0.6.13 copy isn't on this shell's `PATH`; doctor remains PATH-based
 (see [`hatcheck doctor`](install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents)). A
 session converted for mcode was read by that 0.6.13 on 2026-10-25, started on the file in its
-terminal UI with the command hatcheck prints.
+terminal UI with the command hatcheck prints. Compared with mcode 0.7.6 (at `~/.minimax-code/bin/mcode`)
+on 2026-11-12 without a live turn: migrations, `local_runtime_session_locks`, `messages.jsonl` and
+the `--session` flags are unchanged.
 
 - `v2/sqlite/runtime-state.sqlite` is opened read-only, with no runtime initialization or migrations
   and no writes to the store. Only `local_runtime_sessions` rows with `columnar_version=3` are read.
@@ -421,7 +429,8 @@ moves that home whole: the settings, the login and each project's sessions. hatc
 `installation_id`, or a project's chats); `qwen` and `qwen:NAME` name these in profile arguments.
 There is no hatcheck qwen launcher or installer alias. `QWEN_RUNTIME_DIR`, which moves the session
 data alone and leaves the login where it was, isn't followed. What hatcheck reads, checked against
-qwen 0.26.0:
+qwen 0.26.0 (compared with qwen 0.27.2 on 2026-11-12 without a live turn: `parentUuid` chain,
+`real_user` / `mod_prompt` provenances and `--resume`/`--add-dir`/`-i` flags unchanged):
 
 - `projects/<folder>/chats/<uuid>.jsonl`, where `<folder>` is the project folder's path with every
   character that isn't a letter or digit made a dash (lowercased first on Windows), and
@@ -482,7 +491,8 @@ credential store, its login, which hatcheck never reads. hatcheck discovers `~/.
 folder, or its `config.json`); `copilot` and `copilot:NAME` name these in profile arguments. There
 is no hatcheck copilot launcher or installer alias. Whether copilot's system credential store keeps
 one login per home is for the maintainer's probe in [maintenance.md](maintenance.md): hatcheck
-reads no login and can't tell. What hatcheck reads, checked against copilot 1.0.103:
+reads no login and can't tell. What hatcheck reads, checked against copilot 1.0.103 (compared with
+copilot 1.0.109 on 2026-11-12 without a live turn):
 
 - `session-state/<uuid>/events.jsonl`, the record copilot writes as a session runs: an event per
   line with `type`, `data`, `id`, `timestamp` and `parentId`. `session.start` carries the folder,
@@ -517,7 +527,8 @@ reads no login and can't tell. What hatcheck reads, checked against copilot 1.0.
   `copilot sessions import <file>` validates and imports, giving the session an ID of its own that
   it prints for `copilot --resume`. Checked with copilot 1.0.103 on 2026-10-25, whose `sessions
   import --dry-run` accepted the file and whose import made the session folder, with the title as
-  its name. Copies between copilot homes are refused: hatcheck never writes copilot's store.
+  its name; copilot 1.0.109 did the same in a throwaway home on 2026-11-12 without a login. Copies
+  between copilot homes are refused: hatcheck never writes copilot's store.
 - `relocate` lists affected copilot sessions as skipped: its workspace file and events record the
   folder, and stay as they were. `--dry-run` changes nothing.
 - `hatcheck bind default` binds `~/.copilot` along with the rest when copilot has run there, `bind
@@ -539,7 +550,8 @@ profile arguments. There are no named OpenCode homes: a second store needs `XDG_
 and which of those a profile should mean is a decision not taken (see `agent.rs`). `~/.opencode`,
 where its installer puts the program, isn't a data folder, and the `opencode2` shim beside it runs
 `opencode`. The version-1 store, `storage/` beside the database, is what opencode 2 imports on its
-first run, and isn't read. What hatcheck reads, checked against opencode 2.1.4:
+first run, and isn't read. What hatcheck reads, checked against opencode 2.1.4 (and compared with
+opencode 2.2.7 on 2026-11-12):
 
 - `session_v2`: a row per session with its `id` (`ses_` and 26 characters; hatcheck shows the
   characters and takes either), `parent_id` (set on the child sessions subagents run, which stay
@@ -549,13 +561,16 @@ first run, and isn't read. What hatcheck reads, checked against opencode 2.1.4:
   price for, which the list leaves out), and its tokens by kind for every model together,
   `tokens_input`, `tokens_output`, `tokens_reasoning`, `tokens_cache_read` and
   `tokens_cache_write`, which `hatcheck --details` shows. Nothing records a branch.
-- `session_message`: a row per message, in `seq` order, with `type` and a JSON `data` record. A
-  `user` message's `text` and `files` (marked as images or files), an `assistant` message's
-  `content` parts (`text` kept, `reasoning` left out, `tool` as a call with its `state.input` and
-  the text of its `state.content` or its error), a `shell` message's command and output, and a
-  completed `compaction`'s summary make the conversation; `synthetic`, `system` and `skill`
-  messages and the agent, model and folder switches are opencode's own. The first user message's
-  text is the title when the row has none.
+- `session_message` and `session_part`: a row per message in `session_message`, in `seq` order,
+  with `type` and a JSON `data` record. A `user` message's `text` and `files` (marked as images or
+  files), an `assistant` message's `content` parts (`text` kept, `reasoning` left out, `tool` as a
+  call with its `state.input` and the text of its `state.content` or its error), a `shell`
+  message's command and output, and a completed `compaction`'s summary make the conversation;
+  `synthetic`, `system` and `skill` messages and the agent, model and folder switches are
+  opencode's own. From opencode 2.2.7, assistant parts may live per row in `session_part`
+  instead of inline in `data.content`; opencode reads `session_part` rows by `ordinal` ahead of
+  any inline `data.content`, and hatcheck reads both the same way. The first user message's text is
+  the title when the row has none.
 - Nothing marks a session open; `open` and `move` refuse none.
 - The resume command is `opencode --session ses_<id>`, run from the session's folder, where
   opencode files it. A data folder other than the one plain opencode uses, reached by its path, is
@@ -572,7 +587,8 @@ first run, and isn't read. What hatcheck reads, checked against opencode 2.1.4:
   session export` prints, with an ID minted as opencode mints them, which `opencode session import
   <file>` takes from the session's folder; the session then resumes with `opencode --session
   ses_<id>`. Checked with opencode 2.1.4 on 2026-10-25, with its service disabled, whose import
-  took the file, listed the session with its title and folder and exported it back. A copy into
+  took the file, listed the session with its title and folder and exported it back; opencode 2.2.7
+  did the same under `--standalone` in a throwaway home on 2026-11-12 without a login. A copy into
   its own store is refused as already there; hatcheck never writes opencode's database.
 - `relocate` lists affected opencode sessions as skipped: the row records the folder in opencode's
   database, which hatcheck never writes. `--dry-run` changes nothing.
@@ -584,7 +600,7 @@ first run, and isn't read. What hatcheck reads, checked against opencode 2.1.4:
 ## `claude-z`, `claude-k`, `claude-m`, `claude-d`: Claude Code on Z.ai, Kimi, MiniMax or DeepSeek
 
 `claude-z`, `claude-k`, `claude-m` and `claude-d` start Claude Code on [Z.ai](https://z.ai)'s GLM
-models, [Kimi](https://www.kimi.com/code)'s, [MiniMax](https://platform.minimax.io)'s or
+models, [Kimi](https://www.kimi.com/code)'s, [MiniMax](https://platform.minimax.io/console/home)'s or
 [DeepSeek](https://platform.deepseek.com)'s, with your plan or balance there, instead of on
 Anthropic's. `cl -z <name>`, `cl -k <name>`, `cl -m <name>` and `cl -D <name>` do the same in a
 profile, so a session can switch between Claude and those models and stay in its profile:

@@ -4,10 +4,12 @@
 //! its `message` rows, and the `part` rows of each (text, reasoning, a tool call with its input
 //! and output). Beside the database, cli/artifacts/sess_<id>/ holds tool results spilled to
 //! files, and v2/ the desktop app's own files, with the login, which hatcheck never reads.
-//! Nothing marks a session open. hatcheck reads the database and never writes it: a session
-//! converted for zcode is written as a file zcode is started on. docs/agents.md's `ZCode`
-//! section says what is read, and that it was checked against ZCode 0.16.9 and compared with
-//! 0.17.0, which keeps a deleted session's row and marks it.
+//! From ZCode 3.18.2, `session_runtime_presence` marks a session open while its process is
+//! running, and `session_purge` marks a permanently deleted one. hatcheck reads the database
+//! and never writes it: a session converted for zcode is written as a file zcode is started on.
+//! docs/agents.md's `ZCode` section says what is read, and that it was checked against ZCode
+//! 0.16.9 and compared with 0.17.0 (which keeps a deleted session's row and marks it) and
+//! 0.17.1 (ZCode 3.17.2 and 3.18.2).
 
 use crate::agent::Agent;
 use crate::conv::{self, Conversation, Turn};
@@ -142,7 +144,8 @@ pub fn rows(root: &str) -> Vec<Row> {
         return Vec::new();
     };
     // ZCode 0.17.0 deletes a session by setting time_deleted, a column older databases lack,
-    // and keeps the row; its own lists leave those out.
+    // and ZCode 3.18.2 records permanent deletions in session_purge; its own lists leave both
+    // out.
     let soft_delete = db
         .query_row(
             "SELECT count(*) FROM pragma_table_info('session') WHERE name = 'time_deleted'",
@@ -150,11 +153,22 @@ pub fn rows(root: &str) -> Vec<Row> {
             |r| r.get::<_, i64>(0),
         )
         .is_ok_and(|n| n > 0);
-    let kept = if soft_delete {
-        " AND time_deleted IS NULL"
-    } else {
-        ""
-    };
+    let purge_table = db
+        .query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'session_purge'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .is_ok_and(|n| n > 0);
+    let mut kept = String::new();
+    if soft_delete {
+        kept.push_str(" AND time_deleted IS NULL");
+    }
+    if purge_table {
+        kept.push_str(
+            " AND NOT EXISTS (SELECT 1 FROM session_purge p WHERE p.session_id = session.id)",
+        );
+    }
     let Ok(mut query) = db.prepare(&format!(
         "SELECT {COLUMNS} FROM session WHERE (parent_id IS NULL OR parent_id = ''){kept} \
          ORDER BY time_updated DESC, id"
@@ -165,6 +179,27 @@ pub fn rows(root: &str) -> Vec<Row> {
         return Vec::new();
     };
     found.flatten().collect()
+}
+
+/// Whether ZCode (3.18.2 on) has the session open: a row in `session_runtime_presence` for the
+/// session names a process that is still running. Older databases lack the table and return
+/// false.
+pub fn session_open(root: &str, id: &str) -> bool {
+    let Ok(db) = open(root) else {
+        return false;
+    };
+    let full = Agent::Zcode.full_id(id);
+    let Ok(mut query) =
+        db.prepare("SELECT process_id FROM session_runtime_presence WHERE session_id = ?1")
+    else {
+        return false;
+    };
+    let Ok(pids) = query.query_map([&full], |r| r.get::<_, i64>(0)) else {
+        return false;
+    };
+    let pids: Vec<i64> = pids.flatten().collect();
+    pids.into_iter()
+        .any(|pid| u64::try_from(pid).is_ok_and(|p| p > 0 && crate::qwen::pid_alive(p)))
 }
 
 /// The sessions whose ID starts with prefix, the agent's own prefix left off.
@@ -391,5 +426,36 @@ mod tests {
         assert_eq!(entrypoint(&r), "subagent");
         r.task_type = "goal".into();
         assert_eq!(entrypoint(&r), "goal");
+    }
+
+    #[test]
+    fn rows_skip_purged_sessions() {
+        let dir = std::env::temp_dir().join(format!("hatcheck-zcode-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let db_dir = dir.join("cli").join("db");
+        std::fs::create_dir_all(&db_dir).unwrap();
+        let db = Connection::open(db_dir.join("db.sqlite")).unwrap();
+        db.execute_batch(
+            "CREATE TABLE session (
+                id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, directory TEXT,
+                time_created INTEGER, time_updated INTEGER, time_archived INTEGER,
+                time_deleted INTEGER, task_type TEXT, version TEXT
+            );
+            CREATE TABLE session_purge (
+                session_id TEXT PRIMARY KEY, root_id TEXT NOT NULL, operation_id TEXT NOT NULL,
+                retained_artifacts TEXT NOT NULL, workspace_path TEXT NOT NULL,
+                workspace_identity TEXT, state TEXT NOT NULL
+            );
+            INSERT INTO session VALUES ('sess_11111111-1111-4111-8111-111111111111', NULL, 'Kept', '/w', 1000, 2000, NULL, NULL, 'interactive', '0.17.1');
+            INSERT INTO session VALUES ('sess_22222222-2222-4222-8222-222222222222', NULL, 'Purged', '/w', 1000, 3000, NULL, NULL, 'interactive', '0.17.1');
+            INSERT INTO session_purge VALUES ('sess_22222222-2222-4222-8222-222222222222', 'sess_22222222-2222-4222-8222-222222222222', 'op_1', '[]', '/w', NULL, 'deleting');",
+        )
+        .unwrap();
+        drop(db);
+        let root = dir.to_string_lossy().to_string();
+        let listed = rows(&root);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "11111111-1111-4111-8111-111111111111");
     }
 }

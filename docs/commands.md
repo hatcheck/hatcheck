@@ -1008,8 +1008,9 @@ cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
   semaphore isn't detected. An mcode session with an unexpired writer lease is refused; an expired
   lease is stale, and unknown lock state is treated as busy rather than as proof the writer died.
   An idle session merely selected in mcode's TUI isn't detectable. A qwen session is refused while
-  qwen's registry or its terminal UI's sidecar names a running process, and a copilot session while
-  the `inuse.<pid>.lock` in its folder does. Nothing marks an opencode session open.
+  qwen's registry or its terminal UI's sidecar names a running process, a copilot session while
+  the `inuse.<pid>.lock` in its folder does, and a ZCode session (3.18.2 on) while
+  `session_runtime_presence` names a running process. Nothing marks a Kimi or opencode session open.
 - The terminal:
   - **macOS:** Terminal, or the one `hatcheck` runs in when that's iTerm2, Ghostty or WezTerm. Terminal
     and iTerm2 are driven with AppleScript, which macOS asks you to allow once.
@@ -1112,10 +1113,10 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
   commands you ran with `!`, the replies' text and tool requests, and the tools' results. copilot's
   reasoning, what it adds to the conversation itself, its hooks' and its own records are left out;
   images and files are marked.
-- An opencode session comes from its message rows, as [OpenCode](agents.md#opencode-opencode)
-  describes: your messages, the replies' text and tool calls with their results, shell commands and
-  compaction summaries. Reasoning, files' contents and opencode's own records are left out; images
-  and files are marked.
+- An opencode session comes from its message rows (and, from 2.2.7, `session_part` rows), as
+  [OpenCode](agents.md#opencode-opencode) describes: your messages, the replies' text and tool calls
+  with their results, shell commands and compaction summaries. Reasoning, files' contents and
+  opencode's own records are left out; images and files are marked.
 - `--markdown` (`-m`) prints the conversation as a Markdown document, to keep or share:
   `hatcheck show 3f1c2a9e --markdown > login-fix.md`. A heading with the title, then a line of
   the session's facts (the agent, ID and profile, the folder it started from, its branch and
@@ -1640,8 +1641,9 @@ $ hatcheck --json
   the same on POSIX, from a held `session.lock`; a stale file doesn't count, and Windows' named
   semaphore isn't detected. Mcode's likewise have `pid` and `status` `null`, from an unexpired
   writer lease; an expired lease is stale and unknown lock state is busy. Qwen's too, while qwen's
-  registry or its terminal UI's sidecar names a running process, and copilot's while the
-  `inuse.<pid>.lock` in its folder does. Kimi's, ZCode's and OpenCode's are never marked open, since
+  registry or its terminal UI's sidecar names a running process, copilot's while the
+  `inuse.<pid>.lock` in its folder does, and ZCode's (3.18.2 on) while `session_runtime_presence`
+  does. Kimi's and OpenCode's are never marked open, since
   nothing marks one.
 - `cost_usd` is what the session cost in US dollars as its agent worked it out, the number the text
   rounds to cents, with every digit the agent wrote; `null` when it recorded none, or nothing above
