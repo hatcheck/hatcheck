@@ -152,9 +152,12 @@ The installer scripts put the commands in `~/.local/bin` and add that folder to 
 `HATCHECK_NO_MODIFY_PATH=1` first to keep your shell's startup files as they are. Completions
 for zsh, bash, fish and PowerShell come from
 [`hatcheck completions`](docs/commands.md#hatcheck-completions-for-zsh-bash-fish-and-powershell):
-`eval "$(hatcheck completions zsh)"` after `compinit`, and the others as that section says. Each release, made
-from a tag such as `v0.2.0`, has them and the binaries for each platform, PyPI gets the same
-binaries as wheels, and npm gets them in the `hatcheck` package. The release builds start after
+`eval "$(hatcheck completions zsh)"` after `compinit`, and the others as that section says. Each [release](https://github.com/hatcheck/hatcheck/releases), made
+from a tag such as `v0.2.0`, has them and the binaries for each platform, the
+[Homebrew tap](https://github.com/hatcheck/homebrew-tap) has the formula,
+[PyPI](https://pypi.org/project/hatcheck/) gets the same binaries as wheels,
+[npm](https://www.npmjs.com/package/hatcheck) gets them in the `hatcheck` package, and
+[crates.io](https://crates.io/crates/hatcheck) has the crate. The release builds start after
 0.1.0, which is the Python version.
 
 From a clone, on Windows, switching between installs or removing one, and `hatcheck doctor`,
@@ -317,7 +320,11 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
 - **Claude Desktop instances on Linux.** Claude Desktop for Linux is in beta, for Ubuntu and
   Debian. Whether its own `--user-data-dir` keeps an instance apart there, as on macOS, hasn't been
   tried; until it has, only the CLI tools apply on Linux.
-- **Releases:** the CLI is on GitHub, the Homebrew tap, PyPI and crates.io from 0.2.0
+- **Releases:** the CLI is on [GitHub](https://github.com/hatcheck/hatcheck/releases), the
+  [Homebrew tap](https://github.com/hatcheck/homebrew-tap),
+  [PyPI](https://pypi.org/project/hatcheck/) and
+  [crates.io](https://crates.io/crates/hatcheck) from 0.2.0, and on
+  [npm](https://www.npmjs.com/package/hatcheck) from 0.7.3
   ([CHANGELOG.md](CHANGELOG.md)). Next are winget, then the app's installers, once its release
   workflow has its signing and updater secrets (`desktop.yml` lists them).
 - **Signing:** a Developer ID for the macOS app, and a certificate for the Windows one.

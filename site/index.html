@@ -110,13 +110,13 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <span class="b c">cd ~/code/api</span>
   <span class="d">  4m</span>  <span class="b">Fix flaky login test</span><span class="d"> · </span><span class="d">main</span><span class="d"> · </span>$5.01
         <span class="c">cl</span> a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
-        <span class="d">#</span> <span class="d">5h</span> <span class="y">20%</span> <span class="y">█░░░░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span class="d">week</span>   <span class="r">9%</span> <span class="r">▋░░░░░░</span> <span style="color:#d75f00">↻▉░░░░░░ 21h35m</span>
+        <span class="d">#</span> <span class="d">5h</span> <span class="y">20%</span> <span class="y">█░░░░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span class="d">week</span>  <span class="r">9%</span> <span class="r">▋░░░░░░</span> <span style="color:#d75f00">↻▉░░░░░░ 21h35m</span>
   <span class="d"> 35m</span>  <span class="b">Add rate limiting to the login endpoint</span><span class="d"> · </span><span class="d">main</span>
         <span class="c">cl</span> b --resume 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
         <span class="d">#</span> <span class="d">5h</span> <span class="g">62%</span> <span class="g">███▏░</span> <span style="color:#87afaf">↻██▋░░ 2h39m</span>  <span style="color:#af5fd7">Fable</span> <span class="g">48%</span> <span style="color:#af5fd7">███▍░░░</span> <span style="color:#87afd7">↻████▎░░ 4d4h</span>
   <span class="d"> 50m</span>  <span class="b">Add retries to the uploader</span><span class="d"> · </span><span class="d">main</span>
         <span class="c">codex</span> resume 019a8c1e-7d3f-7b21-9c4e-2f1a0b9c8d7e
-        <span class="d">#</span> <span class="d">5h</span> <span class="g">80%</span> <span class="g">████░</span> <span style="color:#87afd7">↻███░░ 2h59m</span>  <span class="d">week</span>  <span class="g">64%</span> <span class="g">████▌░░</span> <span style="color:#d7af00">↻██░░░░░ 1d23h</span>
+        <span class="d">#</span> <span class="d">5h</span> <span class="g">80%</span> <span class="g">████░</span> <span style="color:#87afd7">↻███░░ 2h59m</span>  <span class="d">week</span> <span class="g">64%</span> <span class="g">████▌░░</span> <span style="color:#d7af00">↻██░░░░░ 1d23h</span>
   <span class="d">  1h</span>  <span class="b">Profile the slow search query</span>
         <span class="c">agy</span> --conversation c134893c-20f5-48ea-bc9b-7f7c9271bc4e
         <span class="d">#</span> <span class="d">usage ?</span>
@@ -154,8 +154,8 @@ hatcheck             # the sessions here from every profile, and what's left of 
 <pre><code><!-- sample:best -->$ hatcheck best
 Session 3f1c2a9e "Fix flaky login test", the newest started from this folder, is in ~/.claude-a: week 9%, 0.4%/h · 5h 20%.
 <span class="b c">Best Claude Code account now: </span><span class="b c">~/.claude-b</span>  <span class="d">team max 5x · </span><span class="g">live</span>
-  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 10:55pm (in 2h39m)</span>
-  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Wed 1:03am (in 4d4h)</span>
+  session (5h) <span class="g"> 62%</span> <span class="g">██████▎░░░</span>  <span style="color:#87afaf">█████▍░░░░</span> <span class="d">resets 8:25pm (in 2h39m)</span>
+  <span style="color:#af5fd7">week (Fable)</span> <span class="g"> 48%</span> <span style="color:#af5fd7">████▊░░░░░</span>  <span style="color:#87afd7">██████░░░░</span> <span class="d">resets Wed 10:33pm (in 4d4h)</span>
 Carry it there with:
 <span class="c">  hatcheck move b</span><span class="d">    (hatcheck fork b keeps the original)</span>
 <span class="d">Then:</span>
@@ -270,6 +270,7 @@ cargo install hatcheck              # or build them from crates.io</code></pre>
     <p>Or build it from a clone, with <a href="https://rustup.rs">Rust</a>; run <code>./install.sh</code> again after a <code>git pull</code>:</p>
 <pre><code>git clone https://github.com/hatcheck/hatcheck
 cd hatcheck && ./install.sh         # Windows, in PowerShell: .\install.ps1</code></pre>
+    <p>Packages: <a href="https://github.com/hatcheck/hatcheck/releases">GitHub Releases</a> · <a href="https://github.com/hatcheck/homebrew-tap">Homebrew tap</a> · <a href="https://www.npmjs.com/package/hatcheck">npm</a> · <a href="https://pypi.org/project/hatcheck/">PyPI</a> · <a href="https://crates.io/crates/hatcheck">crates.io</a>.</p>
   </section>
 
   <section class="wrap" id="app">

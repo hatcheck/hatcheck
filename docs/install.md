@@ -29,9 +29,12 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/hatcheck/hatcheck/
 ```
 
 The installer scripts put the commands in `~/.local/bin` and add that folder to your `PATH`; set
-`HATCHECK_NO_MODIFY_PATH=1` first to keep your shell's startup files as they are. Each release, made
-from a tag such as `v0.2.0`, has them and the binaries for each platform, PyPI gets the same
-binaries as wheels, and npm gets them in the `hatcheck` package. The release builds start after
+`HATCHECK_NO_MODIFY_PATH=1` first to keep your shell's startup files as they are. Each [release](https://github.com/hatcheck/hatcheck/releases), made
+from a tag such as `v0.2.0`, has them and the binaries for each platform, the
+[Homebrew tap](https://github.com/hatcheck/homebrew-tap) has the formula,
+[PyPI](https://pypi.org/project/hatcheck/) gets the same binaries as wheels,
+[npm](https://www.npmjs.com/package/hatcheck) gets them in the `hatcheck` package, and
+[crates.io](https://crates.io/crates/hatcheck) has the crate. The release builds start after
 0.1.0, which is the Python version.
 
 From a clone, on macOS and Linux, with Rust 1.90 or newer ([rustup.rs](https://rustup.rs)):

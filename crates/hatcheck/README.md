@@ -16,8 +16,8 @@ cargo install hatcheck    # or build them
 ```
 
 Either way you get `hatcheck` (`hat` for short), `cl`, `cx`, `ck`, `claude-z`, `claude-k`, `claude-m`
-and `claude-d`. Homebrew,
-npm, PyPI and the install scripts are in [docs/install.md](https://github.com/hatcheck/hatcheck/blob/main/docs/install.md).
+and `claude-d`. [Homebrew](https://github.com/hatcheck/homebrew-tap),
+[npm](https://www.npmjs.com/package/hatcheck), [PyPI](https://pypi.org/project/hatcheck/) and the install scripts are in [docs/install.md](https://github.com/hatcheck/hatcheck/blob/main/docs/install.md).
 
 ## Commands
 

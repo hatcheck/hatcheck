@@ -195,8 +195,9 @@ tags ([desktop/README.md](../desktop/README.md#releases)).
    The release is out when the GitHub release has an archive and its `.sha256` for each target,
    the two installers, `hatcheck.rb`, `sha256.sum` and `dist-manifest.json`, the version is on
    [pypi.org/project/hatcheck](https://pypi.org/project/hatcheck/),
-   [crates.io/crates/hatcheck](https://crates.io/crates/hatcheck) and `npmjs.com/package/hatcheck`,
-   and the tap's formula names it.
+   [crates.io/crates/hatcheck](https://crates.io/crates/hatcheck) and
+   [npmjs.com/package/hatcheck](https://www.npmjs.com/package/hatcheck),
+   and the [tap's](https://github.com/hatcheck/homebrew-tap) formula names it.
 4. **After it**, each commit's body saying what was run:
    - `chore: give the CLI's winget manifest X.Y.Z's zip SHA-256`: download
      `hatcheck-x86_64-pc-windows-msvc.zip` and its `.sha256` from the release, check that
