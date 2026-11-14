@@ -4,7 +4,9 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z`, `claude-k`, `claude-m` and `claude-d`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
-## Unreleased
+## 0.7.3 - 2026-11-14
+
+An npm package, `hatcheck`, installs all nine commands with `npm install -g hatcheck` on macOS, Linux and Windows, and `-o` / `--only AGENT` and `-i` / `--ignore AGENT` select the agents in `sessions`, `usage`, `where`, `search` and `profiles`. The session list's usage comment fits the terminal and shows multi-limit accounts such as agy 1.5.6's a line per limit under the first session, OpenCode 2.2.7's `session_part` rows are read, and ZCode 3.18.2's purged and open sessions are recognised.
 
 ### Added
 
