@@ -4,7 +4,9 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z`, `claude-k`, `claude-m` and `claude-d`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
-## Unreleased
+## 0.7.4 - 2026-11-15
+
+`hatcheck workspaces` pins project folders and `open --new` starts a fresh session in a chosen profile; `hatcheck library` keeps favorites, aliases, tags, archive state and saved views in Hatcheck's own metadata; `hatcheck export` writes Markdown, self-contained HTML or JSON for one session or a filtered batch; `hatcheck insights` reports offline usage forecasts and spending by profile, project and model; `move --backup` saves session-owned source files before a same-agent move; `doctor --deep` and `--repair stale-bindings` add deeper health checks and explicit cleanup; Raycast, Alfred and VS Code integrations join in `integrations/`; and the CLI (`HATCHECK_LANG=zh-CN`), desktop app and website add Simplified Chinese localization.
 
 ### Added
 
