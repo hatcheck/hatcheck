@@ -24,3 +24,7 @@ install-path = ["$XDG_BIN_HOME/", "$XDG_DATA_HOME/../bin", "~/.local/bin"]
 install-success-msg = "hatcheck is installed. hatcheck doctor lists every copy of it on your PATH, and hatcheck --help the commands."
 hosting = "github"
 install-updater = false
+
+[dist.github-custom-runners]
+aarch64-apple-darwin = "macos-latest"
+x86_64-apple-darwin = "macos-15-intel"

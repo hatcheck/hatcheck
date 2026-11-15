@@ -43,6 +43,11 @@ on:
   push:
     tags:
       - 'v**[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag, such as v0.7.4"
+        required: true
 
 jobs:
   # Run 'dist plan' (or host) to determine what tasks we need to do
@@ -50,14 +55,15 @@ jobs:
     runs-on: "ubuntu-22.04"
     outputs:
       val: ${{ steps.plan.outputs.manifest }}
-      tag: ${{ !github.event.pull_request && github.ref_name || '' }}
-      tag-flag: ${{ !github.event.pull_request && format('--tag={0}', github.ref_name) || '' }}
+      tag: ${{ inputs.tag || (!github.event.pull_request && github.ref_name) || '' }}
+      tag-flag: ${{ (inputs.tag && format('--tag={0}', inputs.tag)) || (!github.event.pull_request && format('--tag={0}', github.ref_name)) || '' }}
       publishing: ${{ !github.event.pull_request }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
           submodules: recursive
       - name: Install dist
@@ -77,7 +83,7 @@ jobs:
       # but also really annoying to build CI around when it needs secrets to work right.)
       - id: plan
         run: |
-          dist ${{ (!github.event.pull_request && format('host --steps=create --tag={0}', github.ref_name)) || 'plan' }} --output-format=json > plan-dist-manifest.json
+          dist ${{ (!github.event.pull_request && format('host --steps=create --tag={0}', inputs.tag || github.ref_name)) || 'plan' }} --output-format=json > plan-dist-manifest.json
           echo "dist ran successfully"
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
@@ -107,7 +113,7 @@ jobs:
       # - 1 "global" task that builds universal installers
       # - N "local" tasks that build each platform's binaries and platform-specific installers
       matrix: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner == 'macos-14' && 'macos-latest' || matrix.runner }}
     container: ${{ matrix.container && matrix.container.image || null }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,6 +124,7 @@ jobs:
           git config --global core.longpaths true
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
           submodules: recursive
       - name: Install Rust non-interactively if not already installed
@@ -177,6 +184,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
           submodules: recursive
       - name: Install cached dist
@@ -227,6 +235,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
           submodules: recursive
       - name: Install cached dist
@@ -271,7 +280,7 @@ jobs:
           PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
           ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
           ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
-          RELEASE_COMMIT: "${{ github.sha }}"
+          RELEASE_COMMIT: "${{ inputs.tag || github.sha }}"
         run: |
           # Write and read notes from a file to avoid quoting breaking things
           echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
@@ -339,5 +348,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
           submodules: recursive
