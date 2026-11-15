@@ -1,11 +1,11 @@
 name: desktop-check
 
-# On each change to the app: its pages type-check and build, and its Rust code compiles.
+# On each change to the app or integrations: tests, type-checking, building and Rust compilation.
 on:
   push:
-    paths: ["desktop/**", "crates/**", ".github/workflows/desktop-check.yml"]
+    paths: ["desktop/**", "crates/**", "integrations/**", ".github/workflows/desktop-check.yml"]
   pull_request:
-    paths: ["desktop/**", "crates/**"]
+    paths: ["desktop/**", "crates/**", "integrations/**"]
 
 jobs:
   check:
@@ -22,9 +22,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-      - name: Pages
+      - name: Pages and localization tests
         working-directory: desktop
-        run: npm ci && npm run build
+        run: npm ci && npm run build && npm test
+      - name: VS Code integration tests
+        working-directory: integrations/vscode-hatcheck
+        run: npm test
       - name: Rust
         working-directory: desktop/src-tauri
         run: |

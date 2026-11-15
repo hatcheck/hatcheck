@@ -53,6 +53,31 @@ A session in a folder [`config.toml`](#configtoml-the-lists-defaults-and-what-to
 agent it leaves out, isn't found: `where` exits 1, as for an ID that matches nothing. The shared
 [`-o` / `-i` agent filter](#selecting-agents) limits which agents `where` searches.
 
+## `hatcheck workspaces`: pin project folders
+
+```console
+$ hatcheck workspaces add ~/code/api --name API
+✓ Pinned workspace "API" at ~/code/api.
+$ hatcheck workspaces
+API  ~/code/api
+$ hatcheck workspaces remove ~/code/api
+✓ Unpinned workspace "API". Its folder is still there.
+```
+
+`add` pins the named folder, or this folder when none is named; adding it again with `--name`
+changes its display name. `remove` only unpins it: the project and every session are left alone.
+The list is Hatcheck's own `workspaces.json`, beside `bindings.json` in
+`~/.config/hatcheck` (`%APPDATA%\hatcheck` on Windows), not a cache and not any agent's settings.
+A pinned folder that is later moved or deleted stays in the list and is marked missing; it can be
+unpinned. A store that can't be read or isn't version 1 is an error, not an empty list.
+
+`hatcheck workspaces --json` has each workspace's `name`, absolute `folder`, whether it `exists`,
+and its `bindings`: agent names to absolute profile or home paths, including a parent folder's
+binding and leaving out agents `config.toml` excludes. The desktop app's **Workspaces** tab joins
+these with recent sessions and cached plan usage. Its **New session** action runs
+[`open --new`](#hatcheck-open-resume-a-session-in-a-new-terminal), always with the agent, profile
+and project folder the user chose; it never picks or switches an account itself.
+
 ## `hatcheck`: what to resume
 
 `hat` is the short name: `hat`, `hat usage`, `hat move …` and so on work the same. `hat check` is the name
@@ -60,9 +85,9 @@ in two words, so it's `hat` again: `hat check` lists sessions and `hat check usa
 
 A subcommand can be cut to its first letters, after `hat` or `hatcheck`: `hat m …` is `hat move …`
 and `hat f …` is `hat fork …`. Where two share a letter, it goes to the one used more: `b` is
-`best`, `s` is `show`, `se` is `search`, `u` is `usage`, `d` is `desktop`, `p` is `provider` and
-`r` is `resume`, so `bind`, `unbind` and `doctor` take two letters, `bi`, `un` and `do`, `relocate`
-three, `rel`, and `profiles` four, `prof`. What it prints,
+`best`, `s` is `show`, `se` is `search`, `u` is `usage`, `d` is `desktop`, `p` is `provider`,
+`r` is `resume` and `w` is `where`, so `bind`, `unbind`, `doctor` and `workspaces` take two
+letters, `bi`, `un`, `do` and `wo`, `relocate` three, `rel`, and `profiles` four, `prof`. What it prints,
 and the commands it suggests, use the whole name.
 
 On a terminal, human-facing reports use one style: `✓` for a completed change, `◇` for a dry run
@@ -70,6 +95,20 @@ and `⚠` for a warning, with bold headings, cyan commands, dim explanations and
 appears only in the main help and the session list's heading. `NO_COLOR` turns the colours off,
 and a pipe never gets them. `--json` and raw output (`--print`, `where`, `bind --which` and
 `provider env`) have no colours or added symbols.
+
+### Simplified Chinese output
+
+`HATCHECK_LANG=zh-CN` (also `zh_CN` or `zh`) opts into Simplified Chinese help and human-facing
+messages. There is no automatic locale detection, so scripts and existing users see English unless
+they ask for this. Other locale values fall back to English. The catalog covers common commands and
+newer workflows, with English fallback for provider-specific and not-yet-translated messages.
+Dynamic patterns preserve session IDs, profile names, paths and command syntax.
+
+`--json`, raw output (`--print`, `where`, `bind --which`, `provider env`), `--version`, resume
+commands, flags, JSON keys and copied commands are not translated. Terminal colours and the `✓`,
+`◇`, `⚠` and `🎩` conventions are unchanged. Chinese text uses the existing East Asian width
+handling, including wide-character truncation. For the desktop and website language settings, see
+[the desktop README](../desktop/README.md) and [the Simplified Chinese site](../site/zh-CN/index.html).
 
 ### Selecting agents
 
@@ -420,11 +459,61 @@ Sorted by Fable: those with some left first, the soonest reset on top; then thos
   default so the output is safe to share. `--json` prints the accounts as data
   ([below](#--json-for-scripts-status-bars-and-apps)).
 
+## `hatcheck insights`: local usage and spending history
+
+```console
+$ hatcheck insights
+Usage insights, last 7 days (local only)
+⚠ ~/.claude-work · week: runs out 2026-11-16T10:00:00Z, at 25%/h
+Sessions: 3 · recorded costs: 2 · $4.00
+$ hatcheck insights --days 30 --unused 60 --json
+```
+
+This is an on-demand, offline report: it reads `usage-history.jsonl` and the agents' session files,
+and asks for no live usage. `--days N` chooses 1 to 30 days (7 by default), limited by the history's
+30-day retention. `series` has each limit's readings and existing trend; an account with no readings
+in the period has no series, which the text report says rather than treating it as zero usage.
+
+Two forecasts are included when the readings support them: `runs_out`, when the current pace runs
+the limit out before its reset, and `unused`, when a limit is about to reset with much of it left.
+`--unused PERCENT` sets much, default 50: the newest reading must have at least that percentage
+left and be in the last fifth of its window, at most a day. 100 effectively disables the unused
+forecast. The desktop's existing low-limit and unused notification settings are configurable in the
+same way, and its insights use its unused threshold.
+
+`weekly` counts distinct sessions in the period, those with a recorded cost, and their cost in US
+dollars. `profiles`, `projects` and `models` break that down with session counts and cost, newest
+and costliest first; a session continued or copied under the same agent and ID is counted once, at
+its newest copy. A session with no cost recorded counts as a session but adds nothing to the cost,
+and an unrecorded project or model is named `unrecorded`, not free. `--json` has all of these, plus
+`generated_at`, `days` and `unused_threshold_percent`.
+
+The desktop's **Plans** tab shows the weekly summary, forecast cards, SVG time-series charts and
+the top five profiles, projects and models by recorded cost. It uses only local data and no chart
+library or external resource.
+
 ## `hatcheck move`: carry on a session with another profile
 
 When one account runs low, continue a session on another profile, or in another agent. It moves
 the session: the original is deleted once every copied file is checked against it, and an older
 copy never replaces a newer one. `--keep` keeps the original, which copies it instead.
+
+For a same-agent move, `--backup` first copies the session-owned source files into
+`~/.config/hatcheck/backups/<time>-<agent>-<id>-<pid>` (`%APPDATA%\hatcheck\backups` on Windows),
+with a versioned `manifest.json` naming the original paths and each backup. Claude Code's transcript
+and its session data folder, a Codex session file, or a Kimi session folder are copied without
+path rewriting. Shared indexes and databases, logins and other profile files aren't copied, and
+symlinks and special files aren't followed; `skipped` counts them explicitly. The backup is made
+only after the usual open and conflict checks pass; a failed backup stops before anything is
+deleted. `--backup` is refused for a copy, fork or conversion because those already keep the
+original. `--dry-run --backup` checks and reports the planned backup but writes nothing. Text names
+the backup folder and `--json` adds `backup` with `path`, `dry_run`, `files`, `bytes`, `skipped`
+and the manifest's `items`.
+
+A same-agent move is undone by moving the session back to the reported source, through these same
+checks. The desktop's completed-move dialog has **Undo** for exactly those moves; it leaves any
+backup in place. Its preview names source and destination and says what is preserved and left out,
+with file sizes and conflict states.
 
 ```
 $ hatcheck move 9a8b7c6d a
@@ -827,6 +916,7 @@ to or `--from`; there are no named OpenCode homes.
 | `PROFILE`        | where it goes: `NAME` for `~/.claude-NAME`, or for a Codex or Kimi session `~/.codex-NAME` or `~/.kimi-code-NAME` when that home exists (`claude:NAME`, `codex:NAME` and `kimi:NAME` spell it out; with both, you're asked), `default` or `claude` for `~/.claude`, `codex` for `~/.codex`, `agy` for `~/.gemini/antigravity-cli`, `kimi` for `~/.kimi-code`, `zcode` for `~/.zcode`, `qwen` for `~/.qwen`, `qwen:NAME` for `~/.qwen-NAME`, `dsh` for `~/.dsh`, `dsh:NAME` for `~/.dsh-NAME`, `mcode` for `~/.minimax`, `mcode:NAME` for `~/.minimax-NAME`, `copilot` for `~/.copilot`, `copilot:NAME` for `~/.copilot-NAME`, `opencode` for `~/.local/share/opencode`, or a path; left out, the best account of the session's agent now, as `hatcheck best` picks it, after asking, unless `--yes` |
 | `--from PROFILE` | the profile or home to take it from, when more than one has it; without it you're asked, with the one used last as the default, and a script, `--json` or `--yes` gets that one |
 | `--keep`         | keep the original, which copies the session rather than moving it (a converted session's original is always kept) |
+| `--backup`       | back up session-owned source files and a manifest before a same-agent move deletes the original; refused for a copy, fork or conversion |
 | `--brief`        | for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last six turns within 12,000 characters |
 | `-y`, `--yes`    | don't ask: go ahead with the session and account it picks, and in a terminal resume it right after; never with `--json` |
 | `--dry-run`      | show what would be moved, copied, converted and deleted, and change nothing  |
@@ -959,8 +1049,16 @@ $ hatcheck open 3f1c2a9e --here   # in this terminal instead (hatcheck resume as
 $ hatcheck open 3f1c2a9e --print  # the two commands, for scripts
 cd ~/code/api
 cl a --resume 3f1c2a9e-8b7d-4c1e-9f2a-6d5e4c3b2a10
+$ hatcheck open --new a --cwd ~/code/api  # a fresh session, explicitly in Claude profile a
 ```
 
+- `--new PROFILE --cwd FOLDER` starts a fresh session in exactly that agent, profile or home and
+  project folder, which must exist. `--cwd` defaults to this folder and requires `--new`; `--from`
+  only applies to resuming. PROFILE accepts the same forms as `--login`. If the folder, or one of
+  its parents, is bound to another profile for that agent, the launch is refused with both paths:
+  choose the bound profile or change the binding explicitly. `--print` performs the same checks
+  and creates no home; a real Codex or Kimi launch creates its home if needed. For DSH, `dsh web`
+  opens in the project and the new conversation is started in its web UI.
 - It finds the session by its ID or the start of it, in every Claude Code profile, Codex home,
   Kimi home, DeepSeek Harness home, MiniMax Code home, Qwen Code home and GitHub Copilot CLI home,
   including `DSH_HOME`, `MINIMAX_DATA_DIR`, `MAVIS_DATA_DIR`, `QWEN_HOME` and `COPILOT_HOME`, and in
@@ -1131,6 +1229,47 @@ Left out: Claude's thinking, images, plans, /rewind snapshots and subagent trans
 - `--last N` shows only the last N turns, `--from PROFILE` picks the copy to read when several
   profiles have one, and `--json` prints the turns as data.
 
+## `hatcheck export`: Markdown, HTML and JSON
+
+```console
+$ hatcheck export 3f1c2a9e --from work
+# Fix the flaky login test
+…
+$ hatcheck export 3f1c2a9e --from work --format html --output ~/hatcheck-exports/
+✓ Exported 1 session as html. This session may contain secrets or private source code. Review it before sharing.
+$ hatcheck export --project ~/code/api --hours 3d --format json --output ~/hatcheck-exports --json
+```
+
+With SESSION, `--from` picks the copy as `show` does. Without an option the document goes to stdout
+and nothing is written. `--output FILE` writes one document; `--output DIRECTORY/` writes it under
+a generated name. A directory that already exists is recognised with or without the final slash.
+`--brief` exports the handover brief instead of the whole conversation.
+
+Without SESSION it is a batch: `--project FOLDER` selects only sessions started there (matched
+through links), `--hours N` selects activity in that window, default 24; `0` means all time and
+forms such as `3d` work. Without `--project` every folder is included. CLI sessions are included
+by default; `--all` adds Desktop, SDK and other hosts. A batch needs `--output DIRECTORY` and at
+least one matching session. A batch never prints several documents onto stdout.
+
+Formats are `markdown` (the default), `html` and `json`. Markdown has the conversation and its facts,
+HTML has the same turns in a styled, standalone page with no scripts, fonts or other external
+resources, and JSON has the source, turns and export fields as data. Each names the original agent,
+profile and session ID and its destination and format, and each carries this warning: **the session
+may contain secrets or private source code; review it before sharing.** Export doesn't redact or
+promise to find secrets. JSON's `source`, `export.path`, `export.format`, `warning`, `turns_total`,
+`tool_calls`, `left_out` and `turns` are stable, with absolute paths and UTC times.
+
+Batch filenames contain the agent, profile folder name, short session ID and a slug of the title,
+with the format's extension. Existing files are refused unless `--replace` is given; two sessions
+that would get the same destination are refused too. Writes go through a temporary file and the
+reported byte count is read back from the result. `--dry-run` checks the conversations and names
+what would be written without creating a folder or file; it requires `--output` like a real run.
+
+`--json` prints an operation report rather than the document, with `dry_run`, `exported` (each
+item's `source`, absolute `path`, `format` and `bytes`) and `warning`, so it requires `--output`.
+The desktop's **Export** runs one session and **Export shown** runs every session matching its
+filters, reporting every output and failure separately.
+
 ## `hatcheck search`: the sessions that mention something
 
 Finds the sessions whose title or conversation has every word given, in every profile and home of
@@ -1192,6 +1331,44 @@ cd ~/code/api
   around its first word, up to 160 columns.
 
 `hat se` is the short form: `se` goes to `search`, since `sessions`, the default, needs no word.
+
+## `hatcheck library`: favorites, tags, aliases and saved views
+
+```console
+$ hatcheck library set 3f1c2a9e --from work --alias "Login flake" --favorite --tag backend
+✓ Updated Hatcheck's library entry for 3f1c2a9e.
+$ hatcheck library set 3f1c2a9e --from work --archive
+$ hatcheck library set 3f1c2a9e --from work --unarchive --no-favorite --untag backend
+$ hatcheck library clear 3f1c2a9e --from work
+✓ Cleared the session's Hatcheck metadata. Its transcript is unchanged.
+```
+
+`set` finds the session by ID as `open` does; `--from` picks the profile when more than one has a
+copy. `--alias NAME` sets a personal display name and `--clear-alias` removes it, `--favorite` and
+`--no-favorite` change the favorite mark, `--tag TAG` and `--untag TAG` repeat for tags, and
+`--archive` / `--unarchive` change its library state. An entry with no metadata left is removed.
+`clear` removes all of it at once. A broken store is an error, not an empty library.
+
+This is Hatcheck's own `library.json` in `~/.config/hatcheck` (`%APPDATA%\hatcheck` on Windows),
+not an agent's title, transcript, catalog or archive. Nothing in an agent's files is rewritten or
+deleted. Archiving hides the session in the desktop list unless **Include archived** is ticked; it
+is not an agent-level archive and doesn't change the CLI session list or session discovery.
+
+The desktop's **Edit labels** changes the alias and comma-separated tags, and its Favorite and
+Archive buttons change the other fields. Search covers the original title, alias, tags and folder;
+filters cover agent, profile, model text, cost range, tag, favorite and archive state, in addition
+to the existing date range and host filter. Workspaces use the personal alias too.
+
+`save-filter NAME` saves a desktop view and replaces one of the same name. Its options are
+`--query WORDS`, `--agent AGENT`, `--profile PROFILE`, `--hours N` (168 by default), `--model TEXT`,
+`--cost under-1|1-10|10-plus`, `--tag TAG`, `--favorites` and `--archived`. `remove-filter NAME`
+removes it without touching any session or metadata. The desktop's **Save view** and **Remove view**
+run these with the current controls.
+
+Plain `hatcheck library` reports the counts and path. `--json` has `sessions`, keyed by
+`agent:absolute-profile:id`, and `filters` by view name; session metadata has `alias`, `favorite`,
+`tags` and `archived`, and each saved filter has all the fields above. Mutation commands with
+`--json` print the changed entry or filter. Paths in the keys are absolute.
 
 ## `hatcheck best`: which account to use now
 

@@ -7,15 +7,17 @@
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body class="window">
-    <nav class="tabs">
+    <nav class="tabs" aria-label="Main sections">
       <span class="brand"><span class="logo" aria-hidden="true"></span>Hatcheck</span>
-      <button data-tab="sessions" class="tab active">Sessions</button>
+      <button data-tab="sessions" class="tab active" aria-current="page">Sessions</button>
+      <button data-tab="workspaces" class="tab">Workspaces</button>
       <button data-tab="plans" class="tab">Plans</button>
       <button data-tab="profiles" class="tab">Profiles</button>
       <button data-tab="desktop" class="tab" id="desktop-tab">Desktop</button>
       <button data-tab="settings" class="tab">Settings</button>
       <span class="spacer"></span>
-      <button id="reload" class="icon" title="Refresh">⟳</button>
+      <button id="command-palette" class="icon palette-button" title="Command palette (Ctrl/Cmd+K)" aria-label="Open command palette" aria-keyshortcuts="Control+K Meta+K">⌘K</button>
+      <button id="reload" class="icon" title="Refresh" aria-label="Refresh sessions and plans">⟳</button>
     </nav>
 
     <section id="tab-sessions" class="tab-body">
@@ -43,16 +45,41 @@
         </select>
         <label class="check"><input id="filter-all" type="checkbox" /> Desktop, SDK, Codex app</label>
       </div>
+      <div class="toolbar library-tools">
+        <input id="filter-model" type="search" placeholder="Model" />
+        <select id="filter-cost">
+          <option value="">Any cost</option><option value="under-1">Under $1</option>
+          <option value="1-10">$1–$10</option><option value="10-plus">$10 or more</option>
+        </select>
+        <select id="filter-tag"><option value="">Every tag</option></select>
+        <label class="check"><input id="filter-favorites" type="checkbox" /> Favorites</label>
+        <label class="check"><input id="filter-archived" type="checkbox" /> Include archived</label>
+        <select id="saved-filter"><option value="">Saved views…</option></select>
+        <button id="save-filter" type="button" class="ghost">Save view</button>
+        <button id="remove-filter" type="button" class="ghost">Remove view</button>
+        <button id="export-shown" type="button" class="ghost">Export shown…</button>
+      </div>
       <div class="split">
         <div id="session-list" class="list loading">Loading…</div>
         <div id="session-detail" class="detail"><p class="empty">Pick a session to see its conversation.</p></div>
       </div>
     </section>
 
+    <section id="tab-workspaces" class="tab-body" hidden>
+      <p class="lead">Pinned project folders, their bound profiles, recent sessions and cached usage. A new session starts only in the agent and profile you explicitly choose.</p>
+      <form id="add-workspace" class="inline-form">
+        <input id="workspace-folder" placeholder="Project folder, such as ~/code/api" required />
+        <input id="workspace-name" placeholder="Display name (optional)" />
+        <button type="submit">Pin workspace</button>
+      </form>
+      <div id="workspace-list" class="workspace-grid loading">Loading…</div>
+    </section>
+
     <section id="tab-plans" class="tab-body" hidden>
       <p class="lead">What's left of each plan, sorted as <code>hatcheck usage</code> sorts it: accounts with Fable left first,
         the soonest Fable reset on top. The second bar is the time left until the limit resets.</p>
       <div id="plans" class="plans loading">Loading…</div>
+      <div id="insights" class="insights" aria-live="polite"></div>
     </section>
 
     <section id="tab-profiles" class="tab-body" hidden>
@@ -105,6 +132,12 @@
 
     <section id="tab-settings" class="tab-body" hidden>
       <div class="settings">
+        <label>Language
+          <select id="set-language">
+            <option value="system">System language</option>
+            <option value="en">English</option>
+            <option value="zh-CN">Simplified Chinese</option>
+          </select></label>
         <label class="check"><input id="set-live" type="checkbox" />
           Ask for live usage. Off: show what Claude Code and Codex last saved. On: run Claude Code's /usage in each profile,
           which asks Anthropic with that profile's own login, and ask ChatGPT's usage endpoint for each Codex home with its
@@ -149,8 +182,18 @@
       </div>
     </section>
 
+    <div id="palette" class="dialog palette" hidden>
+      <div class="palette-box" role="dialog" aria-modal="true" aria-labelledby="palette-title">
+        <h3 id="palette-title" class="sr-only">Command palette</h3>
+        <input id="palette-input" type="search" role="combobox" aria-expanded="true" aria-controls="palette-results"
+          aria-autocomplete="list" aria-label="Search sessions and commands" placeholder="Resume a session or run a command…" autocomplete="off" />
+        <div id="palette-results" role="listbox" aria-label="Matching sessions and commands"></div>
+        <p class="note">↑↓ choose · Enter run · Esc close</p>
+      </div>
+    </div>
+
     <div id="dialog" class="dialog" hidden>
-      <div class="dialog-box">
+      <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1">
         <h3 id="dialog-title"></h3>
         <div id="dialog-body"></div>
         <div id="dialog-actions" class="dialog-actions"></div>

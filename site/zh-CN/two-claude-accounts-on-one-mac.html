@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../style.css">
+  <title>一台 Mac 上的两个 Claude 账号 · Hatcheck</title>
+  <meta name="description" content="在一台 Mac 上同时运行两个 Claude Desktop，各自登录独立账号，并使用不同颜色的图标。通过独立数据文件夹隔离账号，由 Hatcheck 创建安全启动器。">
+  <link rel="canonical" href="https://hatcheck.dev/zh-CN/two-claude-accounts-on-one-mac">
+</head>
+<body>
+  <nav class="top wrap" aria-label="网站">
+    <a href="index.html" class="brand"><img src="../favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="../guides.html" aria-current="page">指南</a><a href="../agents.html">智能体</a><a href="../commands.html">命令</a>
+    <a href="../integrations.html">集成</a><a href="../rules.html">规则</a><a href="../index.html" hreflang="en">English</a>
+  </nav>
+  <main class="wrap page guide">
+    <h1>一台 Mac 上的两个 Claude 账号</h1>
+    <p>Claude Desktop 默认只保留一个登录。要同时登录工作账号和个人账号，必须运行两个实例，并分别使用独立的数据文件夹。本页先说明数据文件夹的原理，再介绍 Hatcheck 如何为每个账号创建不同颜色的启动器：打开对应实例，或将已运行的窗口置于前台。每个 Claude 都单独登录；Hatcheck 不读取、复制或共享登录。</p>
+
+    <h2>第二个数据文件夹有什么作用</h2>
+    <p>Claude Desktop 是一个 Electron 应用。通过 <code>--user-data-dir</code> 指定文件夹后，登录、设置、会话、MCP 服务器和 Cowork 数据都会保存在那里，而不是默认位置。因此，下面这条命令会打开一个与第一个实例互不知情的 Claude：</p>
+    <pre><code>open -n -a /Applications/Claude.app --args --user-data-dir="$HOME/.claude-instances/work"</code></pre>
+    <p>这个方法来自 <a href="https://philippstracker.com/multiple-claude-instances/">Philipp Stracker</a>，本身即可使用，但有两个日常问题：</p>
+    <ul>
+      <li><strong>每次执行都会再启动一个进程</strong>，即使该文件夹已有实例正在运行。只有第一个进程能使用该文件夹的登录数据库；后续进程会显示为未登录，而多个进程共用同一文件夹还可能损坏数据。</li>
+      <li><strong>Dock 和 Launchpad 无法区分它们</strong>：图标和名称都一样。</li>
+    </ul>
+
+    <h2>Hatcheck 增加了什么</h2>
+    <p><code>hatcheck desktop new</code> 会在 <code>/Applications</code> 中为每个账号创建一个小型启动器，名称可自定义，图标可重新着色。点击启动器时，如果对应实例没有运行就启动它；如果已经运行，就把窗口带到前台，从而避免同一文件夹出现第二个进程。启动的仍是你已经安装的 <code>Claude.app</code>，只是使用对应账号的数据文件夹，因此 Claude 可以照常更新。</p>
+
+    <h2>设置步骤</h2>
+    <ol>
+      <li>在终端中用一行命令或 Homebrew 安装 CLI。它不会安装任何智能体，也不会修改 Claude 的配置：
+        <pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
+brew install hatcheck/tap/hatcheck    # 或者使用 Homebrew</code></pre></li>
+      <li>为每个账号创建启动器。第一个参数是数据文件夹名称，引号内是显示名称，<code>--hue</code> 用于旋转图标色相：约 110 为绿色、190 为蓝色、240 为紫色：
+        <pre><code>hatcheck desktop new work "Work" --hue 190    # Claude Work.app，蓝色，使用 ~/.claude-instances/work
+hatcheck desktop new home "Home" --hue -10    # Claude Home.app，红橙色</code></pre></li>
+      <li>从 Launchpad、Spotlight 或 Dock 打开每个实例，并在首次启动时分别登录对应账号。启动器第一次将窗口带到前台时，macOS 会询问是否允许控制“系统事件”；请允许，每个启动器只需授权一次。</li>
+    </ol>
+    <p>这样就完成了。启动器使用不同颜色，实例分别登录不同账号，点击任一启动器都会进入对应实例。启动器有颜色；运行中的 Dock 图标和名称仍由 Claude 自己提供。</p>
+
+    <h2>也为最常用的账号创建独立实例</h2>
+    <p>Claude Desktop 没有按数据文件夹加锁，而且只有第一个进程能使用该文件夹的登录数据库。因此，最稳妥的做法是：为每个账号创建独立实例，包括最常用的那个，并在日常使用中避开 Claude 自带的默认图标。让自定义启动器指向默认文件夹，同时继续使用官方图标，会产生重复且未登录的窗口。新实例只需登录一次。如果确实需要保留默认实例中的登录、设置、MCP 服务器和会话，请先完全退出所有 Claude 实例，再按照 <a href="https://github.com/hatcheck/hatcheck/blob/main/docs/desktop-instances.md#copying-an-existing-login-into-an-instance">desktop-instances.md</a> 的步骤复制相关数据。</p>
+    <p>按 <strong>⌘W</strong> 只关闭窗口并保留实例运行，下次点击启动器即可恢复窗口；按 <strong>⌘Q</strong> 才会真正退出。</p>
+
+    <h2>常用命令</h2>
+    <pre><code>hatcheck desktop                # 查看实例及运行状态
+hatcheck desktop open work      # 与点击启动器相同
+hatcheck desktop remove home    # 删除启动器；--data 还会删除数据文件夹及其中的登录</code></pre>
+
+    <h2>哪些内容始终属于你</h2>
+    <ul>
+      <li>数据文件夹位于 <code>~/.claude-instances</code>，每个 Claude 都独立登录。Hatcheck 不询问、读取、复制或移动登录。</li>
+      <li>没有后台服务：启动器只在点击时短暂运行。</li>
+      <li>卸载 Hatcheck 不会删除实例或其登录。只有明确运行 <code>hatcheck desktop remove</code> 才删除启动器，只有加上 <code>--data</code> 才同时删除数据。</li>
+    </ul>
+    <p>更多安全边界及其对应实现，请阅读<a href="../rules.html">Hatcheck 遵守的规则</a>。</p>
+
+    <h2>Windows 和 Linux</h2>
+    <p>在 Windows 上，<code>hatcheck desktop new</code> 会创建具有相同隔离效果的“开始菜单”快捷方式：每个账号都有独立数据文件夹、登录和图标颜色。Linux 版 Claude Desktop 仍处于测试阶段，独立数据文件夹能否同样可靠隔离实例尚未验证（见<a href="https://github.com/hatcheck/hatcheck#roadmap">路线图</a>）。命令行部分，包括<a href="../claude-code-two-accounts.html">为每个账号创建 Claude Code 配置</a>，可在三个平台上使用。</p>
+
+    <h2>桌面应用</h2>
+    <p>Hatcheck 桌面应用可以在“Desktop”页中创建实例并选择颜色，也能查看套餐剩余额度、最近会话和运行状态。主窗口的“Workspaces”页用于固定项目并明确选择新会话的配置。按 Ctrl/Cmd+K 可打开命令面板。</p>
+  </main>
+  <footer class="wrap">
+    <p><a href="index.html">Hatcheck 首页</a> · <a href="../guides.html">指南</a> · <a href="../agents.html">智能体支持</a> · <a href="../commands.html">全部命令</a> · <a href="../rules.html">安全规则</a> · <a href="https://github.com/hatcheck/hatcheck">GitHub 源码、问题和发布</a></p>
+    <p><a href="../two-claude-accounts-on-one-mac.html" hreflang="en">Read this guide in English</a></p>
+  </footer>
+</body>
+</html>

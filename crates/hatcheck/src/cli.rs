@@ -1,20 +1,25 @@
 //! The hatcheck command: picks the subcommand and runs it, or the launcher it's called as.
 
 use crate::{
-    best, bind, completions, desktop, doctor, move_cmd, open_cmd, out, profiles, provider,
-    relocate, resume, search, sessions, show, statusline, usage, where_cmd,
+    best, bind, completions, desktop, doctor, export, insights, library, move_cmd, open_cmd, out,
+    profiles, provider, relocate, resume, search, sessions, show, statusline, usage, where_cmd,
+    workspaces,
 };
 
 pub const SUBCOMMANDS: &[&str] = &[
     "sessions",
     "usage",
     "where",
+    "workspaces",
     "move",
     "fork",
     "open",
     "resume",
     "show",
     "search",
+    "library",
+    "export",
+    "insights",
     "best",
     "bind",
     "unbind",
@@ -28,7 +33,7 @@ pub const SUBCOMMANDS: &[&str] = &[
 ];
 
 /// The letters two subcommands start with, each given to the one used more. The other takes two
-/// letters, bi, un or do, or three, rel; sessions, the default, needs no word at all.
+/// letters, bi, un, do or wo, or three, rel; sessions, the default, needs no word at all.
 const SHARED_LETTERS: &[(&str, &str)] = &[
     ("b", "best"),
     ("s", "show"),
@@ -37,6 +42,7 @@ const SHARED_LETTERS: &[(&str, &str)] = &[
     ("u", "usage"),
     ("d", "desktop"),
     ("r", "resume"),
+    ("w", "where"),
 ];
 
 /// The subcommands a word could name: its whole name, a letter in SHARED_LETTERS, or else each
@@ -70,6 +76,7 @@ Usage:
     hat check ...                      the same as hat (or hatcheck): the name in two words
     hatcheck usage ...                 plan usage left for every profile and home
     hatcheck where SESSION             where a session is stored, by its ID or the start of it
+    hatcheck workspaces ...            pinned project folders, their bindings and recent sessions
     hatcheck move [SESSION] [PROFILE]  move a session to another profile or home, or convert
                                        it for another of the agents; with a profile alone,
                                        the newest session started here goes to it, and
@@ -85,6 +92,10 @@ Usage:
     hatcheck show SESSION              a session's conversation, read-only
     hatcheck search WORDS...           the sessions whose title or conversation has every
                                        word, in every profile and home, newest first
+    hatcheck library ...               favorites, aliases, tags, archive state and saved filters
+    hatcheck export [SESSION] ...      export one session or a project/date batch as Markdown,
+                                       self-contained HTML or JSON
+    hatcheck insights ...              local usage history, forecasts and spending by project/model
     hatcheck best [--for SESSION]      the best account now, in full, and the move command
                                        that carries the newest session started here to it;
                                        --wait sleeps until one has room
@@ -103,8 +114,8 @@ Usage:
                                        which runs, and how to remove the rest
     hatcheck completions SHELL         the completions for zsh, bash, fish or PowerShell
 
-hatcheck, usage, where, show, search, profiles, desktop, move, fork, relocate and
-doctor take --json, for scripts, status bars and the desktop app.
+hatcheck, usage, where, workspaces, show, search, library, export, insights, profiles,
+desktop, move, fork, relocate and doctor take --json, for scripts, status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
@@ -112,9 +123,9 @@ and so on. cl, cx and ck run Claude Code, Codex and Kimi Code CLI with a profile
 
 A subcommand can be cut to its first letters: hat m is hat move, hat f is hat
 fork. Where two share a letter, it goes to the one used more: b is best, s is
-show, se is search, u is usage, d is desktop, p is provider and r is resume, so
-bind, unbind and doctor take two letters, bi, un and do, relocate three, rel,
-and profiles four, prof.";
+show, se is search, u is usage, d is desktop, p is provider, r is resume and w
+is where, so bind, unbind, doctor and workspaces take two letters, bi, un, do
+and wo, relocate three, rel, and profiles four, prof.";
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -125,11 +136,11 @@ pub fn version() -> &'static str {
 /// with no sessions.
 pub fn print_help(me: &str) {
     if me == "hat" {
-        out::println("hat is the short name for hatcheck.\n");
+        out::println(&crate::i18n::help("hat is the short name for hatcheck.\n"));
     }
     let (banner, rest) = HELP.split_once('\n').unwrap_or((HELP, ""));
-    out::heading(&format!("🎩 {banner}"));
-    out::println(rest);
+    out::heading(&format!("🎩 {}", crate::i18n::help(banner)));
+    out::println(&crate::i18n::help(rest));
 }
 
 /// Whether a word is HOURS for the session list: 36, 1.5, 12h or 3d.
@@ -227,6 +238,7 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "sessions" => sessions::main(&argv, &prog),
         "usage" => usage::main(&argv, &prog),
         "where" => where_cmd::main(&argv, &prog),
+        "workspaces" => workspaces::main(&argv, &prog),
         "move" => move_cmd::main(&argv, &prog),
         "fork" => move_cmd::fork_main(&argv, &prog),
         "relocate" => relocate::main(&argv, &prog),
@@ -234,6 +246,9 @@ fn run(argv0: &str, mut argv: Vec<String>, launchers: bool) -> i32 {
         "resume" => resume::main(&argv, &prog),
         "show" => show::main(&argv, &prog),
         "search" => search::main(&argv, &prog),
+        "library" => library::main(&argv, &prog),
+        "export" => export::main(&argv, &prog),
+        "insights" => insights::main(&argv, &prog),
         "profiles" => profiles::main(&argv, &prog),
         "statusline" => statusline::main(&argv, &prog),
         "completions" => completions::main(&argv, &prog),

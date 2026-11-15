@@ -175,10 +175,13 @@ export function toast(message: string, kind: "info" | "error" = "info") {
   if (!box) {
     box = document.createElement("div");
     box.id = "toasts";
+    box.setAttribute("role", "status");
+    box.setAttribute("aria-live", "polite");
     document.body.appendChild(box);
   }
   const el = document.createElement("div");
   el.className = "toast " + kind;
+  el.setAttribute("role", kind === "error" ? "alert" : "status");
   el.textContent = message;
   box.appendChild(el);
   setTimeout(() => el.remove(), kind === "error" ? 9000 : 3500);

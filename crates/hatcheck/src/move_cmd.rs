@@ -1651,6 +1651,8 @@ struct Ask {
     fork: bool,
     /// A conversion hands over a brief in place of the whole conversation.
     brief: bool,
+    /// Back up session-owned source files before a same-agent move deletes the original.
+    backup: bool,
     dry_run: bool,
     json: bool,
     /// --yes: nothing is asked. What it picked goes ahead, and in a terminal it resumes after.
@@ -1677,6 +1679,22 @@ fn set(report: &mut Map<String, Value>, entries: Vec<(&str, Value)>) {
 
 fn opt(v: Option<String>) -> Value {
     v.map_or(Value::Null, Value::String)
+}
+
+fn maybe_backup(
+    a: &Ask,
+    agent: Agent,
+    sid: &str,
+    source: &str,
+    files: &[String],
+    report: &mut Map<String, Value>,
+) -> Result<(), Stop> {
+    if !a.backup {
+        return Ok(());
+    }
+    let backup = crate::backup::create(agent, sid, source, files, a.dry_run)?;
+    report.insert("backup".into(), backup);
+    Ok(())
 }
 
 /// The stop for a Claude Code session open in a profile: the one it's taken from, or with
@@ -1939,6 +1957,7 @@ fn move_claude(
                 ],
             ))
         });
+    maybe_backup(a, Agent::Claude, sid, source, transcripts, report)?;
     if !a.dry_run {
         for item in &items {
             match state_of(&states, &item.dst) {
@@ -2292,6 +2311,7 @@ fn copy_codex(
             ),
         ],
     );
+    maybe_backup(a, Agent::Codex, sid, source, files, report)?;
     if !a.dry_run {
         if matches!(state, "new" | "older") {
             copy(&src, &dst, &[], ids).map_err(io)?;
@@ -2528,6 +2548,7 @@ fn copy_kimi(
         ],
     );
     let new_state = kimi::restate(&state, &src, &dst, (sid, &new_sid));
+    maybe_backup(a, Agent::Kimi, sid, source, files, report)?;
     if !a.dry_run {
         match state_of_copy {
             "new" => copy(&src, &dst, &[], None).map_err(io)?,
@@ -3391,6 +3412,11 @@ fn run(a: &Ask, prog: &str, report: &mut Map<String, Value>) -> Result<Done, Sto
     }
     // A conversion leaves things out, so its original is always kept, moving or not.
     let converting = agent != target_agent || why.is_some();
+    if a.backup && (a.keep || converting) {
+        return Err(
+            "--backup is only for a same-agent move that deletes the original; a copy, fork or conversion already keeps it".into(),
+        );
+    }
     if a.brief && !converting {
         return Err(
             "--brief hands over a brief in place of the conversation, which only a conversion into another agent takes; a move or copy carries the session whole".into(),
@@ -3485,6 +3511,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         .positional("profile", Count::Optional, "where it goes: NAME for ~/.claude-NAME, default or claude for ~/.claude, codex for ~/.codex, codex:NAME for ~/.codex-NAME, agy for ~/.gemini/antigravity-cli, kimi for ~/.kimi-code, kimi:NAME for ~/.kimi-code-NAME, zcode for ~/.zcode, qwen for ~/.qwen, qwen:NAME for ~/.qwen-NAME, dsh for ~/.dsh, dsh:NAME for ~/.dsh-NAME, mcode for ~/.minimax, mcode:NAME for ~/.minimax-NAME, copilot for ~/.copilot, copilot:NAME for ~/.copilot-NAME or opencode for ~/.local/share/opencode, or a path (default: the best account of the session's agent now, as hatcheck best picks it)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has it")
         .flag(&["--keep"], "keep", "keep the original, which copies the session rather than moving it (a converted session's original is always kept)")
+        .flag(&["--backup"], "backup", "before a same-agent move, back up its session-owned source files in Hatcheck's backups folder; copies, forks and conversions already keep the original")
         .flag(&["--brief"], "brief", "for a conversion into another agent, hand over a brief in place of the whole conversation: the first prompt, the files and commands its tool calls named, and its last turns")
         // Still taken, so scripts that pass them run: what --no-keep asked for is the default
         // now, and --fork is hatcheck fork, which keeps the original as --fork always did.
@@ -3508,6 +3535,7 @@ pub fn main(argv: &[String], prog: &str) -> i32 {
         keep: fork || args.flag("keep"),
         fork,
         brief: args.flag("brief"),
+        backup: args.flag("backup"),
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
         yes: args.flag("yes"),
@@ -3547,6 +3575,7 @@ pub fn fork_main(argv: &[String], prog: &str) -> i32 {
         keep: true,
         fork: true,
         brief: args.flag("brief"),
+        backup: args.flag("backup"),
         dry_run: args.flag("dry_run"),
         json: args.flag("json"),
         yes: args.flag("yes"),
@@ -3588,6 +3617,13 @@ fn answer(a: &Ask, prog: &str) -> i32 {
             target_agent,
             target,
         }) => {
+            if let Some(path) = report.get("backup").and_then(|b| py::s(py::get(b, "path"))) {
+                if a.dry_run {
+                    out::println(&format!("Backup would be in {}.", paths::shell_path(path)));
+                } else {
+                    out::success(&format!("Backup saved in {}.", paths::shell_path(path)));
+                }
+            }
             // In a terminal, offer to run that now, or with --yes run it. Never when piped, so
             // scripts don't stop to ask, and nothing starts an agent without a terminal for it.
             if let (Some(sid), Some(cwd)) = (session, cwd) {
@@ -3835,6 +3871,7 @@ mod tests {
             keep: false,
             fork: false,
             brief: false,
+            backup: false,
             dry_run: false,
             json: false,
             yes: false,

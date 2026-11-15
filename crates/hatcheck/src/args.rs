@@ -94,11 +94,11 @@ impl Stop {
     pub fn exit_code(self) -> i32 {
         match self {
             Stop::Help(text) => {
-                crate::out::print(&text);
+                crate::out::print(&crate::i18n::help(&text));
                 0
             }
             Stop::Error(text) => {
-                crate::out::error(&text);
+                crate::out::error(&crate::i18n::help(&text));
                 2
             }
         }

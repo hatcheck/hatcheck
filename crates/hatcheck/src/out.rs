@@ -79,7 +79,7 @@ pub fn eprint(text: &str) {
 
 /// An error on stderr, with its first line red on an error terminal that takes colours.
 pub fn error(text: &str) {
-    eprint(&Paint::stderr().error(text));
+    eprint(&Paint::stderr().error(&crate::i18n::human(text)));
 }
 
 /// A question on stderr, bold on an error terminal that takes colours.
@@ -249,20 +249,25 @@ impl Default for Paint {
     }
 }
 
+/// A normal human-facing line, localized when HATCHECK_LANG explicitly asks for it.
+pub fn human(text: &str) {
+    println(&crate::i18n::human(text));
+}
+
 pub fn heading(text: &str) {
-    println(&Paint::new().heading(text));
+    println(&Paint::new().heading(&crate::i18n::human(text)));
 }
 
 pub fn success(text: &str) {
-    println(&Paint::new().success(text));
+    println(&Paint::new().success(&crate::i18n::human(text)));
 }
 
 pub fn preview(text: &str) {
-    println(&Paint::new().preview(text));
+    println(&Paint::new().preview(&crate::i18n::human(text)));
 }
 
 pub fn warn(text: &str) {
-    println(&Paint::new().warning(text));
+    println(&Paint::new().warning(&crate::i18n::human(text)));
 }
 
 pub fn command(text: &str) {
@@ -270,7 +275,7 @@ pub fn command(text: &str) {
 }
 
 pub fn note(text: &str) {
-    println(&Paint::new().muted(text));
+    println(&Paint::new().muted(&crate::i18n::human(text)));
 }
 
 #[cfg(test)]

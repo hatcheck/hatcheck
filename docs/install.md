@@ -194,3 +194,22 @@ caps them, which 0, the default, doesn't; both as Claude Code 2.1.319 describes 
 `settings.json` that can't be read shows `?` with why, and counts as something to fix, since Claude
 Code pauses its cleanup over it too. `--json` has them as `transcripts`, each with `profile`,
 `days`, `set`, `desktop_days` and `unread`.
+
+`hatcheck doctor --deep` adds health checks without changing the default report: missing agent
+binaries, bindings whose project folders are gone, unreadable or malformed Claude Code, Codex,
+Qwen Code and Copilot transcripts, broken Claude Desktop launcher executables, duplicate Claude
+Desktop main processes, and storage in bytes and files per discovered profile or home. A symlink
+isn't followed for storage, and a folder that can't be measured is `unknown` with its error, not
+zero. If the process list can't be read, `processes_checked` is false and `processes_note` says the
+check is unknown; on Windows that duplicate check is unavailable. A new instance whose data folder
+hasn't been created yet is informational, not something to fix.
+
+Diagnosis is otherwise read-only. `hatcheck doctor --repair stale-bindings` explicitly removes only
+missing folders from Hatcheck's own `bindings.json`, preserving the rest and reporting each removal.
+Other findings print their repair command, such as `hatcheck unbind`, `hatcheck relocate` or
+`hatcheck desktop new --replace`; no transcript, login, agent config or process is changed. The
+JSON `health` field has `issues` (each `kind`, `severity`, `message`, `path` and `repair`), `storage`,
+`repaired`, `processes_checked` and `processes_note`; without `--deep` it is `null`. Any warning
+counts as something to fix in the exit status. A missing agent binary is a warning when that agent
+has profiles or homes, and informational for an agent not in use, so not installing all ten isn't
+itself a failure.

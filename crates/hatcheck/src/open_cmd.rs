@@ -1,7 +1,8 @@
 //! hatcheck open [SESSION] ...: resume a session in a new terminal window, already in its
 //! folder, or open DSH's web UI there and choose the session; here (--here), or print the commands
-//! (--print); --login PROFILE signs in to a profile or home instead. docs/commands.md's
-//! `hatcheck open` section says which terminal opens and how.
+//! (--print); --login PROFILE signs in to a profile or home instead, and --new PROFILE --cwd
+//! FOLDER starts a fresh session. docs/commands.md's `hatcheck open` section says which terminal
+//! opens and how.
 
 use crate::agent::Agent;
 use crate::args::{Count, Parser};
@@ -614,32 +615,133 @@ fn login(profile: &str, here: bool, print: bool, full: bool, terminal: Option<&s
     0
 }
 
+/// --new: start a fresh session in an explicitly chosen agent, profile and project folder.
+/// A binding for another profile is a conflict, not a suggestion to switch accounts silently.
+fn new_session(
+    profile: &str,
+    cwd: &str,
+    here: bool,
+    print: bool,
+    full: bool,
+    terminal: Option<&str>,
+) -> i32 {
+    let (agent, folder) = match find::place_seen(profile) {
+        Ok(place) => place,
+        Err(why) => return out::fail(&why),
+    };
+    let cwd = ospath::realpath(&ospath::abspath(&ospath::expanduser(cwd)));
+    if !ospath::isdir(&cwd) {
+        return out::fail(&format!(
+            "Project folder {} isn't there",
+            paths::shell_path(&cwd)
+        ));
+    }
+    let bindings = paths::load_bindings();
+    if let Some(bound) = paths::bound_profile(Some(&cwd), agent, &bindings) {
+        if !paths::same_folder(&bound, &folder) {
+            return out::fail(&format!(
+                "{} is bound to {} for {}; choose that profile instead of {}",
+                paths::shell_path(&cwd),
+                paths::shell_path(&bound),
+                agent.name(),
+                paths::shell_path(&folder)
+            ));
+        }
+    }
+    let line = |shell: &paths::Shell| {
+        shell.start_command(agent, &folder, full || !launcher_on_path(agent))
+    };
+    let command = line(&paths::Shell::here());
+    if print {
+        out::println(&format!("cd {}", paths::shell_path(&cwd)));
+        out::println(&command);
+        return 0;
+    }
+    if matches!(agent, Agent::Codex | Agent::Kimi) {
+        let _ = std::fs::create_dir_all(&folder); // these agents need their home to exist
+    }
+    if here {
+        out::heading(&format!(
+            "Starting a new {} session with {} here, in {}:",
+            agent.name(),
+            paths::shell_path(&folder),
+            paths::shell_path(&cwd)
+        ));
+        return run_here(&cwd, &command);
+    }
+    let terminal = pick_terminal(terminal);
+    let launched = terminal.as_deref().map(|t| line(&shell_for(t)));
+    let why = match (&terminal, &launched) {
+        (Some(t), Some(launched)) => open_terminal(t, &cwd, launched),
+        _ => Some("no terminal found; set HATCHECK_TERMINAL".into()),
+    };
+    if let Some(why) = why {
+        let paint = out::Paint::stderr();
+        let cd = paint.command(&format!("  cd {}", paths::shell_path(&cwd)));
+        let command = paint.command(&format!("  {command}"));
+        return out::fail(&format!(
+            "Couldn't open a terminal ({why}). Run these instead:\n{cd}\n{command}"
+        ));
+    }
+    out::heading(&format!(
+        "Starting a new {} session with {} in a new {} window, in {}:",
+        agent.name(),
+        paths::shell_path(&folder),
+        ospath::basename(terminal.as_deref().unwrap_or("")),
+        paths::shell_path(&cwd)
+    ));
+    out::command(&format!("  {}", launched.unwrap_or(command)));
+    0
+}
+
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session in a new terminal window, already in its folder; for DeepSeek Harness, open dsh web there and choose the session in its session history.")
+    let parser = Parser::new(prog, "Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, MiniMax Code, Qwen Code, GitHub Copilot CLI or OpenCode session in a new terminal window, already in its folder; for DeepSeek Harness, open dsh web there and choose the session in its session history. --new starts a fresh session in a chosen profile and project folder instead.")
         .positional("session", Count::Optional, "the session ID, or the start of it (default: the newest session started from this folder)")
         .option(&["--from"], "source", "PROFILE", "the profile or home to take it from, when more than one has a copy")
-        .flag(&["--here"], "here", "resume it in this terminal instead")
-        .flag(&["--print"], "print", "print the cd and resume commands instead")
+        .flag(&["--here"], "here", "resume or start it in this terminal instead")
+        .flag(&["--print"], "print", "print the cd and agent commands instead")
         .exclusive(&["here", "print"])
         .option(&["--terminal"], "terminal", "NAME", "the terminal to open (default: HATCHECK_TERMINAL, or this system's usual one)")
         .flag(&["-f", "--full"], "full", "print CLAUDE_CONFIG_DIR=... claude rather than cl, CODEX_HOME=... codex rather than cx, and KIMI_CODE_HOME=... kimi rather than ck")
         .flag(&["-a", "--all"], "all", "without SESSION, also consider sessions from Claude Desktop, the SDK, the Codex app or codex exec")
-        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME, zcode, dsh, dsh:NAME, mcode, mcode:NAME, qwen, qwen:NAME, copilot, copilot:NAME or opencode) in a new terminal, instead of resuming a session");
+        .option(&["--login"], "login", "PROFILE", "sign in to a profile (NAME, default, codex, codex:NAME, agy, kimi, kimi:NAME, zcode, dsh, dsh:NAME, mcode, mcode:NAME, qwen, qwen:NAME, copilot, copilot:NAME or opencode) in a new terminal, instead of resuming a session")
+        .option(&["--new"], "new", "PROFILE", "start a fresh session in this explicitly chosen profile or home instead of resuming")
+        .option(&["--cwd"], "cwd", "FOLDER", "the project folder for --new (default: this folder)")
+        .exclusive(&["login", "new"]);
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
     let (here, print, full) = (args.flag("here"), args.flag("print"), args.flag("full"));
-    if args.value("login").is_some_and(|l| !l.is_empty())
-        && args.value("session").is_some_and(|s| !s.is_empty())
-    {
+    let session = args.value("session").filter(|s| !s.is_empty());
+    let login_profile = args.value("login").filter(|l| !l.is_empty());
+    let new_profile = args.value("new").filter(|p| !p.is_empty());
+    if session.is_some() && (login_profile.is_some() || new_profile.is_some()) {
         return parser
-            .error("give a SESSION or --login, not both")
+            .error("give a SESSION, --login or --new, not more than one")
             .exit_code();
     }
+    if new_profile.is_some() && args.value("source").is_some() {
+        return parser
+            .error("--from only applies when resuming")
+            .exit_code();
+    }
+    if new_profile.is_none() && args.value("cwd").is_some() {
+        return parser.error("--cwd requires --new").exit_code();
+    }
     out::setup_console();
-    if let Some(profile) = args.value("login").filter(|l| !l.is_empty()) {
+    if let Some(profile) = login_profile {
         return login(profile, here, print, full, args.value("terminal"));
+    }
+    if let Some(profile) = new_profile {
+        return new_session(
+            profile,
+            args.value("cwd").unwrap_or("."),
+            here,
+            print,
+            full,
+            args.value("terminal"),
+        );
     }
     let s = match pick(&Pick {
         session: args.value("session").filter(|s| !s.is_empty()),

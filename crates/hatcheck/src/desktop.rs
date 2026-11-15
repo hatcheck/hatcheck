@@ -266,6 +266,26 @@ fn windows_instances() -> Vec<Instance> {
     found
 }
 
+/// Claude Desktop main-process command lines, or None when the process list is unavailable.
+/// Windows uses a different process check in desktop_windows.rs, so this is available only on POSIX.
+pub fn main_processes() -> Option<Vec<String>> {
+    if ospath::WINDOWS {
+        return None;
+    }
+    let out = Command::new("ps")
+        .args(["-axww", "-o", "command="])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    Some(
+        text.lines()
+            .filter(|l| l.contains("/Claude.app/Contents/MacOS/") && !l.contains("--type="))
+            .map(str::to_string)
+            .collect(),
+    )
+}
+
 /// Mark each instance running or not, from its main process: Claude Desktop's own process with
 /// that --user-data-dir (none for the default instance), not one of its helpers.
 fn mark_running(found: &mut [Instance]) {
@@ -281,15 +301,7 @@ fn mark_running(found: &mut [Instance]) {
         }
         return;
     }
-    let out = Command::new("ps")
-        .args(["-axww", "-o", "command="])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-        .unwrap_or_default();
-    let mains: Vec<&str> = out
-        .lines()
-        .filter(|l| l.contains("/Claude.app/Contents/MacOS/") && !l.contains("--type="))
-        .collect();
+    let mains = main_processes().unwrap_or_default();
     for inst in found.iter_mut() {
         inst.running = match &inst.data_dir {
             Some(dir) => {

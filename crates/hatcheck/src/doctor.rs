@@ -1,8 +1,9 @@
 //! hatcheck doctor [--json]: every copy of hatcheck's commands on the PATH, grouped by how
 //! each was installed, which one runs and how to remove the rest; every copy of claude, codex
 //! and agy, with its version and where it came from; and the hooks hatcheck bind --hook added
-//! that run a hatcheck that has gone. It changes nothing; the exit status says whether there's
-//! something to fix. docs/install.md's `hatcheck doctor` section describes it.
+//! that run a hatcheck that has gone. --deep adds session, binding, launcher, process and storage
+//! checks; only --repair stale-bindings changes anything, removing stale bindings of Hatcheck's
+//! own. The exit status says whether there's something to fix. docs/install.md's section describes it.
 
 use crate::agent::Agent;
 use crate::args::Parser;
@@ -434,6 +435,7 @@ struct Report {
     /// How long each Claude Code profile keeps its transcripts.
     transcripts: Vec<Retention>,
     problems: Vec<String>,
+    health: Option<crate::health::HealthReport>,
 }
 
 /// How long a Claude Code profile keeps its transcripts: Claude Code deletes a transcript
@@ -670,6 +672,7 @@ fn examine() -> Report {
         hooks,
         transcripts,
         problems,
+        health: None,
     }
 }
 
@@ -721,6 +724,7 @@ fn as_json(r: &Report) -> Value {
         "shell_functions": r.functions.iter().map(|(n, rc)| json!({"command": n, "file": ospath::abspath(rc)})).collect::<Vec<_>>(),
         "agents": agents, "hooks": hooks, "transcripts": transcripts, "problems": r.problems,
         "config": crate::config::current().to_json(),
+        "health": r.health.as_ref().map_or(Value::Null, crate::health::as_json),
     })
 }
 
@@ -955,6 +959,9 @@ fn describe(r: &Report) {
             show(&config.path)
         ));
     }
+    if let Some(health) = &r.health {
+        crate::health::describe(health);
+    }
     if r.problems.is_empty() {
         out::success("Nothing to fix.");
     } else {
@@ -963,14 +970,42 @@ fn describe(r: &Report) {
 }
 
 pub fn main(argv: &[String], prog: &str) -> i32 {
-    let parser = Parser::new(prog, "Check how hatcheck and the agents are installed: every copy on the PATH, which one runs, and how to remove the rest. Changes nothing.")
+    let parser = Parser::new(prog, "Check how hatcheck and the agents are installed: every copy on the PATH, which one runs, and how to remove the rest. Changes nothing unless --repair stale-bindings explicitly removes missing folders from Hatcheck's bindings.")
+        .flag(&["--deep"], "deep", "also check session readability, bindings, launchers, duplicate processes, missing binaries and storage")
+        .option(&["--repair"], "repair", "KIND", "repair only this: stale-bindings removes bindings whose project folders are gone")
         .flag(&["-j", "--json"], "json", "print what it found as JSON");
     let args = match parser.parse(argv) {
         Ok(a) => a,
         Err(stop) => return stop.exit_code(),
     };
+    let repair = args.value("repair");
+    if repair.is_some_and(|kind| kind != "stale-bindings") {
+        return parser
+            .error("argument --repair: choose stale-bindings")
+            .exit_code();
+    }
     out::setup_console();
-    let report = examine();
+    let mut report = examine();
+    if args.flag("deep") || repair.is_some() {
+        let missing: Vec<Agent> = report
+            .agents
+            .iter()
+            .filter(|(_, copies)| copies.is_empty())
+            .map(|(agent, _)| *agent)
+            .collect();
+        let health = match crate::health::run(&missing, repair.is_some()) {
+            Ok(health) => health,
+            Err(message) => return out::fail(&message),
+        };
+        report.problems.extend(
+            health
+                .issues
+                .iter()
+                .filter(|issue| py::s(py::get(issue, "severity")) != Some("info"))
+                .map(|issue| py::str_of(py::get(issue, "message"))),
+        );
+        report.health = Some(health);
+    }
     if args.flag("json") {
         out::println(&py::dumps(&as_json(&report)));
     } else {

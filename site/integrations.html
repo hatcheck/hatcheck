@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Hatcheck integrations: Raycast, Alfred and VS Code</title>
+  <meta name="description" content="Browse and resume Hatcheck sessions from Raycast, Alfred or VS Code, with cached plans and local usage insights. No login or background service.">
+  <link rel="canonical" href="https://hatcheck.dev/integrations">
+</head>
+<body>
+  <nav class="top wrap" aria-label="Site">
+    <a href="index.html" class="brand"><img src="favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="guides.html">Guides</a><a href="agents.html">Agents</a><a href="commands.html">Commands</a>
+    <a href="integrations.html" aria-current="page">Integrations</a><a href="rules.html">Rules</a>
+    <a href="https://github.com/hatcheck/hatcheck">GitHub</a>
+  </nav>
+  <header class="wrap">
+    <h1>Small integrations, the same stable JSON</h1>
+    <p class="tagline">Browse sessions and cached plans from Raycast, Alfred or VS Code. Nothing starts until you choose it. Nothing reads a login, refreshes a token or runs a background service.</p>
+  </header>
+  <section class="wrap">
+    <h2>Raycast: recent sessions</h2>
+    <p>Add <code>integrations/raycast/hatcheck-sessions.sh</code> to your Raycast script-command folders, with its <code>assets/</code> folder beside it, and make it executable. <strong>Hatcheck: Recent Sessions</strong> lists the last week's sessions and resume commands. Its optional argument selects one agent.</p>
+    <h2>Alfred: searchable sessions</h2>
+    <p>Create a Script Filter that runs <code>/usr/bin/env python3 /absolute/path/to/integrations/alfred/hatcheck_sessions.py {query}</code>. Results filter by title, agent, profile, folder and model. The main action opens the resume command in a terminal; Command copies the command and Alt shows the raw session JSON.</p>
+    <h2>VS Code: sessions and usage</h2>
+    <p>Start an Extension Development Host:</p>
+    <pre><code>code --extensionDevelopmentPath="$PWD/integrations/vscode-hatcheck"</code></pre>
+    <ul>
+      <li><strong>Hatcheck: Resume a Session</strong>: search, then resume in a terminal, copy the command or copy the raw JSON.</li>
+      <li><strong>Hatcheck: Cached Plan Usage</strong>: the cached usage report in a document.</li>
+      <li><strong>Hatcheck: Local Usage Insights</strong>: the structured local report, formatted as JSON.</li>
+    </ul>
+    <p>The extension has no runtime npm dependencies. Its <code>hatcheck.path</code setting selects the binary; <code>HATCHECK_BIN</code> overrides it there and in the other integrations.</p>
+    <p><a href="https://github.com/hatcheck/hatcheck/tree/main/integrations">Installation details and source on GitHub</a></p>
+  </section>
+</body>
+</html>

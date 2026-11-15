@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../style.css">
+  <title>Hatcheck：一台电脑上的多个 AI 编程账号，彼此隔离</title>
+  <meta name="description" content="为每个账号提供独立的 Claude Desktop 和编程智能体配置，统一查看会话与用量。支持 Claude Code、Codex、Kimi Code 等十种工具；不读取登录，不自动切换账号。">
+  <link rel="canonical" href="https://hatcheck.dev/zh-CN/">
+</head>
+<body>
+  <nav class="top wrap" aria-label="网站">
+    <a href="index.html" class="brand" aria-current="page"><img src="../favicon.svg" alt="" width="24" height="24">Hatcheck</a>
+    <a href="../guides.html">指南</a><a href="../agents.html">智能体</a><a href="../commands.html">命令</a>
+    <a href="../integrations.html">集成</a><a href="../rules.html">规则</a>
+    <a href="../index.html" hreflang="en">English</a>
+  </nav>
+  <header class="wrap">
+    <div class="hero">
+      <img src="../favicon.svg" width="64" height="64" alt="Hatcheck 礼帽标志">
+      <div>
+        <h1>多个 AI 编程账号，<span class="nowrap">彼此隔离</span></h1>
+        <p class="tagline">工作和个人、团队席位和自己的套餐：每个账号都有独立的 Claude Desktop、独立配置和独立登录。统一查看最近会话、套餐剩余额度和本地用量分析。支持 Claude Code、Codex、Antigravity CLI、Kimi Code CLI、ZCode、DeepSeek Harness、MiniMax Code、Qwen Code、GitHub Copilot CLI 和 OpenCode。</p>
+      </div>
+    </div>
+    <div class="buttons">
+      <a class="button" href="two-claude-accounts-on-one-mac.html">一台 Mac 上的两个 Claude 账号</a>
+      <a class="button" href="#install">安装命令行工具</a>
+      <a class="button ghost" href="#start">从账号配置开始</a>
+      <a class="button ghost" href="#app">桌面应用与中文界面</a>
+      <a class="button ghost" href="../index.html" hreflang="en">English</a>
+    </div>
+    <p class="unofficial">非官方工具：与各智能体厂商无附属关系，也不由其认可。各名称和商标归其所有者。</p>
+  </header>
+
+  <section class="wrap" id="start">
+    <h2>从账号配置开始</h2>
+    <p>Claude Code 把登录、设置和会话保存在一个文件夹中。让 <code>CLAUDE_CONFIG_DIR</code> 指向另一个文件夹，就会得到拥有独立登录的配置。Codex 和 Kimi Code CLI 分别使用 <code>CODEX_HOME</code> 和 <code>KIMI_CODE_HOME</code>。Hatcheck 的 <code>cl</code>、<code>cx</code> 和 <code>ck</code> 会按固定路径启动它们：</p>
+    <pre><code>cl work              # 使用 ~/.claude-work；首次运行时会要求登录
+cl personal          # 使用 ~/.claude-personal 和另一个账号
+cx work login        # 使用 ~/.codex-work 登录 Codex
+ck work login        # 使用 ~/.kimi-code-work 登录 Kimi Code CLI
+cd ~/code/api
+hatcheck bind work   # 在此项目中，cl、cx、ck 默认使用 work 配置
+hatcheck             # 查看此项目在所有配置中的会话和用量</code></pre>
+    <p>直接运行 <code>claude</code>、<code>codex</code> 或 <code>kimi</code> 仍使用各自的默认文件夹。Hatcheck 不读取、复制或移动登录，也不会自行切换账号。</p>
+  </section>
+
+  <section class="wrap">
+    <h2>项目工作区和会话库</h2>
+    <div class="cards three">
+      <div class="card">
+        <h3>项目工作区</h3>
+        <p>固定常用项目，查看绑定配置、最近会话和缓存用量。新会话必须明确选择智能体、配置和文件夹；绑定冲突会阻止启动，绝不会静默换号。</p>
+      </div>
+      <div class="card">
+        <h3>会话收藏和筛选</h3>
+        <p>收藏会话、添加个人别名和标签、归档而不删除。按智能体、配置、模型、费用、标签、日期和收藏状态筛选，并保存为命名视图。标签只保存在 Hatcheck 自己的 <code>library.json</code> 中。</p>
+      </div>
+      <div class="card">
+        <h3>移动、备份和导出</h3>
+        <p>在账号或智能体之间移动或复制会话。移动前可查看保留和遗漏内容、创建会话文件备份，并在桌面应用中撤销同智能体移动。支持 Markdown、独立 HTML 和 JSON 导出。</p>
+      </div>
+    </div>
+    <pre><code>hat workspaces add ~/code/api --name API
+hat open --new work --cwd ~/code/api   # 明确选择 work，在项目中开始新会话
+hat -o claude,codex -i agy            # 只看 Claude/Codex，排除 agy
+hat search "登录 重试"                 # 搜索会话标题和对话
+hat export --project ~/code/api --hours 3d --format html --output ~/hatcheck-exports</code></pre>
+  </section>
+
+  <section class="wrap">
+    <h2>套餐和本地用量分析</h2>
+    <p><code>hat u</code> 显示各套餐剩余额度、重置时间和消耗速度；<code>hat b</code> 只提供账号建议，不会启动或移动会话。<code>hat insights</code> 使用本地历史，生成用量曲线、可能提前用尽或用不完的预测，以及按配置、项目和模型汇总的费用。</p>
+    <pre><code>hat u                       # 各套餐的剩余额度
+hat b                       # 账号建议，仅此而已
+hat insights --days 7       # 最近一周的本地分析，不请求实时接口
+hat doctor --deep           # 检查会话、绑定、启动器、重复进程和存储</code></pre>
+    <p>桌面应用的“用量”页还有曲线图、预测卡片和费用排行。没有读数会明确显示为未知，不会被当作零用量。</p>
+  </section>
+
+  <section class="wrap">
+    <h2>每个账号一个 Claude Desktop</h2>
+    <p>在 macOS 和 Windows 上，每个实例都有独立的数据文件夹和登录，以及不同颜色的启动器。启动器会把正在运行的实例带到前台，而不是重复打开同一个配置。</p>
+    <pre><code>hatcheck desktop new work "Work" --hue 190       # 蓝色启动器
+hatcheck desktop new hp-bot "HP Bot" --hue 110   # 绿色启动器
+hatcheck desktop open work                       # 打开或置于前台
+hatcheck desktop                                 # 查看实例及运行状态</code></pre>
+    <p>首次打开时，在每个实例中分别登录。绿色等颜色用于启动器；运行中的 Dock 图标仍由 Claude 自己提供。</p>
+  </section>
+
+  <section class="wrap" id="app">
+    <h2>桌面应用与简体中文界面</h2>
+    <p>菜单栏（Windows 和 Linux 为系统托盘）显示额度、最近会话和桌面实例。主窗口提供工作区、会话库、导出、用量图表和配置管理。按 <strong>Ctrl/Cmd+K</strong> 打开命令面板，方向键选择，Enter 运行，Esc 关闭；该快捷键仅在应用内生效。</p>
+    <p>在 <strong>Settings → Language</strong> 中选择 <strong>Simplified Chinese</strong>，或选择 <strong>System language</strong> 跟随系统。命令、选项、配置名、路径、JSON 字段和复制的命令不会被翻译。</p>
+  </section>
+
+  <section class="wrap">
+    <h2>从其他工具继续</h2>
+    <p><a href="../integrations.html">Raycast、Alfred 和 VS Code 集成</a>通过同一个稳定的 JSON 接口浏览会话和缓存用量。只有在选择“继续”后才会启动终端。</p>
+  </section>
+
+  <section class="wrap" id="install">
+    <h2>安装命令行工具</h2>
+    <p>macOS、Linux 或 Windows 上只需一个二进制文件，无需 Python：</p>
+    <pre><code>curl -LsSf https://github.com/hatcheck/hatcheck/releases/latest/download/hatcheck-installer.sh | sh
+brew install hatcheck/tap/hatcheck  # 也可以在 macOS 或 Linux 上使用 Homebrew</code></pre>
+    <p>安装程序只安装 Hatcheck，不安装任何智能体，也不修改它们的配置。完整安装方式和 PowerShell 命令见<a href="../index.html#install">安装说明</a>。</p>
+  </section>
+
+  <footer class="wrap">
+    <p><a href="../guides.html">指南</a> · <a href="../agents.html">智能体支持</a> · <a href="../commands.html">全部命令</a> · <a href="../rules.html">隐私与安全规则</a> · <a href="https://github.com/hatcheck/hatcheck">GitHub 源码、问题和发布</a></p>
+    <p><a href="../index.html" hreflang="en">Read this page in English</a></p>
+  </footer>
+</body>
+</html>

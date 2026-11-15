@@ -32,6 +32,25 @@ export type Account = {
   fable: null | { left: boolean; resets_at?: string | null; back_at?: string | null };
 };
 
+export type InsightAccount = { agent: string; profile: string; label: string };
+export type InsightSeries = {
+  account: InsightAccount;
+  readings: { time: string; used_percent: number; resets_at: string | null }[];
+  trend: null | { pace_percent_per_hour: number; over_seconds: number; readings: number; runs_out_at: string | null; before_reset: boolean | null };
+};
+export type InsightForecast = {
+  kind: "runs_out" | "unused"; account: InsightAccount; left_percent?: number; resets_at?: string | null;
+  runs_out_at?: string | null; pace_percent_per_hour?: number;
+};
+export type InsightSpend = { session_count: number; cost_usd: number; profile?: string; project?: string; model?: string };
+export type Insights = {
+  days: number;
+  series: InsightSeries[];
+  forecasts: InsightForecast[];
+  weekly: { session_count: number; costed_session_count: number; cost_usd: number };
+  profiles: InsightSpend[]; projects: InsightSpend[]; models: InsightSpend[];
+};
+
 export type Session = {
   agent: Agent;
   id: string;
@@ -47,7 +66,17 @@ export type Session = {
   continued_in: string | null;
   bound_to: string | null;
   resume: string;
+  cost_usd: number | null;
 };
+
+export type SessionMetadata = { alias: string | null; favorite: boolean; tags: string[]; archived: boolean };
+export type SavedFilter = {
+  query: string; agent: string; profile: string; hours: number; model: string; cost: string;
+  tag: string; favorites: boolean; archived: boolean;
+};
+export type Library = { sessions: Record<string, SessionMetadata>; filters: Record<string, SavedFilter> };
+
+export type Workspace = { name: string; folder: string; exists: boolean; bindings: Record<string, string> };
 
 export type Instance = { name: string; display: string; app: string; data_dir: string | null; running: boolean };
 
@@ -63,6 +92,12 @@ export type Conversation = {
   turns: { role: string; text: string; time: string | null }[];
 };
 
+export type ExportReport = {
+  dry_run: boolean;
+  exported: { source: { agent: string; id: string; profile: string }; path: string; format: string; bytes: number }[];
+  warning: string;
+};
+
 export type MoveReport = {
   dry_run: boolean;
   action: "copy" | "move" | "update" | "fork" | "convert";
@@ -74,6 +109,8 @@ export type MoveReport = {
   new_session: string | null;
   title?: string | null;
   deleted_original?: boolean;
+  repointed?: boolean;
+  backup?: { path: string; dry_run: boolean; files: number; bytes: number; skipped: number };
   why?: string | null;
   items?: { what: string; from: string; to: string; state: string; detail: string }[];
   prompts?: number;
@@ -122,6 +159,9 @@ async function json<T>(args: string[]): Promise<T> {
 export const usage = () =>
   json<{ accounts: Account[]; sorted_by: string | null }>(["usage", "--json", ...(settings().live ? [] : ["--cached"])]);
 
+export const insights = (days = 7) =>
+  json<Insights>(["insights", "--days", String(days), "--unused", String(settings().unused), "--json"]);
+
 export const recent = (hours: number, everything = false) =>
   json<{ sessions: Session[]; hidden: Record<string, number> }>(
     ["--json", "--cached", "--no-usage", "--all-folders", String(hours), ...(everything ? ["--all"] : [])]);
@@ -133,15 +173,50 @@ export const resume = (s: Session) => engine(["open", s.id, "--from", s.profile]
 
 // A move, or with fork, hatcheck fork: a new session with its own ID, which always keeps the original.
 // With brief, --brief: a conversion into another agent hands over a brief in place of the conversation.
-export function move(s: Session, to: string, how: { dryRun: boolean; keep?: boolean; fork?: boolean; brief?: boolean }) {
+export function move(s: Session, to: string, how: { dryRun: boolean; keep?: boolean; fork?: boolean; brief?: boolean; backup?: boolean }) {
   const args = [how.fork ? "fork" : "move", s.id, to, "--from", s.profile, "--json"];
   if (how.dryRun) args.push("--dry-run");
   if (how.keep && !how.fork) args.push("--keep");
+  if (how.backup && !how.fork && !how.keep) args.push("--backup");
   if (how.brief) args.push("--brief");
   return json<MoveReport>(args);
 }
 
+export function exportSession(s: Session, format: string, directory: string, replace: boolean) {
+  const args = ["export", s.id, "--from", s.profile, "--format", format, "--output", directory + "/", "--json"];
+  if (replace) args.push("--replace");
+  return json<ExportReport>(args);
+}
+
 export const signIn = (profile: string) => engine(["open", "--login", profile]);
+export const newSession = (profile: string, cwd: string) => engine(["open", "--new", profile, "--cwd", cwd]);
+
+export const workspaces = () => json<{ workspaces: Workspace[] }>(["workspaces", "--json"]);
+export const pinWorkspace = (folder: string, name: string) =>
+  engine(["workspaces", "add", folder, ...(name ? ["--name", name] : [])]);
+export const unpinWorkspace = (folder: string) => engine(["workspaces", "remove", folder]);
+
+export const library = () => json<Library>(["library", "--json"]);
+export function updateSession(s: Session, change: {
+  alias?: string | null; favorite?: boolean; archived?: boolean; addTags?: string[]; removeTags?: string[];
+}) {
+  const args = ["library", "--json", "set", s.id, "--from", s.profile];
+  if (change.alias !== undefined) args.push(...(change.alias === null ? ["--clear-alias"] : ["--alias", change.alias]));
+  if (change.favorite !== undefined) args.push(change.favorite ? "--favorite" : "--no-favorite");
+  if (change.archived !== undefined) args.push(change.archived ? "--archive" : "--unarchive");
+  for (const tag of change.removeTags || []) args.push("--untag", tag);
+  for (const tag of change.addTags || []) args.push("--tag", tag);
+  return json<SessionMetadata & { key: string }>(args);
+}
+export function saveFilter(name: string, filter: SavedFilter) {
+  const args = ["library", "save-filter", name, "--query", filter.query, "--agent", filter.agent,
+    "--profile", filter.profile, "--hours", String(filter.hours), "--model", filter.model,
+    "--cost", filter.cost, "--tag", filter.tag];
+  if (filter.favorites) args.push("--favorites");
+  if (filter.archived) args.push("--archived");
+  return engine(args);
+}
+export const removeFilter = (name: string) => engine(["library", "remove-filter", name]);
 
 export const instances = () => json<{ instances: Instance[] }>(["desktop", "--json"]);
 export const openInstance = (name: string) => engine(["desktop", "open", name]);

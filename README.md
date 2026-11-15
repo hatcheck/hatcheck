@@ -177,22 +177,30 @@ Each is documented as it is, with its options and what it prints, in
 | [`ck a --session <id>`](docs/agents.md#ck-run-kimi-code-cli-with-a-home-per-account) | Kimi Code CLI with `~/.kimi-code-a` |
 | [`hatcheck`](docs/commands.md#hatcheck-what-to-resume) | the sessions active in the last day in this folder, or every folder with `-A`, each with its resume or open command, what it cost and what's left of its plan; `-d` adds each one's turns and spend by model, `-c` puts the costliest first, and [`config.toml`](docs/commands.md#configtoml-the-lists-defaults-and-what-to-leave-out) sets the defaults and the agents and folders every command leaves out |
 | [`hatcheck usage`](docs/commands.md#hatcheck-usage-plan-usage-for-every-profile) | what's left of every plan limit, sorted by Fable, and, from hatcheck's own readings over time, how fast each is being used up and whether it runs out before it resets; DSH, Qwen Code, Copilot and OpenCode homes say why there's no reading, and mcode's quota isn't wired |
+| [`hatcheck insights`](docs/commands.md#hatcheck-insights-local-usage-and-spending-history) | local plan charts and forecasts, weekly spending by profile, project and model, with no live requests |
 | [`hatcheck best`](docs/commands.md#hatcheck-best-which-account-to-use-now) | the best account now, with its limits, and the `move` command that carries the newest session started here to it; `--wait` sleeps until one has room |
 | [`hatcheck where SESSION`](docs/commands.md#hatcheck-where-find-a-session) | where a session's files are |
-| [`hatcheck open SESSION`](docs/commands.md#hatcheck-open-resume-a-session-in-a-new-terminal) | resume it in a new terminal, or open DSH's session history in its folder |
+| [`hatcheck workspaces`](docs/commands.md#hatcheck-workspaces-pin-project-folders) | pinned project folders, their bindings and recent sessions in the app |
+| [`hatcheck open SESSION`](docs/commands.md#hatcheck-open-resume-a-session-in-a-new-terminal) | resume it in a new terminal, or open DSH's session history in its folder; `--new PROFILE --cwd FOLDER` starts fresh |
 | [`hatcheck resume`](docs/commands.md#hatcheck-resume-carry-on-the-newest-session-here) | carry on the newest session started from this folder, or open DSH's session history, after asking; `hat r` for short |
 | [`hatcheck show SESSION`](docs/commands.md#hatcheck-show-a-sessions-conversation) | its conversation, read-only; `--markdown` writes it out as a document to keep or share |
+| [`hatcheck export [SESSION]`](docs/commands.md#hatcheck-export-markdown-html-and-json) | one session or a project/date batch as self-contained Markdown, HTML or JSON, with a private-content warning |
 | [`hatcheck search WORDS`](docs/commands.md#hatcheck-search-the-sessions-that-mention-something) | the sessions whose title or conversation has every word, in every profile and home, newest first, with the turns the words are in |
-| [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent; `--brief` hands over a brief in place of the whole conversation |
+| [`hatcheck library`](docs/commands.md#hatcheck-library-favorites-tags-aliases-and-saved-views) | favorites, personal aliases, tags, archiving and saved session views, kept apart from agent files |
+| [`hatcheck move SESSION PROFILE`](docs/commands.md#hatcheck-move-carry-on-a-session-with-another-profile) | carry it to another profile, or convert it for another agent; `--brief` hands over a brief, `--backup` saves session-owned source files before a same-agent move |
 | [`hatcheck fork SESSION PROFILE`](docs/commands.md#hatcheck-fork-a-session-as-a-new-one-in-another-profile) | bring it in there as a new session, keeping the original |
 | [`hatcheck relocate OLD NEW`](docs/commands.md#hatcheck-relocate-a-project-folder-that-moved) | a moved project folder's sessions, brought along; DSH's, mcode's, qwen's, copilot's and opencode's stay as they are |
 | [`hatcheck bind PROFILE`](docs/commands.md#hatcheck-bind-tie-a-folder-to-a-profile) | tie a folder to a profile, so `cl`, `cx` and `ck` pick it there and the list flags strays |
 | [`hatcheck profiles [A B]`](docs/commands.md#hatcheck-profiles-what-each-profile-is-set-up-with) | what each profile and home is set up with: skills, agents, commands, plugins, hooks, MCP servers, permissions and settings; with two named, what differs between them |
 | [`hatcheck statusline --install PROFILE`](docs/commands.md#hatcheck-statusline-which-account-a-session-is-on-in-claude-codes-status-line) | a status line for Claude Code with the profile the session runs in and what's left of its plan: `work · Opus 5.5 · 5h 62% ↻2h41m · wk 30% ↻3d2h · ctx 23% · $1.23` |
 | [`hatcheck completions SHELL`](docs/commands.md#hatcheck-completions-for-zsh-bash-fish-and-powershell) | the completions for zsh, bash, fish or PowerShell: subcommands, options, profiles and recent sessions |
-| [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest, and how long each profile keeps its transcripts |
+| [`hatcheck doctor`](docs/install.md#hatcheck-doctor-every-copy-of-hatcheck-and-the-agents) | every copy of hatcheck and the agents on your `PATH`, which runs, how to remove the rest, transcript retention; `--deep` checks sessions, bindings, launchers and storage |
 | [`hatcheck desktop`](#claude-desktop-instances-macos-and-windows) | Claude Desktop instances on macOS and Windows |
 | [`--json`](docs/commands.md#--json-for-scripts-status-bars-and-apps) | the sessions, plans and results as data, for scripts, status bars and the desktop app |
+
+Small integrations use the same stable JSON: [Raycast, Alfred and VS Code](integrations/README.md) browse sessions and cached plans without touching a login, and resume only when you choose it.
+
+`HATCHECK_LANG=zh-CN` opts into [Simplified Chinese help and human-facing CLI messages](docs/commands.md#simplified-chinese-output), with English fallback. JSON, raw output, commands, flags, paths and copied commands stay unchanged.
 
 `hat` is the short name, and a subcommand can be cut to its first letters: `hat m` is `hat move`, `hat r` is `hat resume`; the list's flags have single letters that bundle, so `hat -dc` is `hat --details --by-cost`. [`claude-z`, `claude-k`, `claude-m` and `claude-d`](docs/agents.md#claude-z-claude-k-claude-m-claude-d-claude-code-on-zai-kimi-minimax-or-deepseek) run Claude Code on Z.ai's, Kimi's, MiniMax's or DeepSeek's models in any profile.
 
@@ -283,7 +291,10 @@ Its main window browses every session, with search, filters and a read-only prev
 conversation. From there you can resume or open a session, copy its command, or move or fork it to
 another profile after a dry run, handing over a brief in place of the whole conversation when it
 goes to another agent. The window also lists profiles and homes, signs in to a new one in a
-terminal, and makes Desktop instances.
+terminal, and makes Desktop instances. Ctrl/Cmd+K opens a command palette for sessions and actions,
+with keyboard navigation and accessible dialogs and controls; the shortcut is app-local. The main
+window and tray follow the system language, with an explicit Simplified Chinese or English selector
+in Settings. Commands, flags, profile names, paths and copied commands stay untranslated.
 
 It ships the CLI inside itself, so it needs no Python. It never handles a login, and live usage is
 off until you turn it on. See [desktop/README.md](desktop/README.md) to build and test it, with
@@ -307,6 +318,7 @@ off until you turn it on. See [desktop/README.md](desktop/README.md) to build an
   read your real profiles, the Keychain or the network: `python3 -m unittest discover -s tests`,
   beside the crate's own `cargo test -p hatcheck`. GitHub Actions runs both on macOS, Linux and
   Windows.
+- **`integrations/`**: [Raycast, Alfred and VS Code](integrations/README.md), using the CLI's stable JSON.
 - **`AGENTS.md`** and **`docs/lessons.md`**: notes for coding agents (`CLAUDE.md` imports them),
   and what earlier work got wrong, with the rule that would have caught it.
 - **`CHANGELOG.md`**, each release's notes; **`install.sh`** and **`install.ps1`**, to build from a

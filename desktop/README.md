@@ -22,19 +22,43 @@ the CLI for JSON (`hatcheck --json`, `hatcheck usage --json`, `hatcheck show --j
   and when a limit is about to reset with much of it unused (half or more left in the last fifth
   of its window, a day at most, by default): what's left then goes to waste, so it's the account
   to use now.
+- **Command palette and keyboard access:** Ctrl/Cmd+K opens a searchable palette for resuming,
+  moving and exporting sessions, opening profiles, starting workspace sessions, showing plans and
+  settings, and refreshing. Arrow keys choose, Enter runs, Escape closes. The shortcut is app-local;
+  no system-wide hotkey is registered. Dialogs trap and restore focus, controls have accessible names,
+  charts and toasts have screen-reader announcements, and reduced-motion preferences are respected.
 - **Main window:**
-  - *Sessions:* every session of the last day to month, searchable by title and folder, filtered
-    by agent and profile, with a read-only preview of the conversation (`hatcheck show`), and
-    Resume, Copy and **Move**: pick a profile, see the dry run (`hatcheck move --dry-run --json`,
-    or `hatcheck fork` for a new session that keeps the original; to another agent's profile,
-    **Hand over a brief** passes `--brief`), then do it, and resume it there.
-  - *Plans:* every account's limits.
+  - *Sessions:* every session of the last day to month, searchable by title, alias, tags and folder,
+    filtered by agent, profile, model, cost, tags and favorites, with archived sessions hidden unless
+    asked for. Named views save the whole filter. Favorites, aliases, tags and archive state live only
+    in Hatcheck's `library.json`, never in an agent's files. The read-only conversation preview
+    (`hatcheck show`) has Resume, Copy and **Move**: pick a profile, see the dry run
+    (`hatcheck move --dry-run --json`, or `hatcheck fork` for a new session that keeps the original;
+    to another agent's profile, **Hand over a brief** passes `--brief`), then do it, and resume it there.
+    The preview names source and destination, what is preserved and left out, file sizes and conflicts.
+    A same-agent move can first make a session-owned backup (`--backup`), and a completed same-agent
+    move has **Undo**, which moves it back through the same checked path; copies, forks and conversions
+    keep the original instead.
+    **Export** writes one session, and **Export shown** writes every session matching the filters,
+    as Markdown, self-contained HTML or JSON (`hatcheck export`). Each document includes source and
+    destination metadata and a warning to review secrets and private source code before sharing.
+    Existing files are replaced only when that is explicitly selected.
+  - *Workspaces:* pinned project folders with their bound profiles, recent sessions and cached usage.
+    **New session** opens a terminal in the project with the explicitly selected agent and profile
+    (`hatcheck open --new`), refusing a conflicting folder binding rather than switching accounts.
+  - *Plans:* every account's limits, then local insights (`hatcheck insights`): a weekly session
+    summary, run-out and unused-quota forecasts, SVG usage charts, and recorded spending by profile,
+    project and model. The unused forecast follows the configurable unused notification threshold;
+    no live request or external chart resource is used.
   - *Profiles:* every profile or home, and **Sign in** or **Add one**, which runs the agent's own
     sign-in through `hatcheck open --login`, so the login stays with the agent.
   - *Desktop* (macOS and Windows): the Claude Desktop instances, and **Make one** with its own
     colour (`hatcheck desktop new`), and remove them.
-  - *Settings:* live usage, how often to refresh, notifications, which terminal Resume opens, and
-    **Check for updates**.
+  - *Settings:* live usage, how often to refresh, notifications, which terminal Resume opens,
+    **Check for updates**, and **Language**. System language is the default; Simplified Chinese and
+    English can be selected explicitly. The catalog has English fallback, commands, flags, profile
+    names, paths, JSON keys and copied commands stay untranslated, and the same catalog applies to
+    the main window and tray.
 
 DeepSeek Harness account homes are `~/.dsh` and `~/.dsh-NAME`, selected with `DSH_HOME`; **Add one**
 makes `dsh:NAME`. DSH's own profiles are plugin stacks, not Hatcheck account homes, and there is no
@@ -104,6 +128,7 @@ npm run tauri dev       # the app from source, against your profiles, the pages 
 npm run demo            # the app against a demo home, to try Move and the rest on sessions that don't matter
 npm run tauri build     # src-tauri/target/release/bundle/: Hatcheck.app and a .dmg on macOS
 npm run build           # what CI checks of the pages: the types (tsc) and the build (vite)
+npm test                # what CI also runs: built-in Node tests, including Simplified Chinese patterns
 ```
 
 - **The engine** is built only by `npm run engine`, not by `tauri dev` or `tauri build`: run it

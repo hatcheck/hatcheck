@@ -8,6 +8,7 @@ import {
   type Account, type Limit, type Session,
 } from "./engine";
 import { accountHead, agentName, ago, clock, errorText, esc, learnHome, limitRow, pasteCommand, profileName, tilde, toast } from "./format";
+import { startLocalization } from "./i18n";
 
 const $ = (id: string) => document.getElementById(id)!;
 let sessionsById = new Map<string, Session>();
@@ -173,6 +174,7 @@ document.addEventListener("click", async (event) => {
 });
 
 async function start() {
+  startLocalization();
   try {
     $("version").textContent = `${await version()} · Unofficial`;
   } catch {

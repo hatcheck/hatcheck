@@ -1,0 +1,39 @@
+{
+  "name": "hatcheck-sessions",
+  "displayName": "Hatcheck Sessions",
+  "description": "Resume Hatcheck sessions and inspect cached usage and local insights from VS Code.",
+  "version": "0.1.0",
+  "publisher": "hatcheck",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:hatcheck.sessions",
+    "onCommand:hatcheck.usage",
+    "onCommand:hatcheck.insights"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "hatcheck.sessions", "title": "Hatcheck: Resume a Session" },
+      { "command": "hatcheck.usage", "title": "Hatcheck: Cached Plan Usage" },
+      { "command": "hatcheck.insights", "title": "Hatcheck: Local Usage Insights" }
+    ],
+    "configuration": {
+      "title": "Hatcheck",
+      "properties": {
+        "hatcheck.path": {
+          "type": "string",
+          "default": "hatcheck",
+          "description": "Hatcheck executable, or its absolute path."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test extension.test.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

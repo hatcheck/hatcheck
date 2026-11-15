@@ -172,7 +172,11 @@ body.window { display: flex; flex-direction: column; }
 .detail { overflow-y: auto; padding: 4px 4px 16px 18px; user-select: text; }
 .detail-head h2 { font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--text); margin: 6px 0 4px; }
 .detail-head .meta { color: var(--muted); font-size: 12px; }
-.detail-head .actions { display: flex; gap: 6px; margin: 10px 0 6px; }
+.detail-head .actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px; }
+.library-tools { font-size: 12px; }
+.library-tools input[type="search"] { flex: 0 1 150px; min-width: 110px; }
+.library-tools select { max-width: 180px; }
+#saved-filter { max-width: 200px; }
 .conversation { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; }
 .turn { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .turn .who { font-weight: 600; font-size: 12px; margin-bottom: 3px; }
@@ -210,8 +214,57 @@ table.items th { color: var(--muted); font-weight: 500; font-size: 12px; }
 .dialog-box select { flex: 1; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .report { margin-top: 10px; user-select: text; }
+.handoff-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; overflow-wrap: anywhere; }
+@media (max-width: 620px) { .handoff-summary { grid-template-columns: 1fr; } }
 
 /* Toasts. */
 #toasts { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 10; max-width: 92vw; }
 .toast { background: var(--text); color: var(--bg); border-radius: 8px; padding: 7px 12px; box-shadow: var(--shadow); font-size: 12px; word-break: break-word; }
 .toast.error { background: var(--low); color: #fff; }
+
+/* Workspaces: pinned projects, their recent sessions and explicit fresh launches. */
+.workspace-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; margin-top: 12px; }
+.workspace-card h2 { margin: 0 0 4px; }
+.workspace-card .folder { overflow-wrap: anywhere; user-select: text; }
+.workspace-card .bindings { margin: 8px 0; }
+.workspace-card .workspace-sessions { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 4px; }
+.workspace-session { display: block; width: 100%; text-align: left; background: transparent; color: var(--text); padding: 5px 0; }
+.workspace-session:hover .title { color: var(--accent); }
+.workspace-session .meta { display: block; color: var(--muted); font-size: 12px; }
+.workspace-actions { display: flex; gap: 6px; margin-top: 8px; }
+#workspace-folder { min-width: 260px; flex: 1; }
+#workspace-name { min-width: 150px; }
+
+/* Local usage insights. */
+.insights { margin-top: 20px; }
+.insight-summary { margin: 8px 0 12px; }
+.insight-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+.insight-chart svg { display: block; width: 100%; height: 56px; margin-top: 6px; }
+.insight-chart .axis { stroke: var(--line); stroke-width: 1; }
+.insight-chart .usage-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.insight-chart .usage-point { fill: var(--accent); }
+.forecast-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.forecast.runs_out { border-left: 3px solid var(--low); }
+.forecast.unused { border-left: 3px solid var(--mid); }
+.spend-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.spend-list h2 { margin-top: 0; }
+.spend-row { display: grid; grid-template-columns: minmax(80px, 1fr) 80px 52px 20px; gap: 6px; align-items: center; padding: 3px 0; font-variant-numeric: tabular-nums; }
+.spend-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spend-bar { height: 6px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.spend-bar i { display: block; height: 100%; background: var(--accent); }
+@media (max-width: 900px) { .spend-grid { grid-template-columns: 1fr; } }
+
+/* Keyboard and screen-reader access. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.palette { z-index: 20; align-items: flex-start; padding-top: 12vh; }
+.palette-box { width: min(680px, 92vw); max-height: 72vh; overflow: hidden; display: flex; flex-direction: column; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 12px; }
+#palette-input { width: 100%; font-size: 15px; padding: 9px 11px; }
+#palette-results { overflow-y: auto; margin-top: 8px; }
+.palette-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 10px; text-align: left; background: transparent; color: var(--text); border-radius: 7px; }
+.palette-option:hover, .palette-option.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.palette-option .hint { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.palette-button { font-size: 11px !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

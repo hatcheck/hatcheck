@@ -39,6 +39,7 @@ Usage:
     hat check ...                      the same as hat (or hatcheck): the name in two words
     hatcheck usage ...                 plan usage left for every profile and home
     hatcheck where SESSION             where a session is stored, by its ID or the start of it
+    hatcheck workspaces ...            pinned project folders, their bindings and recent sessions
     hatcheck move [SESSION] [PROFILE]  move a session to another profile or home, or convert
                                        it for another of the agents; with a profile alone,
                                        the newest session started here goes to it, and
@@ -54,6 +55,10 @@ Usage:
     hatcheck show SESSION              a session's conversation, read-only
     hatcheck search WORDS...           the sessions whose title or conversation has every
                                        word, in every profile and home, newest first
+    hatcheck library ...               favorites, aliases, tags, archive state and saved filters
+    hatcheck export [SESSION] ...      export one session or a project/date batch as Markdown,
+                                       self-contained HTML or JSON
+    hatcheck insights ...              local usage history, forecasts and spending by project/model
     hatcheck best [--for SESSION]      the best account now, in full, and the move command
                                        that carries the newest session started here to it;
                                        --wait sleeps until one has room
@@ -72,8 +77,8 @@ Usage:
                                        which runs, and how to remove the rest
     hatcheck completions SHELL         the completions for zsh, bash, fish or PowerShell
 
-hatcheck, usage, where, show, search, profiles, desktop, move, fork, relocate and
-doctor take --json, for scripts, status bars and the desktop app.
+hatcheck, usage, where, workspaces, show, search, library, export, insights, profiles,
+desktop, move, fork, relocate and doctor take --json, for scripts, status bars and the desktop app.
 
 `hatcheck SUBCOMMAND --help` lists a subcommand's options, and hatcheck --version
 says which version this is. hat is the short name: hat usage is hatcheck usage,
@@ -81,9 +86,10 @@ and so on. cl, cx and ck run Claude Code, Codex and Kimi Code CLI with a profile
 
 A subcommand can be cut to its first letters: hat m is hat move, hat f is hat
 fork. Where two share a letter, it goes to the one used more: b is best, s is
-show, se is search, u is usage, d is desktop, p is provider and r is resume, so
-bind, unbind and doctor take two letters, bi, un and do, relocate three, rel,
-and profiles four, prof.<!-- /help:hatcheck --></code></pre>
+show, se is search, u is usage, d is desktop, p is provider, r is resume and w
+is where, so bind, unbind, doctor and workspaces take two letters, bi, un, do
+and wo, relocate three, rel, and profiles four, prof.<!-- /help:hatcheck --></code></pre>
+    <p class="note">For Simplified Chinese help and human-facing messages, opt in with <code>HATCHECK_LANG=zh-CN</code>. There is no automatic locale detection and other locales fall back to English. JSON, raw output, commands, flags, paths and copied commands are not translated.</p>
     <div class="helps">
       <details><summary><code>hatcheck sessions</code><span>or plain <code>hat</code>, the default: recent sessions in every profile and home, with resume commands, costs and plan usage</span></summary>
 <pre><code><!-- help:sessions -->usage: hatcheck sessions [-h] [-o AGENT] [-i AGENT] [-n N] [-a] [-A |
@@ -164,6 +170,20 @@ options:
   -j, --json          print the accounts and their limits as JSON, for scripts
                       and status bars<!-- /help:usage --></code></pre>
       </details>
+      <details><summary><code>hatcheck insights</code><span>or <code>hat i</code>: local usage history, forecasts and spending by project and model</span></summary>
+<pre><code><!-- help:insights -->usage: hatcheck insights [-h] [--days N] [--unused PERCENT] [-j]
+
+Show local plan-limit history, run-out and unused-quota forecasts, spending by
+profile, project and model, and a weekly session summary. Reads only
+Hatcheck's history and agents' session files; asks for no live usage.
+
+options:
+  -h, --help        show this help message and exit
+  --days N          whole days of history to include, 1 to 30 (default 7)
+  --unused PERCENT  flag a limit resetting soon with at least this much left
+                    (default 50; 100 effectively disables it)
+  -j, --json        print the report as JSON<!-- /help:insights --></code></pre>
+      </details>
       <details><summary><code>hatcheck best</code><span>or <code>hat b</code>: the best account now, and the move command that carries a session to it</span></summary>
 <pre><code><!-- help:best -->usage: hatcheck best [-h] [--for SESSION] [-C] [--wait [PROFILE]]
 
@@ -203,6 +223,23 @@ options:
                       separate)
   -j, --json          print the matches as JSON<!-- /help:where --></code></pre>
       </details>
+      <details><summary><code>hatcheck workspaces</code><span>or <code>hat wo</code>: pinned project folders, their bindings and recent sessions</span></summary>
+<pre><code><!-- help:workspaces -->usage: hatcheck workspaces [-h] [-j] {list,add,remove} ...
+
+Pin project folders as workspaces. The desktop app shows their bindings and
+recent sessions, and starts a new session only in the agent and profile you
+choose. Pinning changes no binding or agent configuration.
+
+positional arguments:
+  {list,add,remove}
+    list             list pinned workspaces (the default)
+    add              pin a folder, or change its display name
+    remove           unpin a folder without deleting it
+
+options:
+  -h, --help         show this help message and exit
+  -j, --json         list the workspaces as JSON<!-- /help:workspaces --></code></pre>
+      </details>
       <details><summary><code>hatcheck show</code><span>or <code>hat s</code>: a session's conversation, read-only</span></summary>
 <pre><code><!-- help:show -->usage: hatcheck show [-h] [--from PROFILE] [--last N] [--brief] [-m | -j]
                      session
@@ -226,6 +263,35 @@ options:
                   session's facts, then each turn under who said it and when,
                   tool calls in code blocks
   -j, --json      print it as JSON<!-- /help:show --></code></pre>
+      </details>
+      <details><summary><code>hatcheck export</code><span>or <code>hat e</code>: one session or a project/date batch as Markdown, self-contained HTML or JSON</span></summary>
+<pre><code><!-- help:export -->usage: hatcheck export [-h] [--from PROFILE] [--project FOLDER] [--hours N]
+                       [--format KIND] [--output PATH] [--replace] [--brief]
+                       [-a] [--dry-run] [-j]
+                       [session]
+
+Export one session or a project/date batch as a self-contained Markdown, HTML
+or JSON document. Every document includes source and destination metadata and
+a warning that sessions may contain secrets or private source code.
+
+positional arguments:
+  session           one session ID or its start; leave out for a batch
+
+options:
+  -h, --help        show this help message and exit
+  --from PROFILE    the profile or home to read SESSION from
+  --project FOLDER  export only sessions started in this project folder
+  --hours N         export sessions active in the last N hours (default 24; 0
+                    for all time; 3d works too)
+  --format KIND     markdown (the default), html or json
+  --output PATH     a file for one session, or a directory for a batch or one
+                    session
+  --replace         replace files that already exist
+  --brief           export the handover brief instead of the whole
+                    conversation
+  -a, --all         include Desktop, SDK and other non-CLI sessions in a batch
+  --dry-run         report what would be exported without writing files
+  -j, --json        print the export report as JSON; --output is required<!-- /help:export --></code></pre>
       </details>
       <details><summary><code>hatcheck search</code><span>or <code>hat se</code>: the sessions whose title or conversation has every word, in every profile and home</span></summary>
 <pre><code><!-- help:search -->usage: hatcheck search [-h] [-o AGENT] [-i AGENT] [--since HOURS] [--here]
@@ -260,9 +326,28 @@ options:
                       shortcut, and the same for the other launchers
   -j, --json          print the sessions found as JSON<!-- /help:search --></code></pre>
       </details>
+      <details><summary><code>hatcheck library</code><span>or <code>hat l</code>: favorites, aliases, tags, archive state and saved filters</span></summary>
+<pre><code><!-- help:library -->usage: hatcheck library [-h] [-j] {set,clear,save-filter,remove-filter} ...
+
+Keep favorites, aliases, tags, archive state and saved session filters in
+Hatcheck's own library.json. No agent transcript or setting is changed, and
+archiving never deletes a session.
+
+positional arguments:
+  {set,clear,save-filter,remove-filter}
+    set                 change a session's alias, favorite, tags or archive
+                        state
+    clear               remove all Hatcheck metadata for a session
+    save-filter         save a reusable desktop session filter
+    remove-filter       remove a saved filter
+
+options:
+  -h, --help            show this help message and exit
+  -j, --json            print the library or changed item as JSON<!-- /help:library --></code></pre>
+      </details>
       <details><summary><code>hatcheck move</code><span>or <code>hat m</code>: move a session to another profile or home, or convert it for another agent</span></summary>
-<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--brief] [-y] [--dry-run]
-                     [-j]
+<pre><code><!-- help:move -->usage: hatcheck move [-h] [--from PROFILE] [--keep] [--backup] [--brief] [-y]
+                     [--dry-run] [-j]
                      [session] [profile]
 
 Move a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, DeepSeek
@@ -294,6 +379,9 @@ options:
                   it
   --keep          keep the original, which copies the session rather than
                   moving it (a converted session's original is always kept)
+  --backup        before a same-agent move, back up its session-owned source
+                  files in Hatcheck's backups folder; copies, forks and
+                  conversions already keep the original
   --brief         for a conversion into another agent, hand over a brief in
                   place of the whole conversation: the first prompt, the files
                   and commands its tool calls named, and its last turns
@@ -361,15 +449,17 @@ options:
   --dry-run   say what would move and change nothing
   -j, --json  say what was or would be done as JSON<!-- /help:relocate --></code></pre>
       </details>
-      <details><summary><code>hatcheck open</code><span>or <code>hat o</code>: resume a session in a new terminal, in its folder</span></summary>
+      <details><summary><code>hatcheck open</code><span>or <code>hat o</code>: resume a session, or explicitly start a fresh one, in a new terminal</span></summary>
 <pre><code><!-- help:open -->usage: hatcheck open [-h] [--from PROFILE] [--here | --print]
-                     [--terminal NAME] [-f] [-a] [--login PROFILE]
+                     [--terminal NAME] [-f] [-a] [--login PROFILE |
+                     --new PROFILE] [--cwd FOLDER]
                      [session]
 
 Resume a Claude Code, Codex, Antigravity CLI, Kimi Code CLI, ZCode, MiniMax
 Code, Qwen Code, GitHub Copilot CLI or OpenCode session in a new terminal
 window, already in its folder; for DeepSeek Harness, open dsh web there and
-choose the session in its session history.
+choose the session in its session history. --new starts a fresh session in a
+chosen profile and project folder instead.
 
 positional arguments:
   session          the session ID, or the start of it (default: the newest
@@ -379,8 +469,8 @@ options:
   -h, --help       show this help message and exit
   --from PROFILE   the profile or home to take it from, when more than one has
                    a copy
-  --here           resume it in this terminal instead
-  --print          print the cd and resume commands instead
+  --here           resume or start it in this terminal instead
+  --print          print the cd and agent commands instead
   --terminal NAME  the terminal to open (default: HATCHECK_TERMINAL, or this
                    system's usual one)
   -f, --full       print CLAUDE_CONFIG_DIR=... claude rather than cl,
@@ -391,7 +481,10 @@ options:
   --login PROFILE  sign in to a profile (NAME, default, codex, codex:NAME,
                    agy, kimi, kimi:NAME, zcode, dsh, dsh:NAME, mcode,
                    mcode:NAME, qwen, qwen:NAME, copilot, copilot:NAME or
-                   opencode) in a new terminal, instead of resuming a session<!-- /help:open --></code></pre>
+                   opencode) in a new terminal, instead of resuming a session
+  --new PROFILE    start a fresh session in this explicitly chosen profile or
+                   home instead of resuming
+  --cwd FOLDER     the project folder for --new (default: this folder)<!-- /help:open --></code></pre>
       </details>
       <details><summary><code>hatcheck resume</code><span>or <code>hat r</code>: carry on the newest session started here, in this terminal, after asking</span></summary>
 <pre><code><!-- help:resume -->usage: hatcheck resume [-h] [--from PROFILE] [-y | --print] [-f] [-a]
@@ -556,14 +649,19 @@ options:
                CLAUDE_CONFIG_DIR names, or ~/.claude)<!-- /help:statusline --></code></pre>
       </details>
       <details><summary><code>hatcheck doctor</code><span>or <code>hat do</code>: every copy of hatcheck and the agents on your PATH</span></summary>
-<pre><code><!-- help:doctor -->usage: hatcheck doctor [-h] [-j]
+<pre><code><!-- help:doctor -->usage: hatcheck doctor [-h] [--deep] [--repair KIND] [-j]
 
 Check how hatcheck and the agents are installed: every copy on the PATH, which
-one runs, and how to remove the rest. Changes nothing.
+one runs, and how to remove the rest. Changes nothing unless --repair stale-
+bindings explicitly removes missing folders from Hatcheck's bindings.
 
 options:
-  -h, --help  show this help message and exit
-  -j, --json  print what it found as JSON<!-- /help:doctor --></code></pre>
+  -h, --help     show this help message and exit
+  --deep         also check session readability, bindings, launchers,
+                 duplicate processes, missing binaries and storage
+  --repair KIND  repair only this: stale-bindings removes bindings whose
+                 project folders are gone
+  -j, --json     print what it found as JSON<!-- /help:doctor --></code></pre>
       </details>
       <details><summary><code>hatcheck completions</code><span>or <code>hat c</code>: the completions for zsh, bash, fish or PowerShell</span></summary>
 <pre><code><!-- help:completions -->usage: hatcheck completions [-h] SHELL

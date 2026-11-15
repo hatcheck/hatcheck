@@ -414,11 +414,14 @@ pub fn selftest() -> i32 {
     LOGIN_PATH.get_or_init(login_path);
     println!("engine: {}", engine_path().display());
     let mut failed = 0;
-    let runs: [&[&str]; 4] = [
+    let runs: [&[&str]; 7] = [
         &["--version"],
         &["usage", "--json", "--cached"],
         &["--json", "--cached", "--no-usage", "--all-folders", "48"],
         &["where", "--json", "0"],
+        &["workspaces", "--json"],
+        &["library", "--json"],
+        &["insights", "--json"],
     ];
     // Twice: the first round starts the engine, the second finds it running.
     for round in ["first", "again"] {
