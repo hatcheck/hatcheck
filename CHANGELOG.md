@@ -4,6 +4,14 @@
 
 What changed in each release of the hatcheck CLI: `hatcheck`, `hat`, `cl`, `cx`, `ck`, `claude-z`, `claude-k`, `claude-m` and `claude-d`. A release's notes on GitHub are its section here. The desktop app is released on its own, from `desktop-v*` tags.
 
+## 0.7.5 - 2026-11-15
+
+The GitHub Release archives, shell and PowerShell installers, and `hatcheck/homebrew-tap` Homebrew formula build and publish alongside `npm`, `PyPI` and `crates.io` after GitHub Actions retired the `macos-14` Apple Silicon runner.
+
+### Fixed
+
+- **The release workflow (`v-release.yml`) builds Apple Silicon macOS archives on `macos-latest` instead of the retired `macos-14` runner**, restoring the GitHub Release archives, installer scripts and `hatcheck/homebrew-tap` formula updates that `cargo-dist 0.33.0`'s default runner plan skipped on 0.7.2, 0.7.3 and 0.7.4.
+
 ## 0.7.4 - 2026-11-15
 
 `hatcheck workspaces` pins project folders and `open --new` starts a fresh session in a chosen profile; `hatcheck library` keeps favorites, aliases, tags, archive state and saved views in Hatcheck's own metadata; `hatcheck export` writes Markdown, self-contained HTML or JSON for one session or a filtered batch; `hatcheck insights` reports offline usage forecasts and spending by profile, project and model; `move --backup` saves session-owned source files before a same-agent move; `doctor --deep` and `--repair stale-bindings` add deeper health checks and explicit cleanup; Raycast, Alfred and VS Code integrations join in `integrations/`; and the CLI (`HATCHECK_LANG=zh-CN`), desktop app and website add Simplified Chinese localization.
