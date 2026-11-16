@@ -10,6 +10,7 @@ members = ["cargo:."]
 # The version of dist that CI uses (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.33.0"
 ci = "github"
+allow-dirty = ["ci"]
 # Only tags starting with v: v0.2.0 releases the CLI, and the app's desktop-v0.2.0 tags are
 # left to desktop.yml. It also names the workflow v-release.yml, leaving release.yml to PyPI.
 tag-namespace = "v"

@@ -83,6 +83,7 @@ jobs:
       # but also really annoying to build CI around when it needs secrets to work right.)
       - id: plan
         run: |
+          grep -q 'allow-dirty' dist-workspace.toml || sed -i '/^\[dist\]/a allow-dirty = ["ci"]' dist-workspace.toml
           dist ${{ (!github.event.pull_request && format('host --steps=create --tag={0}', inputs.tag || github.ref_name)) || 'plan' }} --output-format=json > plan-dist-manifest.json
           echo "dist ran successfully"
           cat plan-dist-manifest.json
@@ -203,6 +204,7 @@ jobs:
       - id: cargo-dist
         shell: bash
         run: |
+          grep -q 'allow-dirty' dist-workspace.toml || sed -i '/^\[dist\]/a allow-dirty = ["ci"]' dist-workspace.toml
           dist build ${{ needs.plan.outputs.tag-flag }} --output-format=json "--artifacts=global" > dist-manifest.json
           echo "dist ran successfully"
 
@@ -254,6 +256,7 @@ jobs:
       - id: host
         shell: bash
         run: |
+          grep -q 'allow-dirty' dist-workspace.toml || sed -i '/^\[dist\]/a allow-dirty = ["ci"]' dist-workspace.toml
           dist host ${{ needs.plan.outputs.tag-flag }} --steps=upload --steps=release --output-format=json > dist-manifest.json
           echo "artifacts uploaded and released successfully"
           cat dist-manifest.json
