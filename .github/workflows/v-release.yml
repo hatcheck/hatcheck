@@ -147,6 +147,10 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+      - name: Allow custom workflow in dist-workspace.toml
+        shell: bash
+        run: |
+          grep -q 'allow-dirty' dist-workspace.toml || perl -i -pe 's/^\[dist\]/[dist]\nallow-dirty = ["ci"]/' dist-workspace.toml
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
